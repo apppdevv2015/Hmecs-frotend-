@@ -6,14 +6,15 @@ export type PayFastCheckoutResponse = {
   redirect_url?: string;
   url?: string;
   data?: Record<string, string | number | boolean | null | undefined>;
-
+  skip_payment?: boolean;
+  message?: string;
 };
 
 export const initiatePayFastCheckout = async (
   planId: string | number,
   idempotencyKey?: string
 ): Promise<PayFastCheckoutResponse> => {
-  return apiRequest<PayFastCheckoutResponse>("/auth/subscriptions/checkout", {
+  const response = await apiRequest<any>("/auth/subscriptions/checkout", {
     method: "POST",
     body: JSON.stringify({
       plan_id: planId,
@@ -26,4 +27,11 @@ export const initiatePayFastCheckout = async (
         "http://localhost:5173/payment/cancel",
     }),
   });
+
+  // If response is wrapped under standard responseHandler envelope { success, message, data }
+  if (response && response.success && response.data) {
+    return response.data;
+  }
+
+  return response;
 };

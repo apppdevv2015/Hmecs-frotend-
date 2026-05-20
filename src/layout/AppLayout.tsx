@@ -1,11 +1,10 @@
+import React, { useEffect, useState } from "react";
 import { SidebarProvider, useSidebar } from "../context/SidebarContext";
 import { Outlet, Link } from "react-router";
 import AppHeader from "./AppHeader";
 import Backdrop from "./Backdrop";
 import AppSidebar from "./AppSidebar";
 import type { UserRole } from "../config/sidebar.config";
-import { CompanyAdminNav } from "../components/company-admin/CompanyAdminNav";
-import { useEffect, useState } from "react";
 import { userService } from "../services/userService";
 import { AlertCircle, Rocket } from "lucide-react";
 
@@ -18,21 +17,23 @@ const LayoutContent: React.FC<AppLayoutProps> = ({ role = "super_admin" }) => {
   const [hasActiveSub, setHasActiveSub] = useState(true);
 
   useEffect(() => {
-    if (role === "company_admin") {
-      const checkSub = async () => {
-        try {
-          const sub = await userService.getActiveSubscription();
-          setHasActiveSub(!!(sub?.data || sub));
-        } catch (e) {
-          setHasActiveSub(false);
-        }
-      };
-      checkSub();
-    }
+    if (role !== "company_admin") return;
+
+    const checkSub = async () => {
+      try {
+        const sub = await userService.getActiveSubscription();
+        setHasActiveSub(Boolean(sub?.data || sub));
+      } catch (error) {
+        console.error("Subscription check failed:", error);
+        setHasActiveSub(false);
+      }
+    };
+
+    checkSub();
   }, [role]);
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-slate-950">
+    <div className="min-h-screen bg-[#F8FAFC] text-slate-900 dark:bg-slate-950 dark:text-white">
       <AppSidebar role={role} />
       <Backdrop />
 
@@ -44,22 +45,35 @@ const LayoutContent: React.FC<AppLayoutProps> = ({ role = "super_admin" }) => {
         <AppHeader />
 
         {!hasActiveSub && role === "company_admin" && (
-          <div className="mx-6 mt-6 overflow-hidden rounded-2xl bg-orange-500 p-1 text-white shadow-lg shadow-orange-500/20 animate-in fade-in slide-in-from-top-4 duration-500">
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-orange-600 rounded-xl px-6 py-4">
-              <div className="flex items-center gap-4">
-                <div className="h-10 w-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
-                  <AlertCircle className="text-white" size={20} />
+          <div className="mx-4 mt-6 overflow-hidden rounded-[2rem] border border-blue-200 bg-blue-500 p-1 text-white shadow-lg shadow-blue-500/20 animate-in fade-in slide-in-from-top-4 duration-500 dark:border-blue-500/30 dark:bg-blue-600 md:mx-6">
+            <div className="flex flex-col items-start justify-between gap-5 rounded-[1.7rem] bg-blue-600 px-6 py-5 dark:bg-blue-700 sm:flex-row sm:items-center">
+              <div className="flex items-start gap-4">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/15 text-white">
+                  <AlertCircle size={22} />
                 </div>
+
                 <div>
-                  <h4 className="text-sm font-black uppercase tracking-widest">Read-Only Mode Active</h4>
-                  <p className="text-xs font-medium text-orange-100 mt-0.5">Your subscription has expired. You can view data but cannot make changes.</p>
+                  <p className="text-[11px] font-black uppercase tracking-[0.2em] text-blue-100">
+                    Subscription Notice
+                  </p>
+
+                  <h4 className="mt-1 text-sm font-black uppercase tracking-widest text-white">
+                    Read-Only Mode Active
+                  </h4>
+
+                  <p className="mt-1 text-xs font-semibold leading-5 text-blue-100">
+                    Your subscription has expired. You can view data but cannot
+                    make changes.
+                  </p>
                 </div>
               </div>
-              <Link 
-                to="/plans" 
-                className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-white text-orange-600 text-[10px] font-black uppercase tracking-widest hover:bg-orange-50 transition shadow-lg"
+
+              <Link
+                to="/plans"
+                className="flex shrink-0 items-center gap-2 rounded-2xl bg-white px-6 py-3 text-[10px] font-black uppercase tracking-widest text-blue-600 shadow-lg shadow-blue-900/10 transition-all hover:bg-orange-50 hover:text-orange-600"
               >
-                Upgrade Now <Rocket size={14} />
+                Upgrade Now
+                <Rocket size={14} />
               </Link>
             </div>
           </div>

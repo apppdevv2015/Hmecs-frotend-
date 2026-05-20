@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import { CheckCircle2, Pencil, Trash2, X, XCircle } from "lucide-react";
 import {
   createSubscriptionPlan,
@@ -14,6 +14,7 @@ type Plan = {
   featuresText: string;
   price: string;
   machines: number;
+  validityDays: number;
   createdAt: string;
 };
 
@@ -28,17 +29,18 @@ const emptyPlan: Plan = {
   featuresText: "",
   price: "",
   machines: 0,
+  validityDays: 30,
   createdAt: "",
 };
 
 const featuresToText = (
-  features: Record<string, boolean> | string[] | null,
+  features: Record<string, boolean> | string[] | null | undefined,
 ) => {
   if (Array.isArray(features)) return features.join(", ");
 
   if (features && typeof features === "object") {
     return Object.keys(features)
-      .filter((key) => features[key])
+      .filter((key) => Boolean(features[key]))
       .join(", ");
   }
 
@@ -56,21 +58,23 @@ const textToFeaturesPayload = (text: string) => {
     }, {});
 };
 
-const mapApiPlanToPlan = (plan: SubscriptionPlanApi): Plan => {
-  const priceValue = String(plan.price ?? 0);
-
-  return {
-    id: Number(plan.id),
-    name: plan.name || "Untitled Plan",
-    featuresText: featuresToText(plan.features),
-    price: priceValue.startsWith("$") ? priceValue : `$${priceValue}`,
-    machines: Number(plan.machine_limit ?? 0),
-    createdAt: plan.created_at || "",
-  };
-};
-
 const getNumericPrice = (price: string) => {
   return Number(String(price).replace("$", "").trim());
+};
+
+const mapApiPlanToPlan = (plan: SubscriptionPlanApi): Plan => {
+  const apiPlan = plan as any;
+  const priceValue = String(apiPlan.price ?? 0);
+
+  return {
+    id: Number(apiPlan.id ?? 0),
+    name: apiPlan.plan_name || apiPlan.name || "Untitled Plan",
+    featuresText: featuresToText(apiPlan.features),
+    price: priceValue.startsWith("$") ? priceValue : `$${priceValue}`,
+    machines: Number(apiPlan.machine_limit ?? 0),
+    validityDays: Number(apiPlan.validity_days ?? 30),
+    createdAt: apiPlan.created_at || "",
+  };
 };
 
 export default function Plans() {
@@ -139,9 +143,18 @@ export default function Plans() {
     const numericPrice = getNumericPrice(plan.price);
 
     if (!plan.name.trim()) return "Plan name is required";
-    if (!plan.machines || plan.machines <= 0)
+
+    if (!plan.machines || Number(plan.machines) <= 0) {
       return "Machine limit is required";
-    if (!numericPrice || numericPrice <= 0) return "Valid price is required";
+    }
+
+    if (!numericPrice || numericPrice <= 0) {
+      return "Valid price is required";
+    }
+
+    if (!plan.validityDays || Number(plan.validityDays) <= 0) {
+      return "Validity days is required";
+    }
 
     return "";
   };
@@ -161,12 +174,18 @@ export default function Plans() {
       setCreating(true);
       setError("");
 
-      await createSubscriptionPlan({
-        name: createPlan.name.trim(),
+      const payload = {
+        plan_name: createPlan.name.trim(),
         machine_limit: Number(createPlan.machines),
         price: getNumericPrice(createPlan.price),
+        validity_days: Number(createPlan.validityDays),
+
+        // Keep this only for create API compatibility if backend supports features.
+        // Update API will not send features.
         features: textToFeaturesPayload(createPlan.featuresText),
-      });
+      } as any;
+
+      await createSubscriptionPlan(payload);
 
       setCreatePlan(null);
       showToast("success", "Plan created successfully");
@@ -196,12 +215,14 @@ export default function Plans() {
       setUpdating(true);
       setError("");
 
-      await updateSubscriptionPlan(editPlan.id, {
-        name: editPlan.name.trim(),
+      const payload = {
+        plan_name: editPlan.name.trim(),
         machine_limit: Number(editPlan.machines),
         price: getNumericPrice(editPlan.price),
-        features: textToFeaturesPayload(editPlan.featuresText),
-      });
+        validity_days: Number(editPlan.validityDays),
+      } as any;
+
+      await updateSubscriptionPlan(editPlan.id, payload);
 
       setEditPlan(null);
       showToast("success", "Plan updated successfully");
@@ -354,11 +375,11 @@ export default function Plans() {
 
         {!loading && plans.length > 0 && (
           <div className="overflow-x-auto">
-            <div className="min-w-[900px] divide-y divide-slate-100 dark:divide-slate-800">
+            <div className="min-w-[1000px] divide-y divide-slate-100 dark:divide-slate-800">
               {plans.map((plan) => (
                 <div
                   key={plan.id}
-                  className="grid grid-cols-[150px_1fr_120px_140px_100px] items-center gap-4 px-1 py-5 text-sm transition hover:bg-slate-50 dark:hover:bg-slate-800/60"
+                  className="grid grid-cols-[150px_1fr_120px_140px_140px_100px] items-center gap-4 px-1 py-5 text-sm transition hover:bg-slate-50 dark:hover:bg-slate-800/60"
                 >
                   <div className="font-semibold capitalize text-slate-800 dark:text-white">
                     {plan.name}
@@ -390,6 +411,10 @@ export default function Plans() {
 
                   <div className="text-slate-600 dark:text-slate-300">
                     {plan.machines} machines
+                  </div>
+
+                  <div className="text-slate-600 dark:text-slate-300">
+                    {plan.validityDays} days
                   </div>
 
                   <div className="flex items-center justify-end gap-3">
@@ -435,6 +460,7 @@ export default function Plans() {
           onSubmit={handleCreatePlan}
           submitLabel={creating ? "Creating..." : "Create Plan"}
           disabled={creating}
+          showFeatures
         />
       )}
 
@@ -449,6 +475,7 @@ export default function Plans() {
           onSubmit={handleSaveEdit}
           submitLabel={updating ? "Updating..." : "Save Changes"}
           disabled={updating}
+          showFeatures={false}
         />
       )}
 
@@ -503,16 +530,18 @@ function PlanModal({
   onSubmit,
   submitLabel,
   disabled,
+  showFeatures,
 }: {
   title: string;
   plan: Plan;
-  setPlan: React.Dispatch<React.SetStateAction<Plan | null>>;
+  setPlan: Dispatch<SetStateAction<Plan | null>>;
   inputClass: string;
   labelClass: string;
   onClose: () => void;
   onSubmit: () => void;
   submitLabel: string;
   disabled: boolean;
+  showFeatures: boolean;
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
@@ -537,6 +566,7 @@ function PlanModal({
           setPlan={setPlan}
           inputClass={inputClass}
           labelClass={labelClass}
+          showFeatures={showFeatures}
         />
 
         <div className="mt-6 flex justify-end gap-3">
@@ -568,19 +598,31 @@ function PlanForm({
   setPlan,
   inputClass,
   labelClass,
+  showFeatures,
 }: {
   plan: Plan;
-  setPlan: React.Dispatch<React.SetStateAction<Plan | null>>;
+  setPlan: Dispatch<SetStateAction<Plan | null>>;
   inputClass: string;
   labelClass: string;
+  showFeatures: boolean;
 }) {
+  const updatePlanField = <K extends keyof Plan>(key: K, value: Plan[K]) => {
+    setPlan((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        [key]: value,
+      };
+    });
+  };
+
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
       <div>
         <label className={labelClass}>Plan Name</label>
         <input
           value={plan.name}
-          onChange={(e) => setPlan({ ...plan, name: e.target.value })}
+          onChange={(e) => updatePlanField("name", e.target.value)}
           className={inputClass}
           placeholder="Enter plan name"
         />
@@ -590,7 +632,7 @@ function PlanForm({
         <label className={labelClass}>Price</label>
         <input
           value={plan.price}
-          onChange={(e) => setPlan({ ...plan, price: e.target.value })}
+          onChange={(e) => updatePlanField("price", e.target.value)}
           className={inputClass}
           placeholder="99"
         />
@@ -600,35 +642,54 @@ function PlanForm({
         <label className={labelClass}>Machine Limit</label>
         <input
           type="number"
+          min={1}
           value={plan.machines}
           onChange={(e) =>
-            setPlan({ ...plan, machines: Number(e.target.value) })
+            updatePlanField("machines", Number(e.target.value))
           }
           className={inputClass}
           placeholder="10"
         />
       </div>
 
-      <div className="md:col-span-2">
-        <label className={labelClass}>Features</label>
-        <textarea
-          value={plan.featuresText}
+      <div>
+        <label className={labelClass}>Validity Days</label>
+        <input
+          type="number"
+          min={1}
+          value={plan.validityDays}
           onChange={(e) =>
-            setPlan({
-              ...plan,
-              featuresText: e.target.value,
-            })
+            updatePlanField("validityDays", Number(e.target.value))
           }
-          rows={4}
-          className="w-full resize-none rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-          placeholder="Engine Monitoring, Hydraulic Monitoring, Tyre Monitoring"
+          className={inputClass}
+          placeholder="30"
         />
-
-        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-          Add features with comma separation. Example: Engine Monitoring,
-          Hydraulic Monitoring
-        </p>
       </div>
+
+      {showFeatures && (
+        <div className="md:col-span-2">
+          <label className={labelClass}>Features</label>
+          <textarea
+            value={plan.featuresText}
+            onChange={(e) => updatePlanField("featuresText", e.target.value)}
+            rows={4}
+            className="w-full resize-none rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+            placeholder="Engine Monitoring, Hydraulic Monitoring, Tyre Monitoring"
+          />
+
+          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+            Add features with comma separation. Example: Engine Monitoring,
+            Hydraulic Monitoring
+          </p>
+        </div>
+      )}
+
+      {!showFeatures && (
+        <div className="md:col-span-2 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-700 dark:border-orange-500/20 dark:bg-orange-500/10 dark:text-orange-300">
+          Update API only accepts plan name, machine limit, price and validity
+          days. Features are not sent in update payload.
+        </div>
+      )}
     </div>
   );
 }

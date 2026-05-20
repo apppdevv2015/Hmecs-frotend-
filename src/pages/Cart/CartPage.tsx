@@ -16,6 +16,8 @@ export default function CartPage() {
   const [plan, setPlan] = useState<PricingPlan | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isPaymentLoading, setIsPaymentLoading] = useState(false);
+  const [hasUsedDemo, setHasUsedDemo] = useState(false);
+  const [isRedirecting, setIsRedirecting] = useState(false);
 
   const getToken = () => {
     return (
@@ -25,9 +27,13 @@ export default function CartPage() {
     );
   };
 
+  const refreshLoginStatus = () => {
+    setIsLoggedIn(Boolean(getToken()));
+  };
+
   useEffect(() => {
     const savedPlan = localStorage.getItem("selectedPlan");
-    setIsLoggedIn(Boolean(getToken()));
+    refreshLoginStatus();
 
     if (savedPlan) {
       try {
@@ -41,7 +47,7 @@ export default function CartPage() {
 
   useEffect(() => {
     const checkLogin = () => {
-      setIsLoggedIn(Boolean(getToken()));
+      refreshLoginStatus();
     };
 
     window.addEventListener("storage", checkLogin);
@@ -53,76 +59,36 @@ export default function CartPage() {
     };
   }, []);
 
-  // const handlePayment = async () => {
-  //   const selectedPlan = plan as PricingPlan & {
-  //     id?: string | number;
-  //   };
-
-  //   if (!isLoggedIn) {
-  //     toast.error("Please sign in first to continue payment");
-  //     navigate("/signin?redirect=/cart");
-  //     return;
-  //   }
-
-  //   if (!selectedPlan?.id) {
-  //     toast.error("Plan ID not found");
-  //     return;
-  //   }
-
-  //   try {
-  //     setIsPaymentLoading(true);
-  //     const loadingToast = toast.loading("Opening PayFast payment page...");
-
-  //     const response = await initiatePayFastCheckout(selectedPlan.id);
-
-  //     toast.dismiss(loadingToast);
-
-  //     const paymentUrl =
-  //       response?.checkout_url ||
-  //       response?.payment_url ||
-  //       response?.redirect_url ||
-  //       response?.url;
-
-  //     if (!paymentUrl) {
-  //       toast.error("Payment URL not received from server");
-  //       return;
-  //     }
-
-  //     window.location.assign(paymentUrl);
-  //   } catch (error) {
-  //     console.error("Payment Error:", error);
-  //     toast.error("Failed to open payment page");
-  //   } finally {
-  //     setIsPaymentLoading(false);
-  //   }
-  // };
-  const [hasUsedDemo, setHasUsedDemo] = useState(false);
-  const [isRedirecting, setIsRedirecting] = useState(false);
-
   useEffect(() => {
     const checkDemo = async () => {
-      if (getToken()) {
-        try {
-          const history = await userService.getSubscriptionHistory();
-          const used = Array.isArray(history) && history.some((sub: any) => 
-            sub.plan_name?.toLowerCase().includes("demo") || 
-            sub.plan_name?.toLowerCase().includes("free")
+      if (!getToken()) return;
+
+      try {
+        const history = await userService.getSubscriptionHistory();
+
+        const used =
+          Array.isArray(history) &&
+          history.some(
+            (sub: any) =>
+              sub.plan_name?.toLowerCase().includes("demo") ||
+              sub.plan_name?.toLowerCase().includes("free"),
           );
-          setHasUsedDemo(used);
-        } catch (e) {
-          console.error("Demo check failed", e);
-        }
+
+        setHasUsedDemo(used);
+      } catch (e) {
+        console.error("Demo check failed", e);
       }
     };
+
     checkDemo();
-  }, []);
+  }, [isLoggedIn]);
 
   const handlePayment = async () => {
     const selectedPlan = plan as PricingPlan & {
       id?: string | number;
     };
 
-    if (!isLoggedIn) {
+    if (!getToken()) {
       toast.error("Please sign in first to continue payment");
       navigate("/signin?redirect=/cart");
       return;
@@ -133,96 +99,113 @@ export default function CartPage() {
       return;
     }
 
-    const isDemo = selectedPlan.name?.toLowerCase().includes("demo") || selectedPlan.name?.toLowerCase().includes("free");
-    
+    const isDemo =
+      selectedPlan.name?.toLowerCase().includes("demo") ||
+      selectedPlan.name?.toLowerCase().includes("free");
+
     if (isDemo && hasUsedDemo) {
       toast.dismiss();
       toast.error("you used already demo plan", { duration: 4000 });
       setIsRedirecting(true);
+
       setTimeout(() => {
         navigate("/plans");
       }, 3000);
+
       return;
     }
 
-  try {
-    setIsPaymentLoading(true);
+    try {
+      setIsPaymentLoading(true);
 
-    const loadingToast = toast.loading("Opening PayFast payment page...");
-    
-    // Generate idempotency key (UUID v4 like)
-    const idempotencyKey = crypto.randomUUID?.() || Math.random().toString(36).substring(2) + Date.now().toString(36);
-    
-    const response = await initiatePayFastCheckout(selectedPlan.id, idempotencyKey);
+      const loadingToast = toast.loading("Opening PayFast payment page...");
 
-    toast.dismiss(loadingToast);
+      const idempotencyKey =
+        crypto.randomUUID?.() ||
+        Math.random().toString(36).substring(2) + Date.now().toString(36);
 
-    // Handle free/demo plan activation (skip payment)
-    if (response?.skip_payment) {
-      toast.dismiss();
-      toast.success(response.message || "Plan activated successfully!", { duration: 4000 });
-      setIsRedirecting(true);
-      setTimeout(() => {
-        navigate("/company-admin/dashboard");
-      }, 3000);
-      return;
+      const response = await initiatePayFastCheckout(
+        selectedPlan.id,
+        idempotencyKey,
+      );
+
+      toast.dismiss(loadingToast);
+
+      if (response?.skip_payment) {
+        toast.dismiss();
+        toast.success(response.message || "Plan activated successfully!", {
+          duration: 4000,
+        });
+
+        setIsRedirecting(true);
+
+        setTimeout(() => {
+          navigate("/company-admin/dashboard");
+        }, 3000);
+
+        return;
+      }
+
+      const paymentUrl =
+        response?.checkout_url ||
+        response?.payment_url ||
+        response?.redirect_url ||
+        response?.url;
+
+      const paymentData = response?.data;
+
+      if (!paymentUrl || !paymentData) {
+        toast.error("Invalid PayFast response");
+        console.log("Invalid PayFast Response:", response);
+        return;
+      }
+
+      const form = document.createElement("form");
+      form.method = "POST";
+      form.action = paymentUrl;
+      form.style.display = "none";
+
+      Object.entries(paymentData).forEach(([key, value]) => {
+        if (value === undefined || value === null || value === "") return;
+
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = key;
+        input.value = String(value);
+        form.appendChild(input);
+      });
+
+      document.body.appendChild(form);
+      form.submit();
+    } catch (error) {
+      console.error("Payment Error:", error);
+      toast.error("Failed to open payment page");
+    } finally {
+      setIsPaymentLoading(false);
     }
+  };
 
-    const paymentUrl =
-      response?.checkout_url ||
-      response?.payment_url ||
-      response?.redirect_url ||
-      response?.url;
-
-    const paymentData = response?.data;
-
-    if (!paymentUrl || !paymentData) {
-      toast.error("Invalid PayFast response");
-      console.log("Invalid PayFast Response:", response);
-      return;
-    }
-
-    const form = document.createElement("form");
-    form.method = "POST";
-    form.action = paymentUrl;
-    form.style.display = "none";
-
-    Object.entries(paymentData).forEach(([key, value]) => {
-      if (value === undefined || value === null || value === "") return;
-
-      const input = document.createElement("input");
-      input.type = "hidden";
-      input.name = key;
-      input.value = String(value);
-      form.appendChild(input);
-    });
-
-    document.body.appendChild(form);
-    form.submit();
-  } catch (error) {
-    console.error("Payment Error:", error);
-    toast.error("Failed to open payment page");
-  } finally {
-    setIsPaymentLoading(false);
-  }
-};
+  const loggedIn = Boolean(getToken()) || isLoggedIn;
 
   if (isRedirecting) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 dark:bg-slate-950">
         <div className="text-center space-y-6 max-w-md w-full bg-white dark:bg-slate-900 p-12 rounded-[3rem] shadow-2xl border border-slate-100 dark:border-white/5 animate-in zoom-in-95 duration-300">
-           <div className="h-20 w-20 bg-orange-100 dark:bg-orange-500/10 rounded-3xl flex items-center justify-center mx-auto text-orange-500 animate-pulse">
-             <span className="text-4xl font-black">!</span>
-           </div>
-           <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tighter uppercase">Redirecting to plans...</h2>
-           <p className="text-slate-500 dark:text-slate-400 font-medium leading-relaxed">
-             Please wait while we take you to the plans page to upgrade your account.
-           </p>
-           <div className="flex justify-center gap-1.5">
-             <div className="h-1.5 w-1.5 bg-orange-500 rounded-full animate-bounce [animation-delay:-0.3s]" />
-             <div className="h-1.5 w-1.5 bg-orange-500 rounded-full animate-bounce [animation-delay:-0.15s]" />
-             <div className="h-1.5 w-1.5 bg-orange-500 rounded-full animate-bounce" />
-           </div>
+          <div className="h-20 w-20 bg-orange-100 dark:bg-orange-500/10 rounded-3xl flex items-center justify-center mx-auto text-orange-500 animate-pulse">
+            <span className="text-4xl font-black">!</span>
+          </div>
+          <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tighter uppercase">
+            Redirecting to plans...
+          </h2>
+          <p className="text-slate-500 dark:text-slate-400 font-medium leading-relaxed">
+            Please wait while we take you to the plans page to upgrade your
+            account.
+          </p>
+          <div className="flex justify-center gap-1.5">
+            <div className="h-1.5 w-1.5 bg-orange-500 rounded-full animate-bounce [animation-delay:-0.3s]" />
+            <div className="h-1.5 w-1.5 bg-orange-500 rounded-full animate-bounce [animation-delay:-0.15s]" />
+            <div className="h-1.5 w-1.5 bg-orange-500 rounded-full animate-bounce" />
+          </div>
         </div>
       </div>
     );
@@ -327,7 +310,7 @@ export default function CartPage() {
 
               <div className="mt-6 rounded-2xl border border-blue-100 bg-blue-50 p-4 dark:border-blue-500/20 dark:bg-blue-500/10">
                 <p className="text-sm leading-6 text-slate-700 dark:text-slate-200">
-                  {!isLoggedIn
+                  {!loggedIn
                     ? "Please create your account or sign in first. After login/signup, you will come back to this cart page and the payment option will be available."
                     : "Click Pay Now to open the PayFast payment page. After successful payment, you will be redirected to the Sign In page."}
                 </p>
@@ -369,7 +352,7 @@ export default function CartPage() {
                 </div>
               </div>
 
-              {!isLoggedIn ? (
+              {!loggedIn ? (
                 <div className="mt-8 space-y-3">
                   <button
                     onClick={() => navigate("/signup?redirect=/cart")}

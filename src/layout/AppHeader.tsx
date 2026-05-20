@@ -63,7 +63,7 @@ const AppHeader: React.FC = () => {
             )}
           </button>
 
-          {/* Desktop Search */}
+         
           <div className="hidden lg:block">
             <form>
               <div className="relative">

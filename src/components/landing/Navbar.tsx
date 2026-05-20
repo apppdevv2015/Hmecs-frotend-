@@ -163,7 +163,7 @@ export default function Navbar({ active = "home", setActive }: NavbarProps) {
             {isDark ? <Sun size={20} /> : <Moon size={20} />}
           </button>
 
-          {!showDashboard ? (
+         
             <>
               <Link
                 to="/signin"
@@ -179,15 +179,7 @@ export default function Navbar({ active = "home", setActive }: NavbarProps) {
                 Get Started
               </Link>
             </>
-          ) : (
-            <button
-              type="button"
-              onClick={handleDashboardClick}
-              className="hidden rounded-lg bg-blue-600 px-4 py-2.5 text-xs font-bold text-white shadow-md transition hover:-translate-y-0.5 hover:bg-blue-700 sm:inline-flex"
-            >
-              Dashboard
-            </button>
-          )}
+          
 
           <button
             type="button"
@@ -219,7 +211,7 @@ export default function Navbar({ active = "home", setActive }: NavbarProps) {
             ))}
 
             <div className="grid grid-cols-2 gap-3 pt-3">
-              {!showDashboard ? (
+             
                 <>
                   <Link
                     to="/signin"
@@ -237,15 +229,7 @@ export default function Navbar({ active = "home", setActive }: NavbarProps) {
                     Get Started
                   </Link>
                 </>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleDashboardClick}
-                  className="col-span-2 rounded-xl bg-blue-600 px-4 py-3 text-center text-sm font-bold text-white shadow-md transition hover:bg-blue-700"
-                >
-                  Dashboard
-                </button>
-              )}
+              
             </div>
           </div>
         </div>

@@ -115,11 +115,11 @@ export default function LandingPage() {
 
   useEffect(() => {
     const revealElements = document.querySelectorAll(
-      ".reveal, .reveal-left, .reveal-right, .reveal-scale"
+      ".reveal, .reveal-left, .reveal-right, .reveal-scale",
     );
 
     const sectionElements = document.querySelectorAll(
-      "section[id], footer[id]"
+      "section[id], footer[id]",
     );
 
     const revealObserver = new IntersectionObserver(
@@ -130,7 +130,7 @@ export default function LandingPage() {
           }
         });
       },
-      { threshold: 0.16 }
+      { threshold: 0.16 },
     );
 
     const sectionObserver = new IntersectionObserver(
@@ -141,7 +141,7 @@ export default function LandingPage() {
           }
         });
       },
-      { threshold: 0.45 }
+      { threshold: 0.45 },
     );
 
     revealElements.forEach((el) => revealObserver.observe(el));
@@ -167,10 +167,9 @@ export default function LandingPage() {
     <main className="min-h-screen overflow-x-hidden bg-white text-slate-900 transition-colors duration-300 dark:bg-slate-950 dark:text-white">
       <Navbar active={active} setActive={setActive} />
 
-
       <section
         id="home"
-      className="relative -mt-[90px] h-[100svh] w-full overflow-hidden bg-slate-950 pt-[90px]"
+        className="relative -mt-[90px] h-[100svh] w-full overflow-hidden bg-slate-950 pt-[90px]"
       >
         <video
           src={video1}
@@ -196,7 +195,7 @@ export default function LandingPage() {
                 {activeText.smallTitle}
               </p>
 
-            <h1 className="max-w-2xl text-4xl font-black uppercase leading-[0.98] tracking-tight text-white sm:text-6xl lg:text-7xl">
+              <h1 className="max-w-2xl text-4xl font-black uppercase leading-[0.98] tracking-tight text-white sm:text-6xl lg:text-7xl">
                 {activeText.title}
               </h1>
 
@@ -211,9 +210,8 @@ export default function LandingPage() {
                 >
                   See Our Plans
                 </Link>
-
                 <Link
-                  to="/demo"
+                  to="/company-admin/coming-soon/demo"
                   className="rounded-full bg-blue-600 px-5 py-2 text-xs font-bold text-white shadow-lg shadow-blue-600/30 transition hover:-translate-y-1 hover:bg-blue-700 sm:text-sm"
                 >
                   Book Demo
@@ -514,9 +512,7 @@ export default function LandingPage() {
 
             <h2 className="mt-3 text-4xl font-black leading-tight text-slate-950 dark:text-white">
               Data That Improves
-              <span className="block text-blue-600">
-                Machine Performance
-              </span>
+              <span className="block text-blue-600">Machine Performance</span>
             </h2>
 
             <div className="mt-8 space-y-4">

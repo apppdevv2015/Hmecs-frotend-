@@ -6,7 +6,15 @@ export async function apiRequest<T>(
 ): Promise<T> {
   const token = localStorage.getItem("token");
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+  const baseUrl = String(API_BASE_URL || "").replace(/\/$/, "");
+  const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+  const finalUrl = `${baseUrl}${cleanEndpoint}`;
+
+  console.log("API_BASE_URL:", API_BASE_URL);
+  console.log("API Endpoint:", endpoint);
+  console.log("Final API URL:", finalUrl);
+
+  const response = await fetch(finalUrl, {
     ...options,
     headers: {
       "Content-Type": "application/json",
@@ -16,17 +24,25 @@ export async function apiRequest<T>(
     },
   });
 
-  let data;
+  let data: any = null;
 
   try {
-    data = await response.json();
+    const text = await response.text();
+    data = text ? JSON.parse(text) : null;
   } catch {
     data = null;
   }
 
   if (!response.ok) {
+    console.error("API Error:", {
+      status: response.status,
+      statusText: response.statusText,
+      url: finalUrl,
+      data,
+    });
+
     throw new Error(data?.message || data?.error || "Something went wrong");
   }
 
-  return data;
+  return data as T;
 }

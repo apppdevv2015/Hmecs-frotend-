@@ -1,5 +1,9 @@
+import toast from "react-hot-toast";
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
 
 import { EyeCloseIcon, EyeIcon } from "../../icons";
 import Label from "../form/Label";
@@ -9,22 +13,83 @@ import { authService } from "../../services/authService";
 import Navbar from "../../components/landing/Navbar";
 import Footer from "../../components/landing/Footer";
 
-type FormErrors = {
-  firstName?: string;
-  lastName?: string;
-  companyName?: string;
-  phone?: string;
-  email?: string;
-  password?: string;
-};
+const signUpSchema = z.object({
+  firstName: z
+    .string()
+    .trim()
+    .min(1, "First name is required")
+    .min(2, "First name must be at least 2 characters"),
 
-type SignupPayload = {
-  firstName: string;
-  lastName: string;
-  companyName: string;
-  phone: string;
-  email: string;
-  password: string;
+  lastName: z
+    .string()
+    .trim()
+    .min(1, "Last name is required")
+    .min(2, "Last name must be at least 2 characters"),
+
+  companyName: z
+    .string()
+    .trim()
+    .min(1, "Company name is required")
+    .min(2, "Company name must be at least 2 characters"),
+
+  phone: z
+    .string()
+    .trim()
+    .min(1, "Phone number is required")
+    .regex(/^[6-9]\d{9}$/, "Please enter a valid 10 digit phone number"),
+
+  email: z
+    .string()
+    .trim()
+    .min(1, "Company email is required")
+    .email("Please enter a valid email address"),
+
+  password: z
+    .string()
+    .min(1, "Password is required")
+    .min(8, "Password must be at least 8 characters")
+    .regex(
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/,
+      "Password must contain uppercase, lowercase, number and special character",
+    ),
+});
+
+type SignUpFormData = z.infer<typeof signUpSchema>;
+
+const getApiErrorMessage = (error: unknown) => {
+  const defaultMessage = "Signup failed. Please try again.";
+
+  if (!(error instanceof Error) || !error.message) {
+    return defaultMessage;
+  }
+
+  const message = error.message.toLowerCase();
+
+  const blockedWords = [
+    "select",
+    "insert",
+    "update",
+    "delete",
+    "relation",
+    "sql",
+    "database",
+    "users",
+    "roles",
+    "companies",
+    "join",
+    "where",
+    "limit",
+    "constraint",
+    "violates",
+  ];
+
+  const isBackendError = blockedWords.some((word) => message.includes(word));
+
+  if (isBackendError) {
+    return defaultMessage;
+  }
+
+  return error.message;
 };
 
 export default function SignUpForm() {
@@ -39,121 +104,107 @@ export default function SignUpForm() {
   )}`;
 
   const [active, setActive] = useState("");
-
   const [showPassword, setShowPassword] = useState(false);
-  const [errors, setErrors] = useState<FormErrors>({});
-  const [loading, setLoading] = useState(false);
-  const [apiError, setApiError] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
 
-  const clearError = (field: keyof FormErrors) => {
-    setErrors((prev) => ({ ...prev, [field]: "" }));
-    setApiError("");
-    setSuccessMessage("");
-  };
+  const {
+    register,
+    handleSubmit,
+    setError,
+    formState: { errors, isSubmitting },
+  } = useForm<SignUpFormData>({
+    resolver: zodResolver(signUpSchema),
+    defaultValues: {
+      firstName: "",
+      lastName: "",
+      companyName: "",
+      phone: "",
+      email: "",
+      password: "",
+    },
+    mode: "onSubmit",
+    reValidateMode: "onSubmit",
+  });
 
-  const validateForm = (data: SignupPayload) => {
-    const newErrors: FormErrors = {};
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-    if (!data.firstName.trim()) {
-      newErrors.firstName = "First name is required";
-    }
-
-    if (!data.lastName.trim()) {
-      newErrors.lastName = "Last name is required";
-    }
-
-    if (!data.companyName.trim()) {
-      newErrors.companyName = "Company name is required";
-    }
-
-    if (!data.phone.trim()) {
-      newErrors.phone = "Phone number is required";
-    }
-
-    if (!data.email.trim()) {
-      newErrors.email = "Email is required";
-    } else if (!emailRegex.test(data.email.trim())) {
-      newErrors.email = "Please enter a valid email address";
-    }
-
-    if (!data.password.trim()) {
-      newErrors.password = "Password is required";
-    } else if (data.password.trim().length < 6) {
-      newErrors.password = "Password must be at least 6 characters";
-    }
-
-    return newErrors;
-  };
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-
-    const formData = new FormData(e.currentTarget);
-
-    const payload: SignupPayload = {
-      firstName: String(formData.get("firstName") || ""),
-      lastName: String(formData.get("lastName") || ""),
-      companyName: String(formData.get("companyName") || ""),
-      phone: String(formData.get("phone") || ""),
-      email: String(formData.get("email") || ""),
-      password: String(formData.get("password") || ""),
-    };
-
-    const validationErrors = validateForm(payload);
-
-    if (Object.keys(validationErrors).length > 0) {
-      setErrors(validationErrors);
-      return;
-    }
+  const onSubmit = async (data: SignUpFormData) => {
+    const toastId = toast.loading("Creating account...");
 
     try {
-      setLoading(true);
-      setErrors({});
-      setApiError("");
-      setSuccessMessage("");
-
       const response = await authService.register({
-        company_name: payload.companyName,
-        fname: payload.firstName,
-        lname: payload.lastName,
-        email: payload.email,
-        password: payload.password,
-        mobile: payload.phone,
+        company_name: data.companyName.trim(),
+        fname: data.firstName.trim(),
+        lname: data.lastName.trim(),
+        email: data.email.trim().toLowerCase(),
+        password: data.password,
+        mobile_number: data.phone.trim(),
       });
 
       console.log("Signup API Success:", response);
 
       const registerResponse = response as any;
 
-      const token =
-        registerResponse?.token ||
-        registerResponse?.accessToken ||
-        registerResponse?.access_token ||
-        registerResponse?.data?.token ||
-        registerResponse?.data?.accessToken ||
-        registerResponse?.data?.access_token;
+    const token =
+  registerResponse?.token ||
+  registerResponse?.accessToken ||
+  registerResponse?.access_token ||
+  registerResponse?.data?.token ||
+  registerResponse?.data?.accessToken ||
+  registerResponse?.data?.access_token ||
+  registerResponse?.admin?.token ||
+  registerResponse?.data?.admin?.token ||
+  registerResponse?.company?.token ||
+  registerResponse?.data?.company?.token;
+
+      const user =
+        registerResponse?.user ||
+        registerResponse?.data?.user ||
+        registerResponse?.data;
+
+      const role =
+        user?.role ||
+        user?.role_name ||
+        user?.roleName ||
+        registerResponse?.role ||
+        registerResponse?.role_name ||
+        registerResponse?.data?.role ||
+        registerResponse?.data?.role_name;
 
       if (token) {
         localStorage.setItem("token", token);
       }
 
-      setSuccessMessage("Account created successfully. Redirecting to cart...");
+      if (role) {
+        localStorage.setItem("role", String(role));
+      }
+
+      if (user) {
+        localStorage.setItem("user", JSON.stringify(user));
+      }
+
+      toast.success("Account created successfully", { id: toastId });
 
       setTimeout(() => {
-        navigate(redirectTo, { replace: true });
-      }, 800);
-    } catch (error: any) {
+        navigate("/cart", { replace: true });
+      }, 700);
+
+      
+    } catch (error) {
       console.error("Signup API Error:", error);
 
-      setApiError(
-        error?.response?.data?.message ||
-          error?.message ||
-          "Signup failed. Please try again.",
-      );
-    } finally {
-      setLoading(false);
+      const message = getApiErrorMessage(error);
+
+      if (message.toLowerCase().includes("password")) {
+        setError("password", {
+          type: "server",
+          message,
+        });
+      } else {
+        setError("email", {
+          type: "server",
+          message,
+        });
+      }
+
+      toast.error(message, { id: toastId });
     }
   };
 
@@ -194,7 +245,6 @@ export default function SignUpForm() {
         }}
       >
         <div className="absolute inset-0 bg-white/70 backdrop-blur-[2px] dark:bg-slate-950/65" />
-
         <div className="absolute left-10 top-32 h-40 w-40 rounded-full bg-blue-600/20 blur-3xl" />
 
         <div className="relative z-10 w-full max-w-4xl overflow-hidden rounded-2xl border border-slate-200/80 bg-white/90 shadow-2xl shadow-slate-950/20 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/90 dark:shadow-black/30">
@@ -232,25 +282,24 @@ export default function SignUpForm() {
                 </p>
               </div>
 
-              <form onSubmit={handleSubmit} noValidate>
+              <form onSubmit={handleSubmit(onSubmit)} noValidate>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
                     <Label>First Name *</Label>
 
                     <Input
-                      name="firstName"
                       placeholder="John"
                       className={`mt-1 ${
                         errors.firstName
                           ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
                           : ""
                       }`}
-                      onChange={() => clearError("firstName")}
+                      {...register("firstName")}
                     />
 
-                    {errors.firstName && (
+                    {errors.firstName?.message && (
                       <p className="mt-1 text-xs text-red-500">
-                        {errors.firstName}
+                        {errors.firstName.message}
                       </p>
                     )}
                   </div>
@@ -259,19 +308,18 @@ export default function SignUpForm() {
                     <Label>Last Name *</Label>
 
                     <Input
-                      name="lastName"
                       placeholder="Doe"
                       className={`mt-1 ${
                         errors.lastName
                           ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
                           : ""
                       }`}
-                      onChange={() => clearError("lastName")}
+                      {...register("lastName")}
                     />
 
-                    {errors.lastName && (
+                    {errors.lastName?.message && (
                       <p className="mt-1 text-xs text-red-500">
-                        {errors.lastName}
+                        {errors.lastName.message}
                       </p>
                     )}
                   </div>
@@ -280,19 +328,18 @@ export default function SignUpForm() {
                     <Label>Company Name *</Label>
 
                     <Input
-                      name="companyName"
                       placeholder="ABC Mining Pvt Ltd"
                       className={`mt-1 ${
                         errors.companyName
                           ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
                           : ""
                       }`}
-                      onChange={() => clearError("companyName")}
+                      {...register("companyName")}
                     />
 
-                    {errors.companyName && (
+                    {errors.companyName?.message && (
                       <p className="mt-1 text-xs text-red-500">
-                        {errors.companyName}
+                        {errors.companyName.message}
                       </p>
                     )}
                   </div>
@@ -301,19 +348,27 @@ export default function SignUpForm() {
                     <Label>Phone *</Label>
 
                     <Input
-                      name="phone"
+                      type="tel"
                       placeholder="9876543210"
+                      maxLength={10}
+                      inputMode="numeric"
                       className={`mt-1 ${
                         errors.phone
                           ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
                           : ""
                       }`}
-                      onChange={() => clearError("phone")}
+                      {...register("phone")}
+                      onInput={(e: React.FormEvent<HTMLInputElement>) => {
+                        e.currentTarget.value = e.currentTarget.value.replace(
+                          /\D/g,
+                          "",
+                        );
+                      }}
                     />
 
-                    {errors.phone && (
+                    {errors.phone?.message && (
                       <p className="mt-1 text-xs text-red-500">
-                        {errors.phone}
+                        {errors.phone.message}
                       </p>
                     )}
                   </div>
@@ -322,20 +377,20 @@ export default function SignUpForm() {
                     <Label>Company Email *</Label>
 
                     <Input
-                      name="email"
                       type="email"
                       placeholder="company@email.com"
+                      autoComplete="email"
                       className={`mt-1 ${
                         errors.email
                           ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
                           : ""
                       }`}
-                      onChange={() => clearError("email")}
+                      {...register("email")}
                     />
 
-                    {errors.email && (
+                    {errors.email?.message && (
                       <p className="mt-1 text-xs text-red-500">
-                        {errors.email}
+                        {errors.email.message}
                       </p>
                     )}
                   </div>
@@ -345,15 +400,15 @@ export default function SignUpForm() {
 
                     <div className="relative mt-1">
                       <Input
-                        name="password"
                         type={showPassword ? "text" : "password"}
                         placeholder="Enter strong password"
+                        autoComplete="new-password"
                         className={`pr-12 ${
                           errors.password
                             ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
                             : ""
                         }`}
-                        onChange={() => clearError("password")}
+                        {...register("password")}
                       />
 
                       <button
@@ -369,32 +424,20 @@ export default function SignUpForm() {
                       </button>
                     </div>
 
-                    {errors.password && (
+                    {errors.password?.message && (
                       <p className="mt-1 text-xs text-red-500">
-                        {errors.password}
+                        {errors.password.message}
                       </p>
                     )}
                   </div>
                 </div>
 
-                {apiError && (
-                  <p className="mt-3 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-400">
-                    {apiError}
-                  </p>
-                )}
-
-                {successMessage && (
-                  <p className="mt-3 rounded-lg bg-green-50 px-4 py-2 text-sm text-green-600 dark:bg-green-500/10 dark:text-green-400">
-                    {successMessage}
-                  </p>
-                )}
-
                 <button
                   type="submit"
-                  disabled={loading}
+                  disabled={isSubmitting}
                   className="mt-4 w-full rounded-xl bg-blue-600 py-3 text-sm font-bold text-white shadow-lg shadow-blue-600/30 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
                 >
-                  {loading ? "Creating Account..." : "Create Account"}
+                  {isSubmitting ? "Creating Account..." : "Create Account"}
                 </button>
               </form>
 

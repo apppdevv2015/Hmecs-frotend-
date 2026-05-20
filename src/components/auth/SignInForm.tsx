@@ -1,6 +1,9 @@
 import toast from "react-hot-toast";
-import { FormEvent, useEffect, useState } from "react";
-import { Link } from "react-router";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
 
 import { EyeCloseIcon, EyeIcon } from "../../icons";
 import Label from "../form/Label";
@@ -13,10 +16,20 @@ import { userService } from "../../services/userService";
 import Navbar from "../../components/landing/Navbar";
 import Footer from "../../components/landing/Footer";
 
-type FormErrors = {
-  email?: string;
-  password?: string;
-};
+const signInSchema = z.object({
+  email: z
+    .string()
+    .trim()
+    .min(1, "Email is required.")
+    .email("Please enter a valid email address."),
+
+  password: z
+    .string()
+    .min(1, "Password is required.")
+    .min(5, "Password must be at least 6 characters."),
+});
+
+type SignInFormData = z.infer<typeof signInSchema>;
 
 type LoginUser = {
   id?: string | number;
@@ -41,6 +54,7 @@ type LoginResponse = {
   admin?: LoginUser;
   company?: LoginUser;
   data?: {
+    message?: string;
     token?: string;
     accessToken?: string;
     access_token?: string;
@@ -58,205 +72,206 @@ type DecodedToken = {
   companyName?: string;
   company?: string;
   user?: LoginUser;
+  data?: {
+    role?: string;
+    role_name?: string;
+    email?: string;
+    name?: string;
+    user?: LoginUser;
+  };
+  roles?: string[];
   exp?: number;
 };
 
-export default function SignInForm() {
+const normalizeRole = (role?: string | number | null) => {
+  if (!role) return "";
 
+  return String(role)
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, "_")
+    .replace(/-/g, "_")
+    .replace(/_+$/g, "");
+};
+
+const getRedirectPathByRole = (role?: string | number | null) => {
+  const normalizedRole = normalizeRole(role);
+
+  const roleRoutes: Record<string, string> = {
+    super_admin: "/super-admin/dashboard",
+    superadmin: "/super-admin/dashboard",
+    system_admin: "/super-admin/dashboard",
+
+    admin: "/company-admin/dashboard",
+    company_admin: "/company-admin/dashboard",
+    companyadmin: "/company-admin/dashboard",
+
+    operator: "/operator/dashboard",
+    planner: "/operator/dashboard",
+
+    mechanic: "/mechanic/dashboard",
+
+    engineer: "/engineer/dashboard",
+
+    viewer: "/viewer/dashboard",
+  };
+
+  return roleRoutes[normalizedRole] || null;
+};
+
+const clearAuthStorage = () => {
+  localStorage.removeItem("token");
+  localStorage.removeItem("user");
+  localStorage.removeItem("role");
+  localStorage.removeItem("email");
+  localStorage.removeItem("name");
+};
+
+const decodeToken = (token: string): DecodedToken | null => {
+  try {
+    const base64Url = token.split(".")[1];
+    if (!base64Url) return null;
+
+    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+
+    const jsonPayload = decodeURIComponent(
+      window
+        .atob(base64)
+        .split("")
+        .map((char) => `%${`00${char.charCodeAt(0).toString(16)}`.slice(-2)}`)
+        .join("")
+    );
+
+    return JSON.parse(jsonPayload);
+  } catch (error) {
+    console.error("Token decode error:", error);
+    return null;
+  }
+};
+
+const getUserFullName = (user?: LoginUser) => {
+  const fullName = `${user?.first_name || ""} ${user?.last_name || ""}`.trim();
+  return user?.name || fullName || user?.email || "User";
+};
+
+const getLoginData = (response: LoginResponse) => response?.data || response;
+
+const getApiErrorMessage = (error: unknown) => {
+  const defaultMessage = "Invalid email or password";
+
+  if (!(error instanceof Error) || !error.message) {
+    return defaultMessage;
+  }
+
+  const message = error.message.toLowerCase();
+
+  const blockedWords = [
+    "select",
+    "insert",
+    "update",
+    "delete",
+    "relation",
+    "sql",
+    "database",
+    "users",
+    "roles",
+    "companies",
+    "join",
+    "where",
+    "limit",
+    "syntax",
+    "column",
+    "table",
+  ];
+
+  const isBackendError = blockedWords.some((word) => message.includes(word));
+
+  if (isBackendError) {
+    return defaultMessage;
+  }
+
+  return error.message;
+};
+
+const showLoginSuccessToast = (role?: string | number | null) => {
+  const normalizedRole = normalizeRole(role);
+
+  const messages: Record<string, string> = {
+    super_admin: "Super Admin login successfully",
+    superadmin: "Super Admin login successfully",
+    system_admin: "Super Admin login successfully",
+
+    admin: "Company Admin login successfully",
+    company_admin: "Company Admin login successfully",
+    companyadmin: "Company Admin login successfully",
+
+    operator: "Operator login successfully",
+    planner: "Operator login successfully",
+
+    mechanic: "Mechanic login successfully",
+
+    engineer: "Engineer login successfully",
+
+    viewer: "Viewer login successfully",
+  };
+
+  toast.dismiss();
+
+  toast.success(messages[normalizedRole] || "Login successfully", {
+    duration: 2500,
+    position: "top-right",
+  });
+};
+
+export default function SignInForm() {
+  const navigate = useNavigate();
 
   const [active, setActive] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isChecked, setIsChecked] = useState(false);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
 
-  const [errors, setErrors] = useState<FormErrors>({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const defaultValues = useMemo<SignInFormData>(
+    () => ({
+      email: "",
+      password: "",
+    }),
+    []
+  );
+
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    setError,
+    clearErrors,
+    formState: { errors, isSubmitting },
+  } = useForm<SignInFormData>({
+    resolver: zodResolver(signInSchema),
+    defaultValues,
+    mode: "onSubmit",
+    reValidateMode: "onChange",
+  });
 
   useEffect(() => {
     const rememberMe = localStorage.getItem("rememberMe");
     const rememberedEmail = localStorage.getItem("rememberEmail");
 
     if (rememberMe === "true" && rememberedEmail) {
-      setEmail(rememberedEmail);
+      setValue("email", rememberedEmail, { shouldValidate: false });
       setIsChecked(true);
     }
-  }, []);
+  }, [setValue]);
 
-  const validateForm = () => {
-    const newErrors: FormErrors = {};
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-    if (!email.trim()) {
-      newErrors.email = "Company email is required.";
-    } else if (!emailRegex.test(email.trim())) {
-      newErrors.email = "Please enter a valid email address.";
-    }
-
-    if (!password.trim()) {
-      newErrors.password = "Password is required.";
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const decodeToken = (token: string): DecodedToken | null => {
+  const onSubmit = async (formData: SignInFormData) => {
     try {
-      const base64Url = token.split(".")[1];
-      if (!base64Url) return null;
+      clearErrors();
 
-      const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
-
-      const jsonPayload = decodeURIComponent(
-        window
-          .atob(base64)
-          .split("")
-          .map((char) => {
-            return "%" + ("00" + char.charCodeAt(0).toString(16)).slice(-2);
-          })
-          .join(""),
-      );
-
-      return JSON.parse(jsonPayload);
-    } catch (error) {
-      console.error("Token decode error:", error);
-      return null;
-    }
-  };
-
-  const normalizeRole = (role?: string | number | null) => {
-    if (!role) return "";
-
-    return String(role)
-      .toLowerCase()
-      .trim()
-      .replace(/\s+/g, "_")
-      .replace(/-/g, "_");
-  };
-
-  const getRedirectPathByRole = (role?: string | number | null) => {
-    const normalizedRole = normalizeRole(role);
-
-    if (
-      normalizedRole === "super_admin" ||
-      normalizedRole === "superadmin" ||
-      normalizedRole === "super_admin_role"
-    ) {
-      return "/super-admin/dashboard";
-    }
-
-    if (
-      normalizedRole === "admin" ||
-      normalizedRole === "company_admin" ||
-      normalizedRole === "companyadmin"
-    ) {
-      return "/company-admin/dashboard";
-    }
-
-    if (normalizedRole === "operator") {
-      return "/operator/dashboard";
-    }
-
-    if (normalizedRole === "mechanic") {
-      return "/mechanic/dashboard";
-    }
-
-    if (normalizedRole === "engineer") {
-      return "/engineer/dashboard";
-    }
-
-    if (normalizedRole === "planner") {
-      return "/planner/dashboard";
-    }
-
-    if (normalizedRole === "viewer") {
-      return "/viewer/dashboard";
-    }
-
-    return null;
-  };
-
-  const clearAuthStorage = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    localStorage.removeItem("role");
-  };
-
-  const getUserFullName = (user?: LoginUser) => {
-    const fullName = `${user?.first_name || ""} ${user?.last_name || ""}`.trim();
-    return user?.name || fullName || user?.email || "User";
-  };
-
-  const getLoginData = (response: LoginResponse) => {
-    return response?.data || response;
-  };
-
-  const showLoginSuccessToast = (
-    role?: string | number | null,
-    user?: LoginUser,
-  ) => {
-    const normalizedRole = normalizeRole(role);
-
-    if (normalizedRole === "super_admin" || normalizedRole === "superadmin") {
-      toast.success("Super Admin login successful");
-      return;
-    }
-
-    if (normalizedRole === "admin" || normalizedRole === "company_admin") {
-      const companyName =
-        user?.companyName ||
-        user?.company_name ||
-        user?.company ||
-        getUserFullName(user);
-
-      toast.success(`${companyName} login successful`);
-      return;
-    }
-
-    if (normalizedRole === "operator") {
-      toast.success("Operator login successful");
-      return;
-    }
-
-    if (normalizedRole === "mechanic") {
-      toast.success("Mechanic login successful");
-      return;
-    }
-
-    if (normalizedRole === "engineer") {
-      toast.success("Engineer login successful");
-      return;
-    }
-
-    if (normalizedRole === "planner") {
-      toast.success("Planner login successful");
-      return;
-    }
-
-    if (normalizedRole === "viewer") {
-      toast.success("Viewer login successful");
-      return;
-    }
-
-    toast.success("Login successful");
-  };
-
-  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-
-    if (!validateForm()) return;
-
-    try {
-      setIsSubmitting(true);
-      setErrors({});
+      const email = formData.email.trim().toLowerCase();
 
       const response = (await authService.login({
-        email: email.trim(),
-        password,
+        email,
+        password: formData.password,
       })) as LoginResponse;
-
-      console.log("LOGIN RESPONSE:", response);
 
       const loginData = getLoginData(response);
 
@@ -266,56 +281,77 @@ export default function SignInForm() {
       const apiUser =
         loginData?.user || loginData?.admin || loginData?.company || undefined;
 
-      console.log("LOGIN DATA:", loginData);
-      console.log("TOKEN:", token);
-      console.log("API USER:", apiUser);
-
       if (!token) {
         clearAuthStorage();
-        setErrors({ password: "Token not found in login response." });
-        toast.error("Token not found in login response");
+
+        setError("password", {
+          type: "server",
+          message: "Token not found in login response.",
+        });
+
+        toast.dismiss();
+        toast.error("Token not found in login response", {
+          duration: 3000,
+          position: "top-right",
+        });
+
         return;
       }
 
       const decodedToken = decodeToken(token);
-
-      console.log("DECODED TOKEN:", decodedToken);
 
       const userRole =
         decodedToken?.role ||
         decodedToken?.role_name ||
         decodedToken?.user?.role ||
         decodedToken?.user?.role_name ||
+        decodedToken?.data?.role ||
+        decodedToken?.data?.role_name ||
+        decodedToken?.data?.user?.role ||
+        decodedToken?.data?.user?.role_name ||
+        decodedToken?.roles?.[0] ||
         apiUser?.role ||
         apiUser?.role_name;
 
-      const redirectPath = getRedirectPathByRole(userRole);
-
-      console.log("USER ROLE:", userRole);
-      console.log("REDIRECT PATH:", redirectPath);
+      const normalizedRole = normalizeRole(userRole);
+      const redirectPath = getRedirectPathByRole(normalizedRole);
 
       if (!redirectPath) {
         clearAuthStorage();
-        setErrors({
-          password: `Role not allowed: ${userRole || "No role found"}`,
+
+        const message = `Role not allowed: ${userRole || "No role found"}`;
+
+        setError("password", {
+          type: "server",
+          message,
         });
-        toast.error(`Role not allowed: ${userRole || "No role found"}`);
+
+        toast.dismiss();
+        toast.error(message, {
+          duration: 3000,
+          position: "top-right",
+        });
+
         return;
       }
 
       const finalUser: LoginUser = {
         id: apiUser?.id,
-        role: normalizeRole(userRole),
+        role: normalizedRole,
         role_name: apiUser?.role_name,
         role_id: apiUser?.role_id,
         email:
           decodedToken?.email ||
           decodedToken?.user?.email ||
+          decodedToken?.data?.email ||
+          decodedToken?.data?.user?.email ||
           apiUser?.email ||
-          email.trim(),
+          email,
         name:
           decodedToken?.name ||
           decodedToken?.user?.name ||
+          decodedToken?.data?.name ||
+          decodedToken?.data?.user?.name ||
           apiUser?.name ||
           getUserFullName(apiUser),
         first_name: apiUser?.first_name,
@@ -334,48 +370,55 @@ export default function SignInForm() {
 
       localStorage.setItem("token", token);
       localStorage.setItem("user", JSON.stringify(finalUser));
-      localStorage.setItem("role", normalizeRole(userRole));
+      localStorage.setItem("role", normalizedRole);
       localStorage.setItem("email", finalUser.email || "");
       localStorage.setItem("name", finalUser.name || "");
 
-      // After setting token, check subscription for company admin
       let finalRedirect = redirectPath;
-      if (normalizeRole(userRole) === "company_admin" || normalizeRole(userRole) === "admin") {
+
+      if (normalizedRole === "company_admin" || normalizedRole === "admin") {
         try {
-          const sub = await userService.getActiveSubscription();
-          if (!sub) {
+          const subscription = await userService.getActiveSubscription();
+
+          if (!subscription) {
             finalRedirect = "/plans";
           }
-        } catch (subErr) {
-          console.error("Sub check error during login:", subErr);
-          // If error, default to redirectPath and let dashboard handle it
+        } catch (subscriptionError) {
+          console.error("Subscription check error:", subscriptionError);
         }
       }
 
       if (isChecked) {
         localStorage.setItem("rememberMe", "true");
-        localStorage.setItem("rememberEmail", email.trim());
+        localStorage.setItem("rememberEmail", email);
       } else {
         localStorage.removeItem("rememberMe");
         localStorage.removeItem("rememberEmail");
       }
 
-      showLoginSuccessToast(userRole, finalUser);
-      
-      // Check for redirect query parameter
       const searchParams = new URLSearchParams(window.location.search);
       const redirectParam = searchParams.get("redirect");
-      const finalDest = redirectParam || finalRedirect;
 
-      window.location.href = finalDest;
+      showLoginSuccessToast(normalizedRole);
+
+      navigate(redirectParam || finalRedirect, { replace: true });
     } catch (error) {
       console.error("Login API Error:", error);
 
       clearAuthStorage();
-      setErrors({ password: "Invalid email or password" });
-      toast.error("Invalid email or password");
-    } finally {
-      setIsSubmitting(false);
+
+      const message = getApiErrorMessage(error);
+
+      setError("password", {
+        type: "server",
+        message,
+      });
+
+      toast.dismiss();
+      toast.error(message || "Invalid email or password", {
+        duration: 3000,
+        position: "top-right",
+      });
     }
   };
 
@@ -390,7 +433,6 @@ export default function SignInForm() {
         }}
       >
         <div className="absolute inset-0 bg-white/70 backdrop-blur-[2px] dark:bg-slate-950/65" />
-
         <div className="absolute left-10 top-32 h-40 w-40 rounded-full bg-blue-600/20 blur-3xl" />
 
         <div className="relative z-10 w-full max-w-sm rounded-2xl border border-slate-200/80 bg-white/90 p-5 shadow-2xl shadow-slate-950/20 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/90 dark:shadow-black/30">
@@ -408,7 +450,11 @@ export default function SignInForm() {
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+          <form
+            onSubmit={handleSubmit(onSubmit)}
+            className="space-y-4"
+            noValidate
+          >
             <div>
               <Label>
                 Company Email <span className="text-red-500">*</span>
@@ -416,29 +462,24 @@ export default function SignInForm() {
 
               <Input
                 type="email"
-                placeholder="you@company.com"
+                placeholder="Enter your company email"
+                autoComplete="email"
+                error={Boolean(errors.email)}
                 className={`mt-2 ${
                   errors.email
                     ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
                     : ""
                 }`}
-                value={email}
-                onChange={(e) => {
-                  setEmail(e.target.value);
-
-                  if (errors.email || errors.password) {
-                    setErrors((prev) => ({
-                      ...prev,
-                      email: "",
-                      password: "",
-                    }));
-                  }
-                }}
+                {...register("email", {
+                  onChange: () => {
+                    if (errors.email) clearErrors("email");
+                  },
+                })}
               />
 
-              {errors.email && (
+              {errors.email?.message && (
                 <p className="mt-1 text-xs font-medium text-red-500">
-                  {errors.email}
+                  {errors.email.message}
                 </p>
               )}
             </div>
@@ -452,28 +493,25 @@ export default function SignInForm() {
                 <Input
                   type={showPassword ? "text" : "password"}
                   placeholder="Enter your password"
+                  autoComplete="current-password"
+                  error={Boolean(errors.password)}
                   className={`pr-12 ${
                     errors.password
                       ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
                       : ""
                   }`}
-                  value={password}
-                  onChange={(e) => {
-                    setPassword(e.target.value);
-
-                    if (errors.password) {
-                      setErrors((prev) => ({
-                        ...prev,
-                        password: "",
-                      }));
-                    }
-                  }}
+                  {...register("password", {
+                    onChange: () => {
+                      if (errors.password) clearErrors("password");
+                    },
+                  })}
                 />
 
                 <button
                   type="button"
                   onClick={() => setShowPassword((prev) => !prev)}
                   className="absolute right-4 top-1/2 z-20 flex h-6 w-6 -translate-y-1/2 items-center justify-center text-slate-500 transition hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
                 >
                   {showPassword ? (
                     <EyeIcon className="h-5 w-5 fill-current" />
@@ -483,21 +521,21 @@ export default function SignInForm() {
                 </button>
               </div>
 
-              {errors.password && (
+              {errors.password?.message && (
                 <p className="mt-1 text-xs font-medium text-red-500">
-                  {errors.password}
+                  {errors.password.message}
                 </p>
               )}
             </div>
 
             <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-2">
+              <label className="flex cursor-pointer items-center gap-2">
                 <Checkbox checked={isChecked} onChange={setIsChecked} />
 
                 <span className="text-sm text-slate-600 dark:text-slate-400">
                   Remember me
                 </span>
-              </div>
+              </label>
 
               <Link
                 to="/reset-password"
@@ -508,6 +546,7 @@ export default function SignInForm() {
             </div>
 
             <Button
+              type="submit"
               disabled={isSubmitting}
               className="w-full rounded-xl bg-blue-600 py-3 text-sm font-bold text-white shadow-lg shadow-blue-600/30 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
             >

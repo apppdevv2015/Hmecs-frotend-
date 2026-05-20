@@ -6,7 +6,7 @@ export type RegisterPayload = {
   lname: string;
   email: string;
   password: string;
-  mobile: string;
+  mobile_number: string;
 };
 
 export type LoginPayload = {
@@ -15,11 +15,13 @@ export type LoginPayload = {
 };
 
 export type AuthResponse = {
+  success?: boolean;
   message?: string;
   token?: string;
   admin?: unknown;
   company?: unknown;
   user?: unknown;
+  data?: unknown;
 };
 
 export const authService = {
