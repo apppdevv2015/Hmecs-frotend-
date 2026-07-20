@@ -26,8 +26,8 @@ export const CompanyAdminNav: React.FC = () => {
       icon: <Register size={18} />,
     },
     {
-      name: "Maintenance Log",
-      path: "/company-admin/maintenance",
+      name: "Add Machine",
+      path: "/company-admin/machines",
       icon: <Log size={18} />,
     },
     {
@@ -75,18 +75,6 @@ export const CompanyAdminNav: React.FC = () => {
             </Link>
           );
         })}
-
-        <Link
-          to="/company-admin/add-component"
-          className={`flex items-center gap-3 rounded-[2rem] px-6 py-4 text-[11px] font-black uppercase tracking-widest transition-all ${
-            currentPath === "/company-admin/add-component"
-              ? "bg-blue-500 text-white shadow-lg shadow-blue-500/25"
-              : "border border-orange-100 bg-orange-50 text-orange-500 hover:bg-orange-100 dark:border-orange-500/20 dark:bg-orange-500/10 dark:text-orange-400 dark:hover:bg-orange-500/20"
-          }`}
-        >
-          <PlusCircle size={18} />
-          Add Component
-        </Link>
       </div>
     </div>
   );

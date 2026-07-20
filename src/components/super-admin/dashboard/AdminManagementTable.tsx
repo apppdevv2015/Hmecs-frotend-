@@ -22,25 +22,47 @@ import { useNavigate } from "react-router";
 
 type ApiUser = {
   id: string | number;
+
+  firstName?: string;
+  lastName?: string;
+
   first_name?: string;
   last_name?: string;
+
   fname?: string;
   lname?: string;
+
   name?: string;
   email?: string;
-  mobile?: string;
+
+  mobileNumber?: string;
   mobile_number?: string;
+  mobile?: string;
   phone?: string;
+
   role_name?: string;
   role?: string | { name?: string };
+
   company_id?: string | number | null;
   company_code?: string | null;
+  companyCode?: string;
   company_name?: string;
-  company?: string | { name?: string; code?: string };
+
+  company?: {
+    id?: string;
+    name?: string;
+    companyCode?: string;
+    companyCodee?: string;
+  };
+
   status?: string;
+
+  isActive?: boolean;
   is_active?: boolean;
+
   created_at?: string;
   createdAt?: string;
+
   updated_at?: string;
   updatedAt?: string;
 };
@@ -64,15 +86,32 @@ type Admin = {
 const roleColor: Record<string, string> = {
   super_admin:
     "bg-purple-50 text-purple-700 dark:bg-purple-500/15 dark:text-purple-400",
+
   admin: "bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400",
-  engineer:
+
+  Artisans:
     "bg-green-50 text-green-700 dark:bg-green-500/15 dark:text-green-400",
-  planner:
+
+  supervisor:
     "bg-orange-50 text-orange-700 dark:bg-orange-500/15 dark:text-orange-400",
+
+  operator: "bg-cyan-50 text-cyan-700 dark:bg-cyan-500/15 dark:text-cyan-400",
+
+  planner:
+    "bg-yellow-50 text-yellow-700 dark:bg-yellow-500/15 dark:text-yellow-400",
+
   viewer: "bg-gray-50 text-gray-700 dark:bg-gray-500/15 dark:text-gray-400",
 };
 
-const uniqueRoles = ["super_admin", "admin", "engineer", "planner", "viewer"];
+const uniqueRoles = [
+  "super_admin",
+  "admin",
+  "Artisans",
+  "supervisor",
+  "operator",
+  "planner",
+  "viewer",
+];
 
 const getApiMessage = (response: unknown, fallback: string) => {
   if (response && typeof response === "object") {
@@ -147,18 +186,24 @@ const getCompanyName = (user: ApiUser) => {
     return user.company?.name || user.company_name || "-";
   }
 
-  return user.company_name || user.company || "-";
+  return user.company_name || "-";
 };
 
 const getCompanyCode = (user: ApiUser) => {
   if (typeof user.company === "object") {
-    return user.company?.code || user.company_code || "-";
+    return (
+      user.company?.companyCode || user.companyCode || user.company_code || "-"
+    );
   }
 
-  return user.company_code || "-";
+  return user.companyCode || user.company_code || "-";
 };
 
 const getStatus = (user: ApiUser) => {
+  if (typeof user.isActive === "boolean") {
+    return user.isActive ? "Active" : "Inactive";
+  }
+
   if (typeof user.is_active === "boolean") {
     return user.is_active ? "Active" : "Inactive";
   }
@@ -171,16 +216,19 @@ const normalizeRole = (role?: string) => {
 
   if (value === "super_admin") return "super_admin";
   if (value === "admin") return "admin";
-  if (value === "engineer") return "engineer";
+  if (value === "Artisans") return "Artisans";
+  if (value === "supervisor") return "supervisor";
+  if (value === "operator") return "operator";
   if (value === "planner") return "planner";
   if (value === "viewer") return "viewer";
 
-  return value || "viewer";
+  return value || "unknown";
 };
 
 const mapApiUserToAdmin = (user: ApiUser): Admin => {
-  const firstName = user.first_name || user.fname || "";
-  const lastName = user.last_name || user.lname || "";
+  const firstName = user.firstName || user.first_name || user.fname || "";
+
+  const lastName = user.lastName || user.last_name || user.lname || "";
 
   const fullName =
     user.name || `${firstName} ${lastName}`.trim() || "Unknown User";
@@ -192,17 +240,33 @@ const mapApiUserToAdmin = (user: ApiUser): Admin => {
 
   return {
     id: user.id,
+
     firstName,
     lastName,
+
     name: fullName,
+
     email: user.email || "",
-    mobileNumber: user.mobile_number || user.mobile || user.phone || "",
+
+    mobileNumber:
+      user.mobileNumber ||
+      user.mobile_number ||
+      user.mobile ||
+      user.phone ||
+      "",
+
     roleName: normalizeRole(roleValue),
+
     companyName: getCompanyName(user),
+
     companyCode: getCompanyCode(user),
+
     status: getStatus(user),
+
     avatar: getAvatar(fullName),
+
     createdAt: user.created_at || user.createdAt || "-",
+
     updatedAt: user.updated_at || user.updatedAt || "-",
   };
 };
@@ -223,57 +287,45 @@ export default function AdminManagementTable() {
 
   const [selectedAdmin, setSelectedAdmin] = useState<Admin | null>(null);
   const [modalType, setModalType] = useState<"view" | "edit" | "delete" | null>(
-    null
+    null,
   );
   const [editForm, setEditForm] = useState<Admin | null>(null);
 
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 5;
 
-  const fetchUsers = async () => {
+  const fetchUsers = async (page = 1) => {
     try {
       setLoading(true);
       setError("");
 
-      const response = await userService.getUsers();
+      const response = await userService.getUsers({
+        page: currentPage,
+        limit: 10,
+      });
 
-      const rawResponse = response as
-  | ApiUser[]
-  | {
-      users?: ApiUser[];
-      roles?: ApiUser[];
-      data?:
-        | ApiUser[]
-        | {
-            users?: ApiUser[];
-            roles?: ApiUser[];
-          };
-    };
+      const rawResponse = response as any;
 
-const usersData = Array.isArray(rawResponse)
-  ? rawResponse
-  : Array.isArray(rawResponse?.users)
-    ? rawResponse.users
-    : Array.isArray(rawResponse?.data)
-      ? rawResponse.data
-      : Array.isArray(rawResponse?.data?.users)
-        ? rawResponse.data.users
-        : [];
+      const usersData = Array.isArray(rawResponse)
+        ? rawResponse
+        : rawResponse?.data?.users || rawResponse?.users || [];
 
-    setAdmins(
-  Array.isArray(usersData)
-    ? usersData.map(mapApiUserToAdmin)
-    : []
-);
+      const pagination = rawResponse?.data?.pagination;
+
+      setTotalPages(pagination?.pages || 1);
+      setTotalItems(pagination?.total || 0);
+
+      setAdmins(
+        Array.isArray(usersData) ? usersData.map(mapApiUserToAdmin) : [],
+      );
     } catch (err) {
       const message = getErrorMessage(err, "Failed to fetch users");
+
       setError(message);
       toast.error(message);
     } finally {
       setLoading(false);
     }
   };
-
   useEffect(() => {
     fetchUsers();
   }, []);
@@ -282,37 +334,30 @@ const usersData = Array.isArray(rawResponse)
     (selectedRole !== "All" ? 1 : 0) + (selectedStatus !== "All" ? 1 : 0);
 
   const filteredAdmins = useMemo(() => {
+    const searchText = searchTerm.toLowerCase().trim();
+
     return admins.filter((admin) => {
-      const searchText = searchTerm.toLowerCase();
+      if (!searchText) return true;
 
-      const matchesSearch =
-        admin.name.toLowerCase().includes(searchText) ||
-        admin.email.toLowerCase().includes(searchText) ||
-        admin.mobileNumber.toLowerCase().includes(searchText) ||
-        admin.roleName.toLowerCase().includes(searchText) ||
-        admin.companyName.toLowerCase().includes(searchText) ||
-        admin.companyCode.toLowerCase().includes(searchText);
-
-      const matchesRole =
-        selectedRole === "All" || admin.roleName === selectedRole;
-
-      const matchesStatus =
-        selectedStatus === "All" || admin.status === selectedStatus;
-
-      return matchesSearch && matchesRole && matchesStatus;
+      return (
+        (admin.name || "").toLowerCase().includes(searchText) ||
+        (admin.email || "").toLowerCase().includes(searchText) ||
+        (admin.mobileNumber || "").toLowerCase().includes(searchText) ||
+        (admin.roleName || "").toLowerCase().includes(searchText) ||
+        (admin.companyName || "").toLowerCase().includes(searchText) ||
+        (admin.companyCode || "").toLowerCase().includes(searchText)
+      );
     });
-  }, [admins, searchTerm, selectedRole, selectedStatus]);
+  }, [admins, searchTerm]);
 
-  const totalItems = filteredAdmins.length;
-  const totalPages = Math.ceil(totalItems / itemsPerPage);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
 
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
+  const startItem = totalItems === 0 ? 0 : (currentPage - 1) * 10 + 1;
 
-  const paginatedAdmins = filteredAdmins.slice(startIndex, endIndex);
+  const paginatedAdmins = filteredAdmins;
 
-  const startItem = totalItems === 0 ? 0 : startIndex + 1;
-  const endItem = Math.min(endIndex, totalItems);
+  const endItem = Math.min(currentPage * 10, totalItems);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -429,38 +474,14 @@ const usersData = Array.isArray(rawResponse)
 
   return (
     <>
-      <Toaster
-        position="top-right"
-        containerStyle={{
-          zIndex: 999999,
-        }}
-        toastOptions={{
-          duration: 3000,
-          style: {
-            borderRadius: "12px",
-            background: "#111827",
-            color: "#fff",
-            fontSize: "14px",
-            padding: "12px 14px",
-            boxShadow: "0 18px 45px rgba(0,0,0,0.25)",
-          },
-          success: {
-            duration: 2500,
-          },
-          error: {
-            duration: 3500,
-          },
-        }}
-      />
-
-      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm transition-all duration-300 dark:border-gray-800 dark:bg-white/[0.03]">
+      <div className="flex h-full min-h-[620px] flex-col rounded-2xl border border-slate-200 bg-white shadow-sm transition-all duration-300 dark:border-slate-800 dark:bg-slate-900">
         <div className="p-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+              <h2 className="text-lg font-semibold text-slate-950 dark:text-white">
                 Admin Management
               </h2>
-              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                 View and manage all users from the API.
               </p>
             </div>
@@ -469,7 +490,7 @@ const usersData = Array.isArray(rawResponse)
               <div className="relative">
                 <Search
                   size={18}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
                 />
 
                 <input
@@ -477,21 +498,21 @@ const usersData = Array.isArray(rawResponse)
                   placeholder="Search user..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 pl-10 pr-4 text-sm text-gray-700 outline-none transition-all duration-200 placeholder:text-gray-400 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 dark:border-gray-800 dark:bg-[#0f172a] dark:text-gray-300 dark:placeholder:text-gray-500 dark:focus:border-blue-500 sm:w-64"
+                  className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-4 text-sm text-slate-700 outline-none transition-all duration-200 placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300 dark:placeholder:text-slate-500 dark:focus:border-blue-500 sm:w-64"
                 />
               </div>
 
               <button
+                type="button"
                 onClick={() => setShowFilter(!showFilter)}
                 className={`relative flex h-10 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-medium transition-all duration-200 ${
                   showFilter || activeFilterCount > 0
                     ? "border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-500/60 dark:bg-blue-500/10 dark:text-blue-400"
-                    : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-800 dark:bg-[#0f172a] dark:text-gray-300 dark:hover:bg-white/10"
+                    : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-white/10"
                 }`}
               >
                 <SlidersHorizontal size={17} />
                 Filter
-
                 {activeFilterCount > 0 && (
                   <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-600 px-1.5 text-[10px] font-semibold text-white">
                     {activeFilterCount}
@@ -500,20 +521,21 @@ const usersData = Array.isArray(rawResponse)
               </button>
 
               {showFilter && (
-                <div className="absolute right-0 top-12 z-50 w-full rounded-2xl border border-gray-200 bg-white p-4 shadow-xl dark:border-gray-800 dark:bg-[#0f172a] sm:w-72">
-                  <div className="mb-4 flex items-center justify-between border-b border-gray-100 pb-3 dark:border-gray-800">
+                <div className="absolute right-0 top-12 z-50 w-full rounded-2xl border border-slate-200 bg-white p-4 shadow-xl dark:border-slate-800 dark:bg-slate-950 sm:w-72">
+                  <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
                     <div>
-                      <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+                      <h3 className="text-sm font-semibold text-slate-950 dark:text-white">
                         Filter Users
                       </h3>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
                         Refine list by role and status.
                       </p>
                     </div>
 
                     <button
+                      type="button"
                       onClick={() => setShowFilter(false)}
-                      className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-white/10 dark:hover:text-white"
+                      className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-white/10 dark:hover:text-white"
                     >
                       <X size={16} />
                     </button>
@@ -521,13 +543,13 @@ const usersData = Array.isArray(rawResponse)
 
                   <div className="space-y-3">
                     <div>
-                      <label className="mb-1.5 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                      <label className="mb-1.5 block text-xs font-medium text-slate-600 dark:text-slate-400">
                         Role
                       </label>
                       <select
                         value={selectedRole}
                         onChange={(e) => setSelectedRole(e.target.value)}
-                        className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-sm text-gray-700 outline-none focus:border-blue-500 dark:border-gray-800 dark:bg-[#111c2f] dark:text-gray-300"
+                        className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700 outline-none focus:border-blue-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
                       >
                         <option>All</option>
                         {uniqueRoles.map((role) => (
@@ -539,13 +561,13 @@ const usersData = Array.isArray(rawResponse)
                     </div>
 
                     <div>
-                      <label className="mb-1.5 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                      <label className="mb-1.5 block text-xs font-medium text-slate-600 dark:text-slate-400">
                         Status
                       </label>
                       <select
                         value={selectedStatus}
                         onChange={(e) => setSelectedStatus(e.target.value)}
-                        className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-sm text-gray-700 outline-none focus:border-blue-500 dark:border-gray-800 dark:bg-[#111c2f] dark:text-gray-300"
+                        className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700 outline-none focus:border-blue-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
                       >
                         <option>All</option>
                         <option>Active</option>
@@ -555,13 +577,15 @@ const usersData = Array.isArray(rawResponse)
 
                     <div className="grid grid-cols-2 gap-2 pt-2">
                       <button
+                        type="button"
                         onClick={resetFilters}
-                        className="h-10 rounded-xl border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-800 dark:text-gray-300 dark:hover:bg-white/10"
+                        className="h-10 rounded-xl border border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-white/10"
                       >
                         Reset
                       </button>
 
                       <button
+                        type="button"
                         onClick={() => setShowFilter(false)}
                         className="h-10 rounded-xl bg-blue-600 text-sm font-medium text-white hover:bg-blue-700"
                       >
@@ -573,9 +597,10 @@ const usersData = Array.isArray(rawResponse)
               )}
 
               <button
-                onClick={fetchUsers}
+                type="button"
+                onClick={() => fetchUsers(currentPage)}
                 disabled={loading}
-                className="flex h-10 items-center justify-center rounded-xl border border-gray-200 bg-white px-4 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-800 dark:bg-[#0f172a] dark:text-gray-300 dark:hover:bg-white/10"
+                className="flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-white/10"
               >
                 {loading ? "Loading..." : "Refresh"}
               </button>
@@ -583,10 +608,10 @@ const usersData = Array.isArray(rawResponse)
           </div>
         </div>
 
-        <div className="overflow-x-auto px-5 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+        <div className="min-h-0 flex-1 overflow-x-auto px-5 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
           <table className="w-full min-w-[900px] text-left">
             <thead>
-              <tr className="border-y border-gray-200 text-sm text-gray-500 dark:border-gray-800 dark:text-gray-400">
+              <tr className="border-y border-slate-200 text-sm text-slate-500 dark:border-slate-800 dark:text-slate-400">
                 <th className="px-4 py-3 font-medium">User</th>
                 <th className="px-4 py-3 font-medium">Mobile</th>
                 <th className="px-4 py-3 font-medium">Role</th>
@@ -602,7 +627,7 @@ const usersData = Array.isArray(rawResponse)
                 <tr>
                   <td
                     colSpan={7}
-                    className="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400"
+                    className="px-4 py-10 text-center text-sm text-slate-500 dark:text-slate-400"
                   >
                     Loading users...
                   </td>
@@ -611,7 +636,7 @@ const usersData = Array.isArray(rawResponse)
                 <tr>
                   <td
                     colSpan={7}
-                    className="px-4 py-8 text-center text-sm text-red-500"
+                    className="px-4 py-10 text-center text-sm text-red-500"
                   >
                     {error}
                   </td>
@@ -620,26 +645,26 @@ const usersData = Array.isArray(rawResponse)
                 paginatedAdmins.map((admin) => (
                   <tr
                     key={String(admin.id)}
-                    className="border-b border-gray-100 transition hover:bg-gray-50/70 dark:border-gray-800 dark:hover:bg-white/[0.03]"
+                    className="border-b border-slate-100 transition hover:bg-slate-50/80 dark:border-slate-800 dark:hover:bg-white/[0.03]"
                   >
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-600 text-sm font-semibold text-white">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-semibold text-white">
                           {admin.avatar || "U"}
                         </div>
 
-                        <div>
-                          <p className="font-medium text-gray-900 dark:text-white">
+                        <div className="min-w-0">
+                          <p className="truncate font-medium text-slate-950 dark:text-white">
                             {admin.name}
                           </p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">
-                            {admin.email}
+                          <p className="truncate text-xs text-slate-500 dark:text-slate-400">
+                            {admin.email || "-"}
                           </p>
                         </div>
                       </div>
                     </td>
 
-                    <td className="px-4 py-4 text-gray-700 dark:text-gray-300">
+                    <td className="px-4 py-4 text-slate-700 dark:text-slate-300">
                       {admin.mobileNumber || "-"}
                     </td>
 
@@ -653,11 +678,11 @@ const usersData = Array.isArray(rawResponse)
                       </span>
                     </td>
 
-                    <td className="px-4 py-4 text-gray-700 dark:text-gray-300">
+                    <td className="px-4 py-4 text-slate-700 dark:text-slate-300">
                       {admin.companyCode || "-"}
                     </td>
 
-                    <td className="px-4 py-4 text-gray-700 dark:text-gray-300">
+                    <td className="px-4 py-4 text-slate-700 dark:text-slate-300">
                       {admin.companyName || "-"}
                     </td>
 
@@ -675,31 +700,36 @@ const usersData = Array.isArray(rawResponse)
 
                     <td className="relative px-4 py-4">
                       <button
+                        type="button"
                         onClick={() =>
                           setOpenMenu(
                             openMenu === String(admin.id)
                               ? null
-                              : String(admin.id)
+                              : String(admin.id),
                           )
                         }
-                        className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-white/10 dark:hover:text-white"
+                        className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-white/10 dark:hover:text-white"
                       >
                         <MoreVertical size={18} />
                       </button>
 
                       {openMenu === String(admin.id) && (
-                        <div className="absolute right-6 top-12 z-50 w-36 rounded-xl border border-gray-200 bg-white py-2 shadow-lg dark:border-gray-800 dark:bg-[#0f172a]">
+                        <div className="absolute right-6 top-12 z-50 w-36 rounded-xl border border-slate-200 bg-white py-2 shadow-lg dark:border-slate-800 dark:bg-slate-950">
                           <button
+                            type="button"
                             onClick={() => handleView(admin)}
                             disabled={viewLoading}
-                            className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:text-gray-300 dark:hover:bg-white/10"
+                            className="flex w-full items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:text-slate-300 dark:hover:bg-white/10"
                           >
                             <Eye size={15} />
                             {viewLoading ? "Loading..." : "View"}
                           </button>
 
                           <button
-                            onClick={() => navigate("/super-admin/intelligence")}
+                            type="button"
+                            onClick={() =>
+                              navigate("/super-admin/intelligence")
+                            }
                             className="flex w-full items-center gap-2 px-4 py-2 text-sm text-orange-600 hover:bg-orange-50 dark:text-orange-400 dark:hover:bg-white/10"
                           >
                             <TrendingUp size={15} />
@@ -707,6 +737,7 @@ const usersData = Array.isArray(rawResponse)
                           </button>
 
                           <button
+                            type="button"
                             onClick={() => handleEdit(admin)}
                             className="flex w-full items-center gap-2 px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-white/10"
                           >
@@ -715,6 +746,7 @@ const usersData = Array.isArray(rawResponse)
                           </button>
 
                           <button
+                            type="button"
                             onClick={() => handleDelete(admin)}
                             className="flex w-full items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-white/10"
                           >
@@ -730,7 +762,7 @@ const usersData = Array.isArray(rawResponse)
                 <tr>
                   <td
                     colSpan={7}
-                    className="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400"
+                    className="px-4 py-10 text-center text-sm text-slate-500 dark:text-slate-400"
                   >
                     No users found.
                   </td>
@@ -740,22 +772,24 @@ const usersData = Array.isArray(rawResponse)
           </table>
         </div>
 
-        <Pagination
-          currentPage={currentPage}
-          totalPages={totalPages}
-          startItem={startItem}
-          endItem={endItem}
-          totalItems={totalItems}
-          onPrev={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-          onNext={() =>
-            setCurrentPage((prev) => Math.min(prev + 1, totalPages))
-          }
-        />
+        <div className="mt-auto border-t border-slate-200 dark:border-slate-800">
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            startItem={startItem}
+            endItem={endItem}
+            totalItems={totalItems}
+            onPrev={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+            onNext={() =>
+              setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+            }
+          />
+        </div>
       </div>
 
       {viewLoading && (
         <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="rounded-2xl border border-gray-200 bg-white px-6 py-5 text-sm font-semibold text-gray-700 shadow-2xl dark:border-gray-800 dark:bg-[#0f172a] dark:text-white">
+          <div className="rounded-2xl border border-slate-200 bg-white px-6 py-5 text-sm font-semibold text-slate-700 shadow-2xl dark:border-slate-800 dark:bg-slate-950 dark:text-white">
             Loading user details...
           </div>
         </div>
@@ -763,10 +797,10 @@ const usersData = Array.isArray(rawResponse)
 
       {modalType && selectedAdmin && !viewLoading && (
         <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-gray-200 bg-white p-5 shadow-2xl transition-all duration-300 [scrollbar-width:none] dark:border-gray-800 dark:bg-[#0f172a] [&::-webkit-scrollbar]:hidden">
+          <div className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl transition-all duration-300 [scrollbar-width:none] dark:border-slate-800 dark:bg-slate-950 [&::-webkit-scrollbar]:hidden">
             <div className="mb-5 flex items-center justify-between">
               <div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                <h3 className="text-lg font-semibold text-slate-950 dark:text-white">
                   {modalType === "view" && "User Details"}
                   {modalType === "edit" && "Edit User"}
                   {modalType === "delete" && "Delete User"}
@@ -774,9 +808,10 @@ const usersData = Array.isArray(rawResponse)
               </div>
 
               <button
+                type="button"
                 onClick={closeModal}
                 disabled={isSubmitting}
-                className="rounded-xl p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-white/10 dark:hover:text-white"
+                className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-white/10 dark:hover:text-white"
               >
                 <X size={18} />
               </button>
@@ -821,14 +856,14 @@ const usersData = Array.isArray(rawResponse)
                 />
 
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                  <label className="mb-1.5 block text-xs font-medium text-slate-600 dark:text-slate-400">
                     Role
                   </label>
 
                   <div className="relative">
                     <Shield
                       size={16}
-                      className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                      className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
                     />
 
                     <select
@@ -836,7 +871,7 @@ const usersData = Array.isArray(rawResponse)
                       onChange={(e) =>
                         setEditForm({ ...editForm, roleName: e.target.value })
                       }
-                      className="h-11 w-full rounded-xl border border-gray-200 bg-gray-50 pl-10 pr-3 text-sm text-gray-700 outline-none focus:border-blue-500 dark:border-gray-800 dark:bg-[#111c2f] dark:text-gray-300"
+                      className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-3 text-sm text-slate-700 outline-none focus:border-blue-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
                     >
                       {uniqueRoles.map((role) => (
                         <option key={role} value={role}>
@@ -858,14 +893,16 @@ const usersData = Array.isArray(rawResponse)
 
                 <div className="grid grid-cols-2 gap-3 pt-3">
                   <button
+                    type="button"
                     onClick={closeModal}
                     disabled={isSubmitting}
-                    className="h-11 rounded-xl border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-800 dark:text-gray-300 dark:hover:bg-white/10"
+                    className="h-11 rounded-xl border border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-white/10"
                   >
                     Cancel
                   </button>
 
                   <button
+                    type="button"
                     onClick={saveEdit}
                     disabled={isSubmitting}
                     className="h-11 rounded-xl bg-blue-600 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
@@ -879,10 +916,16 @@ const usersData = Array.isArray(rawResponse)
             {modalType === "view" && (
               <div>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <DetailBox label="First Name" value={selectedAdmin.firstName} />
+                  <DetailBox
+                    label="First Name"
+                    value={selectedAdmin.firstName}
+                  />
                   <DetailBox label="Last Name" value={selectedAdmin.lastName} />
                   <DetailBox label="Email" value={selectedAdmin.email} />
-                  <DetailBox label="Mobile" value={selectedAdmin.mobileNumber} />
+                  <DetailBox
+                    label="Mobile"
+                    value={selectedAdmin.mobileNumber}
+                  />
                   <DetailBox
                     label="Role"
                     value={formatRole(selectedAdmin.roleName)}
@@ -908,6 +951,7 @@ const usersData = Array.isArray(rawResponse)
                 </div>
 
                 <button
+                  type="button"
                   onClick={closeModal}
                   className="mt-5 h-11 w-full rounded-xl bg-blue-600 text-sm font-medium text-white hover:bg-blue-700"
                 >
@@ -919,25 +963,27 @@ const usersData = Array.isArray(rawResponse)
             {modalType === "delete" && (
               <div>
                 <div className="mb-5 rounded-2xl border border-red-200 bg-red-50 p-4 dark:border-red-500/20 dark:bg-red-500/10">
-                  <h4 className="text-base font-semibold text-gray-900 dark:text-white">
+                  <h4 className="text-base font-semibold text-slate-950 dark:text-white">
                     Delete {selectedAdmin.name}?
                   </h4>
 
-                  <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                  <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
                     Are you sure you want to delete this user?
                   </p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <button
+                    type="button"
                     onClick={closeModal}
                     disabled={isSubmitting}
-                    className="h-11 rounded-xl border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-800 dark:text-gray-300 dark:hover:bg-white/10"
+                    className="h-11 rounded-xl border border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-white/10"
                   >
                     Cancel
                   </button>
 
                   <button
+                    type="button"
                     onClick={confirmDelete}
                     disabled={isSubmitting}
                     className="h-11 rounded-xl bg-red-600 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
@@ -956,9 +1002,9 @@ const usersData = Array.isArray(rawResponse)
 
 function DetailBox({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-gray-800 dark:bg-white/[0.04]">
-      <p className="text-xs text-gray-500 dark:text-gray-400">{label}</p>
-      <p className="mt-1 break-all text-sm font-medium text-gray-900 dark:text-white">
+    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-white/[0.04]">
+      <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
+      <p className="mt-1 break-all text-sm font-medium text-slate-950 dark:text-white">
         {value || "-"}
       </p>
     </div>
@@ -978,17 +1024,17 @@ function InputBox({
 }) {
   return (
     <div>
-      <label className="mb-1.5 block text-xs font-medium text-gray-600 dark:text-gray-400">
+      <label className="mb-1.5 block text-xs font-medium text-slate-600 dark:text-slate-400">
         {label}
       </label>
       <div className="relative">
-        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
           {icon}
         </span>
         <input
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="h-11 w-full rounded-xl border border-gray-200 bg-gray-50 pl-10 pr-3 text-sm text-gray-700 outline-none focus:border-blue-500 dark:border-gray-800 dark:bg-[#111c2f] dark:text-gray-300"
+          className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-3 text-sm text-slate-700 outline-none focus:border-blue-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
         />
       </div>
     </div>

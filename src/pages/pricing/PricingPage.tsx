@@ -1,7 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import toast from "react-hot-toast";
-import { pricingComparison } from "../../data/pricingComparison";
 import Header from "../../components/landing/Navbar";
 import Footer from "../../components/landing/Footer";
 import {
@@ -9,24 +8,59 @@ import {
   type SubscriptionPlanApi,
 } from "../../services/subscriptionService";
 import { userService } from "../../services/userService";
+import StorageService, { STORAGE_KEYS } from "../../services/storage.service";
+
+type FlexibleSubscriptionPlanApi = SubscriptionPlanApi & {
+  id: string | number;
+
+  name?: string;
+  planName?: string;
+  plan_name?: string;
+
+  price: string | number;
+
+  machineLimit?: number;
+  machine_limit?: number;
+
+  staffLimit?: number;
+  staff_limit?: number;
+
+  validityDays?: number;
+  validity_days?: number;
+
+  isPublic?: boolean;
+  is_public?: boolean;
+
+  isActive?: boolean;
+  is_active?: boolean;
+
+  description?: string;
+  features?: Record<string, boolean> | string[] | null;
+};
 
 type PricingPlan = {
   id: string | number;
   name: string;
   subtitle: string;
   price: string;
+  numericPrice: number;
   period: string;
   limit: string;
+  staffLimit: string;
+  validity: string;
   features: string[];
+  unavailableFeatures: string[];
   popular: boolean;
   icon: string;
-  rawPlan: SubscriptionPlanApi;
+  rawPlan: FlexibleSubscriptionPlanApi;
 };
 
 const featuresToArray = (
-  features: Record<string, boolean> | string[] | null,
+  features: Record<string, boolean> | string[] | null | undefined,
 ): string[] => {
-  if (Array.isArray(features)) return features.filter(Boolean);
+  if (Array.isArray(features)) {
+    return features.filter(Boolean);
+  }
 
   if (features && typeof features === "object") {
     return Object.keys(features).filter((key) => features[key]);
@@ -36,324 +70,476 @@ const featuresToArray = (
 };
 
 const formatPrice = (price: string | number) => {
-  const value = String(price ?? "0");
-  return value.startsWith("$") ? value : `$${value}`;
+  const numericPrice = Number(String(price ?? "0").replace(/[^\d.]/g, ""));
+
+  return new Intl.NumberFormat("en-ZA", {
+    style: "currency",
+    currency: "ZAR",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(isNaN(numericPrice) ? 0 : numericPrice);
+};
+
+const getPlanName = (plan: FlexibleSubscriptionPlanApi) => {
+  return (
+    plan.planName ||
+    plan.plan_name ||
+    plan.name ||
+    "Untitled Plan"
+  ).trim();
+};
+
+const getMachineLimit = (plan: FlexibleSubscriptionPlanApi) => {
+  return Number(plan.machineLimit ?? plan.machine_limit ?? 0);
+};
+
+const getStaffLimit = (plan: FlexibleSubscriptionPlanApi) => {
+  return Number(plan.staffLimit ?? plan.staff_limit ?? 0);
+};
+
+const getValidityDays = (plan: FlexibleSubscriptionPlanApi) => {
+  return Number(plan.validityDays ?? plan.validity_days ?? 30);
+};
+
+const getPlanType = (planName: string) => {
+  const name = planName.toLowerCase();
+
+  if (name.includes("gold")) return "gold";
+  if (name.includes("demo") || name.includes("free")) return "demo";
+  if (name.includes("basic")) return "basic";
+  if (name.includes("standard")) return "standard";
+  if (name.includes("pro") || name.includes("plus")) return "pro";
+  if (name.includes("enterprise")) return "enterprise";
+
+  return "default";
+};
+
+const getUnavailableFeatures = (planName: string): string[] => {
+  const type = getPlanType(planName);
+
+  if (type === "gold" || type === "enterprise") {
+    return [];
+  }
+
+  if (type === "demo") {
+    return [
+      "Advanced reporting not included",
+      "Limited machine and staff access",
+      "Priority support not available",
+    ];
+  }
+
+  if (type === "basic") {
+    return [
+      "Predictive intelligence not included",
+      "Advanced reports not available",
+      "Priority support not included",
+    ];
+  }
+
+  if (type === "standard") {
+    return [
+      "Enterprise-level analytics not included",
+      "Priority support not included",
+      "Unlimited scaling not available",
+    ];
+  }
+
+  if (type === "pro") {
+    return [
+      "Unlimited machine access not included",
+      "Dedicated enterprise support not included",
+    ];
+  }
+
+  return [
+    "Some advanced modules may be limited",
+    "Enterprise support not included",
+  ];
+};
+
+const getFallbackFeatures = (
+  planName: string,
+  machineLimit: number,
+  staffLimit: number,
+  validityDays: number,
+) => {
+  const type = getPlanType(planName);
+
+  if (type === "demo") {
+    return [
+      `${machineLimit} machines included`,
+      `${staffLimit} staff users included`,
+      `${validityDays} days demo validity`,
+      "Basic machine health preview",
+      "Limited component intelligence access",
+    ];
+  }
+
+  if (type === "gold") {
+    return [
+      `${machineLimit} machines included`,
+      `${staffLimit} staff users included`,
+      `${validityDays} days validity`,
+      "Advanced machine health monitoring",
+      "Predictive component intelligence",
+      "Priority support and reports",
+    ];
+  }
+
+  if (type === "basic") {
+    return [
+      `${machineLimit} machines included`,
+      `${staffLimit} staff users included`,
+      `${validityDays} days validity`,
+      "Machine health monitoring",
+      "Basic alerts and reports",
+    ];
+  }
+
+  if (type === "standard") {
+    return [
+      `${machineLimit} machines included`,
+      `${staffLimit} staff users included`,
+      `${validityDays} days validity`,
+      "Machine and component monitoring",
+      "Maintenance alerts and reports",
+    ];
+  }
+
+  if (type === "pro") {
+    return [
+      `${machineLimit} machines included`,
+      `${staffLimit} staff users included`,
+      `${validityDays} days validity`,
+      "Component intelligence access",
+      "Advanced alerts and reports",
+    ];
+  }
+
+  return [
+    `${machineLimit} machines included`,
+    `${staffLimit} staff users included`,
+    `${validityDays} days validity`,
+    "Machine health monitoring",
+    "Component intelligence access",
+    "Alerts and reports",
+  ];
 };
 
 const mapApiPlanToPricingPlan = (
-  plan: SubscriptionPlanApi,
+  plan: FlexibleSubscriptionPlanApi,
   index: number,
 ): PricingPlan => {
-  const features = featuresToArray(plan.features);
+  const planName = getPlanName(plan);
+  const machineLimit = getMachineLimit(plan);
+  const staffLimit = getStaffLimit(plan);
+  const validityDays = getValidityDays(plan);
+
+  const apiFeatures = featuresToArray(plan.features);
+
+  const finalFeatures =
+    apiFeatures.length > 0
+      ? apiFeatures
+      : getFallbackFeatures(planName, machineLimit, staffLimit, validityDays);
+
+  const lowerPlanName = planName.toLowerCase();
 
   return {
     id: plan.id,
-    name: plan.name || "Untitled Plan",
-    subtitle: `${plan.machine_limit ?? 0} machine limit plan for mining operations.`,
+    name: planName,
+    subtitle:
+      plan.description ||
+      `${machineLimit} machine limit and ${staffLimit} staff users for mining operations.`,
+
     price: formatPrice(plan.price),
-    period: "",
-    limit: `${plan.machine_limit ?? 0} Machines Included`,
-    features,
+
+    numericPrice: Number(String(plan.price ?? "0").replace(/[^\d.]/g, "")),
+
+    period: `/${validityDays} days`,
+    limit: `${machineLimit} Machines`,
+    staffLimit: `${staffLimit} Staff`,
+    validity: `${validityDays} Days`,
+    features: finalFeatures,
+    unavailableFeatures: getUnavailableFeatures(planName),
     popular:
-      String(plan.name).toLowerCase().includes("pro") ||
-      String(plan.name).toLowerCase().includes("plus") ||
+      lowerPlanName.includes("pro") ||
+      lowerPlanName.includes("plus") ||
       index === 1,
-    icon: index === 0 ? "⚙️" : index === 1 ? "🚜" : "🏗️",
+    icon: planName.charAt(0).toUpperCase(),
     rawPlan: plan,
   };
 };
 
 function PricingHero() {
   return (
-    <div className="mx-auto mb-14 max-w-3xl text-center">
-      <p className="mb-4 text-sm font-black uppercase tracking-[0.25em] text-blue-600">
-        Subscription Plans
-      </p>
+    <div className="relative mx-auto mb-16 max-w-6xl overflow-hidden rounded-[40px] px-6 py-12 text-center lg:px-10">
+      {/* Background Glow */}
+      <div className="absolute left-1/2 top-0 h-[280px] w-[280px] -translate-x-1/2 rounded-full bg-cyan-400/15 blur-[90px]" />
 
-      <h1 className="text-4xl font-black leading-tight text-slate-950 sm:text-6xl dark:text-white">
-        Choose the Right Plan for Your{" "}
-        <span className="text-blue-600">Mining Operations</span>
-      </h1>
+      <div className="absolute left-[15%] top-10 h-[180px] w-[180px] rounded-full bg-violet-400/10 blur-[80px]" />
 
-      <p className="mx-auto mt-6 max-w-2xl text-base leading-8 text-slate-600 dark:text-slate-300">
-        Flexible USD pricing for heavy machine maintenance, fleet tracking,
-        alerts, reports and operational intelligence.
-      </p>
+      <div className="absolute right-[15%] top-10 h-[180px] w-[180px] rounded-full bg-sky-400/10 blur-[80px]" />
+
+      {/* Right Side Human PNG */}
+
+      {/* Main Content */}
+      <div className="relative z-10">
+        {/* Small Badge */}
+        <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-cyan-200 bg-white/80 px-5 py-2 text-sm font-semibold text-cyan-700 shadow-sm backdrop-blur-md dark:border-cyan-500/20 dark:bg-cyan-500/10 dark:text-cyan-300">
+          <span className="h-2 w-2 rounded-full bg-emerald-500" />
+          Flexible Pricing Plans
+        </div>
+
+        {/* Heading */}
+        <h1 className="mx-auto max-w-5xl text-5xl font-black leading-tight tracking-tight sm:text-6xl">
+          <span className="text-slate-900 dark:text-white">
+            Smart Pricing for
+          </span>
+
+          <br />
+
+          <span className="bg-gradient-to-r from-cyan-500 via-blue-600 to-violet-600 bg-clip-text text-transparent">
+            Smarter Mining Operations
+          </span>
+        </h1>
+
+        {/* Description */}
+        <p className="mx-auto mt-6 max-w-3xl text-lg leading-8 text-slate-600 dark:text-slate-300">
+          Choose the right subscription plan to monitor machines, track
+          components, manage staff, and scale your mining operations with
+          intelligent insights.
+        </p>
+      </div>
     </div>
   );
 }
 
-function PricingCard({ 
-  plan, 
-  activePlan, 
-  hasUsedDemo 
-}: { 
-  plan: PricingPlan; 
+function PricingCard({
+  plan,
+  activePlan,
+  hasUsedDemo,
+}: {
+  plan: PricingPlan;
   activePlan?: string | null;
   hasUsedDemo?: boolean;
 }) {
   const navigate = useNavigate();
-  const [showConfirm, setShowConfirm] = useState(false);
+  const [, setShowConfirm] = useState(false);
 
-  const isDemo = plan.name.toLowerCase().includes("free") || plan.name.toLowerCase().includes("demo");
+  const isDemo =
+    plan.name.toLowerCase().includes("free") ||
+    plan.name.toLowerCase().includes("demo");
+
   const isDemoDisabled = isDemo && hasUsedDemo;
 
+  const isCurrentPlan =
+    activePlan &&
+    activePlan.trim().toLowerCase() === plan.name.trim().toLowerCase();
+
   const proceedToCart = () => {
-    localStorage.setItem(
-      "selectedPlan",
-      JSON.stringify({
-        id: plan.id,
-        name: plan.name,
-        subtitle: plan.subtitle,
-        price: plan.price,
-        period: plan.period,
-        limit: plan.limit,
-        machine_limit: plan.rawPlan.machine_limit,
-        features: plan.features,
-        icon: plan.icon,
-      }),
-    );
+    const machineLimit =
+      plan.rawPlan.machineLimit ?? plan.rawPlan.machine_limit ?? 0;
+
+    const staffLimitValue =
+      plan.rawPlan.staffLimit ?? plan.rawPlan.staff_limit ?? 0;
+
+    const validityDays =
+      plan.rawPlan.validityDays ?? plan.rawPlan.validity_days ?? 30;
+
+    StorageService.set(STORAGE_KEYS.SELECTED_PLAN, {
+      id: plan.id,
+      name: plan.name,
+      subtitle: plan.subtitle,
+      price: plan.price,
+      period: plan.period,
+      limit: plan.limit,
+      machineLimit,
+      machine_limit: machineLimit,
+      staffLimit: staffLimitValue,
+      staff_limit: staffLimitValue,
+      validityDays,
+      validity_days: validityDays,
+      validity: plan.validity,
+      features: plan.features,
+      icon: plan.icon,
+      rawPlan: plan.rawPlan,
+    });
+
     navigate("/cart");
   };
 
   const handleSelectPlan = () => {
     if (isDemoDisabled) {
       toast.dismiss();
-      toast.error("you used demo plan please upgarte now");
+      toast.error("You already used the demo plan. Please upgrade now.");
       return;
     }
 
-    if (activePlan && activePlan !== plan.name) {
+    if (activePlan && !isCurrentPlan) {
       setShowConfirm(true);
-    } else {
-      proceedToCart();
+      return;
     }
+
+    proceedToCart();
   };
 
   return (
-    <>
+    <div
+      className={`relative w-[360px] min-h-[600px]
+    overflow-hidden rounded-[30px]
+    border bg-white shadow-lg
+    transition-all duration-300
+    hover:-translate-y-1 hover:shadow-2xl
+    dark:border-slate-700 dark:bg-[#0B1220]
+    ${plan.popular ? "border-cyan-400/30" : "border-slate-200"}`}
+    >
+      {/* TOP COLORED SECTION */}
       <div
-        className={`relative flex h-full min-h-[580px] flex-col rounded-[1.75rem] border p-6 transition duration-300 hover:-translate-y-3${
-          plan.popular
-            ? "border-blue-500 bg-blue-600 text-white shadow-lg shadow-blue-600/20"
-            : "border-slate-200 bg-white text-slate-900 shadow-lg shadow-slate-200/70 dark:border-white/10 dark:bg-slate-900 dark:text-white dark:shadow-none"
-        }`}
+        className={`relative rounded-b-[36px] px-7 pt-8 pb-8 text-white
+      ${
+        plan.popular
+          ? `
+            bg-gradient-to-br
+            from-cyan-500
+            via-sky-500
+            to-blue-600
+          `
+          : `
+            bg-gradient-to-br
+            from-violet-500
+            via-indigo-500
+            to-blue-600
+          `
+      }`}
       >
+        {/* Recommended */}
         {plan.popular && (
-          <div className="absolute right-5 top-5 rounded-full bg-white px-4 py-2 text-xs font-black uppercase tracking-wide text-blue-600">
-            Most Popular
+          <div className="absolute top-5 right-5">
+            <span className="rounded-full bg-white/20 px-3 py-1 text-[10px] font-bold uppercase tracking-wider backdrop-blur-md border border-white/20">
+              Best Deal
+            </span>
           </div>
         )}
 
-        <div
-          className={`mb-7 flex h-16 w-16 items-center justify-center rounded-3xl text-3xl ${
-            plan.popular ? "bg-white/20" : "bg-blue-50 dark:bg-blue-600/20"
-          }`}
-        >
-          {plan.icon}
-        </div>
+        {/* Title */}
+        <h3 className="text-[30px] font-extrabold tracking-tight">
+          {plan.name}
+        </h3>
 
-        <h2 className="text-xl font-black uppercase tracking-wide">
-          {plan.name} PLAN
-        </h2>
-
-        <p
-          className={`mt-3 text-sm leading-6 ${
-            plan.popular ? "text-blue-50" : "text-slate-500 dark:text-slate-300"
-          }`}
-        >
+        {/* Subtitle */}
+        <p className="mt-3 min-h-[52px] text-sm leading-6 text-white/90">
           {plan.subtitle}
         </p>
 
-        <div className="mt-7 flex items-end gap-1">
-          <span
-            className={`text-5xl font-black ${
-              plan.popular ? "text-white" : "text-blue-600"
-            }`}
-          >
+        {/* Price */}
+        <div className="mt-8 flex items-end gap-2">
+          <span className="text-[56px] font-black leading-none">
             {plan.price}
+          </span>
+
+          <span className="mb-2 text-sm font-medium text-white/80">
+            {plan.period}
           </span>
         </div>
 
-        <p
-          className={`mt-4 rounded-2xl px-4 py-3 text-sm font-bold ${
-            plan.popular
-              ? "bg-white/15 text-white"
-              : "bg-blue-50 text-blue-700 dark:bg-blue-600/15 dark:text-blue-300"
-          }`}
-        >
-          {plan.limit}
-        </p>
-
-        <ul className="mt-8 max-h-[190px] flex-1 space-y-4 overflow-y-auto pr-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-          {plan.features.map((feature) => (
-            <li key={feature} className="flex items-start gap-3 text-sm leading-6">
-              <span className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-black ${plan.popular ? "bg-white text-blue-600" : "bg-blue-100 text-blue-600 dark:bg-blue-600/20 dark:text-blue-300"}`}>
-                ✓
-              </span>
-              <span className={plan.popular ? "text-white" : "text-slate-700 dark:text-slate-200"}>
-                {feature}
-              </span>
-            </li>
-          ))}
-        </ul>
-
+        {/* CTA */}
         <button
+          type="button"
           onClick={handleSelectPlan}
-          className={`mt-10 w-full rounded-2xl px-6 py-4 text-sm font-black transition hover:-translate-y-0.5 ${
-            isDemoDisabled 
-              ? "bg-orange-500 text-white shadow-lg shadow-orange-500/20 hover:bg-orange-600"
-              : plan.popular
-                ? "bg-white text-blue-600 shadow-lg hover:bg-blue-50"
-                : "bg-blue-600 text-white shadow-lg shadow-blue-600/25 hover:bg-blue-700"
-          }`}
+          className={`
+          mt-8 h-[52px] w-full rounded-[18px]
+          bg-white text-slate-900
+          text-sm font-bold
+          transition hover:scale-[1.01]
+          hover:bg-slate-100
+          active:scale-[0.98]
+          shadow-lg
+        `}
         >
-          {isDemoDisabled ? "Upgrade Now" : activePlan === plan.name ? "Current Plan" : "Proceed to Cart →"}
+          {isDemoDisabled
+            ? "Upgrade Now"
+            : isCurrentPlan
+              ? "Current Plan"
+              : "Get Started"}
         </button>
       </div>
 
-      {/* Confirmation Modal */}
-      {showConfirm && (
-        <div className="fixed inset-0 z-[999] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md scale-in-center rounded-[2.5rem] bg-white p-10 shadow-2xl dark:bg-slate-900">
-            <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-3xl bg-orange-50 text-orange-500 dark:bg-orange-500/10">
-              <span className="text-3xl">⚠️</span>
-            </div>
-            
-            <h3 className="text-2xl font-black text-slate-900 dark:text-white">
-              Active Plan Detected
-            </h3>
-            <p className="mt-4 text-slate-500 dark:text-slate-400 leading-relaxed font-medium">
-              You currently have an active <span className="font-black text-blue-600 uppercase">{activePlan}</span> plan. 
-              Buying the <span className="font-black text-orange-500 uppercase">{plan.name}</span> plan will update your subscription. 
-              Are you sure you want to proceed?
-            </p>
+      {/* BOTTOM CONTENT */}
+      <div className="px-7 py-7">
+        {/* Features */}
+        <div className="mt-8">
+          <p className="mb-5 text-sm font-bold text-slate-800 dark:text-white">
+            Benefits
+          </p>
 
-            <div className="mt-10 flex flex-col gap-3">
-              <button
-                onClick={proceedToCart}
-                className="w-full rounded-2xl bg-slate-900 py-4 text-sm font-black text-white hover:bg-slate-800 transition shadow-xl"
-              >
-                Yes, Update My Plan
-              </button>
-              <button
-                onClick={() => setShowConfirm(false)}
-                className="w-full rounded-2xl border border-slate-200 py-4 text-sm font-black text-slate-500 hover:bg-slate-50 transition"
-              >
-                Cancel
-              </button>
-            </div>
+          <div className="space-y-4">
+            {plan.features.slice(0, 5).map((feature) => (
+              <div key={feature} className="flex items-start gap-3">
+                <div
+                  className={`
+                  mt-1 flex h-5 w-5 shrink-0
+                  items-center justify-center
+                  rounded-full text-white
+                  ${plan.popular ? "bg-cyan-500" : "bg-violet-500"}
+                `}
+                >
+                  <span className="text-[10px] font-bold">✓</span>
+                </div>
+
+                <span className="text-sm leading-6 text-slate-700 dark:text-slate-300">
+                  {feature}
+                </span>
+              </div>
+            ))}
           </div>
         </div>
-      )}
-    </>
+      </div>
+    </div>
   );
 }
 
-function PricingPlans() {
-  const [plans, setPlans] = useState<PricingPlan[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [activePlan, setActivePlan] = useState<string | null>(null);
-  const [hasUsedDemo, setHasUsedDemo] = useState(false);
-
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-
-        // Fetch plans
-        const response: any = await getSubscriptionPlans();
-        const apiPlans = Array.isArray(response)
-          ? response
-          : Array.isArray(response?.data)
-            ? response.data
-            : Array.isArray(response?.plans)
-              ? response.plans
-              : Array.isArray(response?.data?.plans)
-                ? response.data.plans
-                : Array.isArray(response?.result)
-                  ? response.result
-                  : Array.isArray(response?.subscriptions)
-                    ? response.subscriptions
-                    : [];
-
-        setPlans(apiPlans.map(mapApiPlanToPricingPlan));
-
-        // Fetch active sub and history for state detection
-        const token = localStorage.getItem("token") || localStorage.getItem("authToken");
-        if (token) {
-          try {
-            const [activeSub, history] = await Promise.all([
-              userService.getActiveSubscription(),
-              userService.getSubscriptionHistory()
-            ]);
-
-            setActivePlan(activeSub?.plan_name || null);
-            setHasUsedDemo(Array.isArray(history) && history.some((sub: any) => 
-              sub.plan_name?.toLowerCase().includes("demo") || 
-              sub.plan_name?.toLowerCase().includes("free")
-            ));
-          } catch (e) {
-            console.error("Failed to fetch sub status", e);
-          }
-        }
-      } catch (error) {
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : "Failed to load pricing plans",
-        );
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, []);
-
+function PricingPlans({
+  visiblePlans,
+  loading,
+  activePlan,
+  hasUsedDemo,
+}: {
+  visiblePlans: PricingPlan[];
+  loading: boolean;
+  activePlan: string | null;
+  hasUsedDemo: boolean;
+}) {
   return (
     <main
       id="plans"
-      className="relative z-10 overflow-visible bg-gradient-to-br from-white via-blue-50 to-white px-5 py-20 lg:px-8 dark:from-[#050b18] dark:via-[#071b38] dark:to-[#050b18]"
+      className="relative z-10 overflow-x-hidden bg-gradient-to-br from-white via-blue-50 to-white px-4 py-10 lg:px-6 dark:from-[#050b18] dark:via-[#071b38] dark:to-[#050b18]"
     >
-      <div className="absolute left-1/2 top-24 h-[420px] w-[420px] -translate-x-1/2 rounded-full bg-blue-400/10 blur-3xl" />
-      <div className="absolute right-0 top-10 h-72 w-72 rounded-full bg-blue-600/5 blur-3xl" />
+      <div className="pointer-events-none absolute left-1/2 top-16 h-72 w-72 -translate-x-1/2 rounded-full bg-blue-400/10 blur-3xl" />
+      <div className="pointer-events-none absolute right-0 top-10 h-56 w-56 rounded-full bg-blue-600/5 blur-3xl" />
 
-      <div className="relative mx-auto max-w-7xl">
+      <div className="relative mx-auto max-w-[1400px] w-full overflow-hidden px-4">
         <PricingHero />
 
         {loading ? (
-          <p className="py-10 text-center text-sm font-semibold text-slate-500 dark:text-slate-300">
+          <p className="py-8 text-center text-sm font-semibold text-slate-500 dark:text-slate-300">
             Loading pricing plans...
           </p>
-        ) : plans.length === 0 ? (
-          <p className="py-10 text-center text-sm font-semibold text-slate-500 dark:text-slate-300">
+        ) : visiblePlans.length === 0 ? (
+          <p className="py-8 text-center text-sm font-semibold text-slate-500 dark:text-slate-300">
             No pricing plans found.
           </p>
         ) : (
-          <div className="relative">
-            <div className="overflow-x-auto overflow-y-visible py-4 pb-8 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-              <div className="flex snap-x snap-mandatory gap-6 px-1 sm:gap-7">
-                {plans.map((plan) => (
-                  <div
-                    key={plan.id}
-                    className="min-w-[86%] snap-start sm:min-w-[46%] lg:min-w-[calc((100%-3.5rem)/3)]"
-                  >
-                    <PricingCard 
-                      plan={plan} 
-                      activePlan={activePlan} 
-                      hasUsedDemo={hasUsedDemo} 
-                    />
-                  </div>
-                ))}
+          <div className="mx-auto flex flex-wrap items-stretch justify-center gap-8 max-w-[1400px] pt-8 pb-10">
+            {visiblePlans.map((plan) => (
+              <div key={plan.id} className="flex h-full">
+                <PricingCard
+                  plan={plan}
+                  activePlan={activePlan}
+                  hasUsedDemo={hasUsedDemo}
+                />
               </div>
-            </div>
-
-            {plans.length > 3 && (
-              <p className="mt-1 text-center text-xs font-semibold text-slate-500 dark:text-slate-400">
-                Scroll left or right to view more plans →
-              </p>
-            )}
+            ))}
           </div>
         )}
       </div>
@@ -361,65 +547,191 @@ function PricingPlans() {
   );
 }
 
-function PricingComparison() {
+const comparisonRows = [
+  {
+    label: "Machine Access",
+    value: (plan: PricingPlan) => plan.limit,
+  },
+  {
+    label: "Staff Access",
+    value: (plan: PricingPlan) => plan.staffLimit,
+  },
+  {
+    label: "Plan Validity",
+    value: (plan: PricingPlan) => plan.validity,
+  },
+  {
+    label: "Machine Health Monitoring",
+    value: (plan: PricingPlan) =>
+      plan.features.some((item) => item.toLowerCase().includes("machine"))
+        ? "✓ Included"
+        : "× Limited",
+  },
+  {
+    label: "Component Intelligence",
+    value: (plan: PricingPlan) =>
+      plan.features.some((item) => item.toLowerCase().includes("component"))
+        ? "✓ Included"
+        : "× Limited",
+  },
+  {
+    label: "Advanced Reports",
+    value: (plan: PricingPlan) =>
+      plan.unavailableFeatures.some((item) =>
+        item.toLowerCase().includes("report"),
+      )
+        ? "× Not Included"
+        : "✓ Included",
+  },
+  {
+    label: "Priority Support",
+    value: (plan: PricingPlan) =>
+      plan.unavailableFeatures.some((item) =>
+        item.toLowerCase().includes("support"),
+      )
+        ? "× Not Included"
+        : "✓ Included",
+  },
+];
+
+function PricingComparison({ plans }: { plans: PricingPlan[] }) {
   return (
     <section
       id="comparison"
-      className="bg-white px-5 py-20 lg:px-8 dark:bg-[#050b18]"
-    >
-      <div className="mx-auto max-w-7xl">
-        <div className="text-center">
-          <p className="text-sm font-black uppercase tracking-[0.25em] text-blue-600">
-            Compare Plans
-          </p>
+      className="
+      relative overflow-hidden
+      bg-gradient-to-br
+      from-[#eef7ff]
+      via-[#f9fbff]
+      to-[#f3f7ff]
+      px-5 py-20 lg:px-8
 
-          <h2 className="mt-4 text-3xl font-black text-slate-950 sm:text-5xl dark:text-white">
-            What You Get in Each Plan
+      dark:from-[#050b18]
+      dark:via-[#08111f]
+      dark:to-[#0b1424]
+    "
+    >
+      {/* Background Design */}
+      <div className="absolute inset-0 overflow-hidden">
+        {/* Left Blur */}
+        <div className="absolute left-[-100px] top-[80px] h-[320px] w-[320px] rounded-full bg-cyan-300/20 blur-[120px]" />
+
+        {/* Right Blur */}
+        <div className="absolute right-[-120px] bottom-[60px] h-[320px] w-[320px] rounded-full bg-violet-300/20 blur-[120px]" />
+
+        {/* Top Center */}
+        <div className="absolute left-1/2 top-0 h-[240px] w-[240px] -translate-x-1/2 rounded-full bg-sky-300/10 blur-[100px]" />
+
+        {/* Dot Pattern */}
+        <div className="absolute inset-0 opacity-[0.03] dark:opacity-[0.02]">
+          <div
+            className="h-full w-full"
+            style={{
+              backgroundImage:
+                "radial-gradient(circle at 1px 1px, #0f172a 1px, transparent 0)",
+              backgroundSize: "32px 32px",
+            }}
+          />
+        </div>
+      </div>
+
+      <div className="relative mx-auto max-w-7xl">
+        {/* Header */}
+        <div className="text-center">
+          <div className="inline-flex rounded-full border border-cyan-200 bg-cyan-50 px-5 py-2 text-sm font-semibold text-cyan-700 shadow-sm dark:border-cyan-500/20 dark:bg-cyan-500/10 dark:text-cyan-300">
+            Compare Plans
+          </div>
+
+          <h2 className="mt-5 text-4xl font-black tracking-tight text-slate-900 sm:text-5xl dark:text-white">
+            Compare Features Across Plans
           </h2>
 
-          <p className="mx-auto mt-5 max-w-3xl text-slate-600 dark:text-slate-300">
-            Compare machine limits, user roles, modules, reporting and support
-            before creating your company account.
+          <p className="mx-auto mt-5 max-w-3xl text-base leading-7 text-slate-600 dark:text-slate-300">
+            Compare machine access, reports, monitoring, intelligence, and
+            support to choose the best plan for your business.
           </p>
         </div>
 
-        <div className="mt-12 overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-2xl dark:border-white/10 dark:bg-white/5">
+        {/* Comparison Table */}
+        <div
+          className="
+          mt-14 overflow-hidden rounded-[34px]
+          border border-white/50
+          bg-white/75 backdrop-blur-2xl
+          shadow-[0_20px_60px_rgba(15,23,42,0.08)]
+
+          dark:border-white/10
+          dark:bg-white/[0.03]
+        "
+        >
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[820px]">
+            <table className="w-full min-w-[950px]">
+              {/* Header */}
               <thead>
-                <tr className="bg-blue-600 text-white">
-                  <th className="px-6 py-5 text-left text-sm font-black">
+                <tr className="bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-700 text-white">
+                  <th className="px-6 py-7 text-left text-sm font-bold uppercase tracking-[0.15em]">
                     Features
                   </th>
-                  <th className="px-6 py-5 text-center text-sm font-black">
-                    Basic
-                  </th>
-                  <th className="px-6 py-5 text-center text-sm font-black">
-                    Pro
-                  </th>
-                  <th className="px-6 py-5 text-center text-sm font-black">
-                    Plus
-                  </th>
+
+                  {plans.map((plan) => (
+                    <th key={plan.id} className="px-6 py-7 text-center">
+                      <div className="flex flex-col items-center">
+                        <span className="text-xs font-semibold uppercase tracking-[0.15em] text-white/80">
+                          Plan
+                        </span>
+
+                        <span className="mt-2 text-lg font-black">
+                          {plan.name}
+                        </span>
+                      </div>
+                    </th>
+                  ))}
                 </tr>
               </thead>
 
-              <tbody className="divide-y divide-slate-200 text-sm text-slate-700 dark:divide-white/10 dark:text-slate-200">
-                {pricingComparison.map(([feature, basic, pro, plus]) => (
+              {/* Body */}
+              <tbody className="divide-y divide-slate-200 dark:divide-white/10">
+                {comparisonRows.map((row) => (
                   <tr
-                    key={feature}
-                    className="transition hover:bg-blue-50 dark:hover:bg-white/5"
+                    key={row.label}
+                    className="
+                    transition-all duration-300
+                    hover:bg-cyan-50/70
+                    dark:hover:bg-cyan-500/5
+                  "
                   >
-                    <td className="px-6 py-5 font-bold text-slate-950 dark:text-white">
-                      {feature}
+                    {/* Left Label */}
+                    <td className="px-6 py-5 font-semibold text-slate-800 dark:text-slate-100">
+                      {row.label}
                     </td>
 
-                    <td className="px-6 py-5 text-center">{basic}</td>
+                    {/* Plan Values */}
+                    {plans.map((plan) => {
+                      const value = row.value(plan);
+                      const isNegative = String(value).startsWith("×");
 
-                    <td className="px-6 py-5 text-center font-bold text-blue-600 dark:text-blue-300">
-                      {pro}
-                    </td>
+                      const isIncluded = String(value).startsWith("✓");
 
-                    <td className="px-6 py-5 text-center">{plus}</td>
+                      return (
+                        <td
+                          key={`${plan.id}-${row.label}`}
+                          className="px-6 py-5 text-center"
+                        >
+                          <div
+                            className={`inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold transition-all
+                            ${
+                              isNegative
+                                ? "bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-300"
+                                : isIncluded
+                                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"
+                                  : "bg-slate-100 text-slate-700 dark:bg-white/10 dark:text-slate-200"
+                            }`}
+                          >
+                            {value}
+                          </div>
+                        </td>
+                      );
+                    })}
                   </tr>
                 ))}
               </tbody>
@@ -433,7 +745,7 @@ function PricingComparison() {
 
 function PricingCTA() {
   return (
-    <section className="relative z-10 bg-blue-600 px-5 py-20 text-center text-white lg:px-8">
+    <section className="relative z-10 overflow-x-hidden bg-blue-600 px-5 py-16 text-center text-white lg:px-8">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.25),transparent_45%)]" />
 
       <div className="relative mx-auto max-w-4xl">
@@ -459,18 +771,123 @@ function PricingCTA() {
 
 export default function PricingPage() {
   const [active, setActive] = useState("plans");
+  const [plans, setPlans] = useState<PricingPlan[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [activePlan, setActivePlan] = useState<string | null>(null);
+  const [hasUsedDemo, setHasUsedDemo] = useState(false);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+
+        const response: any = await getSubscriptionPlans();
+
+        const apiPlans: FlexibleSubscriptionPlanApi[] = Array.isArray(response)
+          ? response
+          : Array.isArray(response?.data)
+            ? response.data
+            : Array.isArray(response?.plans)
+              ? response.plans
+              : Array.isArray(response?.data?.plans)
+                ? response.data.plans
+                : Array.isArray(response?.result)
+                  ? response.result
+                  : Array.isArray(response?.subscriptions)
+                    ? response.subscriptions
+                    : [];
+
+        const publicActivePlans = apiPlans.filter((plan) => {
+          const isActive = plan.isActive ?? plan.is_active ?? true;
+          const isPublic = plan.isPublic ?? plan.is_public ?? true;
+          return isActive && isPublic;
+        });
+
+        setPlans(publicActivePlans.map(mapApiPlanToPricingPlan));
+
+        const token =
+          StorageService.get<string>(STORAGE_KEYS.TOKEN) ||
+          StorageService.get<string>(STORAGE_KEYS.AUTH_TOKEN);
+
+        if (token) {
+          try {
+            const [activeSub, history] = await Promise.all([
+              userService.getActiveSubscription(),
+              userService.getSubscriptionHistory(),
+            ]);
+
+            setActivePlan(
+              activeSub?.plan_name ||
+                activeSub?.planName ||
+                activeSub?.name ||
+                null,
+            );
+
+            setHasUsedDemo(
+              Array.isArray(history) &&
+                history.some((sub: any) => {
+                  const historyPlanName = String(
+                    sub?.plan_name || sub?.planName || sub?.name || "",
+                  ).toLowerCase();
+
+                  return (
+                    historyPlanName.includes("demo") ||
+                    historyPlanName.includes("free")
+                  );
+                }),
+            );
+          } catch (error) {
+            console.error("Failed to fetch subscription status", error);
+          }
+        }
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Failed to load pricing plans",
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  const visiblePlans = useMemo(() => {
+    return [...plans]
+      .sort((a, b) => {
+        const priceA = Number(
+          String(a.rawPlan.price ?? "0").replace(/[^\d.]/g, ""),
+        );
+
+        const priceB = Number(
+          String(b.rawPlan.price ?? "0").replace(/[^\d.]/g, ""),
+        );
+
+        return priceA - priceB;
+      })
+      .slice(0, 5);
+  }, [plans]);
 
   return (
-    <div className="min-h-screen bg-white text-slate-900 transition-colors duration-300 dark:bg-[#050b18] dark:text-white">
+    <div className="min-h-screen overflow-x-hidden pt-[90px] bg-white text-slate-900 transition-colors duration-300 dark:bg-[#050b18] dark:text-white">
       <Header active={active} setActive={setActive} />
 
-      <main>
-        <PricingPlans />
-        <PricingComparison />
+      <main className="overflow-x-hidden">
+        <PricingPlans
+          visiblePlans={visiblePlans}
+          loading={loading}
+          activePlan={activePlan}
+          hasUsedDemo={hasUsedDemo}
+        />
+
+        <PricingComparison plans={visiblePlans} />
+
         <PricingCTA />
       </main>
 
-      <div className="[&_.reveal]:!translate-y-0 [&_.reveal]:!opacity-100">
+      <div className="overflow-x-hidden [&_.reveal]:!translate-y-0 [&_.reveal]:!opacity-100">
         <Footer />
       </div>
     </div>

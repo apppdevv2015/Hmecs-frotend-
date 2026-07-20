@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
+
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import {
   Eye,
   Pencil,
@@ -9,7 +12,7 @@ import {
   UserCheck,
   X,
 } from "lucide-react";
-import toast, { Toaster } from "react-hot-toast";
+import { showErrorToast } from "../../../utils/toastUtils";
 
 import {
   ApiRole,
@@ -34,17 +37,30 @@ type Role = {
 
 type ApiUser = {
   id: number | string;
+
+  firstName?: string;
+  lastName?: string;
+
   first_name?: string;
   last_name?: string;
+
   fname?: string;
   lname?: string;
+
   name?: string;
   email?: string;
+
+  mobileNumber?: string;
   mobile?: string;
   mobile_number?: string;
   phone?: string;
+
   role_name?: string;
   role?: string | { name?: string };
+
+  roleId?: string;
+  role_id?: string | number;
+
   company_name?: string;
   company?: string | { name?: string };
 };
@@ -65,6 +81,15 @@ type FormState = {
 const emptyForm: FormState = {
   name: "",
 };
+
+const roleSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(3, "Role name must be at least 3 characters")
+    .max(30, "Role name cannot exceed 30 characters")
+    .regex(/^[A-Za-z ]+$/, "Only alphabets and spaces are allowed"),
+});
 
 const formatRoleName = (name: string) =>
   name
@@ -139,7 +164,6 @@ const getUserRole = (user: ApiUser) => {
     user.role_name ||
     (typeof user.role === "object" ? user.role?.name : user.role) ||
     "viewer";
-
   return formatRoleName(roleValue);
 };
 
@@ -151,14 +175,47 @@ const getCompanyName = (user: ApiUser) => {
   return user.company_name || user.company || "—";
 };
 
-const mapApiUserToRow = (user: ApiUser): UserRow => ({
-  id: user.id,
-  name: getUserName(user),
-  email: user.email || "—",
-  phone: user.mobile_number || user.mobile || user.phone || "—",
-  role: getUserRole(user),
-  company: getCompanyName(user),
-});
+const mapApiUserToRow = (user: ApiUser, roles: Role[]): UserRow => {
+  const firstName = user.firstName || user.first_name || user.fname || "";
+
+  const lastName = user.lastName || user.last_name || user.lname || "";
+
+  const fullName =
+    user.name || `${firstName} ${lastName}`.trim() || "Unknown User";
+
+  const matchedRole = roles.find(
+    (role) =>
+      String(role.id).trim() === String(user.roleId || user.role_id).trim(),
+  );
+
+  const roleValue =
+    matchedRole?.name ||
+    (typeof user.role === "object" ? user.role?.name : user.role) ||
+    user.role_name ||
+    "No Role";
+
+  return {
+    id: user.id,
+
+    name: fullName,
+
+    email: user.email || "—",
+
+    phone:
+      user.mobileNumber ||
+      user.mobile_number ||
+      user.mobile ||
+      user.phone ||
+      "—",
+
+    role: formatRoleName(String(roleValue)),
+
+    company:
+      typeof user.company === "object"
+        ? (user.company?.name ?? "—")
+        : user.company || user.company_name || "—",
+  };
+};
 
 export default function Roles() {
   const [roles, setRoles] = useState<Role[]>([]);
@@ -178,10 +235,16 @@ export default function Roles() {
   const [roleUsers, setRoleUsers] = useState<UserRow[]>([]);
 
   const [form, setForm] = useState<FormState>(emptyForm);
+  const [roleError, setRoleError] = useState(false);
 
   useEffect(() => {
     fetchRoles();
   }, []);
+
+  // NOTE: roleService (createRoleApi/updateRoleApi/deleteRoleApi/getRoles)
+  // doesn't go through apiCall yet, so its toasts stay manual below.
+  // userService calls (getUsers/updateUser) in this file already auto-toast
+  // via apiCall — don't add manual toasts back for those.
 
   const fetchRoles = async () => {
     try {
@@ -205,8 +268,7 @@ export default function Roles() {
       });
 
       setRoles(mappedRoles);
-    } catch (error: any) {
-      toast.error(error?.message || "Failed to fetch roles");
+    } catch {
     } finally {
       setLoading(false);
     }
@@ -255,25 +317,24 @@ export default function Roles() {
   };
 
   const handleCreateRole = async () => {
-    if (!form.name.trim()) {
-      toast.error("Please enter role name");
+    const result = roleSchema.safeParse(form);
+
+    if (!result.success) {
+      showErrorToast(result.error.issues[0].message);
       return;
     }
 
     try {
       setActionLoading(true);
 
-      await createRoleApi({
+      const response = await createRoleApi({
         name: normalizeRoleName(form.name),
       });
-
-      toast.success("Role created successfully");
 
       closeAddModal();
 
       await fetchRoles();
     } catch (error: any) {
-      toast.error(error?.message || "Failed to create role");
     } finally {
       setActionLoading(false);
     }
@@ -282,25 +343,24 @@ export default function Roles() {
   const handleUpdateRole = async () => {
     if (!editingRole) return;
 
-    if (!form.name.trim()) {
-      toast.error("Please enter role name");
+    const result = roleSchema.safeParse(form);
+
+    if (!result.success) {
+      showErrorToast(result.error.issues[0].message);
       return;
     }
 
     try {
       setActionLoading(true);
 
-      await updateRoleApi(editingRole.id, {
+      const response = await updateRoleApi(editingRole.id, {
         name: normalizeRoleName(form.name),
       });
-
-      toast.success("Role updated successfully");
 
       closeEditModal();
 
       await fetchRoles();
-    } catch (error: any) {
-      toast.error(error?.message || "Failed to update role");
+    } catch {
     } finally {
       setActionLoading(false);
     }
@@ -312,36 +372,46 @@ export default function Roles() {
     try {
       setActionLoading(true);
 
-      await deleteRoleApi(deleteRole.id);
-
-      toast.success("Role deleted successfully");
+      const response = await deleteRoleApi(deleteRole.id);
 
       setDeleteRole(null);
 
       await fetchRoles();
-    } catch (error: any) {
-      toast.error(error?.message || "Failed to delete role");
+    } catch {
     } finally {
       setActionLoading(false);
     }
   };
 
-  const openRoleUsersModal = async (role: Role) => {
+  const fetchRoleUsers = async () => {
     try {
-      setSelectedRole(role);
       setUsersLoading(true);
 
-      const response = await userService.getUsers();
+      const response = await userService.getUsers({
+        page: 1,
+        limit: 100,
+        forceRefresh: true, // cache bypass
+      } as any);
 
       const usersData = normalizeUsersResponse(response);
 
-      setRoleUsers(usersData.map(mapApiUserToRow));
-    } catch (error: any) {
-      toast.error(error?.message || "Failed to fetch users");
+      setRoleUsers(usersData.map((user) => mapApiUserToRow(user, roles)));
+    } catch {
+      // error toast already shown globally by apiCall (userService.getUsers)
     } finally {
       setUsersLoading(false);
     }
   };
+
+  const openRoleUsersModal = async (role: Role) => {
+    setSelectedRole(role);
+  };
+
+  useEffect(() => {
+    if (selectedRole && roles.length > 0) {
+      fetchRoleUsers();
+    }
+  }, [selectedRole, roles]);
 
   const handleAssignRole = async (userId: number | string) => {
     if (!selectedRole) return;
@@ -349,71 +419,96 @@ export default function Roles() {
     try {
       setActionLoading(true);
 
-      await userService.updateUser(userId, {
-        role_name: selectedRole.rawName,
-      } as any);
+      const selectedUser = roleUsers.find((user) => user.id === userId);
 
-      toast.success(`${selectedRole.name} role assigned successfully`);
+      if (!selectedUser) return;
 
-      setSelectedRole(null);
-      setRoleUsers([]);
-    } catch (error: any) {
-      toast.error(error?.message || "Failed to assign role");
+      const [firstName = "", ...rest] = selectedUser.name.split(" ");
+
+      const lastName = rest.join(" ");
+
+      const payload = {
+        first_name: firstName,
+        last_name: lastName,
+        email: selectedUser.email,
+        mobile_number: selectedUser.phone,
+        roleId: selectedRole.id,
+      };
+
+      await userService.updateUser(userId, payload);
+
+      // permanent UI update
+      setRoleUsers((prev) =>
+        prev.map((u) =>
+          u.id === userId
+            ? {
+                ...u,
+                role: formatRoleName(selectedRole.rawName),
+              }
+            : u,
+        ),
+      );
+    } catch {
+      // success/error toast already shown globally by apiCall (userService.updateUser)
     } finally {
       setActionLoading(false);
     }
   };
-
   return (
     <div className="space-y-6">
-      <Toaster
-        position="top-right"
-        toastOptions={{
-          duration: 3000,
-        }}
-      />
+      <div className="overflow-hidden rounded-2xl border border-blue-700/30 bg-gradient-to-r from-blue-800 via-blue-700 to-blue-800 px-6 py-6 shadow-lg">
+        <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
+          {/* Left Section */}
+          <div>
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.15em] text-white backdrop-blur-sm">
+              Access Control
+            </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            Role Management
-          </h1>
+            <h1 className="text-3xl font-black tracking-tight text-white">
+              Role Management
+            </h1>
 
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            Manage system roles and access
-          </p>
-        </div>
-
-        <div className="flex flex-wrap gap-3">
-          <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 dark:border-gray-700 dark:bg-[#0f172a]">
-            <Search size={16} className="text-gray-400" />
-
-            <input
-              placeholder="Search roles..."
-              className="bg-transparent text-sm text-gray-900 outline-none placeholder:text-gray-400 dark:text-white"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+            <p className="mt-2 max-w-2xl text-sm font-medium text-blue-100">
+              Manage system roles, permissions, and access control settings from
+              one centralized location.
+            </p>
           </div>
 
-          <button
-            onClick={fetchRoles}
-            disabled={loading}
-            className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-60 dark:border-gray-700 dark:bg-[#0f172a] dark:text-white dark:hover:bg-white/10"
-            type="button"
-          >
-            <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
-            Refresh
-          </button>
+          {/* Right Section */}
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Search */}
+            <div className="flex h-12 items-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-4 backdrop-blur-sm">
+              <Search size={16} className="shrink-0 text-blue-100" />
 
-          <button
-            onClick={openAddModal}
-            className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-            type="button"
-          >
-            <Plus size={16} />
-            Add Role
-          </button>
+              <input
+                placeholder="Search roles..."
+                className="w-44 bg-transparent text-sm text-white outline-none placeholder:text-blue-200"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+
+            {/* Refresh */}
+            <button
+              onClick={fetchRoles}
+              disabled={loading}
+              type="button"
+              className="flex h-12 items-center justify-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-5 text-sm font-semibold text-white backdrop-blur-sm transition-all duration-200 hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
+              Refresh
+            </button>
+
+            {/* Add Role */}
+            <button
+              onClick={openAddModal}
+              type="button"
+              className="flex h-12 items-center justify-center gap-2 rounded-2xl bg-white px-5 text-sm font-semibold text-blue-700 shadow-md transition-all duration-200 hover:bg-blue-50 hover:shadow-lg"
+            >
+              <Plus size={16} />
+              Add Role
+            </button>
+          </div>
         </div>
       </div>
 
@@ -553,6 +648,8 @@ export default function Roles() {
           onSubmit={handleCreateRole}
           submitText={actionLoading ? "Creating..." : "Create Role"}
           disabled={actionLoading}
+          roleError={roleError}
+          setRoleError={setRoleError}
         />
       )}
 
@@ -565,6 +662,8 @@ export default function Roles() {
           onSubmit={handleUpdateRole}
           submitText={actionLoading ? "Updating..." : "Update Role"}
           disabled={actionLoading}
+          roleError={roleError}
+          setRoleError={setRoleError}
         />
       )}
 
@@ -597,7 +696,6 @@ export default function Roles() {
     </div>
   );
 }
-
 function RoleFormModal({
   title,
   form,
@@ -606,50 +704,69 @@ function RoleFormModal({
   onSubmit,
   submitText,
   disabled,
+  roleError,
+  setRoleError,
 }: any) {
   return (
-    <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-2xl dark:border-gray-800 dark:bg-[#0f172a]">
-        <div className="mb-5 flex items-center justify-between">
-          <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
-            {title}
-          </h3>
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-md">
+      <div className="w-full max-w-md overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-[0_30px_80px_rgba(0,0,0,0.12)] dark:border-slate-800 dark:bg-[#081028]">
+        <div className="border-b border-slate-200 p-7 dark:border-slate-800">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="mb-2 text-xs font-bold uppercase tracking-[3px] text-blue-500">
+                ROLE MANAGEMENT
+              </p>
 
-          <button
-            onClick={onClose}
-            disabled={disabled}
-            className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-white/10"
-            type="button"
-          >
-            <X size={18} />
-          </button>
+              <h3 className="text-2xl font-bold text-slate-900 dark:text-white">
+                {title}
+              </h3>
+            </div>
+
+            <button
+              onClick={onClose}
+              disabled={disabled}
+              type="button"
+              className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 transition hover:bg-red-50 hover:text-red-500 dark:bg-slate-800 dark:hover:bg-red-500/10"
+            >
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
-        <InputField
-          label="Role Name"
-          value={form.name}
-          placeholder="admin / engineer / planner / viewer"
-          onChange={(value: string) => setForm({ name: value })}
-        />
+        <div className="space-y-5 p-7">
+          <InputField
+            label="Role Name"
+            value={form.name}
+            placeholder="admin / manager / viewer"
+            error={roleError}
+            onChange={(value: string) => {
+              setForm({ name: value });
 
-        <div className="mt-6 flex justify-end gap-3">
-          <button
-            onClick={onClose}
-            disabled={disabled}
-            className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:text-white dark:hover:bg-white/10"
-            type="button"
-          >
-            Cancel
-          </button>
+              const result = roleSchema.safeParse({ name: value });
 
-          <button
-            onClick={onSubmit}
-            disabled={disabled}
-            className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
-            type="button"
-          >
-            {submitText}
-          </button>
+              setRoleError(!result.success);
+            }}
+          />
+
+          <div className="flex justify-end gap-3 pt-3">
+            <button
+              onClick={onClose}
+              disabled={disabled}
+              type="button"
+              className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+            >
+              Cancel
+            </button>
+
+            <button
+              onClick={onSubmit}
+              disabled={disabled}
+              type="button"
+              className="rounded-2xl bg-gradient-to-r from-blue-600 to-cyan-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-500/20 transition hover:scale-[1.02] disabled:opacity-60"
+            >
+              {submitText}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -658,30 +775,128 @@ function RoleFormModal({
 
 function ViewRoleModal({ role, onClose }: any) {
   return (
-    <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-lg rounded-2xl border border-gray-200 bg-white p-6 shadow-2xl dark:border-gray-800 dark:bg-[#0f172a]">
-        <div className="mb-5 flex items-center justify-between">
-          <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
-            Role Details
-          </h3>
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/70 p-4 backdrop-blur-md">
+      <div className="w-full max-w-xl rounded-[32px] border border-slate-200 bg-white p-7 shadow-[0_30px_80px_rgba(0,0,0,0.12)] dark:border-slate-800 dark:bg-[#081028]">
+        <div className="mb-6 flex items-center justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[3px] text-blue-500">
+              ROLE DETAILS
+            </p>
+
+            <h3 className="mt-2 text-2xl font-bold text-slate-900 dark:text-white">
+              {role.name}
+            </h3>
+          </div>
 
           <button
             onClick={onClose}
-            className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-white/10"
             type="button"
+            className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 hover:bg-red-50 hover:text-red-500 dark:bg-slate-800"
           >
             <X size={18} />
           </button>
         </div>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <DetailRow label="Role ID" value={role.id} />
           <DetailRow label="Role Name" value={role.name} />
           <DetailRow label="Status" value={role.status} />
-          <DetailRow label="Created At" value={role.createdAt} />
-          <DetailRow label="Updated At" value={role.updatedAt} />
         </div>
       </div>
+    </div>
+  );
+}
+
+function DeleteConfirmModal({ role, onClose, onDelete, disabled }: any) {
+  return (
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/70 p-4 backdrop-blur-md">
+      <div className="w-full max-w-md rounded-[32px] bg-white p-7 shadow-[0_30px_80px_rgba(0,0,0,0.12)] dark:bg-[#081028]">
+        <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-red-100 dark:bg-red-500/10">
+          <Trash2 size={28} className="text-red-500" />
+        </div>
+
+        <h3 className="text-2xl font-bold text-slate-900 dark:text-white">
+          Delete Role
+        </h3>
+
+        <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
+          Are you sure you want to delete{" "}
+          <span className="font-bold text-slate-900 dark:text-white">
+            {role.name}
+          </span>
+          ?
+        </p>
+
+        <div className="mt-7 flex justify-end gap-3">
+          <button
+            onClick={onClose}
+            disabled={disabled}
+            type="button"
+            className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-white"
+          >
+            Cancel
+          </button>
+
+          <button
+            onClick={onDelete}
+            disabled={disabled}
+            type="button"
+            className="rounded-2xl bg-gradient-to-r from-red-500 to-rose-500 px-5 py-3 text-sm font-semibold text-white"
+          >
+            {disabled ? "Deleting..." : "Delete"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StatCard({ title, value }: any) {
+  return (
+    <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-[#081028]">
+      <p className="text-sm text-slate-500 dark:text-slate-400">{title}</p>
+
+      <h3 className="mt-3 text-4xl font-extrabold text-slate-900 dark:text-white">
+        {value}
+      </h3>
+    </div>
+  );
+}
+
+function DetailRow({ label, value }: any) {
+  return (
+    <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5 dark:border-slate-800 dark:bg-slate-900/50">
+      <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+        {label}
+      </p>
+
+      <p className="mt-2 text-lg font-bold text-slate-900 dark:text-white">
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function InputField({ label, value, placeholder, onChange, error }: any) {
+  return (
+    <div>
+      <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
+        {label}
+      </label>
+
+      <input
+        type="text"
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+        className={`h-[56px] w-full rounded-2xl px-5 text-sm font-medium outline-none transition-all
+${
+  error
+    ? "border border-red-500 bg-red-50 focus:border-red-500"
+    : "border border-slate-200 bg-slate-50 focus:border-blue-500"
+}
+dark:border-slate-700 dark:bg-slate-900 dark:text-white`}
+      />
     </div>
   );
 }
@@ -695,50 +910,59 @@ function RoleUsersModal({
   onAssign,
 }: any) {
   return (
-    <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-      <div className="flex max-h-[90vh] w-full max-w-5xl flex-col rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-gray-800 dark:bg-[#0f172a]">
-        <div className="border-b border-gray-200 p-5 dark:border-gray-800">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
-                Assign {role.name}
-              </h3>
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/70 p-4 backdrop-blur-md">
+      <div className="flex max-h-[85vh] w-full max-w-5xl flex-col overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-[0_30px_80px_rgba(0,0,0,0.12)] dark:border-slate-800 dark:bg-[#081028]">
+        {/* HEADER */}
+        <div className="flex items-center justify-between border-b border-slate-200 p-7 dark:border-slate-800">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[3px] text-blue-500">
+              ASSIGN ROLE
+            </p>
 
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                Click any user to assign role
-              </p>
-            </div>
-
-            <button
-              onClick={onClose}
-              className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-white/10"
-              type="button"
-            >
-              <X size={18} />
-            </button>
+            <h3 className="mt-2 text-2xl font-bold text-slate-900 dark:text-white">
+              Assign Role - {role.name}
+            </h3>
           </div>
+
+          <button
+            onClick={onClose}
+            type="button"
+            className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 hover:bg-red-50 hover:text-red-500 dark:bg-slate-800"
+          >
+            <X size={18} />
+          </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-5">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[850px] text-left text-sm">
-              <thead className="border-b border-gray-200 text-gray-500 dark:border-gray-700 dark:text-gray-400">
-                <tr>
-                  <th className="px-4 py-3">Name</th>
-                  <th className="px-4 py-3">Email</th>
-                  <th className="px-4 py-3">Phone</th>
-                  <th className="px-4 py-3">Company</th>
-                  <th className="px-4 py-3">Current Role</th>
-                  <th className="px-4 py-3 text-center">Action</th>
+        {/* TABLE */}
+        <div className="p-7">
+          <div className="max-h-[420px] overflow-y-auto overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800">
+            <table className="w-full min-w-[900px]">
+              <thead className="sticky top-0 z-10 bg-white dark:bg-[#081028]">
+                <tr className="border-b border-slate-200 dark:border-slate-800">
+                  <th className="py-4 text-left text-xs font-bold uppercase text-slate-500">
+                    User
+                  </th>
+
+                  <th className="py-4 text-left text-xs font-bold uppercase text-slate-500">
+                    Email
+                  </th>
+
+                  <th className="py-4 text-left text-xs font-bold uppercase text-slate-500">
+                    Current Role
+                  </th>
+
+                  <th className="py-4 text-center text-xs font-bold uppercase text-slate-500">
+                    Action
+                  </th>
                 </tr>
               </thead>
 
-              <tbody>
+              <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
                 {loading ? (
                   <tr>
                     <td
-                      colSpan={6}
-                      className="py-10 text-center text-gray-500 dark:text-gray-400"
+                      colSpan={4}
+                      className="py-16 text-center text-slate-500"
                     >
                       Loading users...
                     </td>
@@ -747,34 +971,28 @@ function RoleUsersModal({
                   users.map((user: any) => (
                     <tr
                       key={user.id}
-                      className="border-b border-gray-100 dark:border-gray-800"
+                      className="border-b border-slate-100 dark:border-slate-800"
                     >
-                      <td className="px-4 py-3 text-gray-900 dark:text-white">
+                      <td className="py-5 font-medium text-slate-900 dark:text-white">
                         {user.name}
                       </td>
 
-                      <td className="px-4 py-3 text-gray-500 dark:text-gray-400">
+                      <td className="text-slate-500 dark:text-slate-400">
                         {user.email}
                       </td>
 
-                      <td className="px-4 py-3 text-gray-500 dark:text-gray-400">
-                        {user.phone}
+                      <td>
+                        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                          {user.role || "No Role"}
+                        </span>
                       </td>
 
-                      <td className="px-4 py-3 text-gray-500 dark:text-gray-400">
-                        {user.company}
-                      </td>
-
-                      <td className="px-4 py-3 text-gray-500 dark:text-gray-400">
-                        {user.role}
-                      </td>
-
-                      <td className="px-4 py-3 text-center">
+                      <td className="text-center">
                         <button
                           onClick={() => onAssign(user.id)}
                           disabled={assigning}
-                          className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-60"
                           type="button"
+                          className="rounded-2xl bg-gradient-to-r from-blue-600 to-cyan-500 px-4 py-2 text-sm font-semibold text-white"
                         >
                           {assigning ? "Assigning..." : "Assign"}
                         </button>
@@ -784,8 +1002,8 @@ function RoleUsersModal({
                 ) : (
                   <tr>
                     <td
-                      colSpan={6}
-                      className="py-10 text-center text-gray-500 dark:text-gray-400"
+                      colSpan={4}
+                      className="py-16 text-center text-slate-500"
                     >
                       No users found
                     </td>
@@ -796,88 +1014,6 @@ function RoleUsersModal({
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-function DeleteConfirmModal({ role, onClose, onDelete, disabled }: any) {
-  return (
-    <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-2xl dark:border-gray-800 dark:bg-[#0f172a]">
-        <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
-          Delete Role
-        </h3>
-
-        <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-          Are you sure you want to delete{" "}
-          <span className="font-semibold text-gray-900 dark:text-white">
-            {role.name}
-          </span>
-          ?
-        </p>
-
-        <div className="mt-6 flex justify-end gap-3">
-          <button
-            onClick={onClose}
-            disabled={disabled}
-            className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:text-white dark:hover:bg-white/10"
-            type="button"
-          >
-            Cancel
-          </button>
-
-          <button
-            onClick={onDelete}
-            disabled={disabled}
-            className="rounded-xl bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-60"
-            type="button"
-          >
-            {disabled ? "Deleting..." : "Delete"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function StatCard({ title, value }: any) {
-  return (
-    <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-[#0f172a]">
-      <p className="text-sm text-gray-500 dark:text-gray-400">{title}</p>
-
-      <h3 className="mt-1 text-xl font-bold text-gray-900 dark:text-white">
-        {value}
-      </h3>
-    </div>
-  );
-}
-
-function DetailRow({ label, value }: any) {
-  return (
-    <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-gray-800 dark:bg-white/5">
-      <p className="text-xs text-gray-500 dark:text-gray-400">{label}</p>
-
-      <p className="mt-1 font-semibold text-gray-900 dark:text-white">
-        {value}
-      </p>
-    </div>
-  );
-}
-
-function InputField({ label, value, placeholder, onChange }: any) {
-  return (
-    <div>
-      <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
-        {label}
-      </label>
-
-      <input
-        type="text"
-        value={value}
-        placeholder={placeholder}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-xl border border-gray-200 bg-transparent px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 dark:border-gray-700 dark:text-white"
-      />
     </div>
   );
 }

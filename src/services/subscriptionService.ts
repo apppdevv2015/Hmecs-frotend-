@@ -1,4 +1,4 @@
-import { apiRequest } from "./api";
+import { apiCall } from "./apiHandler";
 
 export type SubscriptionPlanApi = {
   id: number | string;
@@ -27,37 +27,62 @@ export type UpdateSubscriptionPlanPayload = {
   validity_days: number;
 };
 
-// GET ALL PLANS API
+
+
 export const getSubscriptionPlans = async () => {
-  return apiRequest<SubscriptionPlanApi[]>("/auth/plans", {
+  return apiCall<SubscriptionPlanApi[]>("/auth/plans", {
     method: "GET",
   });
 };
 
-// CREATE PLAN API
+
+
 export const createSubscriptionPlan = async (
   payload: CreateSubscriptionPlanPayload,
 ) => {
-  return apiRequest<SubscriptionPlanApi>("/auth/plans", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
+  return apiCall<SubscriptionPlanApi>(
+    "/auth/plans",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+    {
+      showSuccess: true,
+      successMessage: "Plan created successfully",
+    },
+  );
 };
 
-// UPDATE PLAN API
+
+
 export const updateSubscriptionPlan = async (
   id: number | string,
   payload: UpdateSubscriptionPlanPayload,
 ) => {
-  return apiRequest<SubscriptionPlanApi>(`/auth/plans/${id}`, {
-    method: "PUT",
-    body: JSON.stringify(payload),
-  });
+  return apiCall<SubscriptionPlanApi>(
+    `/auth/plans/${id}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    },
+    {
+      showSuccess: true,
+      successMessage: "Plan updated successfully",
+    },
+  );
 };
 
-// DELETE PLAN API
+
+
 export const deleteSubscriptionPlan = async (id: number | string) => {
-  return apiRequest<{ message?: string }>(`/auth/plans/${id}`, {
-    method: "DELETE",
-  });
+  return apiCall<{ message?: string }>(
+    `/auth/plans/${id}`,
+    {
+      method: "DELETE",
+    },
+    {
+      showSuccess: true,
+      successMessage: "Plan deleted successfully",
+    },
+  );
 };

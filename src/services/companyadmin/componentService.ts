@@ -1,59 +1,42 @@
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:4000/api";
+import { apiCall } from "../apiHandler";
+import StorageService, { STORAGE_KEYS } from "../storage.service";
 
-const API_PREFIX = "/v1";
-
-type ApiResponse<T> = {
-  success?: boolean;
-  message?: string;
-  data?: T;
-};
-
-const getToken = () => localStorage.getItem("token") || "";
-
-const getAuthHeaders = () => {
-  const token = getToken();
-
-  return {
-    "Content-Type": "application/json",
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
-};
-
-const parseApiError = async (response: Response) => {
+const getCompanyIdFromToken = () => {
   try {
-    const data = await response.json();
-    return data?.message || data?.error || "Something went wrong";
+    const token = StorageService.get<string>(STORAGE_KEYS.TOKEN) || "";
+
+    if (!token) return "";
+
+    const payload = JSON.parse(atob(token.split(".")[1] || ""));
+
+    return (
+      payload?.companyId || payload?.company_id || payload?.company?.id || ""
+    );
   } catch {
-    return "Something went wrong";
+    return "";
   }
 };
 
-async function apiRequest<T>(url: string, options?: RequestInit): Promise<T> {
-  const baseUrl = API_BASE_URL.replace(/\/$/, "");
-  const prefix = API_PREFIX.startsWith("/") ? API_PREFIX : `/${API_PREFIX}`;
-  let path = url.startsWith("/") ? url : `/${url}`;
-  
-  let fullPath = `${prefix}${path}`;
-  if (baseUrl.endsWith("/v1") && fullPath.startsWith("/v1/")) {
-    fullPath = fullPath.substring(3); // Remove first "/v1"
+const getCompanyId = () => {
+  try {
+    const user = StorageService.get<any>(STORAGE_KEYS.USER) || {};
+
+    return (
+      user?.companyId ||
+      user?.company_id ||
+      user?.company?.id ||
+      StorageService.get<string>(STORAGE_KEYS.COMPANY_ID) ||
+      getCompanyIdFromToken() ||
+      ""
+    );
+  } catch {
+    return (
+      StorageService.get<string>(STORAGE_KEYS.COMPANY_ID) ||
+      getCompanyIdFromToken() ||
+      ""
+    );
   }
-
-  const response = await fetch(`${baseUrl}${fullPath}`, {
-    ...options,
-    headers: {
-      ...getAuthHeaders(),
-      ...(options?.headers || {}),
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(await parseApiError(response));
-  }
-
-  const data: ApiResponse<T> = await response.json();
-  return (data?.data ?? data) as T;
-}
+};
 
 export type ComponentPayload = {
   machineId?: string;
@@ -70,34 +53,67 @@ export type ComponentPayload = {
 
 export const componentService = {
   getCategories: () => {
-    return apiRequest<any[]>("/components/categories");
+    return apiCall<any[]>("/components/categories", {
+      method: "GET",
+    });
   },
 
   getComponents: (machineId?: string) => {
-    const query = machineId ? `?machineId=${encodeURIComponent(machineId)}` : "";
-    return apiRequest<any[]>(`/components${query}`);
+    const companyId = getCompanyId();
+
+    if (!companyId) {
+      throw new Error("companyId is required");
+    }
+
+    const queryParts = [`companyId=${encodeURIComponent(companyId)}`];
+
+    if (machineId) {
+      queryParts.push(`machineId=${encodeURIComponent(machineId)}`);
+    }
+
+    return apiCall<any[]>(`/components/register?${queryParts.join("&")}`, {
+      method: "GET",
+    });
   },
 
   createComponent: (payload: ComponentPayload) => {
-    return apiRequest("/components", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
+    return apiCall<any>(
+      "/components",
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+      {
+        showSuccess: true,
+      },
+    );
   },
 
   updateComponent: (
     componentId: string,
     payload: Omit<ComponentPayload, "machineId">,
   ) => {
-    return apiRequest(`/components/${componentId}`, {
-      method: "PUT",
-      body: JSON.stringify(payload),
-    });
+    return apiCall<any>(
+      `/components/${componentId}`,
+      {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      },
+      {
+        showSuccess: true,
+      },
+    );
   },
 
   deleteComponent: (componentId: string) => {
-    return apiRequest(`/components/${componentId}`, {
-      method: "DELETE",
-    });
+    return apiCall<any>(
+      `/components/${componentId}`,
+      {
+        method: "DELETE",
+      },
+      {
+        showSuccess: true,
+      },
+    );
   },
 };

@@ -1,11 +1,17 @@
+import offlineQueueService from "./services/offlineQueue.service";
+import { NotificationProvider } from "./context/NotificationContext";
+
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { HelmetProvider } from "react-helmet-async";
-import { Toaster } from "react-hot-toast";
+import { Provider } from "react-redux";
+import { store } from "./redux/store";
 
 import "./index.css";
 import "swiper/swiper-bundle.css";
 import "flatpickr/dist/flatpickr.css";
+
+import "./index.css";
 
 import App from "./App.tsx";
 import { ThemeProvider } from "./context/ThemeContext.tsx";
@@ -18,30 +24,46 @@ const updateSW = registerSW({
     }
   },
   onOfflineReady() {
-    console.log("Offline ready");
+    
   },
 });
 
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <HelmetProvider>
-      <ThemeProvider>
-        <App />
+// Sync on app startup if online
+if (navigator.onLine) {
+  setTimeout(() => {
+    offlineQueueService.syncRequests();
 
-        <Toaster
-          position="top-right"
-          toastOptions={{
-            duration: 3000,
-            style: {
-              background: "#111827",
-              color: "#fff",
-              borderRadius: "12px",
-              padding: "14px 16px",
-              fontSize: "14px",
-            },
-          }}
-        />
-      </ThemeProvider>
-    </HelmetProvider>
-  </StrictMode>
+    // Signal Service Worker to sync too
+    if (navigator.serviceWorker?.controller) {
+      navigator.serviceWorker.controller.postMessage({
+        type: "SYNC_OFFLINE_REQUESTS",
+      });
+    }
+  }, 1000);
+}
+
+window.addEventListener("online", async () => {
+
+  // Sync app-level queue
+  await offlineQueueService.syncRequests();
+
+  // Signal Service Worker to sync its queue
+  if (navigator.serviceWorker?.controller) {
+    navigator.serviceWorker.controller.postMessage({
+      type: "SYNC_OFFLINE_REQUESTS",
+    });
+  }
+});
+
+createRoot(document.getElementById("root")!).render(
+  
+    <Provider store={store}>
+      <HelmetProvider>
+        <ThemeProvider>
+          <NotificationProvider>
+            <App />
+          </NotificationProvider>
+        </ThemeProvider>
+      </HelmetProvider>
+    </Provider>
 );

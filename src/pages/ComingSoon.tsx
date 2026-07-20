@@ -1,6 +1,7 @@
 
 import { Rocket, Timer, ChevronLeft, ArrowRight } from "lucide-react";
 import { useNavigate } from "react-router";
+import StorageService, { STORAGE_KEYS } from "../services/storage.service";
 
 type UserRole =
   | "super_admin"
@@ -10,7 +11,7 @@ type UserRole =
   | "admin"
   | "system_admin"
   | "planner"
-  | "engineer"
+  | "Artisans"
   | "viewer";
 
 type JwtPayload = {
@@ -54,7 +55,7 @@ const getRoleDashboardPath = (role?: string | null) => {
       return "/operator/dashboard";
 
     case "mechanic":
-    case "engineer":
+    case "Artisans":
       return "/mechanic/dashboard";
 
     default:
@@ -86,14 +87,14 @@ const decodeJwtPayload = (token: string): JwtPayload | null => {
 };
 
 const getRoleFromLocalStorage = () => {
-  const storedRole = localStorage.getItem("role");
+  const storedRole = StorageService.get<string>(STORAGE_KEYS.ROLE);
 
   if (storedRole) {
     return storedRole;
   }
 
   try {
-    const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
+    const storedUser = StorageService.get<any>(STORAGE_KEYS.USER) || {};
 
     return (
       storedUser?.role ||
@@ -110,7 +111,7 @@ const getRoleFromLocalStorage = () => {
 };
 
 const getRoleFromStorageOrToken = () => {
-  const token = localStorage.getItem("token");
+  const token = StorageService.get<string>(STORAGE_KEYS.TOKEN);
 
   if (!token) return null;
 
@@ -140,7 +141,7 @@ export default function ComingSoon() {
   };
 
   const handleDashboardRedirect = () => {
-    const token = localStorage.getItem("token");
+    const token = StorageService.get<string>(STORAGE_KEYS.TOKEN);
 
     if (!token) {
       navigate("/signin", { replace: true });

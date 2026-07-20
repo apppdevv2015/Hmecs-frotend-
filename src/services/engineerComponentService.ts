@@ -321,10 +321,14 @@ export const engineerComponentService = {
           components,
         };
       });
-    } catch (err) {
-      console.error("Failed to load real machines & components for engineer service, falling back to mock", err);
-      return [];
-    }
+    } 
+    catch (err) {
+  console.error(
+    "Failed to load engineer machines",
+    err
+  );
+  return mockMachines;
+}
   },
 
   getMachineComponents: async (

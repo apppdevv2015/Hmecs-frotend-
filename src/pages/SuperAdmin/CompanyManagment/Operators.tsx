@@ -1,4 +1,7 @@
 import React, { useMemo, useState } from "react";
+import { useForm, type SubmitHandler, type Resolver } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import {
   Search,
   Filter,
@@ -13,12 +16,14 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   CheckCircle,
   AlertCircle,
   Clock,
 } from "lucide-react";
 
 type OperatorStatus = "Active" | "Inactive" | "On Duty";
+type OperatorShift = "Morning" | "Evening" | "Night";
 
 type Operator = {
   id: string;
@@ -34,7 +39,7 @@ type Operator = {
   joinedDate: string;
 };
 
-const operatorsData: Operator[] = [
+const operatorsSeedData: Operator[] = [
   {
     id: "OP-001",
     name: "Thabo Mokoena",
@@ -119,8 +124,7 @@ const statusStyle: Record<OperatorStatus, string> = {
   Active:
     "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
   Inactive: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
-  "On Duty":
-    "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+  "On Duty": "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
 };
 
 const statusIcon: Record<OperatorStatus, React.ReactElement> = {
@@ -129,19 +133,99 @@ const statusIcon: Record<OperatorStatus, React.ReactElement> = {
   "On Duty": <Clock className="h-4 w-4" />,
 };
 
+const shiftOptions: OperatorShift[] = ["Morning", "Evening", "Night"];
+const statusOptions: OperatorStatus[] = ["Active", "Inactive", "On Duty"];
+
+const countryCodes = [
+  { code: "+27", label: "South Africa" },
+  { code: "+91", label: "India" },
+  { code: "+1", label: "USA / Canada" },
+  { code: "+44", label: "United Kingdom" },
+  { code: "+61", label: "Australia" },
+  { code: "+971", label: "UAE" },
+  { code: "+254", label: "Kenya" },
+  { code: "+263", label: "Zimbabwe" },
+];
+
+/* -------------------------------------------------------------------------- */
+/* Zod validation schema                                                      */
+/* -------------------------------------------------------------------------- */
+
+const operatorFormSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, "Name is required")
+    .max(60, "Name must be under 60 characters"),
+
+  email: z
+    .string()
+    .trim()
+    .min(1, "Email is required")
+    .regex(/^[^\s@]+@[^\s@]+\.[^\s@]+$/, "Enter a valid email address"),
+
+  countryCode: z.string().min(1, "Country code is required"),
+
+  phone: z.string().trim().min(1, "Phone number is required"),
+
+  company: z.string().trim().min(1, "Company is required"),
+
+  site: z.string().trim().min(1, "Site is required"),
+
+  assignedMachine: z.string().trim().min(1, "Assigned machine is required"),
+
+  shift: z.enum(["Morning", "Evening", "Night"], {
+    message: "Shift is required",
+  }),
+
+  experience: z
+    .string()
+    .trim()
+    .min(1, "Experience is required")
+    .max(20, "Keep this under 20 characters"),
+
+  status: z.enum(["Active", "Inactive", "On Duty"], {
+    message: "Status is required",
+  }),
+});
+
+type OperatorFormValues = z.infer<typeof operatorFormSchema>;
+
+function splitPhone(fullPhone: string): { countryCode: string; phone: string } {
+  const match = countryCodes.find((c) => fullPhone.startsWith(c.code));
+  if (match) {
+    return {
+      countryCode: match.code,
+      phone: fullPhone.slice(match.code.length).replace(/\D/g, ""),
+    };
+  }
+  return { countryCode: "+27", phone: fullPhone.replace(/\D/g, "") };
+}
+
+function nextOperatorId(operators: Operator[]): string {
+  const maxNum = operators.reduce((max, op) => {
+    const num = parseInt(op.id.replace(/\D/g, ""), 10);
+    return Number.isNaN(num) ? max : Math.max(max, num);
+  }, 0);
+  return `OP-${String(maxNum + 1).padStart(3, "0")}`;
+}
+
 export default function Operators() {
+  const [operators, setOperators] = useState<Operator[]>(operatorsSeedData);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [selectedOperator, setSelectedOperator] = useState<Operator | null>(
-    null
+    null,
   );
   const [deleteOperator, setDeleteOperator] = useState<Operator | null>(null);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [editOperator, setEditOperator] = useState<Operator | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
 
   const itemsPerPage = 5;
 
   const filteredOperators = useMemo(() => {
-    return operatorsData.filter((operator) => {
+    return operators.filter((operator) => {
       const searchValue = search.toLowerCase();
 
       const matchesSearch =
@@ -156,24 +240,24 @@ export default function Operators() {
 
       return matchesSearch && matchesStatus;
     });
-  }, [search, statusFilter]);
+  }, [operators, search, statusFilter]);
 
   const totalPages = Math.ceil(filteredOperators.length / itemsPerPage);
 
   const paginatedOperators = filteredOperators.slice(
     (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
+    currentPage * itemsPerPage,
   );
 
-  const totalOperators = operatorsData.length;
-  const onDutyOperators = operatorsData.filter(
-    (item) => item.status === "On Duty"
+  const totalOperators = operators.length;
+  const onDutyOperators = operators.filter(
+    (item) => item.status === "On Duty",
   ).length;
-  const activeOperators = operatorsData.filter(
-    (item) => item.status === "Active"
+  const activeOperators = operators.filter(
+    (item) => item.status === "Active",
   ).length;
-  const inactiveOperators = operatorsData.filter(
-    (item) => item.status === "Inactive"
+  const inactiveOperators = operators.filter(
+    (item) => item.status === "Inactive",
   ).length;
 
   const handleSearch = (value: string) => {
@@ -186,22 +270,89 @@ export default function Operators() {
     setCurrentPage(1);
   };
 
+  const handleAddOperator = (values: OperatorFormValues) => {
+    // BACKEND TODO: Replace with POST /api/operators call, then refresh list from response
+    const newOperator: Operator = {
+      id: nextOperatorId(operators),
+      name: values.name,
+      email: values.email,
+      phone: `${values.countryCode} ${values.phone}`,
+      company: values.company,
+      site: values.site,
+      assignedMachine: values.assignedMachine,
+      shift: values.shift,
+      experience: values.experience,
+      status: values.status,
+      joinedDate: new Date().toISOString().slice(0, 10),
+    };
+
+    setOperators((prev) => [newOperator, ...prev]);
+    setShowAddModal(false);
+    setCurrentPage(1);
+  };
+
+  const handleUpdateOperator = (values: OperatorFormValues) => {
+    if (!editOperator) return;
+
+    // BACKEND TODO: Replace with PATCH /api/operators/:id call, then refresh list from response
+    setOperators((prev) =>
+      prev.map((op) =>
+        op.id === editOperator.id
+          ? {
+              ...op,
+              name: values.name,
+              email: values.email,
+              phone: `${values.countryCode} ${values.phone}`,
+              company: values.company,
+              site: values.site,
+              assignedMachine: values.assignedMachine,
+              shift: values.shift,
+              experience: values.experience,
+              status: values.status,
+            }
+          : op,
+      ),
+    );
+    setEditOperator(null);
+  };
+
+  const handleDeleteConfirm = () => {
+    if (!deleteOperator) return;
+
+    // BACKEND TODO: Replace with DELETE /api/operators/:id call
+    setOperators((prev) => prev.filter((op) => op.id !== deleteOperator.id));
+    setDeleteOperator(null);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 px-4 py-6 dark:bg-gray-950 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl space-y-6">
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="overflow-hidden rounded-2xl border border-blue-700/30 bg-gradient-to-r from-blue-800 via-blue-700 to-blue-800 px-6 py-6 shadow-lg">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+            {/* Left Content */}
             <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+              <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.15em] text-white backdrop-blur-sm">
+                Workforce Management
+              </div>
+
+              <h1 className="text-3xl font-black tracking-tight text-white">
                 Operators Management
               </h1>
-              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                View and manage all company operators across machines and sites.
+
+              <p className="mt-2 max-w-3xl text-sm font-medium text-blue-100">
+                View, manage, and monitor all company operators across machines,
+                assignments, and operational sites from one centralized
+                location.
               </p>
             </div>
 
-            <button className="inline-flex items-center justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700">
-              <Users className="mr-2 h-4 w-4" />
+            {/* Right Action */}
+            <button
+              type="button"
+              onClick={() => setShowAddModal(true)}
+              className="flex h-12 items-center justify-center gap-2 rounded-2xl bg-white px-5 text-sm font-semibold text-blue-700 shadow-md transition-all duration-200 hover:bg-blue-50 hover:shadow-lg"
+            >
+              <Users className="h-4 w-4" />
               Add Operator
             </button>
           </div>
@@ -324,7 +475,10 @@ export default function Operators() {
                           <Eye className="h-4 w-4" />
                         </ActionButton>
 
-                        <ActionButton title="Edit">
+                        <ActionButton
+                          title="Edit"
+                          onClick={() => setEditOperator(operator)}
+                        >
                           <Edit className="h-4 w-4" />
                         </ActionButton>
 
@@ -374,11 +528,28 @@ export default function Operators() {
         />
       )}
 
+      {showAddModal && (
+        <OperatorFormModal
+          mode="add"
+          onClose={() => setShowAddModal(false)}
+          onSubmit={handleAddOperator}
+        />
+      )}
+
+      {editOperator && (
+        <OperatorFormModal
+          mode="edit"
+          initialOperator={editOperator}
+          onClose={() => setEditOperator(null)}
+          onSubmit={handleUpdateOperator}
+        />
+      )}
+
       {deleteOperator && (
         <DeleteModal
           name={deleteOperator.name}
           onClose={() => setDeleteOperator(null)}
-          onConfirm={() => setDeleteOperator(null)}
+          onConfirm={handleDeleteConfirm}
         />
       )}
     </div>
@@ -518,7 +689,7 @@ function DetailsModal({
   onClose: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[99999990] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
       <div className="w-full max-w-2xl rounded-2xl bg-white p-5 shadow-xl dark:bg-gray-900">
         <div className="flex items-center justify-between border-b border-gray-100 pb-4 dark:border-gray-800">
           <div>
@@ -589,6 +760,258 @@ function InfoItem({
           </p>
         </div>
       </div>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Add / Edit Operator Modal                                                  */
+/* -------------------------------------------------------------------------- */
+
+function OperatorFormModal({
+  mode,
+  initialOperator,
+  onClose,
+  onSubmit,
+}: {
+  mode: "add" | "edit";
+  initialOperator?: Operator;
+  onClose: () => void;
+  onSubmit: (values: OperatorFormValues) => void;
+}) {
+  const defaultPhone = initialOperator
+    ? splitPhone(initialOperator.phone)
+    : { countryCode: "+27", phone: "" };
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<OperatorFormValues>({
+    resolver: zodResolver(operatorFormSchema) as Resolver<OperatorFormValues>,
+    mode: "onChange",
+    reValidateMode: "onChange",
+    defaultValues: {
+      name: initialOperator?.name ?? "",
+      email: initialOperator?.email ?? "",
+      countryCode: defaultPhone.countryCode,
+      phone: defaultPhone.phone,
+      company: initialOperator?.company ?? "",
+      site: initialOperator?.site ?? "",
+      assignedMachine: initialOperator?.assignedMachine ?? "",
+      shift: (initialOperator?.shift as OperatorShift) ?? "Morning",
+      experience: initialOperator?.experience ?? "",
+      status: initialOperator?.status ?? "Active",
+    },
+  });
+
+  const submitHandler: SubmitHandler<OperatorFormValues> = (values) => {
+    onSubmit(values);
+  };
+
+  return (
+    <div className="fixed inset-0  flex items-center justify-center bg-black/60 pt-9 backdrop-blur-sm">
+      <div className="w-full max-w-xl max-h-[80vh] overflow-y-auto overflow-x-hidden rounded-2xl bg-white p-4 shadow-xl dark:bg-gray-900">
+        <div className="flex items-center justify-between border-b border-gray-100 pb-4 dark:border-gray-800">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+              {mode === "add" ? "Add Operator" : "Edit Operator"}
+            </h2>
+            <p className="text-sm text-gray-500">
+              {mode === "add"
+                ? "Fill in the details to onboard a new operator."
+                : `Editing ${initialOperator?.id}`}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <form
+          onSubmit={handleSubmit(submitHandler)}
+          className="mt-5 space-y-4"
+          noValidate
+        >
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField label="Full Name" error={errors.name?.message}>
+              <input
+                {...register("name")}
+                type="text"
+                placeholder="e.g. Thabo Mokoena"
+                className={inputClass(!!errors.name)}
+              />
+            </FormField>
+
+            <FormField label="Email" error={errors.email?.message}>
+              <input
+                {...register("email")}
+                type="email"
+                placeholder="e.g. name@example.com"
+                className={inputClass(!!errors.email)}
+              />
+            </FormField>
+          </div>
+
+          <FormField
+            label="Phone Number"
+            error={errors.phone?.message ?? errors.countryCode?.message}
+          >
+            <div className="flex gap-2">
+              <select
+                {...register("countryCode")}
+                className={`${inputClass(!!errors.countryCode)} w-32 shrink-0`}
+              >
+                {countryCodes.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.code} ({c.label})
+                  </option>
+                ))}
+              </select>
+
+              <input
+                {...register("phone")}
+                type="text"
+                inputMode="numeric"
+                placeholder="e.g. 714569081"
+                className={`${inputClass(!!errors.phone)} flex-1`}
+              />
+            </div>
+          </FormField>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField label="Company" error={errors.company?.message}>
+              <input
+                {...register("company")}
+                type="text"
+                placeholder="e.g. African Mining Ltd"
+                className={inputClass(!!errors.company)}
+              />
+            </FormField>
+
+            <FormField label="Site" error={errors.site?.message}>
+              <input
+                {...register("site")}
+                type="text"
+                placeholder="e.g. Johannesburg Site A"
+                className={inputClass(!!errors.site)}
+              />
+            </FormField>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField
+              label="Assigned Machine"
+              error={errors.assignedMachine?.message}
+            >
+              <input
+                {...register("assignedMachine")}
+                type="text"
+                placeholder="e.g. CAT 777D"
+                className={inputClass(!!errors.assignedMachine)}
+              />
+            </FormField>
+
+            <FormField label="Experience" error={errors.experience?.message}>
+              <input
+                {...register("experience")}
+                type="text"
+                placeholder="e.g. 5 Years"
+                className={inputClass(!!errors.experience)}
+              />
+            </FormField>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField label="Shift" error={errors.shift?.message}>
+              <div className="relative">
+                <select
+                  {...register("shift")}
+                  className={`${inputClass(!!errors.shift)} appearance-none pr-9`}
+                >
+                  {shiftOptions.map((shift) => (
+                    <option key={shift} value={shift}>
+                      {shift}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              </div>
+            </FormField>
+
+            <FormField label="Status" error={errors.status?.message}>
+              <div className="relative">
+                <select
+                  {...register("status")}
+                  className={`${inputClass(!!errors.status)} appearance-none pr-9`}
+                >
+                  {statusOptions.map((status) => (
+                    <option key={status} value={status}>
+                      {status}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              </div>
+            </FormField>
+          </div>
+
+          <div className="mt-2 flex justify-end gap-3 border-t border-gray-100 pt-4 dark:border-gray-800">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-xl border border-gray-200 px-4 py-2 text-sm text-gray-700 dark:border-gray-700 dark:text-gray-300"
+            >
+              Cancel
+            </button>
+
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="rounded-xl bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {mode === "add" ? "Add Operator" : "Save Changes"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function inputClass(hasError: boolean) {
+  return `w-full rounded-xl border bg-white px-3 py-2.5 text-sm text-gray-700 outline-none transition focus:ring-2 dark:bg-gray-950 dark:text-gray-200 ${
+    hasError
+      ? "border-red-400 focus:border-red-500 focus:ring-red-500/20"
+      : "border-gray-200 focus:border-blue-500 focus:ring-blue-500/20 dark:border-gray-700"
+  }`;
+}
+
+function FormField({
+  label,
+  error,
+  children,
+}: {
+  label: string;
+  error?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+        {label}
+      </label>
+      {children}
+      {error && (
+        <p className="mt-1 text-xs font-medium text-red-600 dark:text-red-400">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

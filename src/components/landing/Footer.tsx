@@ -1,120 +1,197 @@
 import { Link } from "react-router";
-import logo1 from "../../assets/images/landingpageimages/logo1.png";
+import logo1 from "../../assets/images/landingpageimages/logo1.webp";
 
 export default function Footer() {
   return (
     <footer
       id="contact"
-      className="border-t border-slate-200 bg-white px-5 py-9 text-slate-600 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-400 lg:px-8"
+      className="border-t border-slate-200 bg-white px-5 py-10 text-slate-600 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-400 lg:px-8"
     >
       <div className="mx-auto max-w-7xl">
-        <div className="grid gap-8 md:grid-cols-4">
-          <div>
-            <img
-              src={logo1}
-              alt="HME Logo"
-              className="h-16 w-auto object-contain"
-            />
+        <div className="grid grid-cols-1 gap-12 md:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1fr]">
+          {/* Company */}
+          <div className="flex flex-col">
+            <Link to="/" className="inline-flex w-fit">
+              <img
+                src={logo1}
+                alt="HMEC Logo"
+                className="h-20 w-auto object-contain"
+              />
+            </Link>
 
-            <p className="mt-4 max-w-sm text-sm font-medium leading-7">
-              The all-in-one maintenance and reporting platform built for heavy
-              mining operations.
+            <p className="mt-6 max-w-[340px] text-[16px] leading-8 text-slate-600 dark:text-slate-400">
+              AI-powered fleet intelligence platform for heavy mining
+              operations. Monitor machine health, manage maintenance, generate
+              intelligent reports, and optimize fleet performance from one
+              unified dashboard.
             </p>
           </div>
 
+          {/* Product */}
           <div>
-            <h3 className="text-sm font-black text-slate-950 dark:text-white">
+            <h3 className="text-[15px] font-extrabold uppercase tracking-[0.22em] text-slate-950 dark:text-white">
               Product
             </h3>
 
-            <ul className="mt-4 space-y-3 text-sm font-medium">
+            <ul className="mt-6 space-y-4">
               <li>
-                <a href="#features" className="transition hover:text-blue-600">
+                <Link
+                  to="/features"
+                  className="text-[16px] text-slate-600 transition-all duration-300 hover:translate-x-1 hover:text-blue-600"
+                >
                   Features
-                </a>
+                </Link>
               </li>
+
               <li>
-                <a
-                  href="#maintenance"
-                  className="transition hover:text-blue-600"
+                <Link
+                  to="/maintenance"
+                  className="text-[16px] text-slate-600 transition-all duration-300 hover:translate-x-1 hover:text-blue-600"
                 >
                   Maintenance
-                </a>
+                </Link>
               </li>
+
               <li>
-                <a href="#reports" className="transition hover:text-blue-600">
+                <Link
+                  to="/reports"
+                  className="text-[16px] text-slate-600 transition-all duration-300 hover:translate-x-1 hover:text-blue-600"
+                >
                   Reports
-                </a>
+                </Link>
               </li>
+
               <li>
-                <Link to="/plans" className="transition hover:text-blue-600">
-                  Plans
+                <Link
+                  to="/plans"
+                  className="text-[16px] text-slate-600 transition-all duration-300 hover:translate-x-1 hover:text-blue-600"
+                >
+                  Pricing Plans
                 </Link>
               </li>
             </ul>
           </div>
 
+          {/* Company */}
           <div>
-            <h3 className="text-sm font-black text-slate-950 dark:text-white">
+            <h3 className="text-[15px] font-extrabold uppercase tracking-[0.22em] text-slate-950 dark:text-white">
               Company
             </h3>
 
-            <ul className="mt-4 space-y-3 text-sm font-medium">
+            <ul className="mt-6 space-y-4">
               <li>
-                <a href="#about" className="transition hover:text-blue-600">
+                <Link
+                  to="/about"
+                  className="text-[16px] text-slate-600 transition-all duration-300 hover:translate-x-1 hover:text-blue-600"
+                >
                   About Us
-                </a>
+                </Link>
               </li>
+
               <li>
-                <a href="#careers" className="transition hover:text-blue-600">
+                <Link
+                  to="/company-admin/coming-soon/careers"
+                  className="text-[16px] text-slate-600 transition-all duration-300 hover:translate-x-1 hover:text-blue-600"
+                >
                   Careers
-                </a>
+                </Link>
               </li>
+
               <li>
-                <a href="#blog" className="transition hover:text-blue-600">
+                <Link
+                  to="/company-admin/coming-soon/blog"
+                  className="text-[16px] text-slate-600 transition-all duration-300 hover:translate-x-1 hover:text-blue-600"
+                >
                   Blog
-                </a>
+                </Link>
               </li>
+
               <li>
-                <a href="#contact" className="transition hover:text-blue-600">
+                <Link
+                  to="/contact"
+                  className="text-[16px] text-slate-600 transition-all duration-300 hover:translate-x-1 hover:text-blue-600"
+                >
                   Contact Us
-                </a>
+                </Link>
               </li>
             </ul>
           </div>
 
+          {/* Support */}
           <div>
-            <h3 className="text-sm font-black text-slate-950 dark:text-white">
+            <h3 className="text-[15px] font-extrabold uppercase tracking-[0.22em] text-slate-950 dark:text-white">
               Support
             </h3>
 
-            <ul className="mt-4 space-y-3 text-sm font-medium">
+            <ul className="mt-6 space-y-4">
               <li>
-                <a href="#help" className="transition hover:text-blue-600">
+                <Link
+                  to="/company-admin/coming-soon/help-center"
+                  className="text-[16px] text-slate-600 transition-all duration-300 hover:translate-x-1 hover:text-blue-600"
+                >
                   Help Center
-                </a>
+                </Link>
               </li>
+
               <li>
-                <a href="#docs" className="transition hover:text-blue-600">
+                <Link
+                  to="/company-admin/coming-soon/documentation"
+                  className="text-[16px] text-slate-600 transition-all duration-300 hover:translate-x-1 hover:text-blue-600"
+                >
                   Documentation
-                </a>
+                </Link>
               </li>
+
               <li>
-                <a href="#terms" className="transition hover:text-blue-600">
+                <Link
+                  to="/company-admin/coming-soon/terms"
+                  className="text-[16px] text-slate-600 transition-all duration-300 hover:translate-x-1 hover:text-blue-600"
+                >
                   Terms of Service
-                </a>
+                </Link>
               </li>
+
               <li>
-                <a href="#privacy" className="transition hover:text-blue-600">
+                <Link
+                  to="/company-admin/coming-soon/privacy-policy"
+                  className="text-[16px] text-slate-600 transition-all duration-300 hover:translate-x-1 hover:text-blue-600"
+                >
                   Privacy Policy
-                </a>
+                </Link>
               </li>
             </ul>
           </div>
         </div>
 
-        <div className="mt-8 border-t border-slate-200 pt-5 text-center text-xs font-semibold text-slate-500 dark:border-slate-800 dark:text-slate-500">
-          © 2026 MineTrack. All rights reserved.
+        {/* Bottom */}
+        <div className="mt-10 flex flex-col items-center justify-between gap-4 border-t border-slate-200 pt-6 text-center text-sm text-slate-500 dark:border-slate-800 dark:text-slate-500 md:flex-row">
+          <p>
+            © 2026{" "}
+            <span className="font-semibold text-slate-700 dark:text-white">
+              HMEC
+            </span>
+            . All rights reserved.
+          </p>
+
+          <div className="flex items-center gap-6">
+            <Link
+              to="/company-admin/coming-soon/privacy-policy"
+              className="transition hover:text-blue-600"
+            >
+              Privacy
+            </Link>
+
+            <Link
+              to="/company-admin/coming-soon/terms"
+              className="transition hover:text-blue-600"
+            >
+              Terms
+            </Link>
+
+            <Link to="/contact" className="transition hover:text-blue-600">
+              Contact
+            </Link>
+          </div>
         </div>
       </div>
     </footer>

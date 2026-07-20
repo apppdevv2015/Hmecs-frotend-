@@ -1,18 +1,18 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router";
+import { Link } from "react-router-dom";
 
 import Navbar from "../../components/landing/Navbar";
 import Footer from "../../components/landing/Footer";
 
-import video1 from "../../assets/images/videos/Untitled design.mp4";
+import video1 from "../../assets/images/videos/Untitled design (2).mp4";
 
-import heavyimge from "../../assets/images/HMEhero.png";
-import jcb from "../../assets/images/HMElogo_2.png";
+import heavyimge from "../../assets/images/HMEhero.webp";
+import jcb from "../../assets/images/HMElogo_2.webp";
 
-import tyre from "../../assets/images/landingpageimages/tyre.png";
-import engine from "../../assets/images/landingpageimages/engine.png";
-import hydrulic from "../../assets/images/landingpageimages/hydrulic.png";
-import suspension from "../../assets/images/landingpageimages/suspension.png";
+import tyre from "../../assets/images/landingpageimages/tyre.webp";
+import engine from "../../assets/images/landingpageimages/engine.webp";
+import hydrulic from "../../assets/images/landingpageimages/hydrulic.webp";
+import suspension from "../../assets/images/landingpageimages/suspension.webp";
 
 const heroTexts = [
   {
@@ -112,6 +112,7 @@ const reportBullets = [
 export default function LandingPage() {
   const [active, setActive] = useState("home");
   const [activeTextIndex, setActiveTextIndex] = useState(0);
+  const [loadVideo, setLoadVideo] = useState(false);
 
   useEffect(() => {
     const revealElements = document.querySelectorAll(
@@ -161,26 +162,34 @@ export default function LandingPage() {
     return () => clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setLoadVideo(true);
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, []);
+
   const activeText = heroTexts[activeTextIndex];
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-white text-slate-900 transition-colors duration-300 dark:bg-slate-950 dark:text-white">
       <Navbar active={active} setActive={setActive} />
-
       <section
         id="home"
-        className="relative -mt-[90px] h-[100svh] w-full overflow-hidden bg-slate-950 pt-[90px]"
+        className="relative  h-[100svh] w-full overflow-hidden bg-slate-950"
       >
-        <video
-          src={video1}
-          autoPlay
-          muted
-          loop
-          playsInline
-          preload="auto"
-          className="absolute inset-0 h-full w-full object-cover object-center brightness-110 contrast-110 saturate-110"
-        />
-
+        {loadVideo && (
+          <video
+            src={video1}
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="metadata"
+            className="absolute inset-0 h-full w-full object-cover object-center brightness-110 contrast-110 saturate-110"
+          />
+        )}
         <div className="absolute inset-0 bg-black/35" />
         <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/35 to-black/5" />
         <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-transparent to-black/70" />
@@ -281,6 +290,10 @@ export default function LandingPage() {
               <img
                 src={heavyimge}
                 alt="HME system"
+                width={1200}
+                height={700}
+                loading="eager"
+                fetchPriority="high"
                 className="h-full w-full rounded-[1.2rem] object-cover object-center"
               />
 
@@ -400,6 +413,9 @@ export default function LandingPage() {
                   <img
                     src={item.image}
                     alt={item.title}
+                    width={600}
+                    height={300}
+                    loading="lazy"
                     className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
                   />
 
@@ -456,6 +472,9 @@ export default function LandingPage() {
                 <img
                   src={jcb}
                   alt="Heavy machine component monitoring"
+                  width={800}
+                  height={300}
+                  loading="lazy"
                   className="h-[300px] w-full rounded-xl object-cover"
                 />
               </div>

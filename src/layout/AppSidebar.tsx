@@ -1,9 +1,12 @@
 import { useState } from "react";
-import { Link, useLocation } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router";
 import { useSidebar } from "../context/SidebarContext";
 import { sidebarConfig } from "../config/sidebar.config";
 import type { UserRole, NavLinkItem } from "../config/sidebar.config";
-import { X, ChevronRight } from "lucide-react";
+import { X, ChevronRight, LogOut } from "lucide-react";
+import StorageService, { STORAGE_KEYS } from "../services/storage.service";
+
+import logo1 from "../assets/images/landingpageimages/logo1.webp";
 
 type AppSidebarProps = {
   role?: UserRole;
@@ -13,7 +16,7 @@ const COMING_SOON_ROUTE = "/coming-soon";
 
 const getStoredUserEmail = () => {
   try {
-    const user = JSON.parse(localStorage.getItem("user") || "{}");
+    const user = StorageService.get<any>(STORAGE_KEYS.USER) || {};
     return user?.email || "";
   } catch {
     return "";
@@ -44,18 +47,33 @@ export default function AppSidebar({ role = "super_admin" }: AppSidebarProps) {
     ? null
     : navGroups.find((group) => group.title === "Settings");
 
-  const [openGroup, setOpenGroup] = useState<string | null>(() => {
-    if (isSuperAdmin) {
-      const firstGroup = mainGroups.find((group) => group.title.trim() !== "");
-      return firstGroup?.title || null;
-    }
+  const [openGroup, setOpenGroup] = useState<string | null>(null);
 
-    return mainGroups[0]?.title || null;
-  });
+  const [openSubMenu, setOpenSubMenu] = useState<string | null>(null);
 
-  const [openSubMenu, setOpenSubMenu] = useState<string | null>(
-    role === "super_admin" ? "User Management" : null
-  );
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    [
+      STORAGE_KEYS.TOKEN,
+      STORAGE_KEYS.AUTH_TOKEN,
+      STORAGE_KEYS.ACCESS_TOKEN,
+      STORAGE_KEYS.ROLE,
+      STORAGE_KEYS.USER,
+      STORAGE_KEYS.SELECTED_PLAN,
+      STORAGE_KEYS.EMAIL,
+      STORAGE_KEYS.NAME,
+      STORAGE_KEYS.COMPANY_ID,
+    ].forEach((key) => StorageService.remove(key));
+
+    StorageService.sessionRemove("login-toast-shown");
+
+    navigate("/signin", {
+      replace: true,
+    });
+  };
 
   const {
     isMobileOpen,
@@ -78,6 +96,49 @@ export default function AppSidebar({ role = "super_admin" }: AppSidebarProps) {
 
   const toggleSubMenu = (name: string) => {
     setOpenSubMenu((prev) => (prev === name ? null : name));
+  };
+
+  function normalizeRole(role?: string | null) {
+    return String(role || "")
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, "_")
+      .replace(/-/g, "_");
+  }
+
+  const getProfilePath = () => {
+    const userData = StorageService.get<any>(STORAGE_KEYS.USER) || {};
+
+    const role = normalizeRole(
+      userData?.role ||
+        userData?.role_name ||
+        StorageService.get(STORAGE_KEYS.ROLE) ||
+        "",
+    );
+    if (role === "super_admin" || role === "superadmin") {
+      return "/super-admin/profile";
+    }
+    if (role === "company_admin" || role === "admin") {
+      return "/company-admin/profile";
+    }
+
+    if (role === "artisans") {
+      return "/artisans/profile";
+    }
+
+    if (role === "supervisor") {
+      return "/supervisor/profile";
+    }
+
+    if (role === "operator" || role === "planner") {
+      return "/operator/profile";
+    }
+
+    return "/signin";
+  };
+
+  const handleProfileClick = () => {
+    navigate(getProfilePath());
   };
 
   const getItemPath = (item: NavLinkItem) => {
@@ -118,6 +179,7 @@ export default function AppSidebar({ role = "super_admin" }: AppSidebarProps) {
 
   const renderLink = (item: NavLinkItem, isChild = false) => {
     const isActive = isItemActive(item);
+
     const isComingSoonItem =
       item.isComingSoon ||
       !item.path ||
@@ -132,41 +194,41 @@ export default function AppSidebar({ role = "super_admin" }: AppSidebarProps) {
           <button
             type="button"
             onClick={() => toggleSubMenu(item.name)}
-            className={`group flex w-full items-center justify-between rounded-2xl px-5 py-4 text-[14px] font-extrabold transition-all duration-200 ${
+            className={`group flex w-full items-center justify-between rounded-lg px-4 py-3 text-[14px] font-semibold leading-5 transition-all duration-200 ${
               isActive
-                ? "bg-blue-50 text-blue-600 shadow-sm dark:bg-white/10 dark:text-white"
-                : "text-slate-700 hover:bg-blue-50 hover:text-blue-600 dark:text-slate-300 dark:hover:bg-white/5 dark:hover:text-white"
+                ? "bg-blue-500/25 text-white shadow-sm ring-1 ring-blue-300/30 dark:bg-blue-600/35 dark:ring-blue-400/35"
+                : "text-white/90 hover:bg-blue-500/15 hover:text-white dark:text-slate-200 dark:hover:bg-blue-600/20 dark:hover:text-white"
             }`}
           >
-            <span className="flex min-w-0 items-center gap-4">
+            <span className="flex min-w-0 items-center gap-3">
               <span
-                className={`flex h-6 w-6 shrink-0 items-center justify-center transition-colors ${
+                className={`flex h-5 w-5 shrink-0 items-center justify-center transition-colors ${
                   isActive
-                    ? "text-blue-500"
-                    : "text-slate-500 group-hover:text-blue-500"
+                    ? "text-blue-100"
+                    : "text-white/75 group-hover:text-white dark:text-slate-300 dark:group-hover:text-white"
                 }`}
               >
                 {item.icon}
               </span>
 
               {showText && (
-                <span className="truncate tracking-tight">{item.name}</span>
+                <span className="truncate tracking-[0.01em]">{item.name}</span>
               )}
             </span>
 
             {showText && (
               <span
-                className={`shrink-0 transition-transform ${
-                  isOpen ? "rotate-90 text-blue-500" : "text-slate-400"
+                className={`shrink-0 transition-transform duration-200 ${
+                  isOpen ? "rotate-90 text-white" : "text-white/70"
                 }`}
               >
-                <ChevronRight size={18} />
+                <ChevronRight size={16} />
               </span>
             )}
           </button>
 
           {isOpen && showText && (
-            <div className="mt-2 space-y-2 pl-7">
+            <div className="mt-1.5 space-y-1 pl-6">
               {item.children.map((child) => renderLink(child, true))}
             </div>
           )}
@@ -179,17 +241,19 @@ export default function AppSidebar({ role = "super_admin" }: AppSidebarProps) {
         key={item.name}
         to={getItemPath(item)}
         onClick={closeSidebar}
-        className={`group relative flex items-center gap-4 rounded-2xl px-5 py-4 text-[14px] font-extrabold transition-all duration-200 ${
-          isChild ? "text-[13px]" : ""
+        className={`group relative flex items-center gap-3 rounded-lg px-4 py-3 text-[14px] font-semibold leading-5 transition-all duration-200 ${
+          isChild ? "text-[13.5px]" : ""
         } ${
           isActive
-            ? "bg-blue-500 text-white shadow-lg shadow-blue-500/30"
-            : "text-slate-700 hover:bg-blue-50 hover:text-blue-600 dark:text-slate-300 dark:hover:bg-white/5 dark:hover:text-white"
+            ? "bg-blue-500/25 text-white shadow-[0_8px_24px_rgba(37,99,235,0.25)] ring-1 ring-blue-300/30 dark:bg-blue-600/35 dark:ring-blue-400/35"
+            : "text-white/90 hover:bg-blue-500/15 hover:text-white dark:text-slate-200 dark:hover:bg-blue-600/20 dark:hover:text-white"
         }`}
       >
         <span
-          className={`flex h-6 w-6 shrink-0 items-center justify-center transition-colors ${
-            isActive ? "text-white" : "text-slate-500 group-hover:text-blue-500"
+          className={`flex h-5 w-5 shrink-0 items-center justify-center transition-colors ${
+            isActive
+              ? "text-blue-100"
+              : "text-white/75 group-hover:text-white dark:text-slate-300 dark:group-hover:text-white"
           }`}
         >
           {item.icon}
@@ -197,14 +261,14 @@ export default function AppSidebar({ role = "super_admin" }: AppSidebarProps) {
 
         {showText && (
           <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
-            <span className="truncate tracking-tight">{item.name}</span>
+            <span className="truncate tracking-[0.01em]">{item.name}</span>
 
             {isComingSoonItem && (
               <span
-                className={`shrink-0 rounded-lg border px-3 py-1 text-[9px] font-black uppercase tracking-[0.1em] shadow-sm ${
+                className={`shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] ${
                   isActive
-                    ? "border-white/30 bg-white/15 text-white"
-                    : "border-blue-100 bg-blue-50 text-blue-500 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-300"
+                    ? "bg-blue-400/25 text-white"
+                    : "bg-white/10 text-white/75"
                 }`}
               >
                 Soon
@@ -221,94 +285,90 @@ export default function AppSidebar({ role = "super_admin" }: AppSidebarProps) {
       {isMobileOpen && (
         <div
           onClick={closeSidebar}
-          className="fixed inset-0 z-[55] bg-slate-900/20 backdrop-blur-sm lg:hidden"
+          className="fixed inset-0 z-[55] bg-slate-950/40 backdrop-blur-sm lg:hidden"
         />
       )}
 
       <aside
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
-        className={`fixed left-0 top-0 z-[60] flex h-screen flex-col border-r border-blue-100 bg-white text-slate-900 shadow-xl shadow-blue-900/5 transition-all duration-300 dark:border-white/5 dark:bg-[#081A33] dark:text-white
-          ${isMobileOpen ? "translate-x-0 w-[300px]" : "-translate-x-full w-[300px]"}
-          ${isDesktopOpen ? "lg:w-[300px]" : "lg:w-[100px]"}
+        className={`fixed left-0 top-0 z-[60] flex h-screen flex-col border-r border-white/10 bg-[#3437e8] text-white shadow-[18px_0_40px_rgba(15,23,42,0.12)] transition-all duration-300 dark:border-white/5 dark:bg-[#0f1724] dark:text-white dark:shadow-black/30
+          ${
+            isMobileOpen
+              ? "translate-x-0 w-[280px]"
+              : "-translate-x-full w-[280px]"
+          }
+          ${isDesktopOpen ? "lg:w-[280px]" : "lg:w-[92px]"}
           lg:translate-x-0`}
       >
-        <div className="flex h-28 shrink-0 items-center justify-between px-8">
-          <div className="flex items-center gap-4 overflow-hidden">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-blue-500 shadow-lg shadow-blue-500/25">
-              <span className="text-lg font-black text-white">H</span>
-            </div>
-
-            {showText && (
-              <div className="flex flex-col">
-                <span className="text-lg font-black leading-tight tracking-tighter text-blue-600 dark:text-white">
-                  HME <span className="text-orange-400">INTEL</span>
-                </span>
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
-                  Fleet Intelligence
-                </span>
-              </div>
-            )}
-          </div>
-
-          <button
-            type="button"
-            onClick={closeSidebar}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-500 transition hover:bg-blue-100 lg:hidden"
+        <div className="shrink-0 flex items-center justify-center">
+          <div
+            className="
+      flex items-center justify-center
+      w-12 h-12
+      sm:w-14 sm:h-14
+      md:w-16 md:h-16
+      lg:w-20 lg:h-20
+      xl:w-24 xl:h-24
+      shrink-0
+    "
           >
-            <X size={20} />
-          </button>
+            <img
+              src={logo1}
+              alt="HME Logo"
+              className="w-full h-full object-contain"
+            />
+          </div>
         </div>
 
-        <nav className="flex-1 space-y-10 overflow-y-auto overflow-x-hidden px-6 py-8 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-          <div>
-            <p
-              className={`mb-5 px-5 text-[11px] font-black uppercase tracking-[0.25em] text-blue-600 dark:text-slate-400 ${
-                !showText ? "text-center" : ""
-              }`}
-            >
-              {showText ? "Main Overview" : "•••"}
-            </p>
-
-            <div className="space-y-2">{renderLink(dashboardItem)}</div>
-          </div>
+        <nav className="mt-7 flex-1 space-y-5 overflow-y-auto overflow-x-hidden px-4 pb-5 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+          <div className="space-y-1.5">{renderLink(dashboardItem)}</div>
 
           {mainGroups.map((group, index) => {
             const isOpen = openGroup === group.title;
             const hasTitle = group.title.trim() !== "";
 
             return (
-              <div key={group.title || `group-${index}`} className="space-y-4">
+              <div key={group.title || `group-${index}`} className="space-y-2">
                 {hasTitle ? (
                   <>
-                    <button
-                      type="button"
-                      onClick={() => toggleGroup(group.title)}
-                      className={`flex w-full items-center justify-between px-5 text-[11px] font-black uppercase tracking-[0.25em] text-blue-600 transition-colors hover:text-blue-500 dark:text-slate-400 ${
-                        !showText ? "justify-center" : ""
-                      }`}
-                    >
-                      {showText ? group.title : "•••"}
+                    {showText ? (
+                      <button
+                        type="button"
+                        onClick={() => toggleGroup(group.title)}
+                        className="flex w-full items-center justify-between px-4 py-3 text-[15px] font-medium text-white/85 transition-all duration-300 hover:text-white"
+                      >
+                        <span>{group.title}</span>
 
-                      {showText && (
                         <span
                           className={`transition-transform duration-200 ${
-                            isOpen ? "rotate-90 text-blue-500" : "text-slate-400"
+                            isOpen ? "rotate-90 text-white/90" : "text-white/70"
                           }`}
                         >
-                          <ChevronRight size={18} />
+                          <ChevronRight size={15} />
                         </span>
-                      )}
-                    </button>
+                      </button>
+                    ) : (
+                      <div className="mx-auto h-px w-8 bg-white/10" />
+                    )}
 
-                    {isOpen && (
-                      <div className="space-y-2 animate-in slide-in-from-top-2 duration-200">
+                    <div
+                      className={`
+                         overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)]
+                           ${
+                             isOpen || !showText
+                               ? "max-h-[500px] opacity-100 translate-y-0"
+                               : "max-h-0 opacity-0 -translate-y-2"
+                           }
+                            `}
+                    >
+                      <div className="space-y-1.5 pt-1">
                         {group.items.map((item) => renderLink(item))}
                       </div>
-                    )}
+                    </div>
                   </>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     {group.items.map((item) => renderLink(item))}
                   </div>
                 )}
@@ -317,40 +377,92 @@ export default function AppSidebar({ role = "super_admin" }: AppSidebarProps) {
           })}
         </nav>
 
-        <div className="shrink-0 space-y-4 border-t border-blue-100 p-5 dark:border-white/5">
+        <div className="shrink-0 border-t border-white/10 bg-transparent p-4">
           {settingsGroup && (
-            <div className="space-y-1.5">
+            <div className="mb-3 space-y-1.5">
               {settingsGroup.items.map((item) => renderLink(item))}
             </div>
           )}
 
-          {showText && (
-            <div className="flex items-center gap-4 rounded-3xl border border-blue-100 bg-[#F8FAFC] p-4 shadow-sm dark:border-white/5 dark:bg-white/5">
-              <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-blue-500 text-xs font-black text-white shadow-lg shadow-blue-500/25">
-                {profile.shortName}
-                <span className="absolute -bottom-1 -right-1 h-3.5 w-3.5 rounded-full border-2 border-white bg-green-500 shadow-sm dark:border-[#081A33]" />
-              </div>
+          {showText ? (
+            <div className="flex items-center gap-3 rounded-2xl bg-white/8 p-3">
+              <button
+                type="button"
+                onClick={handleProfileClick}
+                className="flex min-w-0 flex-1 items-center gap-3 rounded-xl p-2 text-left transition hover:bg-white/10"
+              >
+                <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-cyan-400 to-blue-500 text-xs font-semibold text-white shadow-sm">
+                  {profile.shortName}
 
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-xs font-black uppercase tracking-tight text-blue-600 dark:text-white">
-                  {profile.title}
-                </p>
+                  <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#3437e8] bg-emerald-500 dark:border-[#0f1724]" />
+                </div>
 
-                <p className="truncate text-[10px] font-bold text-slate-500 dark:text-slate-400">
-                  {profileEmail}
-                </p>
-              </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[14px] font-semibold text-white">
+                    {profile.title}
+                  </p>
+
+                  <p className="truncate text-[12px] font-normal text-white/65">
+                    {profileEmail}
+                  </p>
+                </div>
+              </button>
 
               <button
                 type="button"
-                className="flex h-8 w-8 items-center justify-center rounded-xl bg-white text-slate-400 shadow-sm transition-colors hover:text-blue-500 dark:bg-slate-800"
+                onClick={() => setShowLogoutModal(true)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-white/55 transition hover:bg-red-500/20 hover:text-red-300"
               >
-                <ChevronRight size={14} />
+                <LogOut size={15} />
               </button>
+            </div>
+          ) : (
+            <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-cyan-400 to-blue-500 text-xs font-semibold text-white shadow-sm">
+              {profile.shortName}
             </div>
           )}
         </div>
       </aside>
+      {showLogoutModal && (
+        <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/50 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-3xl border border-gray-200 bg-white p-6 shadow-2xl dark:border-gray-800 dark:bg-gray-900">
+            <div className="flex justify-center">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-red-100 dark:bg-red-500/10">
+                <LogOut className="h-8 w-8 text-red-600 dark:text-red-400" />
+              </div>
+            </div>
+
+            <div className="mt-5 text-center">
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                Logout Confirmation
+              </h3>
+
+              <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                Are you sure you want to logout from your account?
+              </p>
+            </div>
+
+            <div className="mt-6 flex gap-3">
+              <button
+                onClick={() => setShowLogoutModal(false)}
+                className="flex-1 rounded-xl border border-gray-300 bg-white px-4 py-3 font-semibold text-gray-700 transition hover:bg-gray-100"
+              >
+                Cancel
+              </button>
+
+              <button
+                onClick={() => {
+                  setShowLogoutModal(false);
+                  handleLogout();
+                }}
+                className="flex-1 rounded-xl bg-red-600 px-4 py-3 font-semibold text-white transition hover:bg-red-700"
+              >
+                Yes, Logout
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
