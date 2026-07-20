@@ -1,8 +1,9 @@
 import { Link } from "react-router";
+import StorageService, { STORAGE_KEYS } from "../services/storage.service";
 
 export default function AccessDenied() {
-  const token = localStorage.getItem("token");
- const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const token = StorageService.get<string>(STORAGE_KEYS.TOKEN);
+  const user = StorageService.get<any>(STORAGE_KEYS.USER) || {};
 
 const role = user?.role?.toLowerCase();
 

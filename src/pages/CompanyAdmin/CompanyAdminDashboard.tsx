@@ -1,60 +1,52 @@
-import React, { useState, useEffect } from "react";
-import { useNavigate, useLocation } from "react-router";
-import { 
-  Activity,
+import React, { useEffect, useState, useMemo } from "react";
+import { useNavigate } from "react-router";
+
+import {
+  CardSkeleton,
+  FleetSkeleton,
+  ChartSkeleton,
+  TableSkeleton,
+} from "../../components/common/Skeleton";
+
+import AppSelect from "../../components/ui/dropdown/AppSelect";
+
+import {
   AlertCircle,
-  ArrowRight,
   BarChart3,
-  Bell,
-  Box,
-  Calendar,
   ChevronRight,
-  ClipboardList,
-  Clock,
-  Cpu,
-  Download,
-  Edit,
-  FileText,
-  Filter,
-  History,
-  LayoutDashboard,
-  Lock,
-  LogOut,
-  Map,
-  Plus,
-  PlusCircle,
-  Search,
-  Send,
-  Settings,
-  Shield,
-  TrendingDown,
-  TrendingUp,
-  Truck,
-  Users,
-  Wrench,
-  Zap,
-  DollarSign,
   Database,
+  Edit,
+  History,
+  Lock,
   PieChart as PieChartIcon,
   CheckCircle2 as CheckLineIcon,
+  Search,
+  Shield,
+  Trash2,
+  Truck,
   X,
-  Trash2
+  ArrowRight,
 } from "lucide-react";
-import toast from "react-hot-toast";
-import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, 
-  Tooltip, ResponsiveContainer, Cell,
-  PieChart, Pie
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+  PieChart,
+  Pie,
 } from "recharts";
 
 import CompanyPlanCard from "../../components/company-admin/dashboard/CompanyPlanCard";
 import SubscriptionHistoryTable from "../../components/company-admin/dashboard/SubscriptionHistoryTable";
+import MachineHealthChart from "../../components/company-admin/dashboard/MachineHealthChart";
 import { userService } from "../../services/userService";
 import { componentService } from "../../services/companyadmin/componentService";
-
 import { CompanyAdminNav } from "../../components/company-admin/CompanyAdminNav";
 
-// Helper functions for normalization
 const getArrayData = <T,>(response: any): T[] => {
   if (Array.isArray(response)) return response;
   if (Array.isArray(response?.data)) return response.data;
@@ -67,7 +59,9 @@ const getArrayData = <T,>(response: any): T[] => {
 
 const normalizeComponent = (item: any) => ({
   id: String(item.id || item.componentId || item.component_id || ""),
-  machineId: String(item.machineId || item.machine_id || item.machine?.id || ""),
+  machineId: String(
+    item.machineId || item.machine_id || item.machine?.id || "",
+  ),
   category: String(item.category || item.categoryName || item.type || ""),
   description: String(item.description || ""),
   serialNumber: String(item.serialNumber || item.serial_number || ""),
@@ -90,10 +84,13 @@ export default function CompanyAdminDashboard() {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
-  // Search, Filter, Edit states
   const [riskSearch, setRiskSearch] = useState("");
   const [riskStatusFilter, setRiskStatusFilter] = useState("all");
   const [editingComponent, setEditingComponent] = useState<any | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
+
   const [editForm, setEditForm] = useState({
     category: "",
     description: "",
@@ -106,17 +103,30 @@ export default function CompanyAdminDashboard() {
     condition: "3",
   });
 
-  const handleDeleteComponent = async (id: string) => {
-    if (window.confirm("Are you sure you want to delete this component? This action cannot be undone.")) {
-      try {
-        await componentService.deleteComponent(id);
-        toast.success("Component deleted successfully!");
-        const componentResponse = await componentService.getComponents();
-        const rawComponents = getArrayData<any>(componentResponse);
-        setComponents(rawComponents.map(normalizeComponent));
-      } catch (err: any) {
-        toast.error(err.message || "Failed to delete component");
-      }
+  const riskOptions = [
+    { label: "All Risks", value: "all" },
+    { label: "Critical Only", value: "critical" },
+    { label: "Warning Only", value: "warning" },
+    { label: "Monitor Only", value: "monitor" },
+  ];
+
+  const handleDeleteComponent = async () => {
+    if (!deleteTarget) return;
+
+    try {
+      setDeleting(true);
+
+      await componentService.deleteComponent(deleteTarget.id);
+
+      const componentResponse = await componentService.getComponents();
+      const rawComponents = getArrayData<any>(componentResponse);
+      setComponents(rawComponents.map(normalizeComponent));
+
+      setDeleteTarget(null);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -135,44 +145,19 @@ export default function CompanyAdminDashboard() {
     });
   };
 
-  const handleSaveEdit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingComponent) return;
-    try {
-      const payload = {
-        category: editForm.category,
-        description: editForm.description,
-        serialNumber: editForm.serialNumber,
-        supplier: editForm.supplier,
-        installHours: Number(editForm.installHours || 0),
-        currentHours: Number(editForm.currentHours || 0),
-        plannedLife: Number(editForm.plannedLife || 0),
-        replacementCost: Number(editForm.replacementCost || 0),
-        condition: Number(editForm.condition || 3),
-      };
-
-      await componentService.updateComponent(editingComponent.id, payload);
-      toast.success("Component updated successfully!");
-      setEditingComponent(null);
-      const componentResponse = await componentService.getComponents();
-      const rawComponents = getArrayData<any>(componentResponse);
-      setComponents(rawComponents.map(normalizeComponent));
-    } catch (err: any) {
-      toast.error(err.message || "Failed to update component");
-    }
-  };
-
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
         setLoading(true);
-        const [sub, subHistory, machinesList, componentResponse] = await Promise.all([
-          userService.getActiveSubscription(),
-          userService.getSubscriptionHistory(),
-          userService.getMachines(),
-          componentService.getComponents()
-        ]);
-        
+
+        const [sub, subHistory, machinesList, componentResponse] =
+          await Promise.all([
+            userService.getActiveSubscription(),
+            userService.getSubscriptionHistory(),
+            userService.getMachines(),
+            componentService.getComponents(),
+          ]);
+
         if (!sub && (!subHistory || subHistory.length === 0)) {
           navigate("/plans");
           return;
@@ -180,8 +165,7 @@ export default function CompanyAdminDashboard() {
 
         setSubscription(sub);
         setHistory(subHistory);
-        
-        // Normalize machines list
+
         const rawMachines = getArrayData<any>(machinesList);
         const normalizedMachines = rawMachines.map((m: any) => ({
           id: String(m.id || m.machineId || m.machine_id || ""),
@@ -193,9 +177,9 @@ export default function CompanyAdminDashboard() {
           location: m.location || m.site || "",
           status: m.status || "active",
         }));
+
         setMachines(normalizedMachines);
 
-        // Normalize components list
         const rawComponents = getArrayData<any>(componentResponse);
         const mappedComponents = rawComponents.map(normalizeComponent);
         setComponents(mappedComponents);
@@ -209,82 +193,107 @@ export default function CompanyAdminDashboard() {
     fetchDashboardData();
   }, [navigate]);
 
-  // Dynamic calculations for summary cards
+  useEffect(() => {
+    if (editingComponent || deleteTarget) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [editingComponent, deleteTarget]);
+
   const summaryStats = React.useMemo(() => {
     const totalComponents = components.length;
-    const criticalCount = components.filter(c => c.intelligence?.riskStatus === 'Critical').length;
-    const warningCount = components.filter(c => c.intelligence?.riskStatus === 'Warning' || c.intelligence?.riskStatus === 'Monitor').length;
-    
-    const totalReplacementCost = components.reduce((sum, c) => sum + Number(c.replacementCost || 0), 0);
-    const formattedReplacementCost = totalReplacementCost >= 1000000 
-      ? `R ${(totalReplacementCost / 1000000).toFixed(2)}M` 
-      : totalReplacementCost >= 1000 
-        ? `R ${(totalReplacementCost / 1000).toFixed(0)}K` 
-        : `R ${totalReplacementCost}`;
+
+    const criticalCount = components.filter(
+      (c) => c.intelligence?.riskStatus === "Critical",
+    ).length;
+
+    const warningCount = components.filter(
+      (c) =>
+        c.intelligence?.riskStatus === "Warning" ||
+        c.intelligence?.riskStatus === "Monitor",
+    ).length;
+
+    const totalReplacementCost = components.reduce(
+      (sum, c) => sum + Number(c.replacementCost || 0),
+      0,
+    );
+
+    const formattedReplacementCost =
+      totalReplacementCost >= 1000000
+        ? `R ${(totalReplacementCost / 1000000).toFixed(2)}M`
+        : totalReplacementCost >= 1000
+          ? `R ${(totalReplacementCost / 1000).toFixed(0)}K`
+          : `R ${totalReplacementCost}`;
 
     return {
       totalComponents,
       criticalCount,
       warningCount,
-      formattedReplacementCost
+      formattedReplacementCost,
     };
   }, [components]);
 
-  // Dynamic Replacement Value by Category
   const categoryData = React.useMemo(() => {
     const categoryTotals: Record<string, number> = {};
+
     const colors: Record<string, string> = {
-      Engine: '#f97316',
-      Tyre: '#0ea5e9',
-      Tyres: '#0ea5e9',
-      Transmission: '#a855f7',
-      Hydraulics: '#eab308',
-      Hydraulic: '#eab308',
-      Brakes: '#ec4899',
-      Brake: '#ec4899',
-      Electrical: '#06b6d4',
-      Cooling: '#14b8a6',
-      Cabin: '#64748b',
+      Engine: "#f97316",
+      Tyre: "#0ea5e9",
+      Tyres: "#0ea5e9",
+      Transmission: "#a855f7",
+      Hydraulics: "#eab308",
+      Hydraulic: "#eab308",
+      Brakes: "#ec4899",
+      Brake: "#ec4899",
+      Electrical: "#06b6d4",
+      Cooling: "#14b8a6",
+      Cabin: "#64748b",
     };
 
     components.forEach((c) => {
-      const cat = c.category || 'Other';
-      categoryTotals[cat] = (categoryTotals[cat] || 0) + Number(c.replacementCost || 0);
+      const cat = c.category || "Other";
+      categoryTotals[cat] =
+        (categoryTotals[cat] || 0) + Number(c.replacementCost || 0);
     });
 
     if (Object.keys(categoryTotals).length === 0) {
       return [
-        { name: 'Engine', value: 0, color: '#f97316' },
-        { name: 'Tyre', value: 0, color: '#0ea5e9' },
+        { name: "Engine", value: 0, color: "#f97316" },
+        { name: "Tyre", value: 0, color: "#0ea5e9" },
       ];
     }
 
     return Object.entries(categoryTotals).map(([name, value]) => ({
       name,
       value,
-      color: colors[name] || '#64748b',
+      color: colors[name] || "#64748b",
     }));
   }, [components]);
 
-  // Dynamic Component Distribution
   const distributionData = React.useMemo(() => {
     const categoryCounts: Record<string, number> = {};
+
     const colors: Record<string, string> = {
-      Engine: '#ef4444',
-      Tyre: '#3b82f6',
-      Tyres: '#3b82f6',
-      Transmission: '#a855f7',
-      Hydraulics: '#eab308',
-      Hydraulic: '#eab308',
-      Brakes: '#f97316',
-      Brake: '#f97316',
-      Electrical: '#06b6d4',
-      Cooling: '#14b8a6',
-      Cabin: '#64748b',
+      Engine: "#ef4444",
+      Tyre: "#3b82f6",
+      Tyres: "#3b82f6",
+      Transmission: "#a855f7",
+      Hydraulics: "#eab308",
+      Hydraulic: "#eab308",
+      Brakes: "#f97316",
+      Brake: "#f97316",
+      Electrical: "#06b6d4",
+      Cooling: "#14b8a6",
+      Cabin: "#64748b",
     };
 
     components.forEach((c) => {
-      const cat = c.category || 'Other';
+      const cat = c.category || "Other";
       categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
     });
 
@@ -292,59 +301,163 @@ export default function CompanyAdminDashboard() {
 
     if (Object.keys(categoryCounts).length === 0) {
       return [
-        { name: 'Engine', value: 0, color: '#ef4444' },
-        { name: 'Tyre', value: 0, color: '#3b82f6' },
+        { name: "Engine", value: 0, color: "#ef4444" },
+        { name: "Tyre", value: 0, color: "#3b82f6" },
       ];
     }
 
     return Object.entries(categoryCounts).map(([name, count]) => ({
       name,
       value: Math.round((count / total) * 100),
-      color: colors[name] || '#64748b',
+      color: colors[name] || "#64748b",
     }));
   }, [components]);
 
-  // Dynamic Fleet Overview (Machines with dynamic component counts and statuses)
   const fleetMachines = React.useMemo(() => {
-    if (machines.length === 0) {
-      return [];
-    }
+    if (machines.length === 0) return [];
 
     return machines.map((m) => {
-      const machineComps = components.filter(c => c.machineId === m.machineId || c.machineId === m.id);
+      const machineComps = components.filter(
+        (c) => c.machineId === m.machineId || c.machineId === m.id,
+      );
+
       const compsCount = machineComps.length;
-      
-      const critCount = machineComps.filter(c => c.intelligence?.riskStatus === 'Critical').length;
-      const warnCount = machineComps.filter(c => c.intelligence?.riskStatus === 'Warning' || c.intelligence?.riskStatus === 'Monitor').length;
-      
-      const totalCost = machineComps.reduce((sum, c) => sum + Number(c.replacementCost || 0), 0);
-      const formattedCost = totalCost >= 1000000 
-        ? `R ${(totalCost / 1000000).toFixed(2)}M` 
-        : totalCost >= 1000 
-          ? `R ${(totalCost / 1000).toFixed(0)}K` 
-          : `R ${totalCost}`;
+
+      const critCount = machineComps.filter(
+        (c) => c.intelligence?.riskStatus === "Critical",
+      ).length;
+
+      const warnCount = machineComps.filter(
+        (c) =>
+          c.intelligence?.riskStatus === "Warning" ||
+          c.intelligence?.riskStatus === "Monitor",
+      ).length;
+
+      const totalCost = machineComps.reduce(
+        (sum, c) => sum + Number(c.replacementCost || 0),
+        0,
+      );
+
+      const formattedCost =
+        totalCost >= 1000000
+          ? `R ${(totalCost / 1000000).toFixed(2)}M`
+          : totalCost >= 1000
+            ? `R ${(totalCost / 1000).toFixed(0)}K`
+            : `R ${totalCost}`;
 
       return {
         id: m.id || m.machineId || m.name,
+        machineId: m.machineId || m.id,
         name: m.name || m.machineId || "Unnamed Machine",
         type: m.model || "N/A",
         comps: compsCount,
         crit: critCount,
         warn: warnCount,
-        val: formattedCost
+        val: formattedCost,
       };
     });
   }, [machines, components]);
 
-  // Dynamic High-Risk Components List
+  const riskComponentsByMachineId = useMemo(() => {
+    const riskMap = new Map<string, any[]>();
+
+    components.forEach((component) => {
+      const machineId = String(component.machineId || "");
+      if (!machineId) return;
+
+      const riskStatus = component.intelligence?.riskStatus;
+
+      if (
+        riskStatus === "Critical" ||
+        riskStatus === "Warning" ||
+        riskStatus === "Monitor"
+      ) {
+        const currentItems = riskMap.get(machineId) || [];
+
+        currentItems.push({
+          ...component,
+          displayRisk:
+            riskStatus === "Critical" ? "Critical" : riskStatus || "Warning",
+        });
+
+        riskMap.set(machineId, currentItems);
+      }
+    });
+
+    riskMap.forEach((items, machineId) => {
+      const sortedItems = items
+        .sort((a, b) => {
+          const aCritical =
+            a.displayRisk === "Critical" ||
+            a.intelligence?.riskStatus === "Critical";
+
+          const bCritical =
+            b.displayRisk === "Critical" ||
+            b.intelligence?.riskStatus === "Critical";
+
+          if (aCritical && !bCritical) return -1;
+          if (!aCritical && bCritical) return 1;
+          return 0;
+        })
+        .slice(0, 5);
+
+      riskMap.set(machineId, sortedItems);
+    });
+
+    return riskMap;
+  }, [components]);
+
+  const handleSaveEdit = async () => {
+    if (!editingComponent) return;
+
+    try {
+      setSavingEdit(true);
+
+      const payload = {
+        category: editForm.category,
+        description: editForm.description,
+        serialNumber: editForm.serialNumber,
+        supplier: editForm.supplier,
+        installHours: Number(editForm.installHours || 0),
+        currentHours: Number(editForm.currentHours || 0),
+        plannedLife: Number(editForm.plannedLife || 0),
+        replacementCost: Number(editForm.replacementCost || 0),
+        condition: Number(editForm.condition || 3),
+      };
+
+      await componentService.updateComponent(editingComponent.id, payload);
+
+      const componentResponse = await componentService.getComponents();
+      const rawComponents = getArrayData<any>(componentResponse);
+      setComponents(rawComponents.map(normalizeComponent));
+
+      setEditingComponent(null);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
   const highRiskComponents = React.useMemo(() => {
     return components
-      .filter((c) => c.intelligence?.riskStatus === 'Critical' || c.intelligence?.riskStatus === 'Warning' || c.intelligence?.riskStatus === 'Monitor')
+      .filter(
+        (c) =>
+          c.intelligence?.riskStatus === "Critical" ||
+          c.intelligence?.riskStatus === "Warning" ||
+          c.intelligence?.riskStatus === "Monitor",
+      )
       .map((c) => {
-        const machine = machines.find(m => m.machineId === c.machineId || m.id === c.machineId);
+        const machine = machines.find(
+          (m) => m.machineId === c.machineId || m.id === c.machineId,
+        );
+
         const machineLabel = machine ? machine.name : c.machineId || "N/A";
-        
-        const lifeUsed = c.plannedLife ? Math.min(100, Math.round((c.currentHours / c.plannedLife) * 100)) : 0;
+
+        const lifeUsed = c.plannedLife
+          ? Math.min(100, Math.round((c.currentHours / c.plannedLife) * 100))
+          : 0;
+
         const remainingLifePercent = 100 - lifeUsed;
 
         return {
@@ -360,16 +473,29 @@ export default function CompanyAdminDashboard() {
           plannedLife: c.plannedLife,
           replacementCost: c.replacementCost,
           condition: c.condition,
-          cond: c.condition >= 5 ? 'Critical' : c.condition >= 4 ? 'Warning' : c.condition >= 3 ? 'Monitor' : 'Good',
+          cond:
+            c.condition >= 5
+              ? "Critical"
+              : c.condition >= 4
+                ? "Warning"
+                : c.condition >= 3
+                  ? "Monitor"
+                  : "Good",
           life: remainingLifePercent,
-          risk: c.intelligence?.riskStatus || 'Healthy',
-          driver: c.intelligence?.riskDriver || 'Normal',
-          costPerHour: `Rs ${(c.plannedLife > 0 ? (Number(c.replacementCost) / c.plannedLife) : 0).toFixed(2)}/hr`,
+          risk: c.intelligence?.riskStatus || "Healthy",
+          driver: c.intelligence?.riskDriver || "Normal",
+          costPerHour: `Rs ${
+            c.plannedLife > 0
+              ? (Number(c.replacementCost) / c.plannedLife).toFixed(2)
+              : "0.00"
+          }/hr`,
         };
       })
       .filter((c) => {
         const query = riskSearch.toLowerCase();
+
         if (!query) return true;
+
         return (
           c.machineLabel.toLowerCase().includes(query) ||
           c.cat.toLowerCase().includes(query) ||
@@ -383,14 +509,75 @@ export default function CompanyAdminDashboard() {
       })
       .sort((a, b) => {
         const score = { Critical: 3, Warning: 2, Monitor: 1, Healthy: 0 };
-        return (score[b.risk as keyof typeof score] || 0) - (score[a.risk as keyof typeof score] || 0);
+        return (
+          (score[b.risk as keyof typeof score] || 0) -
+          (score[a.risk as keyof typeof score] || 0)
+        );
       });
   }, [components, machines, riskSearch, riskStatusFilter]);
 
+  const fleetScrollRef = React.useRef<HTMLDivElement | null>(null);
+
+  const riskLogicScrollRef = React.useRef<HTMLDivElement | null>(null);
+
+  const scrollFleetCards = (direction: "left" | "right") => {
+    const container = fleetScrollRef.current;
+    if (!container) return;
+
+    const card = container.querySelector(
+      "[data-fleet-card]",
+    ) as HTMLElement | null;
+    const gap = 16;
+    const cardsToScroll = 4;
+
+    const scrollAmount = card
+      ? card.offsetWidth * cardsToScroll + gap * (cardsToScroll - 1)
+      : container.clientWidth;
+
+    container.scrollBy({
+      left: direction === "left" ? -scrollAmount : scrollAmount,
+      behavior: "smooth",
+    });
+  };
+
+  const scrollRiskLogicCards = (direction: "left" | "right") => {
+    const container = riskLogicScrollRef.current;
+    if (!container) return;
+
+    const card = container.querySelector(
+      "[data-risk-logic-card]",
+    ) as HTMLElement | null;
+
+    const gap = 20;
+    const cardsToScroll = 4;
+
+    const scrollAmount = card
+      ? card.offsetWidth * cardsToScroll + gap * (cardsToScroll - 1)
+      : container.clientWidth;
+
+    container.scrollBy({
+      left: direction === "left" ? -scrollAmount : scrollAmount,
+      behavior: "smooth",
+    });
+  };
+
   if (loading) {
     return (
-      <div className="flex h-[60vh] items-center justify-center">
-        <div className="h-12 w-12 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
+      <div className="space-y-8">
+        <CardSkeleton />
+
+        <ChartSkeleton />
+
+        <FleetSkeleton />
+
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+          <ChartSkeleton />
+          <ChartSkeleton />
+        </div>
+
+        <TableSkeleton rows={8} />
+
+        <TableSkeleton rows={5} />
       </div>
     );
   }
@@ -398,139 +585,708 @@ export default function CompanyAdminDashboard() {
   const isExpired = subscription?.status === "expired";
 
   return (
-    <div className="min-h-screen bg-[#F8F9FC] dark:bg-slate-900 p-4 lg:p-10">
-      <CompanyAdminNav />
-      {/* Premium Header */}
-      <div className="relative mb-12 overflow-hidden rounded-[3rem] bg-[#0F172A] p-10 text-white shadow-2xl">
-        <div className="absolute right-0 top-0 h-64 w-64 -translate-y-12 translate-x-12 rounded-full bg-blue-500/10 blur-3xl" />
-        <div className="relative z-10 flex flex-col gap-10 xl:flex-row xl:items-center xl:justify-between">
-          <div className="space-y-4">
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-orange-500">Fleet Component Intelligence</p>
-            <h1 className="text-5xl font-black tracking-tighter leading-tight">
-              Component <span className="text-orange-500">Lifecycle</span><br />
+    <div className="hme-dashboard-pro min-h-screen bg-[#F8F9FC] px-4 py-5 font-sans text-slate-900 antialiased dark:bg-slate-900 dark:text-white sm:px-6 lg:px-8 lg:py-7">
+      <style>{`
+        .hme-dashboard-pro {
+          font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+
+        .hme-dashboard-pro .font-black {
+          font-weight: 700 !important;
+        }
+
+        .hme-dashboard-pro h1,
+        .hme-dashboard-pro h2,
+        .hme-dashboard-pro h3 {
+          letter-spacing: -0.025em;
+        }
+
+        .hme-dashboard-pro table th {
+          font-size: 11px !important;
+          font-weight: 700 !important;
+          letter-spacing: 0.08em !important;
+        }
+
+        .hme-dashboard-pro table td {
+          font-size: 13px;
+          line-height: 1.55;
+        }
+
+        .hme-dashboard-pro input,
+        .hme-dashboard-pro select,
+        .hme-dashboard-pro button {
+          font-family: inherit;
+        }
+      `}</style>
+
+      <div className="mx-auto mb-7 max-w-7xl">
+        <CompanyAdminNav />
+      </div>
+
+      <div className="relative mb-8 overflow-hidden rounded-[28px] border border-indigo-300/20 bg-gradient-to-r from-[#3B37E6] via-[#3730D9] to-[#2E2AD9] px-7 py-7 shadow-xl">
+        {/* Background Effects */}
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.12),transparent_35%)]" />
+        <div className="absolute -right-14 -top-14 h-48 w-48 rounded-full bg-white/10 blur-3xl" />
+        <div className="absolute bottom-0 left-0 h-36 w-36 rounded-full bg-cyan-400/10 blur-3xl" />
+        <div className="absolute right-0 top-0 h-56 w-56 translate-x-10 -translate-y-10 rounded-full bg-blue-500/10 blur-3xl" />
+
+        <div className="relative z-10 flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
+          {/* Left Section */}
+          <div className="max-w-md">
+            <div className="inline-flex items-center rounded-full border border-white/20 bg-white/10 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-white backdrop-blur-md">
+              Fleet Component Intelligence
+            </div>
+
+            <h1 className="mt-4 text-[34px] font-extrabold leading-[1.05] tracking-tight text-white lg:text-[40px]">
+              Component <span className="text-blue-200">Lifecycle</span>
+              <br />
               Dashboard
             </h1>
-            <div className="flex items-center gap-4 pt-2">
-               <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-               <p className="text-xs font-bold text-slate-400">KEEPING AFRICA MOVING</p>
+
+            <div className="mt-5 flex items-start gap-3">
+              <div className="mt-2 h-2.5 w-2.5 rounded-full bg-emerald-300 shadow-[0_0_14px_rgba(52,211,153,0.9)]" />
+
+              <p className="max-w-[320px] text-[13px] leading-5 font-medium text-blue-100">
+                Real-time fleet health, lifecycle tracking and replacement cost
+                insights.
+              </p>
             </div>
           </div>
-          
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-4 xl:gap-6">
+
+          {/* Right Stats */}
+          <div className="grid w-full grid-cols-2 gap-4 md:grid-cols-4 xl:max-w-[620px]">
             {[
-              { label: "Total Components", value: String(summaryStats.totalComponents), color: "text-white" },
-              { label: "Critical", value: String(summaryStats.criticalCount), color: "text-red-500" },
-              { label: "Warning", value: String(summaryStats.warningCount), color: "text-orange-500" },
-              { label: "Replacement Value", value: summaryStats.formattedReplacementCost, color: "text-white" },
-            ].map((stat, i) => (
-              <div key={i} className="min-w-[160px] rounded-[2rem] bg-white/5 border border-white/10 p-6 backdrop-blur-md">
-                <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">{stat.label}</p>
-                <p className={`mt-2 text-3xl font-black ${stat.color}`}>{stat.value}</p>
+              {
+                label: "Total Components",
+                value: String(summaryStats.totalComponents),
+                color: "text-white",
+              },
+              {
+                label: "Critical",
+                value: String(summaryStats.criticalCount),
+                color: "text-red-300",
+              },
+              {
+                label: "Warning",
+                value: String(summaryStats.warningCount),
+                color: "text-amber-300",
+              },
+              {
+                label: "Replacement Value",
+                value: summaryStats.formattedReplacementCost,
+                color: "text-white",
+              },
+            ].map((stat, index) => (
+              <div
+                key={index}
+                className="rounded-3xl border border-white/15 bg-white/10 px-5 py-4 backdrop-blur-md transition-all duration-300 hover:-translate-y-1 hover:bg-white/15"
+              >
+                <p className="text-[11px] font-semibold uppercase tracking-[0.13em] text-blue-100">
+                  {stat.label}
+                </p>
+
+                <p
+                  className={`mt-3 text-[34px] font-extrabold leading-none tracking-tight ${stat.color}`}
+                >
+                  {stat.value}
+                </p>
               </div>
             ))}
           </div>
         </div>
       </div>
 
-      <div className="space-y-12">
-        {/* Fleet Overview Section */}
-        <section>
-          <div className="mb-6 flex items-center gap-3">
-            <Truck className="text-slate-400" size={20} />
-            <h2 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-wider">Fleet Overview</h2>
-            <span className="text-xs font-bold text-slate-400">{machines.length} machines • {components.length} components</span>
-          </div>
-          
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-            {fleetMachines.length === 0 ? (
-              <div className="col-span-full rounded-[2.5rem] bg-white border border-slate-100 p-8 text-center text-xs font-bold text-slate-400 dark:bg-slate-800 dark:border-slate-700">
-                No machines found. Please register a machine under the Component Management page.
-              </div>
-            ) : (
-              fleetMachines.map((m) => (
-                <div key={m.id} className="group relative overflow-hidden rounded-[2.5rem] bg-white border border-slate-100 p-7 shadow-sm transition-all hover:shadow-xl dark:bg-slate-800 dark:border-slate-700">
-                  <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-sm font-black text-slate-900 dark:text-white">{m.name}</h3>
-                    <span className="rounded-lg bg-slate-900 px-2 py-1 text-[8px] font-black text-white uppercase">{m.type}</span>
-                  </div>
-                  <div className="flex justify-between items-end">
-                    <div className="space-y-1">
-                      <p className="text-[20px] font-black text-slate-900 dark:text-white">{m.comps}</p>
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Components</p>
-                    </div>
-                    <div className="flex gap-2">
-                      <div className="flex flex-col items-center">
-                        <span className="text-xs font-black text-red-500">{m.crit}</span>
-                        <div className="h-1.5 w-1.5 rounded-full bg-red-500" />
-                      </div>
-                      <div className="flex flex-col items-center">
-                        <span className="text-xs font-black text-orange-500">{m.warn}</span>
-                        <div className="h-1.5 w-1.5 rounded-full bg-orange-500" />
-                      </div>
-                    </div>
-                  </div>
-                  <div className="mt-6 flex items-center justify-between border-t border-slate-50 pt-6 dark:border-slate-700/50">
-                    <p className="text-xs font-black text-slate-900 dark:text-white">{m.val}</p>
-                    <button className="text-slate-300 transition-colors hover:text-orange-500">
-                      <ChevronRight size={18} />
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </section>
+      <div className="mx-auto max-w-7xl space-y-10">
+        <MachineHealthChart machines={machines} components={components} />
 
-        {/* Overview Content - Full Width Stack */}
-        <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          {/* Charts Section */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-            <div className="rounded-[3rem] bg-white p-10 shadow-sm border border-slate-100 dark:bg-slate-800">
-              <div className="mb-10 flex items-center gap-4">
-                <div className="h-10 w-10 rounded-2xl bg-orange-50 flex items-center justify-center text-orange-500">
-                  <BarChart3 size={20} />
-                </div>
-                <div>
-                  <h3 className="text-base font-black text-slate-900 dark:text-white tracking-tight">Replacement Value by Category</h3>
-                  <p className="text-[10px] font-bold text-slate-400 tracking-wider">Total cost exposure per component group</p>
-                </div>
+        <section>
+          <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-blue-700 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-blue-300">
+                <Truck size={19} />
               </div>
-              <div className="h-[300px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={categoryData}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 9, fontWeight: 700, fill: '#94a3b8' }} />
-                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 9, fontWeight: 700, fill: '#94a3b8' }} />
-                    <Tooltip cursor={{ fill: '#f8fafc' }} contentStyle={{ borderRadius: '20px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)' }} />
-                    <Bar dataKey="value" radius={[6, 6, 0, 0]} barSize={40}>
-                      {categoryData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+
+              <div>
+                <h2 className="text-lg font-bold tracking-tight text-slate-950 dark:text-white">
+                  Fleet Overview
+                </h2>
+
+                <p className="mt-1 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">
+                  {machines.length} machines • {components.length} components
+                  connected with live component data
+                </p>
               </div>
             </div>
 
-            <div className="rounded-[3rem] bg-white p-10 shadow-sm border border-slate-100 dark:bg-slate-800">
-              <div className="mb-10 flex items-center gap-4">
-                <div className="h-10 w-10 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-500">
-                  <PieChartIcon size={20} />
-                </div>
-                <div>
-                  <h3 className="text-base font-black text-slate-900 dark:text-white tracking-tight">Component Distribution</h3>
-                  <p className="text-[10px] font-bold text-slate-400 tracking-wider">Breakdown by category</p>
+            {fleetMachines.length > 4 && (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => scrollFleetCards("left")}
+                  className="flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-700 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 active:scale-95 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-blue-500/40 dark:hover:bg-blue-500/10"
+                  aria-label="Scroll fleet left"
+                >
+                  <ChevronRight size={18} className="rotate-180" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => scrollFleetCards("right")}
+                  className="flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-700 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 active:scale-95 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-blue-500/40 dark:hover:bg-blue-500/10"
+                  aria-label="Scroll fleet right"
+                >
+                  <ChevronRight size={18} />
+                </button>
+              </div>
+            )}
+          </div>
+
+          {fleetMachines.length === 0 ? (
+            <div className="rounded-[1.75rem] border border-slate-200 bg-gradient-to-br from-slate-50 via-blue-50/60 to-orange-50/50 p-8 text-center text-xs font-semibold text-slate-500 shadow-sm dark:border-slate-700 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800 dark:text-slate-400">
+              No machines found. Please register a machine under the Component
+              Management page.
+            </div>
+          ) : (
+            <div className="relative overflow-visible rounded-[2rem] border border-slate-200 bg-gradient-to-br from-slate-100 via-blue-50/70 to-orange-50/50 p-4 shadow-[0_18px_45px_rgba(15,23,42,0.07)] dark:border-slate-700 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800">
+              <div className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-blue-500/10 blur-3xl" />
+              <div className="pointer-events-none absolute -bottom-28 right-10 h-72 w-72 rounded-full bg-orange-400/10 blur-3xl" />
+
+              <div
+                ref={fleetScrollRef}
+                className="fleet-scroll relative z-10 flex snap-x snap-mandatory gap-4 overflow-x-auto overflow-y-hidden scroll-smooth px-1 py-2"
+              >
+                {fleetMachines.map((m) => {
+                  const machineRiskComponents =
+                    riskComponentsByMachineId.get(
+                      String(m.machineId || m.id),
+                    ) || [];
+
+                  const riskLevel =
+                    m.crit > 0
+                      ? "Critical"
+                      : m.warn > 0
+                        ? "Warning"
+                        : "Healthy";
+
+                  const cardClass =
+                    riskLevel === "Critical"
+                      ? "border-red-200/90 bg-gradient-to-br from-red-50/90 via-slate-50 to-red-100/60 hover:border-red-300 hover:shadow-[0_18px_42px_rgba(220,38,38,0.14)] dark:border-red-500/25 dark:from-red-950/30 dark:via-slate-900 dark:to-slate-900 dark:hover:border-red-500/45"
+                      : riskLevel === "Warning"
+                        ? "border-orange-200/90 bg-gradient-to-br from-orange-50/90 via-slate-50 to-orange-100/60 hover:border-orange-300 hover:shadow-[0_18px_42px_rgba(249,115,22,0.14)] dark:border-orange-500/25 dark:from-orange-950/30 dark:via-slate-900 dark:to-slate-900 dark:hover:border-orange-500/45"
+                        : "border-blue-200/90 bg-gradient-to-br from-blue-50/90 via-slate-50 to-emerald-50/60 hover:border-blue-300 hover:shadow-[0_18px_42px_rgba(37,99,235,0.12)] dark:border-blue-500/25 dark:from-blue-950/25 dark:via-slate-900 dark:to-slate-900 dark:hover:border-blue-500/45";
+
+                  const innerBoxClass =
+                    riskLevel === "Critical"
+                      ? "border-red-200/80 bg-red-50/70 dark:border-red-500/20 dark:bg-red-500/10"
+                      : riskLevel === "Warning"
+                        ? "border-orange-200/80 bg-orange-50/70 dark:border-orange-500/20 dark:bg-orange-500/10"
+                        : "border-blue-200/80 bg-blue-50/70 dark:border-blue-500/20 dark:bg-blue-500/10";
+
+                  const riskBadgeClass =
+                    riskLevel === "Critical"
+                      ? "border-red-200 bg-red-100 text-red-700 dark:border-red-500/25 dark:bg-red-500/15 dark:text-red-300"
+                      : riskLevel === "Warning"
+                        ? "border-orange-200 bg-orange-100 text-orange-700 dark:border-orange-500/25 dark:bg-orange-500/15 dark:text-orange-300"
+                        : "border-emerald-200 bg-emerald-100 text-emerald-700 dark:border-emerald-500/25 dark:bg-emerald-500/15 dark:text-emerald-300";
+
+                  const dotClass =
+                    riskLevel === "Critical"
+                      ? "bg-red-500 shadow-[0_0_0_4px_rgba(239,68,68,0.13)]"
+                      : riskLevel === "Warning"
+                        ? "bg-orange-500 shadow-[0_0_0_4px_rgba(249,115,22,0.13)]"
+                        : "bg-emerald-500 shadow-[0_0_0_4px_rgba(16,185,129,0.13)]";
+
+                  const typeBadgeClass =
+                    riskLevel === "Critical"
+                      ? "border-red-200 bg-red-50 text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300"
+                      : riskLevel === "Warning"
+                        ? "border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-500/20 dark:bg-orange-500/10 dark:text-orange-300"
+                        : "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-300";
+
+                  const actionButtonClass =
+                    riskLevel === "Critical"
+                      ? "border-red-200 bg-red-50 text-red-700 hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300 dark:hover:bg-red-500/20"
+                      : riskLevel === "Warning"
+                        ? "border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100 dark:border-orange-500/20 dark:bg-orange-500/10 dark:text-orange-300 dark:hover:bg-orange-500/20"
+                        : "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-300 dark:hover:bg-blue-500/20";
+
+                  const statusText =
+                    riskLevel === "Critical"
+                      ? "Immediate attention required"
+                      : riskLevel === "Warning"
+                        ? "Needs close monitoring"
+                        : "Operating within safe range";
+
+                  const alertDuration = `${Math.max(machineRiskComponents.length * 3, 3)}s`;
+
+                  return (
+                    <div
+                      key={m.id}
+                      data-fleet-card
+                      className={`group relative flex min-h-[430px] min-w-[280px] snap-start flex-col overflow-hidden rounded-[1.65rem] border p-5 shadow-[0_10px_28px_rgba(15,23,42,0.055)] transition-all duration-300 hover:-translate-y-0.5 dark:hover:shadow-slate-950/30 sm:min-w-[300px] lg:min-w-[calc((100%-48px)/4)] ${cardClass}`}
+                    >
+                      <div className="pointer-events-none absolute -right-14 -top-14 h-32 w-32 rounded-full bg-white/30 blur-3xl transition-all group-hover:bg-white/40 dark:bg-white/5" />
+                      <div className="pointer-events-none absolute -bottom-16 left-8 h-32 w-32 rounded-full bg-slate-400/10 blur-3xl dark:bg-white/5" />
+
+                      <div className="relative z-10 mb-5 flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="mb-2 flex items-center gap-2">
+                            <span
+                              className={`h-2 w-2 rounded-full ${dotClass}`}
+                            />
+
+                            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-600 dark:text-slate-300">
+                              Machine Asset
+                            </p>
+                          </div>
+
+                          <h3 className="line-clamp-2 text-sm font-bold leading-5 text-slate-950 dark:text-white">
+                            {m.name}
+                          </h3>
+
+                          <p className="mt-1 text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                            {statusText}
+                          </p>
+                        </div>
+
+                        <span
+                          className={`shrink-0 rounded-xl border px-3 py-1.5 text-[9px] font-bold uppercase tracking-wide ${typeBadgeClass}`}
+                        >
+                          {m.type}
+                        </span>
+                      </div>
+
+                      <div
+                        className={`relative z-10 rounded-2xl border p-4 shadow-sm ${innerBoxClass}`}
+                      >
+                        <div className="flex items-end justify-between gap-4">
+                          <div>
+                            <p className="text-3xl font-bold tracking-tight text-slate-950 dark:text-white">
+                              {m.comps}
+                            </p>
+
+                            <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                              Components
+                            </p>
+                          </div>
+
+                          <span
+                            className={`rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-wide ${riskBadgeClass}`}
+                          >
+                            {riskLevel}
+                          </span>
+                        </div>
+
+                        <div className="mt-4 grid grid-cols-2 gap-3">
+                          <div className="rounded-xl border border-red-200/80 bg-red-50/80 px-3 py-2 dark:border-red-500/20 dark:bg-red-500/10">
+                            <p className="text-sm font-bold text-red-600 dark:text-red-400">
+                              {m.crit}
+                            </p>
+
+                            <p className="mt-0.5 text-[9px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                              Critical
+                            </p>
+                          </div>
+
+                          <div className="rounded-xl border border-orange-200/80 bg-orange-50/80 px-3 py-2 dark:border-orange-500/20 dark:bg-orange-500/10">
+                            <p className="text-sm font-bold text-orange-600 dark:text-orange-400">
+                              {m.warn}
+                            </p>
+
+                            <p className="mt-0.5 text-[9px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                              Warning
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="relative z-10 mt-4">
+                        <div className="mb-2 flex items-center justify-between">
+                          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
+                            Component Alert
+                          </p>
+
+                          {machineRiskComponents.length > 1 && (
+                            <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[8px] font-bold uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
+                              Auto Rotate
+                            </span>
+                          )}
+                        </div>
+
+                        {machineRiskComponents.length > 0 ? (
+                          <div className="relative h-[78px] overflow-hidden rounded-xl border border-slate-200/80 bg-slate-50/80 shadow-sm dark:border-slate-700 dark:bg-slate-800/70">
+                            {machineRiskComponents.map((item, index) => {
+                              const isCritical =
+                                item.displayRisk === "Critical" ||
+                                item.intelligence?.riskStatus === "Critical";
+
+                              return (
+                                <div
+                                  key={item.id}
+                                  className={`absolute inset-0 px-3 py-3 ${
+                                    machineRiskComponents.length > 1
+                                      ? "risk-alert-card"
+                                      : "opacity-100"
+                                  } ${
+                                    isCritical
+                                      ? "bg-red-50/90 dark:bg-red-500/10"
+                                      : "bg-orange-50/90 dark:bg-orange-500/10"
+                                  }`}
+                                  style={{
+                                    animationDuration: alertDuration,
+                                    animationDelay: `${index * 3}s`,
+                                  }}
+                                >
+                                  <div className="flex items-center justify-between gap-2">
+                                    <p
+                                      className={`truncate text-[12px] font-bold ${
+                                        isCritical
+                                          ? "text-red-700 dark:text-red-300"
+                                          : "text-orange-700 dark:text-orange-300"
+                                      }`}
+                                    >
+                                      {item.description ||
+                                        item.category ||
+                                        "Risk Component"}
+                                    </p>
+
+                                    <span
+                                      className={`shrink-0 rounded-full px-2 py-0.5 text-[8px] font-bold uppercase ${
+                                        isCritical
+                                          ? "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300"
+                                          : "bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300"
+                                      }`}
+                                    >
+                                      {item.displayRisk}
+                                    </span>
+                                  </div>
+
+                                  <p
+                                    className={`mt-1 truncate text-[10px] font-medium ${
+                                      isCritical
+                                        ? "text-red-600/80 dark:text-red-300/80"
+                                        : "text-orange-600/80 dark:text-orange-300/80"
+                                    }`}
+                                  >
+                                    {item.category || "Component"} • Serial:{" "}
+                                    {item.serialNumber || "N/A"}
+                                  </p>
+
+                                  <p
+                                    className={`mt-1 truncate text-[10px] font-medium ${
+                                      isCritical
+                                        ? "text-red-500/80 dark:text-red-300/70"
+                                        : "text-orange-500/80 dark:text-orange-300/70"
+                                    }`}
+                                  >
+                                    {item.intelligence?.riskDriver ||
+                                      "Component requires inspection"}
+                                  </p>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div className="h-[78px] rounded-xl border border-emerald-200/80 bg-emerald-50/80 px-3 py-3 shadow-sm dark:border-emerald-500/20 dark:bg-emerald-500/10">
+                            <p className="text-[12px] font-bold text-emerald-700 dark:text-emerald-300">
+                              No critical or warning component found
+                            </p>
+
+                            <p className="mt-1 text-[10px] font-medium text-emerald-600/80 dark:text-emerald-300/80">
+                              Current machine health looks stable.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="relative z-10 mt-4 flex items-center justify-between border-t border-slate-300/60 pt-4 dark:border-slate-700/70">
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
+                            Replacement Value
+                          </p>
+
+                          <p className="mt-1 text-sm font-bold text-slate-950 dark:text-white">
+                            {m.val}
+                          </p>
+                        </div>
+
+                        <button
+                          type="button"
+                          className={`flex h-9 w-9 items-center justify-center rounded-xl border transition-all active:scale-95 ${actionButtonClass}`}
+                        >
+                          <ChevronRight size={17} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="pointer-events-none absolute bottom-4 right-0 top-4 w-16 bg-gradient-to-l from-slate-100 via-blue-50/80 to-transparent dark:from-slate-900 dark:via-slate-900/80" />
+              <div className="pointer-events-none absolute bottom-4 left-0 top-4 w-10 bg-gradient-to-r from-slate-100 via-blue-50/80 to-transparent dark:from-slate-900 dark:via-slate-900/80" />
+
+              <style>{`
+       .fleet-scroll {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+  scroll-padding-inline: 12px;
+  transform: translateZ(0);
+  will-change: scroll-position;
+  contain: layout paint;
+}
+
+        .fleet-scroll::-webkit-scrollbar {
+          display: none;
+        }
+
+        .risk-alert-card {
+  opacity: 0;
+  animation-name: risk-alert-swap;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  animation-fill-mode: both;
+  backface-visibility: hidden;
+}
+
+@keyframes risk-alert-swap {
+  0% {
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  36% {
+    opacity: 1;
+  }
+  44% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+      `}</style>
+            </div>
+          )}
+        </section>
+
+        <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+            {/* Replacement Value by Category */}
+            <div className="rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+              <div className="border-b border-slate-100 px-6 py-5 dark:border-slate-700">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+                      <BarChart3 size={20} />
+                    </div>
+
+                    <div>
+                      <h3 className="text-base font-bold tracking-tight text-slate-900 dark:text-white">
+                        Replacement Value by Category
+                      </h3>
+                      <p className="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">
+                        Cost exposure grouped by component category
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 dark:border-slate-700 dark:bg-slate-900">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">
+                      Total Value
+                    </p>
+                    <p className="mt-1 text-sm font-bold text-slate-900 dark:text-white">
+                      {summaryStats.formattedReplacementCost}
+                    </p>
+                  </div>
                 </div>
               </div>
-              <div className="flex flex-col items-center">
-                <div className="h-[220px] w-full">
+
+              <div className="px-6 py-5">
+                <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/60">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
+                      Categories
+                    </p>
+                    <p className="mt-1 text-lg font-bold text-slate-900 dark:text-white">
+                      {categoryData.length}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/60">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
+                      Components
+                    </p>
+                    <p className="mt-1 text-lg font-bold text-slate-900 dark:text-white">
+                      {components.length}
+                    </p>
+                  </div>
+
+                  <div className="col-span-2 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/60 sm:col-span-1">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
+                      Critical
+                    </p>
+                    <p className="mt-1 text-lg font-bold text-slate-900 dark:text-white">
+                      {summaryStats.criticalCount}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="h-[310px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={categoryData}
+                      margin={{ top: 12, right: 12, left: -14, bottom: 4 }}
+                      barCategoryGap="30%"
+                    >
+                      <CartesianGrid
+                        strokeDasharray="4 6"
+                        vertical={false}
+                        stroke="#e5e7eb"
+                      />
+
+                      <XAxis
+                        dataKey="name"
+                        axisLine={false}
+                        tickLine={false}
+                        interval={0}
+                        tickMargin={12}
+                        tick={{
+                          fontSize: 11,
+                          fontWeight: 600,
+                          fill: "#64748b",
+                        }}
+                      />
+
+                      <YAxis
+                        axisLine={false}
+                        tickLine={false}
+                        tickMargin={10}
+                        tickFormatter={(value) =>
+                          Number(value) >= 1000
+                            ? `${Number(value) / 1000}k`
+                            : `${value}`
+                        }
+                        tick={{
+                          fontSize: 11,
+                          fontWeight: 600,
+                          fill: "#94a3b8",
+                        }}
+                      />
+
+                      <Tooltip
+                        cursor={{ fill: "rgba(15,23,42,0.04)" }}
+                        formatter={(value: any) => [
+                          `R ${Number(value || 0).toLocaleString()}`,
+                          "Replacement Value",
+                        ]}
+                        labelStyle={{
+                          color: "#0f172a",
+                          fontWeight: 700,
+                          marginBottom: 6,
+                        }}
+                        contentStyle={{
+                          borderRadius: "12px",
+                          border: "1px solid #e2e8f0",
+                          background: "#ffffff",
+                          boxShadow: "0 12px 28px rgba(15, 23, 42, 0.12)",
+                          padding: "10px 12px",
+                          fontSize: "12px",
+                        }}
+                      />
+
+                      <Bar
+                        dataKey="value"
+                        radius={[8, 8, 0, 0]}
+                        barSize={38}
+                        animationDuration={700}
+                      >
+                        {categoryData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
+
+            {/* Component Distribution */}
+            <div className="rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+              <div className="border-b border-slate-100 px-6 py-5 dark:border-slate-700">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+                      <PieChartIcon size={20} />
+                    </div>
+
+                    <div>
+                      <h3 className="text-base font-bold tracking-tight text-slate-900 dark:text-white">
+                        Component Distribution
+                      </h3>
+                      <p className="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">
+                        Category-wise component allocation across fleet
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 dark:border-slate-700 dark:bg-slate-900">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">
+                      Total Components
+                    </p>
+                    <p className="mt-1 text-sm font-bold text-slate-900 dark:text-white">
+                      {components.length}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-5 px-6 py-5 lg:grid-cols-[260px_1fr] lg:items-center">
+                <div className="relative h-[260px]">
+                  <div className="pointer-events-none absolute left-1/2 top-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center text-center">
+                    <p className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
+                      {components.length}
+                    </p>
+                    <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">
+                      Total
+                    </p>
+                  </div>
+
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                      <Tooltip 
-                        contentStyle={{ borderRadius: '20px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)' }} 
-                        formatter={(value) => [`${value}%`, 'Distribution']}
+                      <Tooltip
+                        formatter={(value: any) => [
+                          `${value}%`,
+                          "Distribution",
+                        ]}
+                        labelStyle={{
+                          color: "#0f172a",
+                          fontWeight: 700,
+                          marginBottom: 6,
+                        }}
+                        contentStyle={{
+                          borderRadius: "12px",
+                          border: "1px solid #e2e8f0",
+                          background: "#ffffff",
+                          boxShadow: "0 12px 28px rgba(15, 23, 42, 0.12)",
+                          padding: "10px 12px",
+                          fontSize: "12px",
+                        }}
                       />
-                      <Pie data={distributionData} innerRadius={60} outerRadius={90} paddingAngle={5} dataKey="value">
+
+                      <Pie
+                        data={distributionData}
+                        innerRadius={72}
+                        outerRadius={104}
+                        paddingAngle={2}
+                        dataKey="value"
+                        stroke="#ffffff"
+                        strokeWidth={3}
+                        animationDuration={700}
+                      >
                         {distributionData.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={entry.color} />
                         ))}
@@ -538,12 +1294,39 @@ export default function CompanyAdminDashboard() {
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
-                <div className="mt-8 grid grid-cols-2 gap-x-12 gap-y-3">
+
+                <div className="space-y-3">
                   {distributionData.slice(0, 8).map((item, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />
-                      <span className="text-[10px] font-bold text-slate-500">{item.name}</span>
-                      <span className="text-[10px] font-black text-slate-900">{item.value}%</span>
+                    <div
+                      key={i}
+                      className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/60"
+                    >
+                      <div className="mb-2 flex items-center justify-between gap-3">
+                        <div className="flex min-w-0 items-center gap-2.5">
+                          <span
+                            className="h-2.5 w-2.5 shrink-0 rounded-full"
+                            style={{ backgroundColor: item.color }}
+                          />
+
+                          <p className="truncate text-xs font-semibold text-slate-700 dark:text-slate-200">
+                            {item.name}
+                          </p>
+                        </div>
+
+                        <p className="text-xs font-bold text-slate-900 dark:text-white">
+                          {item.value}%
+                        </p>
+                      </div>
+
+                      <div className="h-1.5 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+                        <div
+                          className="h-full rounded-full"
+                          style={{
+                            width: `${item.value}%`,
+                            backgroundColor: item.color,
+                          }}
+                        />
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -551,146 +1334,338 @@ export default function CompanyAdminDashboard() {
             </div>
           </div>
 
-          {/* High-Risk Table */}
-          <div className="rounded-[3rem] bg-white shadow-sm border border-slate-100 dark:bg-slate-800 overflow-hidden">
-            <div className="p-8 border-b border-slate-50 dark:border-slate-700/50 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex items-center gap-4">
-                <div className="h-10 w-10 rounded-2xl bg-red-50 flex items-center justify-center text-red-500">
-                  <AlertCircle size={20} />
+          <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_18px_45px_rgba(15,23,42,0.06)] dark:border-slate-700 dark:bg-slate-800">
+            <div className="border-b border-slate-200 bg-gradient-to-r from-white via-slate-50 to-white px-6 py-6 dark:border-slate-700 dark:from-slate-800 dark:via-slate-800/80 dark:to-slate-800 lg:px-7">
+              <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-red-100 bg-red-50 text-red-600 shadow-sm dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400">
+                    <AlertCircle size={21} />
+                  </div>
+
+                  <div>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <h3 className="text-lg font-extrabold tracking-tight text-slate-950 dark:text-white">
+                        High-Risk Components
+                      </h3>
+
+                      <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.12em] text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
+                        {highRiskComponents.length} Active Records
+                      </span>
+                    </div>
+
+                    <p className="mt-1.5 max-w-2xl text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">
+                      Artisans priority view based on remaining life, condition
+                      rating, cost exposure and live risk intelligence signals.
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-base font-black text-slate-900 dark:text-white tracking-tight">High-Risk Components</h3>
-                  <p className="text-[10px] font-bold text-slate-400 tracking-wider">Combined Risk = Remaining Life % + Condition Rating</p>
+
+                <div className="grid grid-cols-2 gap-3 sm:flex sm:items-center">
+                  <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 dark:border-red-500/20 dark:bg-red-500/10">
+                    <p className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-red-500">
+                      Critical
+                    </p>
+                    <p className="mt-1 text-lg font-extrabold text-red-700 dark:text-red-400">
+                      {
+                        highRiskComponents.filter(
+                          (item) => item.risk === "Critical",
+                        ).length
+                      }
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-orange-100 bg-orange-50 px-4 py-3 dark:border-orange-500/20 dark:bg-orange-500/10">
+                    <p className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-orange-500">
+                      Warning
+                    </p>
+                    <p className="mt-1 text-lg font-extrabold text-orange-700 dark:text-orange-400">
+                      {
+                        highRiskComponents.filter(
+                          (item) => item.risk === "Warning",
+                        ).length
+                      }
+                    </p>
+                  </div>
                 </div>
               </div>
-              
-              <div className="flex flex-wrap items-center gap-4">
-                {/* Search input */}
-                <div className="relative">
-                  <Search size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+
+              <div className="mt-6 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div className="relative w-full lg:max-w-sm">
+                  <Search
+                    size={15}
+                    className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                  />
+
                   <input
                     type="text"
-                    placeholder="Search components..."
+                    placeholder="Search by machine, category, serial or description..."
                     value={riskSearch}
                     onChange={(e) => setRiskSearch(e.target.value)}
-                    className="w-48 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-2 pl-10 text-[10px] font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-orange-500/20 dark:bg-slate-900/50 dark:border-slate-700"
+                    className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 pl-10 text-xs font-semibold text-slate-700 shadow-sm outline-none transition-all placeholder:text-slate-400 focus:border-blue-300 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-blue-500/40"
                   />
                 </div>
 
-                {/* Filter dropdown */}
-                <div className="relative">
-                  <select
-                    value={riskStatusFilter}
-                    onChange={(e) => setRiskStatusFilter(e.target.value)}
-                    className="rounded-2xl border border-slate-100 bg-slate-50 py-2.5 px-4 text-[10px] font-black text-slate-600 focus:outline-none focus:ring-2 focus:ring-orange-500/20 dark:bg-slate-900/50 dark:border-slate-700 uppercase"
-                  >
-                    <option value="all">ALL RISKS</option>
-                    <option value="critical">CRITICAL ONLY</option>
-                    <option value="warning">WARNING ONLY</option>
-                    <option value="monitor">MONITOR ONLY</option>
-                  </select>
-                </div>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <div className="w-full sm:w-[180px]">
+                    <AppSelect
+                      value={riskStatusFilter}
+                      options={riskOptions}
+                      onChange={setRiskStatusFilter}
+                      placeholder="All Risks"
+                      triggerClassName="h- rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold  text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                    />
+                  </div>
 
-                <div className="flex items-center gap-2">
-                  <span className="px-3 py-1 rounded-full bg-red-50 text-[9px] font-black text-red-600 uppercase">Critical</span>
-                  <span className="px-3 py-1 rounded-full bg-orange-50 text-[9px] font-black text-orange-600 uppercase">Warning</span>
-                  <span className="px-3 py-1 rounded-full bg-green-50 text-[9px] font-black text-green-600 uppercase">Healthy</span>
+                  <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+                    <span className="flex items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-wide text-red-600 dark:bg-red-500/10 dark:text-red-400">
+                      <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
+                      Critical
+                    </span>
+
+                    <span className="flex items-center gap-1.5 rounded-full bg-orange-50 px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-wide text-orange-600 dark:bg-orange-500/10 dark:text-orange-400">
+                      <span className="h-1.5 w-1.5 rounded-full bg-orange-500" />
+                      Warning
+                    </span>
+
+                    <span className="flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-wide text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                      Healthy
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
+
             <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead className="bg-[#FBFCFE] dark:bg-slate-900/50">
+              <table className="w-full min-w-[1180px] text-left">
+                <thead className="border-b border-slate-200 bg-slate-50/80 dark:border-slate-700 dark:bg-slate-900/60">
                   <tr>
-                    <th className="px-8 py-5 text-[9px] font-black uppercase text-slate-400">Machine</th>
-                    <th className="px-8 py-5 text-[9px] font-black uppercase text-slate-400">Category</th>
-                    <th className="px-8 py-5 text-[9px] font-black uppercase text-slate-400">Description</th>
-                    <th className="px-8 py-5 text-[9px] font-black uppercase text-slate-400">Condition</th>
-                    <th className="px-8 py-5 text-[9px] font-black uppercase text-slate-400">Remaining Life</th>
-                    <th className="px-8 py-5 text-[9px] font-black uppercase text-slate-400">Cost / Hour</th>
-                    <th className="px-8 py-5 text-[9px] font-black uppercase text-slate-400">Risk</th>
-                    <th className="px-8 py-5 text-[9px] font-black uppercase text-slate-400">Risk Driver</th>
-                    <th className="px-8 py-5 text-[9px] font-black uppercase text-slate-400">Alert</th>
-                    <th className="px-8 py-5 text-[9px] font-black uppercase text-slate-400 text-right">Actions</th>
+                    <th className="px-6 py-4 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                      Machine
+                    </th>
+                    <th className="px-6 py-4 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                      Component
+                    </th>
+                    <th className="px-6 py-4 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                      Description
+                    </th>
+                    <th className="px-6 py-4 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                      Condition
+                    </th>
+                    <th className="px-6 py-4 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                      Remaining Life
+                    </th>
+                    <th className="px-6 py-4 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                      Cost / Hour
+                    </th>
+                    <th className="px-6 py-4 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                      Risk Status
+                    </th>
+                    <th className="px-6 py-4 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                      Risk Driver
+                    </th>
+                    <th className="px-6 py-4 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                      Alert
+                    </th>
+                    <th className="px-6 py-4 text-right text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-50 dark:divide-slate-700/50">
+
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-700/70">
                   {highRiskComponents.length === 0 ? (
                     <tr>
-                      <td colSpan={10} className="px-8 py-10 text-center text-xs font-black text-green-600 dark:text-green-400 bg-green-50/5">
-                        ✨ No matching high-risk or critical components detected.
+                      <td colSpan={10} className="px-6 py-14">
+                        <div className="mx-auto max-w-md text-center">
+                          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
+                            <CheckLineIcon size={24} />
+                          </div>
+
+                          <h4 className="text-sm font-extrabold text-slate-900 dark:text-white">
+                            All components are operating within safe limits
+                          </h4>
+
+                          <p className="mt-2 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">
+                            No critical, warning or monitor level component is
+                            available for the current filter.
+                          </p>
+                        </div>
                       </td>
                     </tr>
                   ) : (
                     highRiskComponents.map((item, i) => (
-                      <tr key={i} className="hover:bg-slate-50/50 transition-all">
-                        <td className="px-8 py-6 font-black text-slate-900 dark:text-white text-xs">{item.machineLabel}</td>
-                        <td className="px-8 py-6 text-xs text-slate-500 font-bold">{item.cat}</td>
-                        <td className="px-8 py-6 text-xs text-slate-500 font-bold">{item.description}</td>
-                        <td className="px-8 py-6">
-                          <span className={`px-2 py-0.5 rounded-lg text-[9px] font-black uppercase ${
-                            item.cond === 'Critical' ? 'bg-red-50 text-red-500' :
-                            item.cond === 'Warning' ? 'bg-orange-50 text-orange-500' :
-                            item.cond === 'Monitor' ? 'bg-yellow-50 text-yellow-600' :
-                            'bg-green-50 text-green-600'
-                          }`}>{item.cond}</span>
-                        </td>
-                        <td className="px-8 py-6">
+                      <tr
+                        key={i}
+                        className="group bg-white transition-all hover:bg-slate-50/80 dark:bg-slate-800 dark:hover:bg-slate-700/40"
+                      >
+                        <td className="px-6 py-5">
                           <div className="flex items-center gap-3">
-                            <div className="h-1.5 w-24 bg-slate-100 rounded-full overflow-hidden">
-                              <div className={`h-full ${
-                                item.life < 15 ? 'bg-red-500' :
-                                item.life < 30 ? 'bg-orange-500' :
-                                'bg-emerald-500'
-                              }`} style={{ width: `${item.life}%` }} />
+                            <span
+                              className={`h-10 w-1 rounded-full ${
+                                item.risk === "Critical"
+                                  ? "bg-red-500"
+                                  : item.risk === "Warning"
+                                    ? "bg-orange-500"
+                                    : item.risk === "Monitor"
+                                      ? "bg-yellow-500"
+                                      : "bg-emerald-500"
+                              }`}
+                            />
+
+                            <div>
+                              <p className="max-w-[160px] truncate text-sm font-extrabold text-slate-950 dark:text-white">
+                                {item.machineLabel}
+                              </p>
+
+                              <p className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
+                                Machine Asset
+                              </p>
                             </div>
-                            <span className="text-[10px] font-black">{item.life}%</span>
                           </div>
                         </td>
-                        <td className="px-8 py-6 font-bold text-slate-900 dark:text-white text-xs">
-                          {item.costPerHour}
+
+                        <td className="px-6 py-5">
+                          <span className="inline-flex rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-extrabold text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+                            {item.cat || "N/A"}
+                          </span>
                         </td>
-                        <td className="px-8 py-6">
-                          <span className={`px-2 py-0.5 rounded-lg text-[9px] font-black uppercase ${
-                            item.risk === 'Critical' ? 'bg-red-50 text-red-500' :
-                            item.risk === 'Warning' ? 'bg-orange-50 text-orange-500' :
-                            item.risk === 'Monitor' ? 'bg-yellow-50 text-yellow-600' :
-                            'bg-green-50 text-green-600'
-                          }`}>{item.risk}</span>
+
+                        <td className="px-6 py-5">
+                          <div>
+                            <p className="max-w-[220px] truncate text-xs font-bold text-slate-700 dark:text-slate-200">
+                              {item.description || "N/A"}
+                            </p>
+
+                            <p className="mt-1 text-[10px] font-semibold text-slate-400">
+                              Serial: {item.serialNumber || "N/A"}
+                            </p>
+                          </div>
                         </td>
-                        <td className="px-8 py-6">
-                            <span className={`px-3 py-1 rounded-full border text-[9px] font-black uppercase ${
-                              item.risk === 'Critical' ? 'border-red-200 bg-red-50 text-red-700' :
-                              item.risk === 'Warning' ? 'border-orange-200 bg-orange-50 text-orange-700' :
-                              'border-yellow-200 bg-yellow-50 text-yellow-700'
-                            }`}>
-                              {item.driver}
+
+                        <td className="px-6 py-5">
+                          <span
+                            className={`inline-flex rounded-full px-3 py-1 text-[10px] font-extrabold uppercase tracking-wide ${
+                              item.cond === "Critical"
+                                ? "bg-red-50 text-red-700 ring-1 ring-red-100 dark:bg-red-500/10 dark:text-red-400 dark:ring-red-500/20"
+                                : item.cond === "Warning"
+                                  ? "bg-orange-50 text-orange-700 ring-1 ring-orange-100 dark:bg-orange-500/10 dark:text-orange-400 dark:ring-orange-500/20"
+                                  : item.cond === "Monitor"
+                                    ? "bg-yellow-50 text-yellow-700 ring-1 ring-yellow-100 dark:bg-yellow-500/10 dark:text-yellow-400 dark:ring-yellow-500/20"
+                                    : "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/20"
+                            }`}
+                          >
+                            {item.cond}
+                          </span>
+                        </td>
+
+                        <td className="px-6 py-5">
+                          <div className="w-36">
+                            <div className="mb-2 flex items-center justify-between">
+                              <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                                Life Left
+                              </span>
+
+                              <span className="text-xs font-extrabold text-slate-900 dark:text-white">
+                                {item.life}%
+                              </span>
+                            </div>
+
+                            <div className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+                              <div
+                                className={`h-full rounded-full ${
+                                  item.life < 15
+                                    ? "bg-red-500"
+                                    : item.life < 30
+                                      ? "bg-orange-500"
+                                      : "bg-emerald-500"
+                                }`}
+                                style={{ width: `${item.life}%` }}
+                              />
+                            </div>
+                          </div>
+                        </td>
+
+                        <td className="px-6 py-5">
+                          <p className="text-sm font-extrabold text-slate-950 dark:text-white">
+                            {item.costPerHour}
+                          </p>
+
+                          <p className="mt-0.5 text-[10px] font-semibold text-slate-400">
+                            Operating cost
+                          </p>
+                        </td>
+
+                        <td className="px-6 py-5">
+                          <span
+                            className={`inline-flex rounded-full px-3 py-1 text-[10px] font-extrabold uppercase tracking-wide ${
+                              item.risk === "Critical"
+                                ? "bg-red-600 text-white shadow-sm shadow-red-500/20"
+                                : item.risk === "Warning"
+                                  ? "bg-orange-500 text-white shadow-sm shadow-orange-500/20"
+                                  : item.risk === "Monitor"
+                                    ? "bg-yellow-500 text-white shadow-sm shadow-yellow-500/20"
+                                    : "bg-emerald-500 text-white shadow-sm shadow-emerald-500/20"
+                            }`}
+                          >
+                            {item.risk}
+                          </span>
+                        </td>
+
+                        <td className="px-6 py-5">
+                          <span
+                            className={`inline-flex max-w-[190px] rounded-xl border px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-wide ${
+                              item.risk === "Critical"
+                                ? "border-red-200 bg-red-50 text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400"
+                                : item.risk === "Warning"
+                                  ? "border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-500/20 dark:bg-orange-500/10 dark:text-orange-400"
+                                  : "border-yellow-200 bg-yellow-50 text-yellow-700 dark:border-yellow-500/20 dark:bg-yellow-500/10 dark:text-yellow-400"
+                            }`}
+                          >
+                            <span className="truncate">{item.driver}</span>
+                          </span>
+                        </td>
+
+                        <td className="px-6 py-5">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`h-2.5 w-2.5 rounded-full ${
+                                item.risk === "Critical"
+                                  ? "bg-red-500 shadow-[0_0_0_5px_rgba(239,68,68,0.12)]"
+                                  : item.risk === "Warning"
+                                    ? "bg-orange-500 shadow-[0_0_0_5px_rgba(249,115,22,0.12)]"
+                                    : "bg-emerald-500 shadow-[0_0_0_5px_rgba(16,185,129,0.12)]"
+                              }`}
+                            />
+
+                            <span className="text-[10px] font-extrabold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                              {item.risk === "Critical"
+                                ? "Immediate Review"
+                                : item.risk === "Warning"
+                                  ? "Monitor Closely"
+                                  : "Stable"}
                             </span>
-                        </td>
-                        <td className="px-8 py-6">
-                          <div className="flex items-center justify-start">
-                            <div className={`h-2.5 w-2.5 rounded-full ${
-                              item.risk === 'Critical' ? 'bg-red-500 animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.7)]' :
-                              item.risk === 'Warning' ? 'bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.5)]' :
-                              'bg-green-500'
-                            }`} />
                           </div>
                         </td>
-                        <td className="px-8 py-6 text-right">
-                          <div className="flex items-center justify-end gap-3">
+
+                        <td className="px-6 py-5 text-right">
+                          <div className="flex items-center justify-end gap-2">
                             <button
+                              type="button"
                               onClick={() => handleStartEdit(item)}
                               title="Edit Component"
-                              className="h-8 w-8 rounded-xl bg-slate-50 flex items-center justify-center text-slate-500 hover:bg-orange-50 hover:text-orange-600 transition-all dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-orange-500/10"
+                              className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 shadow-sm transition-all hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600 active:scale-95 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-blue-500/30 dark:hover:bg-blue-500/10"
                             >
-                              <Edit size={12} />
+                              <Edit size={14} />
                             </button>
+
                             <button
-                              onClick={() => handleDeleteComponent(item.id)}
+                              type="button"
+                              onClick={() => setDeleteTarget(item)}
                               title="Delete Component"
-                              className="h-8 w-8 rounded-xl bg-slate-50 flex items-center justify-center text-slate-500 hover:bg-red-50 hover:text-red-600 transition-all dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-red-500/10"
+                              className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 shadow-sm transition-all hover:border-red-200 hover:bg-red-50 hover:text-red-600 active:scale-95 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-red-500/30 dark:hover:bg-red-500/10"
                             >
-                              <Trash2 size={12} />
+                              <Trash2 size={14} />
                             </button>
                           </div>
                         </td>
@@ -702,95 +1677,325 @@ export default function CompanyAdminDashboard() {
             </div>
           </div>
 
-          {/* Risk Logic - Live Verification */}
-          <div className="rounded-[3rem] bg-white p-10 shadow-sm border border-slate-100 dark:bg-slate-800">
-            <div className="mb-10 flex items-center gap-4">
-              <div className="h-10 w-10 rounded-2xl bg-slate-900 flex items-center justify-center text-white">
-                <Database size={20} />
-              </div>
-              <div>
-                <h3 className="text-base font-black text-slate-900 dark:text-white tracking-tight">Risk Logic - Live Verification</h3>
-                <p className="text-[10px] font-bold text-slate-400 tracking-wider">Automated validation of life + condition logic</p>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {[
-                { case: 'Case 1', desc: 'Good condition - mid-life', life: '55%', cond: '2 - Good', status: { exp: 'Healthy', act: 'Healthy' }, driver: { exp: 'Normal', act: 'Normal' }, alert: { exp: 'No Alert', act: 'No Alert' }, pass: true },
-                { case: 'Case 2', desc: 'Vibrating condition - mid-life', life: '55%', cond: '4 - Warning', status: { exp: 'Warning', act: 'Warning' }, driver: { exp: 'Poor Condition', act: 'Poor Condition' }, alert: { exp: 'No Alert', act: 'No Alert' }, pass: true },
-                { case: 'Case 3', desc: 'Low remaining life - regardless of cond', life: '15%', cond: '2 - Good', status: { exp: 'Critical', act: 'Critical' }, driver: { exp: 'Low Remaining Life', act: 'Low Remaining Life' }, alert: { exp: 'A - Immediate', act: 'A - Immediate' }, pass: true },
-                { case: 'Case 4', desc: 'Critical condition - high remaining life', life: '85%', cond: '5 - Critical', status: { exp: 'Critical', act: 'Critical' }, driver: { exp: 'Poor Condition', act: 'Poor Condition' }, alert: { exp: 'A - Immediate', act: 'A - Immediate' }, pass: true },
-              ].map((c, i) => (
-                <div key={i} className={`p-6 rounded-[2rem] border-2 ${c.pass ? 'border-green-100 bg-green-50/10' : 'border-slate-100'}`}>
-                  <div className="flex items-center justify-between mb-4">
-                    <p className="text-xs font-black text-slate-900">{c.case}</p>
-                    <span className="px-2 py-0.5 rounded-lg bg-white border border-green-200 text-[8px] font-black text-green-600 uppercase flex items-center gap-1">
-                      <CheckLineIcon size={10} /> PASS
-                    </span>
+          <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_18px_45px_rgba(15,23,42,0.06)] dark:border-slate-700 dark:bg-slate-800">
+            <div className="relative border-b border-slate-200 bg-gradient-to-r from-slate-50 via-white to-blue-50/60 px-6 py-6 dark:border-slate-700 dark:from-slate-800 dark:via-slate-800 dark:to-slate-900 lg:px-7">
+              <div className="absolute right-0 top-0 h-32 w-32 rounded-full bg-blue-500/10 blur-3xl" />
+
+              <div className="relative z-10 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-slate-950 text-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
+                    <Database size={21} />
                   </div>
-                  <p className="text-[10px] text-slate-400 italic mb-4 h-8">{c.desc}</p>
-                  <div className="grid grid-cols-2 gap-4 mb-4 pb-4 border-b border-green-100/50">
-                    <div className="space-y-1">
-                      <p className="text-[8px] font-black text-slate-400 uppercase">Input Life</p>
-                      <p className="text-xs font-black text-slate-900">{c.life}</p>
+
+                  <div>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <h3 className="text-lg font-extrabold tracking-tight text-slate-950 dark:text-white">
+                        Risk Logic Verification
+                      </h3>
+
+                      <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.12em] text-blue-700 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-400">
+                        Live API Data
+                      </span>
                     </div>
-                    <div className="space-y-1">
-                      <p className="text-[8px] font-black text-slate-400 uppercase">Condition</p>
-                      <p className="text-xs font-black text-slate-900">{c.cond}</p>
-                    </div>
+
+                    <p className="mt-1.5 max-w-2xl text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">
+                      Live verification view generated from component API
+                      records, remaining life, condition rating, risk driver and
+                      alert output.
+                    </p>
                   </div>
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <p className="text-[8px] font-black text-slate-400 uppercase">Risk Status</p>
-                      <span className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase ${c.status.act === 'Healthy' ? 'bg-green-100 text-green-700' : c.status.act === 'Warning' ? 'bg-orange-100 text-orange-700' : 'bg-red-100 text-red-700'}`}>
-                        {c.status.act}
-                      </span>
+                </div>
+
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <div className="grid grid-cols-3 gap-3 sm:min-w-[390px]">
+                    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+                      <p className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-400">
+                        Records
+                      </p>
+                      <p className="mt-1 text-lg font-extrabold text-slate-950 dark:text-white">
+                        {highRiskComponents.length}
+                      </p>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <p className="text-[8px] font-black text-slate-400 uppercase">Risk Driver</p>
-                      <span className="px-2 py-0.5 rounded-md bg-white border border-slate-200 text-[8px] font-black text-slate-700 uppercase">
-                        {c.driver.act}
-                      </span>
+
+                    <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 shadow-sm dark:border-red-500/20 dark:bg-red-500/10">
+                      <p className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-red-600 dark:text-red-400">
+                        Critical
+                      </p>
+                      <p className="mt-1 text-lg font-extrabold text-red-700 dark:text-red-400">
+                        {
+                          highRiskComponents.filter(
+                            (item) => item.risk === "Critical",
+                          ).length
+                        }
+                      </p>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <p className="text-[8px] font-black text-slate-400 uppercase">Alert Trigger</p>
-                      <span className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase ${c.alert.act.includes('Alert') ? 'text-slate-400' : 'bg-red-100 text-red-700'}`}>
-                        {c.alert.act}
-                      </span>
+
+                    <div className="rounded-2xl border border-orange-200 bg-orange-50 px-4 py-3 shadow-sm dark:border-orange-500/20 dark:bg-orange-500/10">
+                      <p className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-orange-600 dark:text-orange-400">
+                        Warning
+                      </p>
+                      <p className="mt-1 text-lg font-extrabold text-orange-700 dark:text-orange-400">
+                        {
+                          highRiskComponents.filter(
+                            (item) => item.risk === "Warning",
+                          ).length
+                        }
+                      </p>
                     </div>
                   </div>
                 </div>
-              ))}
+              </div>
+            </div>
+
+            <div className="p-5 sm:p-6 lg:p-7">
+              {highRiskComponents.length === 0 ? (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-10 text-center dark:border-slate-700 dark:bg-slate-900">
+                  <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
+                    <CheckLineIcon size={24} />
+                  </div>
+
+                  <h4 className="text-sm font-extrabold text-slate-900 dark:text-white">
+                    No risk verification records found
+                  </h4>
+
+                  <p className="mt-2 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">
+                    Data will appear here when component API returns warning,
+                    monitor or critical risk records.
+                  </p>
+                </div>
+              ) : (
+                <div className="relative">
+                  {highRiskComponents.length > 4 && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => scrollRiskLogicCards("left")}
+                        className="absolute left-2 top-1/2 z-30 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-lg transition-all hover:-translate-x-0.5 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 active:scale-95 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-blue-500/40 dark:hover:bg-blue-500/10"
+                        aria-label="Scroll risk logic left"
+                      >
+                        <ChevronRight size={20} className="rotate-180" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => scrollRiskLogicCards("right")}
+                        className="absolute right-2 top-1/2 z-30 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-lg transition-all hover:translate-x-0.5 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 active:scale-95 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-blue-500/40 dark:hover:bg-blue-500/10"
+                        aria-label="Scroll risk logic right"
+                      >
+                        <ChevronRight size={20} />
+                      </button>
+                    </>
+                  )}
+
+                  <div
+                    ref={riskLogicScrollRef}
+                    className="risk-logic-scroll flex snap-x snap-mandatory gap-5 overflow-x-auto scroll-smooth px-12 pb-3"
+                  >
+                    {highRiskComponents.map((item, i) => {
+                      const statusClass =
+                        item.risk === "Critical"
+                          ? "border-red-200 bg-red-50 text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400"
+                          : item.risk === "Warning"
+                            ? "border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-500/20 dark:bg-orange-500/10 dark:text-orange-400"
+                            : item.risk === "Monitor"
+                              ? "border-yellow-200 bg-yellow-50 text-yellow-700 dark:border-yellow-500/20 dark:bg-yellow-500/10 dark:text-yellow-400"
+                              : "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400";
+
+                      const barClass =
+                        item.risk === "Critical"
+                          ? "bg-red-500"
+                          : item.risk === "Warning"
+                            ? "bg-orange-500"
+                            : item.risk === "Monitor"
+                              ? "bg-yellow-500"
+                              : "bg-emerald-500";
+
+                      const alertLabel =
+                        item.risk === "Critical"
+                          ? "Immediate Review"
+                          : item.risk === "Warning"
+                            ? "Monitor Closely"
+                            : item.risk === "Monitor"
+                              ? "Observation Required"
+                              : "Stable";
+
+                      return (
+                        <div
+                          key={item.id || i}
+                          data-risk-logic-card
+                          className="group relative min-w-[280px] snap-start overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white p-5 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-blue-200 hover:shadow-xl hover:shadow-slate-200/70 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-blue-500/30 dark:hover:shadow-slate-950/30 sm:min-w-[300px] xl:min-w-[calc((100%-60px)/4)]"
+                        >
+                          <div
+                            className={`absolute inset-x-0 top-0 h-1 ${barClass}`}
+                          />
+
+                          <div className="mb-5 flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-extrabold tracking-tight text-slate-950 dark:text-white">
+                                {item.machineLabel || "N/A"}
+                              </p>
+
+                              <p className="mt-1 min-h-[34px] text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">
+                                {item.description ||
+                                  item.cat ||
+                                  "Component risk record"}
+                              </p>
+                            </div>
+
+                            <span
+                              className={`inline-flex shrink-0 rounded-full border px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-wide ${statusClass}`}
+                            >
+                              {item.risk}
+                            </span>
+                          </div>
+
+                          <div className="mb-5 grid grid-cols-2 gap-3">
+                            <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/70">
+                              <p className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-400">
+                                Life Left
+                              </p>
+
+                              <p className="mt-1 text-base font-extrabold text-slate-950 dark:text-white">
+                                {item.life}%
+                              </p>
+                            </div>
+
+                            <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/70">
+                              <p className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-400">
+                                Condition
+                              </p>
+
+                              <p className="mt-1 truncate text-base font-extrabold text-slate-950 dark:text-white">
+                                {item.cond || item.condition || "N/A"}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/70">
+                              <p className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-400">
+                                Component
+                              </p>
+
+                              <span className="max-w-[135px] truncate rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-wide text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+                                {item.cat || "N/A"}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/70">
+                              <p className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-400">
+                                Risk Driver
+                              </p>
+
+                              <span className="max-w-[135px] truncate rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-wide text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+                                {item.driver || "Normal"}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/70">
+                              <p className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-slate-400">
+                                Alert Output
+                              </p>
+
+                              <span
+                                className={`max-w-[135px] truncate rounded-full px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-wide ${
+                                  item.risk === "Critical"
+                                    ? "border border-red-200 bg-red-50 text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400"
+                                    : item.risk === "Warning"
+                                      ? "border border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-500/20 dark:bg-orange-500/10 dark:text-orange-400"
+                                      : "border border-slate-200 bg-white text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400"
+                                }`}
+                              >
+                                {alertLabel}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="pointer-events-none absolute bottom-3 right-0 top-0 w-16 bg-gradient-to-l from-white to-transparent dark:from-slate-800" />
+                  <div className="pointer-events-none absolute bottom-3 left-0 top-0 w-10 bg-gradient-to-r from-white to-transparent dark:from-slate-800" />
+
+                  <style>{`
+                  .risk-logic-scroll {
+                    scrollbar-width: none;
+                    -ms-overflow-style: none;
+                    overscroll-behavior-x: contain;
+                    -webkit-overflow-scrolling: touch;
+                  }
+
+                  .risk-logic-scroll::-webkit-scrollbar {
+                    display: none;
+                  }
+                `}</style>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Enterprise Access Box */}
-          <div className="rounded-[3rem] bg-slate-900 p-10 text-white shadow-2xl relative overflow-hidden">
-            <div className="absolute top-0 right-0 p-8">
-              <Shield size={120} className="text-white/5" />
+          <div className="relative overflow-hidden rounded-[2rem] border border-indigo-200/20 bg-gradient-to-r from-[#3B37E6] via-[#3730D9] to-[#2E2AD9] p-8 shadow-2xl">
+            {/* Background Effects */}
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.10),transparent_40%)]" />
+            <div className="absolute -top-16 -right-16 h-56 w-56 rounded-full bg-white/10 blur-3xl" />
+            <div className="absolute bottom-0 left-0 h-40 w-40 rounded-full bg-cyan-400/10 blur-3xl" />
+
+            {/* Icon */}
+            <div className="absolute right-6 top-6 opacity-10">
+              <Shield size={110} className="text-white" />
             </div>
-            <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-8">
-              <div className="space-y-2">
-                <h3 className="text-2xl font-black">Enterprise Access</h3>
-                <p className="text-sm text-slate-400 leading-relaxed max-w-xl">
-                  Your organization is currently on the <span className="text-orange-500 font-black">PREMIUM</span> tier. 
-                  You have full access to predictive analytics, GPS telemetry, and executive reporting.
+
+            <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+              {/* Left */}
+              <div className="max-w-2xl">
+                <div className="inline-flex items-center rounded-full border border-white/20 bg-white/10 px-4 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-100 backdrop-blur-sm">
+                  Enterprise Subscription
+                </div>
+
+                <h3 className="mt-4 text-3xl font-extrabold tracking-tight text-white">
+                  Enterprise Access
+                </h3>
+
+                <p className="mt-3 text-[15px] leading-7 text-blue-100">
+                  Your organization is currently on the{" "}
+                  <span className="font-bold text-amber-300">Premium</span> plan
+                  with complete access to predictive analytics, GPS telemetry,
+                  AI-powered insights, and executive reporting across your
+                  fleet.
                 </p>
               </div>
-              <button onClick={() => navigate("/plans")} className="px-10 py-5 rounded-2xl bg-orange-500 text-white text-xs font-black uppercase tracking-widest hover:bg-orange-600 transition-all shadow-xl shadow-orange-500/20">
+
+              {/* Right */}
+              <button
+                onClick={() => navigate("subscriptions")}
+                className="group inline-flex items-center justify-center rounded-2xl bg-white px-8 py-4 text-sm font-bold text-[#3730D9] shadow-xl transition-all duration-300 hover:-translate-y-1 hover:bg-blue-50 hover:shadow-2xl"
+              >
                 Manage Subscription
+                <ArrowRight
+                  size={18}
+                  className="ml-3 transition-transform duration-300 group-hover:translate-x-1"
+                />
               </button>
             </div>
           </div>
 
-          {/* Subscription History Section */}
           <div className="pt-20 border-t border-slate-200">
             <div className="mb-10 flex items-center gap-4">
               <div className="h-10 w-10 rounded-2xl bg-blue-600 flex items-center justify-center text-white">
                 <History size={20} />
               </div>
-              <h2 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Billing & Enterprise Control</h2>
+
+              <h2 className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+                Billing & Enterprise Control
+              </h2>
             </div>
-            <CompanyPlanCard subscription={subscription} machineCount={machines.length} />
+
+            <CompanyPlanCard
+              subscription={subscription}
+              machineCount={machines.length}
+            />
+
             <div className="mt-10">
               <SubscriptionHistoryTable history={history} />
             </div>
@@ -798,17 +2003,24 @@ export default function CompanyAdminDashboard() {
         </div>
       </div>
 
-      {/* Expired Overlay */}
       {isExpired && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-md">
           <div className="max-w-md rounded-[3rem] bg-white p-12 text-center shadow-2xl dark:bg-slate-800">
             <div className="mx-auto mb-8 flex h-20 w-20 items-center justify-center rounded-[2rem] bg-red-50 text-red-500">
               <Lock size={40} />
             </div>
-            <h2 className="mb-4 text-3xl font-black text-slate-900 dark:text-white tracking-tight">System Locked</h2>
-            <p className="mb-10 text-slate-500 leading-relaxed text-lg">Your enterprise subscription has expired. Access to fleet intelligence is restricted until payment is resolved.</p>
-            <button 
-              onClick={() => navigate("/plans")} 
+
+            <h2 className="mb-4 text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+              System Access Locked
+            </h2>
+
+            <p className="mb-10 text-slate-500 leading-relaxed text-lg">
+              Your enterprise subscription has expired. Access to fleet
+              intelligence is restricted until payment is resolved.
+            </p>
+
+            <button
+              onClick={() => navigate("/plans")}
               className="w-full rounded-[1.5rem] bg-orange-500 py-5 text-lg font-black text-white shadow-2xl shadow-orange-500/40 transition-all hover:bg-orange-600 hover:scale-105 active:scale-95"
             >
               Renew Access Now
@@ -816,137 +2028,312 @@ export default function CompanyAdminDashboard() {
           </div>
         </div>
       )}
-      {/* Edit Component Modal */}
+
       {editingComponent && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/60 backdrop-blur-md">
-          <div className="w-full max-w-lg rounded-[2.5rem] bg-white p-10 shadow-2xl dark:bg-slate-800 border border-slate-100 dark:border-slate-700 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-black text-slate-900 dark:text-white">Edit Component</h3>
-              <button onClick={() => setEditingComponent(null)} className="text-slate-400 hover:text-slate-600 transition-colors">
-                <X size={20} />
+        <div
+          className="fixed inset-0 z-[999999] flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm"
+          onClick={() => setEditingComponent(null)}
+        >
+          <div
+            className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-5 rounded-t-3xl border-b border-blue-700/30 bg-gradient-to-r from-blue-800 via-blue-700 to-blue-800 px-6 py-5 shadow-sm">
+              <div>
+                <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-blue-100">
+                  Component Maintenance
+                </p>
+
+                <h3 className="mt-1 text-xl font-extrabold tracking-tight text-white">
+                  Edit High-Risk Component
+                </h3>
+
+                <p className="mt-1 text-sm font-medium text-blue-100">
+                  Update component lifecycle details without changing the
+                  dashboard data flow.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setEditingComponent(null)}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/20 bg-white/10 text-blue-100 transition-all hover:bg-white/20 hover:text-white"
+              >
+                <X size={18} />
               </button>
             </div>
-            
-            <form onSubmit={handleSaveEdit} className="space-y-6">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase text-slate-400">Category</label>
+
+            <div className="flex-1 overflow-y-auto px-6 py-6">
+              <div className="mb-6 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/70">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                  <div>
+                    <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-400">
+                      Machine
+                    </p>
+                    <p className="mt-1 text-sm font-extrabold text-slate-900 dark:text-white">
+                      {editingComponent.machineLabel || "N/A"}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-400">
+                      Current Risk
+                    </p>
+                    <p className="mt-1 text-sm font-extrabold text-red-600 dark:text-red-400">
+                      {editingComponent.risk || "N/A"}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-400">
+                      Serial Number
+                    </p>
+                    <p className="mt-1 text-sm font-extrabold text-slate-900 dark:text-white">
+                      {editingComponent.serialNumber || "N/A"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                <div>
+                  <label className="mb-2 block text-xs font-extrabold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
+                    Category
+                  </label>
                   <input
                     type="text"
-                    required
                     value={editForm.category}
-                    onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}
-                    className="w-full rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-orange-500/20 dark:bg-slate-900 dark:border-slate-700"
+                    onChange={(e) =>
+                      setEditForm((prev) => ({
+                        ...prev,
+                        category: e.target.value,
+                      }))
+                    }
+                    className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
                   />
                 </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase text-slate-400">Serial Number</label>
+
+                <div>
+                  <label className="mb-2 block text-xs font-extrabold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
+                    Serial Number
+                  </label>
                   <input
                     type="text"
-                    required
                     value={editForm.serialNumber}
-                    onChange={(e) => setEditForm({ ...editForm, serialNumber: e.target.value })}
-                    className="w-full rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-orange-500/20 dark:bg-slate-900 dark:border-slate-700"
+                    onChange={(e) =>
+                      setEditForm((prev) => ({
+                        ...prev,
+                        serialNumber: e.target.value,
+                      }))
+                    }
+                    className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
                   />
                 </div>
-              </div>
 
-              <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-slate-400">Description</label>
-                <input
-                  type="text"
-                  value={editForm.description}
-                  onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-                  className="w-full rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-orange-500/20 dark:bg-slate-900 dark:border-slate-700"
-                />
-              </div>
+                <div className="md:col-span-2">
+                  <label className="mb-2 block text-xs font-extrabold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
+                    Description
+                  </label>
+                  <input
+                    type="text"
+                    value={editForm.description}
+                    onChange={(e) =>
+                      setEditForm((prev) => ({
+                        ...prev,
+                        description: e.target.value,
+                      }))
+                    }
+                    className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+                  />
+                </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase text-slate-400">Supplier</label>
+                <div>
+                  <label className="mb-2 block text-xs font-extrabold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
+                    Supplier
+                  </label>
                   <input
                     type="text"
                     value={editForm.supplier}
-                    onChange={(e) => setEditForm({ ...editForm, supplier: e.target.value })}
-                    className="w-full rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-orange-500/20 dark:bg-slate-900 dark:border-slate-700"
+                    onChange={(e) =>
+                      setEditForm((prev) => ({
+                        ...prev,
+                        supplier: e.target.value,
+                      }))
+                    }
+                    className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
                   />
                 </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase text-slate-400">Replacement Cost (R)</label>
-                  <input
-                    type="number"
-                    required
-                    value={editForm.replacementCost}
-                    onChange={(e) => setEditForm({ ...editForm, replacementCost: e.target.value })}
-                    className="w-full rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-orange-500/20 dark:bg-slate-900 dark:border-slate-700"
-                  />
-                </div>
-              </div>
 
-              <div className="grid grid-cols-3 gap-3">
-                <div className="space-y-1">
-                  <label className="text-[8px] font-black uppercase text-slate-400">Install Hours</label>
+                <div>
+                  <label className="mb-2 block text-xs font-extrabold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
+                    Condition Rating
+                  </label>
+                  <select
+                    value={editForm.condition}
+                    onChange={(e) =>
+                      setEditForm((prev) => ({
+                        ...prev,
+                        condition: e.target.value,
+                      }))
+                    }
+                    className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+                  >
+                    <option value="1">1 - Excellent</option>
+                    <option value="2">2 - Good</option>
+                    <option value="3">3 - Monitor</option>
+                    <option value="4">4 - Warning</option>
+                    <option value="5">5 - Critical</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-xs font-extrabold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
+                    Install Hours
+                  </label>
                   <input
                     type="number"
-                    required
                     value={editForm.installHours}
-                    onChange={(e) => setEditForm({ ...editForm, installHours: e.target.value })}
-                    className="w-full rounded-2xl border border-slate-100 bg-slate-50 px-3 py-3 text-xs font-bold focus:outline-none dark:bg-slate-900 dark:border-slate-700"
+                    onChange={(e) =>
+                      setEditForm((prev) => ({
+                        ...prev,
+                        installHours: e.target.value,
+                      }))
+                    }
+                    className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
                   />
                 </div>
-                <div className="space-y-1">
-                  <label className="text-[8px] font-black uppercase text-slate-400">Current Hours</label>
+
+                <div>
+                  <label className="mb-2 block text-xs font-extrabold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
+                    Current Hours
+                  </label>
                   <input
                     type="number"
-                    required
                     value={editForm.currentHours}
-                    onChange={(e) => setEditForm({ ...editForm, currentHours: e.target.value })}
-                    className="w-full rounded-2xl border border-slate-100 bg-slate-50 px-3 py-3 text-xs font-bold focus:outline-none dark:bg-slate-900 dark:border-slate-700"
+                    onChange={(e) =>
+                      setEditForm((prev) => ({
+                        ...prev,
+                        currentHours: e.target.value,
+                      }))
+                    }
+                    className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
                   />
                 </div>
-                <div className="space-y-1">
-                  <label className="text-[8px] font-black uppercase text-slate-400">Planned Life</label>
+
+                <div>
+                  <label className="mb-2 block text-xs font-extrabold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
+                    Planned Life
+                  </label>
                   <input
                     type="number"
-                    required
                     value={editForm.plannedLife}
-                    onChange={(e) => setEditForm({ ...editForm, plannedLife: e.target.value })}
-                    className="w-full rounded-2xl border border-slate-100 bg-slate-50 px-3 py-3 text-xs font-bold focus:outline-none dark:bg-slate-900 dark:border-slate-700"
+                    onChange={(e) =>
+                      setEditForm((prev) => ({
+                        ...prev,
+                        plannedLife: e.target.value,
+                      }))
+                    }
+                    className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-xs font-extrabold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
+                    Replacement Cost
+                  </label>
+                  <input
+                    type="number"
+                    value={editForm.replacementCost}
+                    onChange={(e) =>
+                      setEditForm((prev) => ({
+                        ...prev,
+                        replacementCost: e.target.value,
+                      }))
+                    }
+                    className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
                   />
                 </div>
               </div>
+            </div>
 
-              <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-slate-400">Condition Rating (1-5)</label>
-                <select
-                  value={editForm.condition}
-                  onChange={(e) => setEditForm({ ...editForm, condition: e.target.value })}
-                  className="w-full rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 text-xs font-bold focus:outline-none dark:bg-slate-900 dark:border-slate-700"
-                >
-                  <option value="1">1 - Brand New</option>
-                  <option value="2">2 - Good Condition</option>
-                  <option value="3">3 - Monitor / Normal Wear</option>
-                  <option value="4">4 - Warning / Deteriorating</option>
-                  <option value="5">5 - Critical / Imminent Failure</option>
-                </select>
-              </div>
-
-              <div className="flex gap-4 pt-4">
+            <div className="shrink-0 border-t border-slate-200 bg-white px-6 py-4 dark:border-slate-700 dark:bg-slate-900">
+              <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
                 <button
                   type="button"
+                  disabled={savingEdit}
                   onClick={() => setEditingComponent(null)}
-                  className="w-1/2 rounded-2xl border border-slate-100 py-4 text-xs font-black uppercase tracking-wider text-slate-400 hover:bg-slate-50 transition-all dark:border-slate-700 dark:hover:bg-slate-700"
+                  className="rounded-2xl border border-slate-200 bg-white px-6 py-3 text-sm font-bold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
                 >
                   Cancel
                 </button>
+
                 <button
-                  type="submit"
-                  className="w-1/2 rounded-2xl bg-orange-500 py-4 text-xs font-black uppercase tracking-wider text-white hover:bg-orange-600 transition-all shadow-lg shadow-orange-500/20"
+                  type="button"
+                  disabled={savingEdit}
+                  onClick={handleSaveEdit}
+                  className="rounded-2xl bg-blue-600 px-7 py-3 text-sm font-extrabold text-white shadow-lg shadow-blue-500/20 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  Save Changes
+                  {savingEdit ? "Saving..." : "Save Changes"}
                 </button>
               </div>
-            </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteTarget && (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-md">
+          <div className="w-full max-w-md rounded-[2rem] border border-slate-200 bg-white p-7 shadow-2xl dark:border-slate-700 dark:bg-slate-800">
+            <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400">
+              <Trash2 size={26} />
+            </div>
+
+            <div className="text-center">
+              <h3 className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+                Delete Component
+              </h3>
+
+              <p className="mt-3 text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">
+                Are you sure you want to delete this component? This action
+                cannot be undone.
+              </p>
+
+              <div className="mt-5 rounded-2xl border border-slate-100 bg-slate-50 p-4 text-left dark:border-slate-700 dark:bg-slate-900/50">
+                <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-400">
+                  Component
+                </p>
+
+                <p className="mt-1 text-sm font-extrabold text-slate-900 dark:text-white">
+                  {deleteTarget.description ||
+                    deleteTarget.cat ||
+                    "Selected Component"}
+                </p>
+
+                <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                  Serial: {deleteTarget.serialNumber || "N/A"}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-7 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={() => setDeleteTarget(null)}
+                className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={handleDeleteComponent}
+                className="rounded-2xl bg-red-600 px-4 py-3 text-sm font-bold text-white shadow-lg shadow-red-500/20 transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {deleting ? "Deleting..." : "Yes, Delete"}
+              </button>
+            </div>
           </div>
         </div>
       )}

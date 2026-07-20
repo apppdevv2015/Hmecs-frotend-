@@ -35,7 +35,7 @@ export const pricingPlans: PricingPlan[] = [
     icon: "🚜",
     features: [
       "Everything in Basic",
-      "Engineer and planner roles",
+      "Artisans and planner roles",
       "Advanced maintenance planning",
       "Tyre, engine and hydraulic modules",
       "Priority support",

@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { Eye, EyeOff, Lock, Mail, ShieldCheck } from "lucide-react";
-import toast, { Toaster } from "react-hot-toast";
 import { apiRequest } from "../../services/api";
+import StorageService, { STORAGE_KEYS } from "../../services/storage.service";
+import { showSuccessToast, showErrorToast } from "../../utils/toastUtils";
 
 type LoginUser = {
   id?: string | number;
@@ -68,16 +69,16 @@ export default function SuperAdminLogin() {
   const [loading, setLoading] = useState(false);
 
   const clearAuthStorage = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    localStorage.removeItem("role");
+    StorageService.remove(STORAGE_KEYS.TOKEN);
+    StorageService.remove(STORAGE_KEYS.USER);
+    StorageService.remove(STORAGE_KEYS.ROLE);
   };
 
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     if (!email.trim() || !password.trim()) {
-      toast.error("Email and password are required");
+      showErrorToast("Email and password are required");
       return;
     }
 
@@ -100,7 +101,7 @@ export default function SuperAdminLogin() {
         response?.data?.access_token;
 
       if (!token) {
-        toast.error("Login failed. Token not received.");
+        showErrorToast("Login failed. Token not received.");
         return;
       }
 
@@ -122,7 +123,7 @@ export default function SuperAdminLogin() {
 
       if (!allowedRoles.includes(normalizedRole)) {
         clearAuthStorage();
-        toast.error("Super Admin only access");
+        showErrorToast("Super Admin only access");
         return;
       }
 
@@ -134,18 +135,18 @@ export default function SuperAdminLogin() {
         email: apiUser?.email || decodedToken?.email || decodedToken?.user?.email,
       };
 
-      localStorage.setItem("token", token);
-      localStorage.setItem("role", normalizedRole);
-      localStorage.setItem("user", JSON.stringify(finalUser));
+      StorageService.set(STORAGE_KEYS.TOKEN, token);
+      StorageService.set(STORAGE_KEYS.ROLE, normalizedRole);
+      StorageService.set(STORAGE_KEYS.USER, finalUser);
 
-      toast.success("Super Admin login successful");
+      showSuccessToast("Super Admin login successful");
 
       setTimeout(() => {
         navigate("/super-admin/dashboard", { replace: true });
       }, 800);
     } catch (error: any) {
       clearAuthStorage();
-      toast.error(error?.message || "Invalid super admin credentials");
+      showErrorToast(error?.message || "Invalid super admin credentials");
     } finally {
       setLoading(false);
     }
@@ -153,8 +154,6 @@ export default function SuperAdminLogin() {
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-slate-950 px-4">
-      <Toaster position="top-right" />
-
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,#1e40af33,transparent_35%),radial-gradient(circle_at_bottom,#f9731630,transparent_30%)]" />
 
       <div className="relative w-full max-w-md">

@@ -1,7 +1,7 @@
-import toast from "react-hot-toast";
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
+import PhoneField from "../common/PhoneField";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 
@@ -9,6 +9,13 @@ import { EyeCloseIcon, EyeIcon } from "../../icons";
 import Label from "../form/Label";
 import Input from "../form/input/InputField";
 import { authService } from "../../services/authService";
+import StorageService, { STORAGE_KEYS } from "../../services/storage.service";
+import {
+  showSuccessToast,
+  showErrorToast,
+  showLoadingToast,
+  updateToast,
+} from "../../utils/toastUtils";
 
 import Navbar from "../../components/landing/Navbar";
 import Footer from "../../components/landing/Footer";
@@ -20,17 +27,9 @@ const signUpSchema = z.object({
     .min(1, "First name is required")
     .min(2, "First name must be at least 2 characters"),
 
-  lastName: z
-    .string()
-    .trim()
-    .min(1, "Last name is required")
-    .min(2, "Last name must be at least 2 characters"),
+  lastName: z.string().trim().min(1, "Last name is required"),
 
-  companyName: z
-    .string()
-    .trim()
-    .min(1, "Company name is required")
-    .min(2, "Company name must be at least 2 characters"),
+  companyName: z.string().trim().min(1, "Company name is required"),
 
   phone: z
     .string()
@@ -46,6 +45,7 @@ const signUpSchema = z.object({
 
   password: z
     .string()
+    .trim()
     .min(1, "Password is required")
     .min(8, "Password must be at least 8 characters")
     .regex(
@@ -107,9 +107,11 @@ export default function SignUpForm() {
   const [showPassword, setShowPassword] = useState(false);
 
   const {
+    control,
     register,
     handleSubmit,
     setError,
+    clearErrors,
     formState: { errors, isSubmitting },
   } = useForm<SignUpFormData>({
     resolver: zodResolver(signUpSchema),
@@ -121,12 +123,15 @@ export default function SignUpForm() {
       email: "",
       password: "",
     },
-    mode: "onSubmit",
-    reValidateMode: "onSubmit",
+    mode: "onTouched",
+    reValidateMode: "onChange",
+    shouldFocusError: true,
   });
 
   const onSubmit = async (data: SignUpFormData) => {
-    const toastId = toast.loading("Creating account...");
+    const toastId = showLoadingToast("Creating account...", {
+      id: "signup-loading",
+    });
 
     try {
       const response = await authService.register({
@@ -138,21 +143,21 @@ export default function SignUpForm() {
         mobile_number: data.phone.trim(),
       });
 
-      console.log("Signup API Success:", response);
+     
 
       const registerResponse = response as any;
 
-    const token =
-  registerResponse?.token ||
-  registerResponse?.accessToken ||
-  registerResponse?.access_token ||
-  registerResponse?.data?.token ||
-  registerResponse?.data?.accessToken ||
-  registerResponse?.data?.access_token ||
-  registerResponse?.admin?.token ||
-  registerResponse?.data?.admin?.token ||
-  registerResponse?.company?.token ||
-  registerResponse?.data?.company?.token;
+      const token =
+        registerResponse?.token ||
+        registerResponse?.accessToken ||
+        registerResponse?.access_token ||
+        registerResponse?.data?.token ||
+        registerResponse?.data?.accessToken ||
+        registerResponse?.data?.access_token ||
+        registerResponse?.admin?.token ||
+        registerResponse?.data?.admin?.token ||
+        registerResponse?.company?.token ||
+        registerResponse?.data?.company?.token;
 
       const user =
         registerResponse?.user ||
@@ -169,24 +174,22 @@ export default function SignUpForm() {
         registerResponse?.data?.role_name;
 
       if (token) {
-        localStorage.setItem("token", token);
+        StorageService.set(STORAGE_KEYS.TOKEN, token);
       }
 
       if (role) {
-        localStorage.setItem("role", String(role));
+        StorageService.set(STORAGE_KEYS.ROLE, String(role));
       }
 
       if (user) {
-        localStorage.setItem("user", JSON.stringify(user));
+        StorageService.set(STORAGE_KEYS.USER, user);
       }
 
-      toast.success("Account created successfully", { id: toastId });
+      updateToast("signup-loading", "Account created successfully", "success");
 
       setTimeout(() => {
         navigate("/cart", { replace: true });
       }, 700);
-
-      
     } catch (error) {
       console.error("Signup API Error:", error);
 
@@ -204,12 +207,12 @@ export default function SignUpForm() {
         });
       }
 
-      toast.error(message, { id: toastId });
+      updateToast("signup-loading", message, "error");
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-white">
+    <div className="min-h-screen pt-[90px] bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-white">
       <style>
         {`
           input:-webkit-autofill,
@@ -294,14 +297,18 @@ export default function SignUpForm() {
                           ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
                           : ""
                       }`}
-                      {...register("firstName")}
+                      {...register("firstName", {
+                        onChange: () => {
+                          if (errors.firstName) clearErrors("firstName");
+                        },
+                      })}
                     />
 
-                    {errors.firstName?.message && (
-                      <p className="mt-1 text-xs text-red-500">
-                        {errors.firstName.message}
+                    <div className="mt-1 h-3">
+                      <p className="text-xs text-red-500">
+                        {errors.firstName?.message || ""}
                       </p>
-                    )}
+                    </div>
                   </div>
 
                   <div>
@@ -314,14 +321,20 @@ export default function SignUpForm() {
                           ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
                           : ""
                       }`}
-                      {...register("lastName")}
+                      {...register("lastName", {
+                        onChange: () => {
+                          if (errors.lastName) clearErrors("lastName");
+                        },
+                      })}
                     />
 
-                    {errors.lastName?.message && (
-                      <p className="mt-1 text-xs text-red-500">
-                        {errors.lastName.message}
-                      </p>
-                    )}
+                    <div className="mt-1 h-3">
+                      {errors.lastName?.message && (
+                        <p className="mt-1 text-xs text-red-500">
+                          {errors.lastName.message}
+                        </p>
+                      )}
+                    </div>
                   </div>
 
                   <div className="sm:col-span-2">
@@ -334,43 +347,48 @@ export default function SignUpForm() {
                           ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
                           : ""
                       }`}
-                      {...register("companyName")}
+                      {...register("companyName", {
+                        onChange: () => {
+                          if (errors.companyName) clearErrors("companyName");
+                        },
+                      })}
                     />
 
-                    {errors.companyName?.message && (
-                      <p className="mt-1 text-xs text-red-500">
-                        {errors.companyName.message}
+                    <div className="mt-1 h-3">
+                      <p className="text-xs text-red-500">
+                        {errors.companyName?.message || ""}
                       </p>
-                    )}
+                    </div>
                   </div>
 
-                  <div>
+                  <div className="mt-1 h-3">
                     <Label>Phone *</Label>
 
-                    <Input
-                      type="tel"
-                      placeholder="9876543210"
-                      maxLength={10}
-                      inputMode="numeric"
-                      className={`mt-1 ${
-                        errors.phone
-                          ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
-                          : ""
-                      }`}
-                      {...register("phone")}
-                      onInput={(e: React.FormEvent<HTMLInputElement>) => {
-                        e.currentTarget.value = e.currentTarget.value.replace(
-                          /\D/g,
-                          "",
-                        );
-                      }}
+                    <Controller
+                      name="phone"
+                      control={control}
+                      render={({ field }) => (
+                        <PhoneField
+                          value={field.value}
+                          onChange={(value) => {
+                            field.onChange(value);
+
+                            if (errors.phone) {
+                              clearErrors("phone");
+                            }
+                          }}
+                          error={undefined} // PhoneField ka default error hide
+                          label=""
+                          defaultCountry="ZA"
+                        />
+                      )}
                     />
 
-                    {errors.phone?.message && (
-                      <p className="mt-1 text-xs text-red-500">
-                        {errors.phone.message}
+                    <div className="mt-1 h-5">
+                      <p className="text-xs text-red-500">
+                        {errors.phone ? "Invalid phone number." : ""}
                       </p>
-                    )}
+                    </div>
                   </div>
 
                   <div>
@@ -385,17 +403,23 @@ export default function SignUpForm() {
                           ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
                           : ""
                       }`}
-                      {...register("email")}
+                      {...register("email", {
+                        setValueAs: (value) => value.trim().toLowerCase(),
+                        onChange: () => {
+                          if (errors.email) clearErrors("email");
+                        },
+                      })}
                     />
-
-                    {errors.email?.message && (
-                      <p className="mt-1 text-xs text-red-500">
-                        {errors.email.message}
-                      </p>
-                    )}
+                    <div className="mt-1 h-5">
+                      {errors.email?.message && (
+                        <p className="mt-1 text-xs text-red-500">
+                          {errors.email.message}
+                        </p>
+                      )}
+                    </div>
                   </div>
 
-                  <div className="sm:col-span-2">
+                  <div>
                     <Label>Password *</Label>
 
                     <div className="relative mt-1">
@@ -408,7 +432,11 @@ export default function SignUpForm() {
                             ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
                             : ""
                         }`}
-                        {...register("password")}
+                        {...register("password", {
+                          onChange: () => {
+                            if (errors.password) clearErrors("password");
+                          },
+                        })}
                       />
 
                       <button
@@ -424,11 +452,11 @@ export default function SignUpForm() {
                       </button>
                     </div>
 
-                    {errors.password?.message && (
-                      <p className="mt-1 text-xs text-red-500">
-                        {errors.password.message}
+                    <div className="mt-1 h-1">
+                      <p className="text-xs text-red-500">
+                        {errors.password?.message || ""}
                       </p>
-                    )}
+                    </div>
                   </div>
                 </div>
 

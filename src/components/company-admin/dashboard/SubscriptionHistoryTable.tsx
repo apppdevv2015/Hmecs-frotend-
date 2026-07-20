@@ -1,18 +1,28 @@
-import {
-  CheckCircle2,
-  Clock,
-  CreditCard,
-  History,
-} from "lucide-react";
+import { CheckCircle2, Clock, CreditCard, History } from "lucide-react";
 
 interface HistoryItem {
   id: string | number;
-  plan_name: string;
-  status: string;
-  price: string | number;
-  subscription_start_date: string;
-  subscription_end_date: string;
-  payment_status: string;
+
+  plan_name?: string;
+  status?: string;
+  price?: string | number;
+
+  payment_status?: string;
+
+  subscription_start_date?: string;
+  subscription_end_date?: string;
+
+  subscriptionStartDate?: string;
+  subscriptionEndDate?: string;
+
+  paymentStatus?: string;
+
+  plan?: {
+    id?: string;
+    planName?: string;
+    price?: string | number;
+    validityDays?: number;
+  };
 }
 
 interface SubscriptionHistoryTableProps {
@@ -32,7 +42,7 @@ export default function SubscriptionHistoryTable({
     });
   };
 
-  const calculateDuration = (start: string, end: string) => {
+  const calculateDuration = (start?: string, end?: string) => {
     if (!start || !end) return "N/A";
 
     const s = new Date(start);
@@ -43,10 +53,10 @@ export default function SubscriptionHistoryTable({
     return `${days} Days`;
   };
 
-  const getStatusClasses = (status: string) => {
+  const getStatusClasses = (status?: string) => {
     const normalizedStatus = status?.toLowerCase();
 
-    if (normalizedStatus === "active") {
+    if (normalizedStatus === "active" || normalizedStatus === "paid") {
       return "border-green-100 bg-green-50 text-green-700 dark:border-green-500/20 dark:bg-green-500/10 dark:text-green-400";
     }
 
@@ -97,9 +107,17 @@ export default function SubscriptionHistoryTable({
             {history && history.length > 0 ? (
               history.map((item) => {
                 const planName =
-                  item.plan_name || (item as any).name || "Unknown Plan";
+                  item.plan_name ||
+                  item.plan?.planName ||
+                  (item as any).planName ||
+                  (item as any).name ||
+                  "Unknown Plan";
 
-                const price = item.price ?? (item as any).amount ?? "0.00";
+                const price =
+                  item.price ??
+                  item.plan?.price ??
+                  (item as any).amount ??
+                  "0.00";
 
                 const startDate =
                   item.subscription_start_date ||
@@ -111,6 +129,12 @@ export default function SubscriptionHistoryTable({
                   item.subscription_end_date ||
                   (item as any).subscriptionEndDate ||
                   (item as any).end_date;
+
+                const displayStatus =
+                  item.payment_status ||
+                  item.paymentStatus ||
+                  item.status ||
+                  "Pending";
 
                 return (
                   <tr
@@ -130,13 +154,14 @@ export default function SubscriptionHistoryTable({
 
                           <span
                             className={`inline-flex w-fit items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-wider ${getStatusClasses(
-                              item.status
+                              displayStatus,
                             )}`}
                           >
-                            {item.status === "active" && (
-                              <CheckCircle2 size={11} />
-                            )}
-                            {item.status || "unknown"}
+                            {["active", "paid"].includes(
+                              displayStatus.toLowerCase(),
+                            ) && <CheckCircle2 size={11} />}
+
+                            {displayStatus}
                           </span>
                         </div>
                       </div>
@@ -144,7 +169,7 @@ export default function SubscriptionHistoryTable({
 
                     <td className="px-6 py-5">
                       <span className="text-base font-black text-blue-600 dark:text-blue-400">
-                        ${price}
+                        ${Number(price).toLocaleString()}
                       </span>
                     </td>
 

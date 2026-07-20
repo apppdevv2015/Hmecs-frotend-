@@ -1,10 +1,11 @@
 import GridShape from "../../components/common/GridShape";
 import { Link } from "react-router";
 import PageMeta from "../../components/common/PageMeta";
+import StorageService, { STORAGE_KEYS } from "../../services/storage.service";
 
 export default function NotFound() {
-  const token = localStorage.getItem("token");
-  const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const token = StorageService.get<string>(STORAGE_KEYS.TOKEN);
+  const user = StorageService.get<any>(STORAGE_KEYS.USER) || {};
   const role = user?.role?.toLowerCase();
 
   const getDashboardPath = () => {
