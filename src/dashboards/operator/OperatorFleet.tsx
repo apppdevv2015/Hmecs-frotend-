@@ -1,6 +1,11 @@
 import { machineAssignmentService } from "../../services/Task/machineAssignmentService";
 import StorageService, { STORAGE_KEYS } from "../../services/storage.service";
 
+import tyreImg from "../../../src/assets/images/landingpageimages/FleetLogo/TyreLogo.png";
+import engineImg from "../../../src/assets/images/landingpageimages/FleetLogo/Engine.png";
+import hydraulicImg from "../../../src/assets/images/landingpageimages/FleetLogo/hydraulic.png";
+import suspensionImg from "../../../src/assets/images/landingpageimages/FleetLogo/suspension.png";
+
 import { useEffect, useMemo, useState, useCallback } from "react";
 import {
   fleetService,
@@ -50,11 +55,21 @@ type FleetStats = {
 
 type ComponentStatus = "ok" | "warn" | "crit" | "none";
 
+// BACKEND TODO: replace with real sensor reading keys once API contract for
+// per-component sub-metrics (pressure, temperature, oil/coolant levels) is finalized.
+type SubMetric = {
+  label: string;
+  value: string;
+};
+
 type MachineComponent = {
   status: ComponentStatus;
   label: string;
   life: string;
   lifePercent: number;
+  // Overall health = inverse of "life used %" until backend exposes a direct health score.
+  overallHealthPercent: number | null;
+  subMetrics: SubMetric[];
 };
 
 type MaintenanceRecord = {
@@ -101,13 +116,15 @@ interface HeatmapDataPoint {
    CATEGORY TABS
 ========================================================== */
 
-const CATEGORY_TABS = ["All Equipment", "Excavators", "Trucks", "Dozers", "Graders"] as const;
+const CATEGORY_TABS = [
+  "All Equipment",
+  "Excavators",
+  "Trucks",
+  "Dozers",
+  "Graders",
+] as const;
 
 type CategoryTab = (typeof CATEGORY_TABS)[number];
-
-/* ==========================================================
-   MOCK DATA
-========================================================== */
 
 /* ==========================================================
    HEATMAP HELPERS
@@ -127,20 +144,21 @@ interface PaletteStop {
   badgeText: string;
 }
 
-const PALETTE: Record<HealthStatus, { light: PaletteStop; dark: PaletteStop }> = {
-  HEALTHY: {
-    light: { fill: "#3b6d11", badgeBg: "#eaf3de", badgeText: "#3b6d11" },
-    dark: { fill: "#2d6a4f", badgeBg: "#0a2e1f", badgeText: "#5dcaa5" },
-  },
-  WARNING: {
-    light: { fill: "#854f0b", badgeBg: "#faeeda", badgeText: "#854f0b" },
-    dark: { fill: "#7a4a00", badgeBg: "#2e1e00", badgeText: "#ef9f27" },
-  },
-  CRITICAL: {
-    light: { fill: "#a32d2d", badgeBg: "#fcebeb", badgeText: "#a32d2d" },
-    dark: { fill: "#7a1f1f", badgeBg: "#2e0a0a", badgeText: "#f09595" },
-  },
-};
+const PALETTE: Record<HealthStatus, { light: PaletteStop; dark: PaletteStop }> =
+  {
+    HEALTHY: {
+      light: { fill: "#3b6d11", badgeBg: "#eaf3de", badgeText: "#3b6d11" },
+      dark: { fill: "#2d6a4f", badgeBg: "#0a2e1f", badgeText: "#5dcaa5" },
+    },
+    WARNING: {
+      light: { fill: "#854f0b", badgeBg: "#faeeda", badgeText: "#854f0b" },
+      dark: { fill: "#7a4a00", badgeBg: "#2e1e00", badgeText: "#ef9f27" },
+    },
+    CRITICAL: {
+      light: { fill: "#a32d2d", badgeBg: "#fcebeb", badgeText: "#a32d2d" },
+      dark: { fill: "#7a1f1f", badgeBg: "#2e0a0a", badgeText: "#f09595" },
+    },
+  };
 
 function resolvePalette(score: number, isDark: boolean): PaletteStop {
   const status = getHealthStatus(score);
@@ -167,7 +185,8 @@ function buildHeatmapOption(
   const textMuted = isDark ? "#6b6b72" : "#888780";
   const borderLine = isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.07)";
   const cellBorder = isDark ? "rgba(0,0,0,0.45)" : "rgba(255,255,255,0.6)";
-  const monoStack = "'ui-monospace','SF Mono','Cascadia Code','JetBrains Mono',monospace";
+  const monoStack =
+    "'ui-monospace','SF Mono','Cascadia Code','JetBrains Mono',monospace";
   const sansStack = "'Inter','Segoe UI',system-ui,sans-serif";
 
   const tooltipFormatter = (params: any): string => {
@@ -177,7 +196,11 @@ function buildHeatmapOption(
     const status = getHealthStatus(score);
     const pal = resolvePalette(score, isDark);
     const statusLabel =
-      status === "HEALTHY" ? "Healthy" : status === "WARNING" ? "Warning" : "Critical";
+      status === "HEALTHY"
+        ? "Healthy"
+        : status === "WARNING"
+          ? "Warning"
+          : "Critical";
     const tooltipBg = isDark ? "#1c1e26" : "#ffffff";
     const dividerClr = isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.07)";
 
@@ -246,8 +269,16 @@ function buildHeatmapOption(
       textStyle: { color: textMuted, fontSize: 10, fontFamily: sansStack },
       inRange: {
         color: isDark
-          ? [PALETTE.CRITICAL.dark.fill, PALETTE.WARNING.dark.fill, PALETTE.HEALTHY.dark.fill]
-          : [PALETTE.CRITICAL.light.fill, PALETTE.WARNING.light.fill, PALETTE.HEALTHY.light.fill],
+          ? [
+              PALETTE.CRITICAL.dark.fill,
+              PALETTE.WARNING.dark.fill,
+              PALETTE.HEALTHY.dark.fill,
+            ]
+          : [
+              PALETTE.CRITICAL.light.fill,
+              PALETTE.WARNING.light.fill,
+              PALETTE.HEALTHY.light.fill,
+            ],
       },
     },
     tooltip: {
@@ -267,7 +298,8 @@ function buildHeatmapOption(
         coordinateSystem: "cartesian2d" as const,
         label: {
           show: true,
-          formatter: (params: any) => `${(params.value as [number, number, number])[2]}%`,
+          formatter: (params: any) =>
+            `${(params.value as [number, number, number])[2]}%`,
           fontSize: 10,
           fontWeight: "bold" as const,
           fontFamily: monoStack,
@@ -301,6 +333,105 @@ function buildHeatmapOption(
 /* ==========================================================
    MISC HELPERS
 ========================================================== */
+
+const getComponentStatusLabel = (status: ComponentStatus) => {
+  if (status === "crit") return "CRITICAL";
+  if (status === "warn") return "WARNING";
+  if (status === "ok") return "GOOD";
+  return "UNKNOWN";
+};
+
+const getComponentBadgeClasses = (status: ComponentStatus) => {
+  if (status === "crit")
+    return "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400";
+  if (status === "warn")
+    return "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400";
+  if (status === "ok")
+    return "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400";
+  return "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400";
+};
+
+// BACKEND TODO: sub-metrics are placeholder values until backend exposes real
+// sensor readings (air pressure, coolant level, oil temperature, etc.) per
+// component category. Replace fallback literals below with real fields once
+// the API contract is confirmed (e.g. intelligence?.airPressure).
+const buildSubMetrics = (
+  category: "tyre" | "engine" | "hydraulic" | "transmission",
+  intelligence: any,
+): SubMetric[] => {
+  switch (category) {
+    case "tyre":
+      return [
+        {
+          label: "Air Pressure",
+          value: intelligence?.airPressure
+            ? `${intelligence.airPressure} PSI`
+            : "32 PSI",
+        },
+        {
+          label: "Tyre Temperature",
+          value: intelligence?.tyreTemperature
+            ? `${intelligence.tyreTemperature}°C`
+            : "45°C",
+        },
+      ];
+    case "engine":
+      return [
+        {
+          label: "Engine Temperature",
+          value: intelligence?.engineTemperature
+            ? `${intelligence.engineTemperature}°C`
+            : "90°C",
+        },
+        {
+          label: "Engine Oil Level",
+          value: intelligence?.oilLevel ? `${intelligence.oilLevel}%` : "100%",
+        },
+        {
+          label: "Coolant Level",
+          value: intelligence?.coolantLevel
+            ? `${intelligence.coolantLevel}%`
+            : "100%",
+        },
+      ];
+    case "hydraulic":
+      return [
+        {
+          label: "Oil Level",
+          value: intelligence?.oilLevel ? `${intelligence.oilLevel}%` : "100%",
+        },
+        {
+          label: "Hydraulic Pressure",
+          value: intelligence?.pressure
+            ? `${intelligence.pressure} Bar`
+            : "210 Bar",
+        },
+        {
+          label: "Oil Temperature",
+          value: intelligence?.oilTemperature
+            ? `${intelligence.oilTemperature}°C`
+            : "55°C",
+        },
+      ];
+    case "transmission":
+      return [
+        {
+          label: "Fluid Level",
+          value: intelligence?.fluidLevel
+            ? `${intelligence.fluidLevel}%`
+            : "0%",
+        },
+        {
+          label: "Gear Temperature",
+          value: intelligence?.gearTemperature
+            ? `${intelligence.gearTemperature}°C`
+            : "0°C",
+        },
+      ];
+    default:
+      return [];
+  }
+};
 
 const getStatusClasses = (status: FleetStatus) => {
   switch (status) {
@@ -408,6 +539,13 @@ const StatusIcon = ({ status }: { status: ComponentStatus }) => {
   );
 };
 
+const COMPONENT_ICON_MAP: Record<string, any> = {
+  TYRE: tyreImg,
+  ENGINE: engineImg,
+  HYDRAULIC: hydraulicImg,
+  TRANSMISSION: suspensionImg,
+};
+
 /* ==========================================================
    HEALTH BAR SUB-COMPONENT
 ========================================================== */
@@ -424,7 +562,9 @@ const HealthBar = ({
   <div className="w-full">
     {showLabel && (
       <div className="mb-1 flex items-center justify-between">
-        <span className="text-[11px] font-semibold text-slate-500">{percent}%</span>
+        <span className="text-[11px] font-semibold text-slate-500">
+          {percent}%
+        </span>
       </div>
     )}
     <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700">
@@ -441,8 +581,14 @@ const HealthBar = ({
 ========================================================== */
 
 const FuelGauge = ({ level }: { level: number }) => {
-  const color = level > 60 ? "text-green-500" : level > 30 ? "text-orange-500" : "text-red-500";
-  const barColor = level > 60 ? "bg-green-500" : level > 30 ? "bg-orange-500" : "bg-red-500";
+  const color =
+    level > 60
+      ? "text-green-500"
+      : level > 30
+        ? "text-orange-500"
+        : "text-red-500";
+  const barColor =
+    level > 60 ? "bg-green-500" : level > 30 ? "bg-orange-500" : "bg-red-500";
   return (
     <div className="flex items-center gap-2">
       <Activity size={14} className={color} />
@@ -458,11 +604,147 @@ const FuelGauge = ({ level }: { level: number }) => {
 };
 
 /* ==========================================================
+   COMPONENT HEALTH OVERVIEW CARD (Tyre / Engine / Hydraulic / Transmission)
+========================================================== */
+
+const ComponentOverviewCard = ({
+  component,
+}: {
+  component: MachineComponent;
+}) => {
+  const image = COMPONENT_ICON_MAP[component.label];
+  const displayLabel =
+    component.label.charAt(0) + component.label.slice(1).toLowerCase();
+
+  return (
+    <div
+      className={`group relative rounded-xl border bg-white  sm:p-3 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg dark:bg-slate-900 ${
+        component.status === "crit"
+          ? "border-red-300 dark:border-red-900 animate-status-blink"
+          : "border-slate-200 hover:border-blue-200 dark:border-slate-800"
+      }`}
+    >
+      {/* Header */}
+      <div className="flex flex-col gap-3">
+        <div className="relative">
+          {/* Status Badge */}
+          <span
+            className={`absolute left-0 top-0 z-10 whitespace-nowrap rounded-full px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.1em] shadow-sm sm:px-3 sm:text-[10px] ${getComponentBadgeClasses(
+              component.status,
+            )}`}
+          >
+            {getComponentStatusLabel(component.status)}
+          </span>
+
+          {/* Center Image */}
+          <div className="flex justify-center">
+            <img
+              src={image ?? tyreImg}
+              alt={displayLabel}
+              className={`h-40 w-40 object-contain transition-transform duration-300 group-hover:scale-105 ${
+                component.status === "crit" ? "animate-icon-pulse" : ""
+              }`}
+            />
+          </div>
+        </div>
+
+        {/* Title */}
+        <div className="min-w-0">
+          <h3 className="break-words text-[15px] font-bold leading-snug tracking-tight text-slate-900 dark:text-white sm:text-[16px]">
+            {displayLabel}
+          </h3>
+
+          <p className="mt-0.5 text-[11px] font-medium text-slate-500 dark:text-slate-400 sm:text-[12px]">
+            Overall Health
+          </p>
+        </div>
+      </div>
+
+      {/* Health Percentage */}
+      <div className="mt-4 sm:mt-5">
+        <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400 sm:text-[11px]">
+          Health Score
+        </p>
+
+        {component.overallHealthPercent === null ? (
+          <div className="rounded-xl border border-dashed border-orange-300 bg-orange-50 p-4 text-center">
+            <p className="font-semibold text-orange-700">Component Required</p>
+
+            <p className="mt-1 text-sm text-slate-500">
+              No component data available.
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-end">
+              <span className="text-2xl font-black tracking-tight text-slate-900 dark:text-white sm:text-3xl">
+                {component.overallHealthPercent}
+              </span>
+
+              <span className="mb-0.5 ml-1 text-base font-bold text-slate-400 sm:text-lg">
+                %
+              </span>
+            </div>
+
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+              <div
+                className={`h-full rounded-full transition-all duration-700 ${getComponentBarColor(
+                  component.status,
+                )}`}
+                style={{ width: `${component.overallHealthPercent}%` }}
+              />
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Metrics */}
+      <div className="mt-4 space-y-1.5 border-t border-slate-100 pt-3 dark:border-slate-800 sm:mt-5 sm:space-y-2 sm:pt-4">
+        {component.overallHealthPercent === null ? (
+          <div className="rounded-lg border border-dashed border-orange-300 bg-orange-50 p-4 text-center dark:border-orange-700 dark:bg-orange-900/20">
+            <p className="text-sm font-semibold text-orange-700 dark:text-orange-300">
+              Component Required
+            </p>
+
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              Register this component to view health metrics.
+            </p>
+          </div>
+        ) : (
+          component.subMetrics.map((metric) => (
+            <div
+              key={metric.label}
+              className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/60"
+            >
+              <span className="truncate text-[11px] font-medium text-slate-500 dark:text-slate-400 sm:text-[12px]">
+                {metric.label}
+              </span>
+
+              <span className="flex-shrink-0 text-[11px] font-semibold text-slate-800 dark:text-slate-200 sm:text-[12px]">
+                {metric.value}
+              </span>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+};
+
+/* ==========================================================
    MACHINE DETAIL MODAL
 ========================================================== */
 
-const MachineModal = ({ machine, onClose }: { machine: FleetMachine; onClose: () => void }) => {
-  const [activeTab, setActiveTab] = useState<"overview" | "components" | "history">("overview");
+const MachineModal = ({
+  machine,
+  onClose,
+}: {
+  machine: FleetMachine;
+  onClose: () => void;
+}) => {
+  const [activeTab, setActiveTab] = useState<
+    "overview" | "components" | "history"
+  >("overview");
   const statusStyles = getStatusClasses(machine.status);
 
   return (
@@ -512,7 +794,9 @@ const MachineModal = ({ machine, onClose }: { machine: FleetMachine; onClose: ()
                 key={tab}
                 onClick={() => setActiveTab(tab)}
                 className={`rounded-xl px-4 py-2 text-[12px] font-bold capitalize transition ${
-                  activeTab === tab ? "bg-white/20 text-white" : "text-blue-100 hover:bg-white/10"
+                  activeTab === tab
+                    ? "bg-white/20 text-white"
+                    : "text-blue-100 hover:bg-white/10"
                 }`}
               >
                 {tab}
@@ -563,7 +847,9 @@ const MachineModal = ({ machine, onClose }: { machine: FleetMachine; onClose: ()
                     <span className="text-4xl font-black text-slate-900 dark:text-white">
                       {machine.healthPercent}
                     </span>
-                    <span className="mb-1 text-lg font-bold text-slate-400">%</span>
+                    <span className="mb-1 text-lg font-bold text-slate-400">
+                      %
+                    </span>
                   </div>
                   <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
                     <div
@@ -592,42 +878,91 @@ const MachineModal = ({ machine, onClose }: { machine: FleetMachine; onClose: ()
           {/* ── COMPONENTS TAB ── */}
           {activeTab === "components" && (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              {[machine.tyre, machine.engine, machine.hydraulic, machine.transmission].map(
-                (comp) => (
+              {[
+                machine.tyre,
+                machine.engine,
+                machine.hydraulic,
+                machine.transmission,
+              ].map((comp) => {
+                const image = COMPONENT_ICON_MAP[comp.label];
+
+                return (
                   <div
                     key={comp.label}
                     className="rounded-[18px] border border-slate-100 bg-slate-50 p-5 dark:border-slate-700 dark:bg-slate-800"
                   >
-                    <div className="mb-4 flex items-center justify-between">
+                    {/* Header */}
+                    <div className="mb-5 flex items-start justify-between">
                       <div className="flex items-center gap-3">
-                        <StatusIcon status={comp.status} />
-                        <p className="text-[13px] font-black text-slate-800 dark:text-white">
-                          {comp.label}
-                        </p>
+                        <img
+                          src={image}
+                          alt={comp.label}
+                          className="h-34 w-4 object-contain"
+                        />
+
+                        <div>
+                          <h3 className="text-sm font-black text-slate-900 dark:text-white">
+                            {comp.label}
+                          </h3>
+
+                          <p className="text-xs text-slate-500">
+                            Component Health
+                          </p>
+                        </div>
                       </div>
+
                       <span
-                        className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-wide ${
-                          comp.status === "ok"
-                            ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                            : comp.status === "warn"
-                              ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
-                              : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
-                        }`}
+                        className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-wide ${getComponentBadgeClasses(
+                          comp.status,
+                        )}`}
                       >
-                        {comp.status === "ok"
-                          ? "Healthy"
-                          : comp.status === "warn"
-                            ? "Warning"
-                            : "Critical"}
+                        {getComponentStatusLabel(comp.status)}
                       </span>
                     </div>
-                    <HealthBar percent={comp.lifePercent} status={comp.status} />
-                    <p className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
+
+                    {/* Overall Health */}
+                    <div className="mb-4">
+                      <div className="mb-2 flex items-center justify-between">
+                        <span className="text-xs font-medium text-slate-500">
+                          Overall Health
+                        </span>
+
+                        <span className="text-sm font-bold text-slate-900 dark:text-white">
+                          {comp.overallHealthPercent ?? 0}%
+                        </span>
+                      </div>
+
+                      <HealthBar
+                        percent={comp.overallHealthPercent ?? 0}
+                        status={comp.status}
+                      />
+                    </div>
+
+                    {/* Remaining Life */}
+                    <p className="mb-4 text-[11px] text-slate-500 dark:text-slate-400">
                       {comp.life}
                     </p>
+
+                    {/* Sub Metrics */}
+                    <div className="space-y-2">
+                      {comp.subMetrics.map((metric) => (
+                        <div
+                          key={metric.label}
+                          className="flex items-center justify-between rounded-xl bg-white px-3 py-2 dark:bg-slate-900"
+                        >
+                          <span className="text-xs text-slate-500">
+                            {metric.label}
+                          </span>
+
+                          <span className="text-xs font-semibold text-slate-900 dark:text-white">
+                            {metric.value}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                ),
-              )}
+                );
+              })}
             </div>
           )}
 
@@ -652,7 +987,9 @@ const MachineModal = ({ machine, onClose }: { machine: FleetMachine; onClose: ()
                         <p className="text-[13px] font-black text-slate-800 dark:text-white">
                           {record.type}
                         </p>
-                        <span className="text-[11px] text-slate-400">{record.date}</span>
+                        <span className="text-[11px] text-slate-400">
+                          {record.date}
+                        </span>
                       </div>
                       <p className="mt-0.5 text-[12px] text-slate-500 dark:text-slate-400">
                         Technician: {record.technician}
@@ -670,7 +1007,9 @@ const MachineModal = ({ machine, onClose }: { machine: FleetMachine; onClose: ()
 
         {/* Modal Footer */}
         <div className="flex items-center justify-between border-t border-slate-100 px-6 py-4 dark:border-slate-700">
-          <p className="text-[12px] text-slate-400">Last updated: {machine.lastSeen}</p>
+          <p className="text-[12px] text-slate-400">
+            Last updated: {machine.lastSeen}
+          </p>
           <button
             onClick={onClose}
             className="rounded-2xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
@@ -701,16 +1040,32 @@ export default function EngineerFleet() {
   const [stats, setStats] = useState<FleetStats | null>(null);
   const [fleetTable, setFleetTable] = useState<FleetMachine[]>([]);
   const [heatmapData, setHeatmapData] = useState<HeatmapDataPoint[]>([]);
-  const [selectedMachine, setSelectedMachine] = useState<FleetMachine | null>(null);
+  const [selectedMachine, setSelectedMachine] = useState<FleetMachine | null>(
+    null,
+  );
   const [openModal, setOpenModal] = useState(false);
   const [sortField, setSortField] = useState<keyof FleetMachine | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
 
-  /* ── Heatmap axis labels built from real fleet data ─── */
-  const HEATMAP_COMPONENTS = ["Tyre", "Engine", "Hydraulic", "Transmission"] as const;
+  // Machine currently shown in the "Component Health Overview" cards above the
+  // table. Updates live whenever a row in the fleet table is clicked.
+  const [overviewMachine, setOverviewMachine] = useState<FleetMachine | null>(
+    null,
+  );
 
-  const heatmapFleets = useMemo(() => fleetTable.map((m) => m.fleet), [fleetTable]);
+  /* ── Heatmap axis labels built from real fleet data ─── */
+  const HEATMAP_COMPONENTS = [
+    "Tyre",
+    "Engine",
+    "Hydraulic",
+    "Transmission",
+  ] as const;
+
+  const heatmapFleets = useMemo(
+    () => fleetTable.map((m) => m.fleet),
+    [fleetTable],
+  );
 
   /* ── Dark-mode detection ────────────────────────────── */
   const [isDark, setIsDark] = useState(false);
@@ -724,7 +1079,13 @@ export default function EngineerFleet() {
 
   /* ── Heatmap option (memo) ──────────────────────────── */
   const heatMapOption = useMemo(
-    () => buildHeatmapOption([...HEATMAP_COMPONENTS], heatmapFleets, heatmapData, isDark),
+    () =>
+      buildHeatmapOption(
+        [...HEATMAP_COMPONENTS],
+        heatmapFleets,
+        heatmapData,
+        isDark,
+      ),
     [heatmapData, heatmapFleets, isDark],
   );
 
@@ -751,9 +1112,10 @@ export default function EngineerFleet() {
       let filteredMachines = machines;
 
       if (currentRole === "operator" && currentUser?.id) {
-        const assignedMachineIds = await machineAssignmentService.getAssignedMachines(
-          String(currentUser.id),
-        );
+        const assignedMachineIds =
+          await machineAssignmentService.getAssignedMachines(
+            String(currentUser.id),
+          );
 
         filteredMachines = machines.filter((machine) =>
           assignedMachineIds.includes(String(machine.machineId)),
@@ -798,6 +1160,10 @@ export default function EngineerFleet() {
           life: `${machine.components.tyre.health}% life left`,
 
           lifePercent: machine.components.tyre.health,
+
+          overallHealthPercent: machine.components.tyre.health,
+
+          subMetrics: buildSubMetrics("tyre", undefined),
         },
 
         engine: {
@@ -810,7 +1176,12 @@ export default function EngineerFleet() {
           life: `${machine.components.engine.health}% life left`,
 
           lifePercent: machine.components.engine.health,
+
+          overallHealthPercent: machine.components.engine.health,
+
+          subMetrics: buildSubMetrics("engine", undefined),
         },
+
         hydraulic: {
           status:
             machine.components.hydraulic.status === "critical"
@@ -822,6 +1193,10 @@ export default function EngineerFleet() {
           life: `${machine.components.hydraulic.health}% life left`,
 
           lifePercent: machine.components.hydraulic.health,
+
+          overallHealthPercent: machine.components.hydraulic.health,
+
+          subMetrics: buildSubMetrics("hydraulic", undefined),
         },
 
         transmission: {
@@ -835,6 +1210,10 @@ export default function EngineerFleet() {
           life: `${machine.components.transmission.health}% life left`,
 
           lifePercent: machine.components.transmission.health,
+
+          overallHealthPercent: machine.components.transmission.health,
+
+          subMetrics: buildSubMetrics("transmission", undefined),
         },
 
         maintenanceHistory: machine.maintenanceHistory,
@@ -846,33 +1225,37 @@ export default function EngineerFleet() {
 
         healthy: formattedMachines.filter((m) => m.status === "Healthy").length,
 
-        maintenance: formattedMachines.filter((m) => m.status === "Warning").length,
+        maintenance: formattedMachines.filter((m) => m.status === "Warning")
+          .length,
 
-        critical: formattedMachines.filter((m) => m.status === "Critical").length,
+        critical: formattedMachines.filter((m) => m.status === "Critical")
+          .length,
       };
 
-      const heatmap: HeatmapDataPoint[] = formattedMachines.flatMap((machine, fleetIndex) => [
-        {
-          fleetIndex,
-          componentIndex: 0,
-          healthScore: machine.tyre.lifePercent,
-        },
-        {
-          fleetIndex,
-          componentIndex: 1,
-          healthScore: machine.engine.lifePercent,
-        },
-        {
-          fleetIndex,
-          componentIndex: 2,
-          healthScore: machine.hydraulic.lifePercent,
-        },
-        {
-          fleetIndex,
-          componentIndex: 3,
-          healthScore: machine.transmission.lifePercent,
-        },
-      ]);
+      const heatmap: HeatmapDataPoint[] = formattedMachines.flatMap(
+        (machine, fleetIndex) => [
+          {
+            fleetIndex,
+            componentIndex: 0,
+            healthScore: machine.tyre.lifePercent,
+          },
+          {
+            fleetIndex,
+            componentIndex: 1,
+            healthScore: machine.engine.lifePercent,
+          },
+          {
+            fleetIndex,
+            componentIndex: 2,
+            healthScore: machine.hydraulic.lifePercent,
+          },
+          {
+            fleetIndex,
+            componentIndex: 3,
+            healthScore: machine.transmission.lifePercent,
+          },
+        ],
+      );
 
       setStats(currentRole === "operator" ? filteredStats : stats);
 
@@ -889,6 +1272,22 @@ export default function EngineerFleet() {
   useEffect(() => {
     fetchDashboard();
   }, [fetchDashboard]);
+
+  // Keep the overview card in sync with the fleet table: default to the first
+  // machine, but preserve the current selection across refetches if it still exists.
+  useEffect(() => {
+    if (fleetTable.length === 0) {
+      setOverviewMachine(null);
+      return;
+    }
+    setOverviewMachine((prev) => {
+      if (prev) {
+        const stillExists = fleetTable.find((m) => m.id === prev.id);
+        if (stillExists) return stillExists;
+      }
+      return fleetTable[0];
+    });
+  }, [fleetTable]);
 
   /* ── Sort handler ───────────────────────────────────── */
   const handleSort = (field: keyof FleetMachine) => {
@@ -910,8 +1309,11 @@ export default function EngineerFleet() {
         machine.location.toLowerCase().includes(search.toLowerCase());
       const matchesCategory =
         activeTab === "All Equipment" ||
-        machine.type.toLowerCase().includes(activeTab.toLowerCase().replace(/s$/, ""));
-      const matchesStatus = statusFilter === "All" || machine.status === statusFilter;
+        machine.type
+          .toLowerCase()
+          .includes(activeTab.toLowerCase().replace(/s$/, ""));
+      const matchesStatus =
+        statusFilter === "All" || machine.status === statusFilter;
       return matchesSearch && matchesCategory && matchesStatus;
     });
 
@@ -933,7 +1335,8 @@ export default function EngineerFleet() {
 
   /* ── Sort indicator helper ──────────────────────────── */
   const SortIndicator = ({ field }: { field: keyof FleetMachine }) => {
-    if (sortField !== field) return <Minus size={10} className="ml-1 opacity-30" />;
+    if (sortField !== field)
+      return <Minus size={10} className="ml-1 opacity-30" />;
     return sortDir === "asc" ? (
       <TrendingUp size={10} className="ml-1 text-blue-500" />
     ) : (
@@ -973,7 +1376,9 @@ export default function EngineerFleet() {
                   </div>
 
                   <h1 className="text-3xl font-black tracking-tight text-white">
-                    {currentRole === "operator" ? "Machine Monitoring" : "Fleet Monitoring"}
+                    {currentRole === "operator"
+                      ? "Machine Monitoring"
+                      : "Fleet Monitoring"}
                   </h1>
 
                   <p className="mt-2 text-sm leading-6 text-blue-100">
@@ -1013,7 +1418,10 @@ export default function EngineerFleet() {
           disabled:opacity-60
         "
               >
-                <RefreshCcw size={18} className={loading ? "animate-spin" : ""} />
+                <RefreshCcw
+                  size={18}
+                  className={loading ? "animate-spin" : ""}
+                />
 
                 {loading ? "Refreshing..." : "Refresh Data"}
               </button>
@@ -1028,28 +1436,32 @@ export default function EngineerFleet() {
               title: "Total Machines",
               value: stats?.totalMachines || 0,
               icon: Truck,
-              color: "bg-blue-100 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400",
+              color:
+                "bg-blue-100 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400",
               trend: null,
             },
             {
               title: "Healthy Machines",
               value: stats?.healthy || 0,
               icon: ShieldCheck,
-              color: "bg-green-100 text-green-600 dark:bg-green-500/10 dark:text-green-400",
+              color:
+                "bg-green-100 text-green-600 dark:bg-green-500/10 dark:text-green-400",
               trend: "+3 this week",
             },
             {
               title: "Maintenance",
               value: stats?.maintenance || 0,
               icon: Wrench,
-              color: "bg-orange-100 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400",
+              color:
+                "bg-orange-100 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400",
               trend: "-2 since yesterday",
             },
             {
               title: "Critical Alerts",
               value: stats?.critical || 0,
               icon: AlertTriangle,
-              color: "bg-red-100 text-red-600 dark:bg-red-500/10 dark:text-red-400",
+              color:
+                "bg-red-100 text-red-600 dark:bg-red-500/10 dark:text-red-400",
               trend: "Needs attention",
             },
           ].map((item) => {
@@ -1064,7 +1476,9 @@ export default function EngineerFleet() {
                 >
                   <Icon size={24} />
                 </div>
-                <p className="mt-5 text-sm font-medium text-slate-500">{item.title}</p>
+                <p className="mt-5 text-sm font-medium text-slate-500">
+                  {item.title}
+                </p>
                 <h3 className="mt-1 text-4xl font-black tracking-tight text-slate-900 dark:text-white">
                   {loading ? (
                     <span className="inline-block h-10 w-16 animate-pulse rounded-xl bg-slate-200 dark:bg-slate-700" />
@@ -1092,7 +1506,8 @@ export default function EngineerFleet() {
               </h3>
 
               <p className="mt-1 text-sm text-slate-500">
-                Fleet-wise component health monitoring — hover a cell for details.
+                Fleet-wise component health monitoring — hover a cell for
+                details.
               </p>
             </div>
 
@@ -1171,6 +1586,60 @@ export default function EngineerFleet() {
           )}
         </div>
 
+        {/* ── COMPONENT HEALTH OVERVIEW ────────────────────
+             Live snapshot of the currently selected machine's
+             component health. Click any row in the fleet table
+             below to update this section. ────────────────── */}
+        <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div className="mb-5 flex items-start justify-between">
+            <div>
+              <h3 className="text-xl font-black text-slate-900 dark:text-white">
+                Component Health Overview
+              </h3>
+              <p className="mt-1 text-sm text-slate-500">
+                {overviewMachine
+                  ? `Showing live component health for ${overviewMachine.machine}`
+                  : "Select a machine from the table below to see its component health."}
+              </p>
+            </div>
+            {overviewMachine && (
+              <button
+                onClick={() => {
+                  setSelectedMachine(overviewMachine);
+                  setOpenModal(true);
+                }}
+                className="inline-flex items-center gap-1 text-sm font-semibold text-blue-600 hover:underline dark:text-blue-400"
+              >
+                View Detailed Analytics
+                <ChevronRight size={14} />
+              </button>
+            )}
+          </div>
+
+          {loading ? (
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="h-52 animate-pulse rounded-[22px] bg-slate-100 dark:bg-slate-800"
+                />
+              ))}
+            </div>
+          ) : overviewMachine ? (
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
+              <ComponentOverviewCard component={overviewMachine.tyre} />
+              <ComponentOverviewCard component={overviewMachine.engine} />
+              <ComponentOverviewCard component={overviewMachine.hydraulic} />
+              <ComponentOverviewCard component={overviewMachine.transmission} />
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-16 text-slate-400">
+              <Truck size={36} className="text-slate-300" />
+              <p className="mt-3 text-sm">No machine selected yet.</p>
+            </div>
+          )}
+        </div>
+
         {/* ── FLEET TABLE ─────────────────────────────────── */}
         <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-[#081028]">
           <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5 dark:border-slate-800">
@@ -1179,7 +1648,7 @@ export default function EngineerFleet() {
                 Company Fleet
               </h3>
               <p className="mt-1 text-[13px] text-slate-500 dark:text-slate-400">
-                Monitor assigned company machines.
+                Monitor assigned company machines. Click a row to load it above.
               </p>
             </div>
             <div className="rounded-full bg-blue-50 px-4 py-2 text-[12px] font-semibold text-blue-700 dark:bg-blue-500/10 dark:text-blue-400">
@@ -1245,16 +1714,26 @@ export default function EngineerFleet() {
                     ))
                   : filteredFleet.map((machine) => {
                       const statusStyles = getStatusClasses(machine.status);
+                      const isActiveOverview =
+                        overviewMachine?.id === machine.id;
                       return (
                         <tr
                           key={machine.id}
-                          className="h-[95px] border-b border-slate-100 transition hover:bg-slate-50/70 dark:border-slate-800 dark:hover:bg-slate-800/20"
+                          onClick={() => setOverviewMachine(machine)}
+                          className={`h-[95px] cursor-pointer border-b border-slate-100 transition hover:bg-slate-50/70 dark:border-slate-800 dark:hover:bg-slate-800/20 ${
+                            isActiveOverview
+                              ? "bg-blue-50/60 dark:bg-blue-500/5"
+                              : ""
+                          }`}
                         >
                           {/* MACHINE */}
                           <td className="px-6 py-4 align-middle">
                             <div className="flex items-center gap-3">
                               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] bg-blue-100 dark:bg-blue-500/10">
-                                <Truck className="text-blue-600 dark:text-blue-400" size={18} />
+                                <Truck
+                                  className="text-blue-600 dark:text-blue-400"
+                                  size={18}
+                                />
                               </div>
                               <div>
                                 <h4 className="text-[14px] font-semibold text-slate-900 dark:text-white">
@@ -1327,7 +1806,9 @@ export default function EngineerFleet() {
                             <span
                               className={`inline-flex min-w-[110px] items-center justify-center gap-2 rounded-full border px-4 py-2 text-[12px] font-semibold ${statusStyles.badge}`}
                             >
-                              <div className={`h-2 w-2 rounded-full ${statusStyles.dot}`} />
+                              <div
+                                className={`h-2 w-2 rounded-full ${statusStyles.dot}`}
+                              />
                               {machine.status}
                             </span>
                           </td>
@@ -1335,7 +1816,8 @@ export default function EngineerFleet() {
                           {/* ACTIONS */}
                           <td className="px-6 py-4 align-middle">
                             <button
-                              onClick={() => {
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 setSelectedMachine(machine);
                                 setOpenModal(true);
                               }}
@@ -1357,7 +1839,9 @@ export default function EngineerFleet() {
                 <h3 className="mt-4 text-base font-semibold text-slate-700 dark:text-slate-300">
                   No Machines Found
                 </h3>
-                <p className="mt-1 text-sm text-slate-500">Try a different keyword or filter.</p>
+                <p className="mt-1 text-sm text-slate-500">
+                  Try a different keyword or filter.
+                </p>
               </div>
             )}
           </div>

@@ -1,6 +1,15 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Eye, Gauge, Loader2, RefreshCw, Search, X } from "lucide-react";
+import {
+  AlertTriangle,
+  Eye,
+  Gauge,
+  Loader2,
+  RefreshCw,
+  Search,
+  X,
+} from "lucide-react";
 import toast from "react-hot-toast";
+import AppSelect from "../../components/ui/dropdown/AppSelect";
 
 import { machineService } from "../../services/companyadmin/machineService";
 import { componentService } from "../../services/companyadmin/componentService";
@@ -70,7 +79,8 @@ const getArrayData = <T,>(response: any): T[] => {
   if (Array.isArray(response?.machines)) return response.machines;
   if (Array.isArray(response?.data?.machines)) return response.data.machines;
   if (Array.isArray(response?.components)) return response.components;
-  if (Array.isArray(response?.data?.components)) return response.data.components;
+  if (Array.isArray(response?.data?.components))
+    return response.data.components;
   if (Array.isArray(response?.result)) return response.result;
 
   return [];
@@ -79,7 +89,11 @@ const getArrayData = <T,>(response: any): T[] => {
 const normalizeMachine = (item: any): Machine => ({
   id: String(item?.id || item?.machine_id || item?.machineId || ""),
   name: String(
-    item?.name || item?.machineName || item?.machine_name || item?.model || "Unnamed Machine",
+    item?.name ||
+      item?.machineName ||
+      item?.machine_name ||
+      item?.model ||
+      "Unnamed Machine",
   ),
   machineId: String(item?.machineId || item?.machine_id || item?.id || ""),
   serialNumber: item?.serialNumber || item?.serial_number || "",
@@ -91,8 +105,16 @@ const normalizeMachine = (item: any): Machine => ({
 
 const normalizeComponent = (item: any): MachineComponent => ({
   id: String(item?.id || item?.componentId || item?.component_id || ""),
-  machineId: String(item?.machineId || item?.machine_id || item?.machine?.id || ""),
-  category: String(item?.category || item?.categoryName || item?.category_name || item?.type || ""),
+  machineId: String(
+    item?.machineId || item?.machine_id || item?.machine?.id || "",
+  ),
+  category: String(
+    item?.category ||
+      item?.categoryName ||
+      item?.category_name ||
+      item?.type ||
+      "",
+  ),
   description: String(item?.description || ""),
   serialNumber: String(item?.serialNumber || item?.serial_number || ""),
   supplier: String(item?.supplier || ""),
@@ -120,7 +142,10 @@ const getHealthPercent = (condition: number) => {
 const getLifeUsedPercent = (component: MachineComponent) => {
   if (!component.plannedLife) return 0;
 
-  return Math.min(100, Math.round((component.currentHours / component.plannedLife) * 100));
+  return Math.min(
+    100,
+    Math.round((component.currentHours / component.plannedLife) * 100),
+  );
 };
 
 const getStatusBadge = (status: ComponentStatus | MachineStatus) => {
@@ -188,7 +213,8 @@ const OperatorComponents: React.FC = () => {
   const [categories, setCategories] = useState<Category[]>([]);
 
   const [selectedMachine, setSelectedMachine] = useState<Machine | null>(null);
-  const [selectedComponent, setSelectedComponent] = useState<MachineComponent | null>(null);
+  const [selectedComponent, setSelectedComponent] =
+    useState<MachineComponent | null>(null);
 
   const [componentSearchQuery, setComponentSearchQuery] = useState("");
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState("all");
@@ -199,7 +225,9 @@ const OperatorComponents: React.FC = () => {
   const selectedMachineComponents = useMemo(() => {
     if (!selectedMachine) return components;
 
-    return components.filter((component) => component.machineId === selectedMachine.machineId);
+    return components.filter(
+      (component) => component.machineId === selectedMachine.machineId,
+    );
   }, [components, selectedMachine]);
 
   const filteredComponents = useMemo(() => {
@@ -207,7 +235,9 @@ const OperatorComponents: React.FC = () => {
 
     if (selectedCategoryFilter !== "all") {
       result = result.filter(
-        (component) => component.category.toLowerCase() === selectedCategoryFilter.toLowerCase(),
+        (component) =>
+          component.category.toLowerCase() ===
+          selectedCategoryFilter.toLowerCase(),
       );
     }
 
@@ -215,7 +245,9 @@ const OperatorComponents: React.FC = () => {
 
     if (query) {
       result = result.filter((component) => {
-        const machine = machines.find((item) => item.machineId === component.machineId);
+        const machine = machines.find(
+          (item) => item.machineId === component.machineId,
+        );
 
         const machineName = machine ? machine.name.toLowerCase() : "";
         const machineModel = machine ? (machine.model || "").toLowerCase() : "";
@@ -232,7 +264,12 @@ const OperatorComponents: React.FC = () => {
     }
 
     return result;
-  }, [selectedMachineComponents, selectedCategoryFilter, componentSearchQuery, machines]);
+  }, [
+    selectedMachineComponents,
+    selectedCategoryFilter,
+    componentSearchQuery,
+    machines,
+  ]);
 
   const averageHealth =
     selectedMachineComponents.length > 0
@@ -255,7 +292,8 @@ const OperatorComponents: React.FC = () => {
       setComponentLoading(true);
 
       const response = await componentService.getComponents(machineId);
-      const mappedComponents = getArrayData<any>(response).map(normalizeComponent);
+      const mappedComponents =
+        getArrayData<any>(response).map(normalizeComponent);
 
       setComponents((previous) => {
         if (!machineId) return mappedComponents;
@@ -277,22 +315,27 @@ const OperatorComponents: React.FC = () => {
     try {
       setLoading(true);
 
-      const [machineResponse, categoryResponse, componentResponse] = await Promise.all([
-        machineService.getMachines(),
-        componentService.getCategories(),
-        componentService.getComponents(),
-      ]);
+      const [machineResponse, categoryResponse, componentResponse] =
+        await Promise.all([
+          machineService.getMachines(),
+          componentService.getCategories(),
+          componentService.getComponents(),
+        ]);
 
-      const mappedMachines = getArrayData<any>(machineResponse).map(normalizeMachine);
+      const mappedMachines =
+        getArrayData<any>(machineResponse).map(normalizeMachine);
 
       const activeCategories = getArrayData<Category>(categoryResponse).filter(
         (category) => category.isActive !== false,
       );
 
-      const mappedComponents = getArrayData<any>(componentResponse).map(normalizeComponent);
+      const mappedComponents =
+        getArrayData<any>(componentResponse).map(normalizeComponent);
 
       setMachines(mappedMachines);
-      setCategories(activeCategories.length > 0 ? activeCategories : defaultCategories);
+      setCategories(
+        activeCategories.length > 0 ? activeCategories : defaultCategories,
+      );
       setSelectedMachine(null);
       setSelectedCategoryFilter("all");
       setComponents(mappedComponents);
@@ -320,7 +363,9 @@ const OperatorComponents: React.FC = () => {
       <div className="flex min-h-screen items-center justify-center bg-slate-100 font-sans text-slate-950 dark:bg-[#07111f] dark:text-white">
         <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm dark:border-slate-800 dark:bg-[#0b1728]">
           <Loader2 className="animate-spin text-blue-600" size={22} />
-          <span className="text-sm font-extrabold tracking-tight">Loading components...</span>
+          <span className="text-sm font-extrabold tracking-tight">
+            Loading components...
+          </span>
         </div>
       </div>
     );
@@ -364,8 +409,9 @@ const OperatorComponents: React.FC = () => {
                 </h1>
 
                 <p className="mt-3 max-w-2xl text-sm leading-6 text-blue-100">
-                  View machine-wise component condition, remaining useful life, health status, risk
-                  analysis, failure prediction and maintenance insights across all assigned assets.
+                  View machine-wise component condition, remaining useful life,
+                  health status, risk analysis, failure prediction and
+                  maintenance insights across all assigned assets.
                 </p>
               </div>
 
@@ -400,14 +446,21 @@ const OperatorComponents: React.FC = () => {
         sm:w-fit
       "
               >
-                <RefreshCw size={18} strokeWidth={2.4} className={loading ? "animate-spin" : ""} />
+                <RefreshCw
+                  size={18}
+                  strokeWidth={2.4}
+                  className={loading ? "animate-spin" : ""}
+                />
                 Refresh
               </button>
             </div>
           </div>
 
           <div className="grid grid-cols-1 gap-4 p-5 sm:grid-cols-2 xl:grid-cols-4">
-            <MetricCard title="Total Components" value={`${selectedMachineComponents.length}`} />
+            <MetricCard
+              title="Total Components"
+              value={`${selectedMachineComponents.length}`}
+            />
             <MetricCard title="Avg Health" value={`${averageHealth}%`} />
             <MetricCard title="Categories" value={`${categories.length}`} />
             <MetricCard title="Critical" value={`${criticalComponents}`} />
@@ -424,7 +477,9 @@ const OperatorComponents: React.FC = () => {
               <p className="mt-1 text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">
                 {selectedMachine
                   ? `${selectedMachine.model || "No Model"} • ${
-                      selectedMachine.site || selectedMachine.location || "No Site"
+                      selectedMachine.site ||
+                      selectedMachine.location ||
+                      "No Site"
                     } • ${selectedMachine.machineId}`
                   : "Overview of all assigned machine components"}
               </p>
@@ -441,48 +496,61 @@ const OperatorComponents: React.FC = () => {
                   type="text"
                   placeholder="Search machine, serial..."
                   value={componentSearchQuery}
-                  onChange={(event) => setComponentSearchQuery(event.target.value)}
+                  onChange={(event) =>
+                    setComponentSearchQuery(event.target.value)
+                  }
                   className="h-11 w-full rounded-lg border border-slate-300 bg-white pl-11 pr-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-700 dark:bg-[#101f33] dark:text-white dark:focus:border-blue-500"
                 />
               </div>
 
-              <select
+              <AppSelect
+                placeholder="All Machines"
                 value={selectedMachine?.machineId || "all"}
-                onChange={(event) => {
-                  if (event.target.value === "all") {
+                onChange={(value) => {
+                  if (value === "all") {
                     setSelectedMachine(null);
                     fetchComponents();
-                  } else {
-                    const machine = machines.find((item) => item.machineId === event.target.value);
+                    return;
+                  }
 
-                    if (machine) {
-                      setSelectedMachine(machine);
-                      fetchComponents(machine.machineId);
-                    }
+                  const machine = machines.find(
+                    (item) => item.machineId === value,
+                  );
+
+                  if (machine) {
+                    setSelectedMachine(machine);
+                    fetchComponents(machine.machineId);
                   }
                 }}
-                className="h-11 w-full cursor-pointer rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-700 dark:bg-[#101f33] dark:text-white sm:w-48"
-              >
-                <option value="all">All Machines</option>
-                {machines.map((machine) => (
-                  <option key={machine.id} value={machine.machineId}>
-                    {machine.name}
-                  </option>
-                ))}
-              </select>
+                options={[
+                  {
+                    value: "all",
+                    label: "All Machines",
+                  },
+                  ...machines.map((machine) => ({
+                    value: machine.machineId,
+                    label: machine.name,
+                  })),
+                ]}
+                className="w-full sm:w-48"
+              />
 
-              <select
+              <AppSelect
+                placeholder="All Categories"
                 value={selectedCategoryFilter}
-                onChange={(event) => setSelectedCategoryFilter(event.target.value)}
-                className="h-11 w-full cursor-pointer rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-700 dark:bg-[#101f33] dark:text-white sm:w-48"
-              >
-                <option value="all">All Categories</option>
-                {categories.map((category) => (
-                  <option key={category.id} value={category.name}>
-                    {category.name}
-                  </option>
-                ))}
-              </select>
+                onChange={setSelectedCategoryFilter}
+                options={[
+                  {
+                    value: "all",
+                    label: "All Categories",
+                  },
+                  ...categories.map((category) => ({
+                    value: category.name,
+                    label: category.name,
+                  })),
+                ]}
+                className="w-full sm:w-48"
+              />
             </div>
           </div>
 
@@ -513,7 +581,9 @@ const OperatorComponents: React.FC = () => {
                   <tr className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-[0.14em] text-slate-500 dark:border-slate-800 dark:bg-slate-950/60">
                     <th className="px-6 py-4 font-bold">Machine / Type</th>
                     <th className="px-6 py-4 font-bold">Category</th>
-                    <th className="px-6 py-4 font-bold">Description / Serial</th>
+                    <th className="px-6 py-4 font-bold">
+                      Description / Serial
+                    </th>
                     <th className="px-6 py-4 font-bold">Current Hrs</th>
                     <th className="px-6 py-4 font-bold">Life Used</th>
                     <th className="px-6 py-4 font-bold">Remaining</th>
@@ -525,21 +595,32 @@ const OperatorComponents: React.FC = () => {
 
                 <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
                   {filteredComponents.map((component) => {
-                    const machine = machines.find((item) => item.machineId === component.machineId);
+                    const machine = machines.find(
+                      (item) => item.machineId === component.machineId,
+                    );
 
-                    const machineName = machine ? machine.name : "Unknown Machine";
+                    const machineName = machine
+                      ? machine.name
+                      : "Unknown Machine";
 
-                    const machineModel = machine ? machine.model || "No Model" : "N/A";
+                    const machineModel = machine
+                      ? machine.model || "No Model"
+                      : "N/A";
 
                     const lifeUsed = getLifeUsedPercent(component);
 
                     const remainingHours = Math.max(
                       0,
                       component.plannedLife -
-                        Math.max(0, component.currentHours - component.installHours),
+                        Math.max(
+                          0,
+                          component.currentHours - component.installHours,
+                        ),
                     );
 
-                    const conditionInfo = getConditionLabel(component.condition);
+                    const conditionInfo = getConditionLabel(
+                      component.condition,
+                    );
 
                     const riskStatus =
                       component.intelligence?.riskStatus ||
@@ -609,7 +690,9 @@ const OperatorComponents: React.FC = () => {
                           <div className="flex w-40 flex-col gap-1.5">
                             <div className="flex items-center justify-between text-xs font-bold text-slate-500 dark:text-slate-400">
                               <span>{lifeUsed}% Used</span>
-                              <span>{remainingHours.toLocaleString()} h left</span>
+                              <span>
+                                {remainingHours.toLocaleString()} h left
+                              </span>
                             </div>
 
                             <div className="h-2.5 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
@@ -666,8 +749,9 @@ const OperatorComponents: React.FC = () => {
       {selectedComponent && (
         <ComponentDetailsModal
           machine={
-            machines.find((machine) => machine.machineId === selectedComponent.machineId) ||
-            selectedMachine
+            machines.find(
+              (machine) => machine.machineId === selectedComponent.machineId,
+            ) || selectedMachine
           }
           component={selectedComponent}
           onClose={() => setSelectedComponent(null)}
@@ -709,7 +793,9 @@ function ComponentDetailsModal({
       <div className="max-h-[92vh] w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-700 bg-white shadow-2xl dark:bg-[#0b1728]">
         <div className="flex items-center justify-between border-b border-slate-200 bg-slate-950 p-5 dark:border-slate-800">
           <div>
-            <h2 className="text-xl font-extrabold tracking-tight text-white">Component Details</h2>
+            <h2 className="text-xl font-extrabold tracking-tight text-white">
+              Component Details
+            </h2>
 
             <p className="mt-1 text-sm font-medium text-slate-300">
               {machine?.name || "Machine"} • {component.machineId}
@@ -768,7 +854,11 @@ function ComponentDetailsModal({
             <div className="mt-4 h-3 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
               <div
                 className={`h-full rounded-full ${
-                  health >= 80 ? "bg-emerald-500" : health >= 60 ? "bg-amber-500" : "bg-red-500"
+                  health >= 80
+                    ? "bg-emerald-500"
+                    : health >= 60
+                      ? "bg-amber-500"
+                      : "bg-red-500"
                 }`}
                 style={{ width: `${health}%` }}
               />
@@ -777,12 +867,27 @@ function ComponentDetailsModal({
 
           <div className="grid gap-3 sm:grid-cols-2">
             <DetailItem label="Category" value={component.category} />
-            <DetailItem label="Description" value={component.description || "-"} />
-            <DetailItem label="Serial Number" value={component.serialNumber || "-"} />
+            <DetailItem
+              label="Description"
+              value={component.description || "-"}
+            />
+            <DetailItem
+              label="Serial Number"
+              value={component.serialNumber || "-"}
+            />
             <DetailItem label="Supplier" value={component.supplier || "-"} />
-            <DetailItem label="Install Hours" value={`${component.installHours}`} />
-            <DetailItem label="Current Hours" value={`${component.currentHours}`} />
-            <DetailItem label="Planned Life" value={`${component.plannedLife}`} />
+            <DetailItem
+              label="Install Hours"
+              value={`${component.installHours}`}
+            />
+            <DetailItem
+              label="Current Hours"
+              value={`${component.currentHours}`}
+            />
+            <DetailItem
+              label="Planned Life"
+              value={`${component.plannedLife}`}
+            />
             <DetailItem label="Life Used" value={`${lifeUsed}%`} />
             <DetailItem
               label="Replacement Cost"
@@ -792,11 +897,13 @@ function ComponentDetailsModal({
           </div>
 
           <div className="mt-6 rounded-xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-500/30 dark:bg-blue-500/10">
-            <p className="text-sm font-bold text-blue-800 dark:text-blue-300">View-only access</p>
+            <p className="text-sm font-bold text-blue-800 dark:text-blue-300">
+              View-only access
+            </p>
 
             <p className="mt-1 text-sm font-medium leading-6 text-blue-700/80 dark:text-blue-200/80">
-              Operator can monitor component information only. Add, edit and delete actions are
-              restricted for this role.
+              Operator can monitor component information only. Add, edit and
+              delete actions are restricted for this role.
             </p>
           </div>
 

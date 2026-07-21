@@ -1,11 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-
 import { createPortal } from "react-dom";
-
+import AppSelect from "../../components/ui/dropdown/AppSelect";
 import { machineAssignmentService } from "../../services/Task/machineAssignmentService";
-
 import StorageService, { STORAGE_KEYS } from "../../services/storage.service";
-
 import {
   fleetService,
   type FleetMachine as ServiceFleetMachine,
@@ -82,9 +79,23 @@ interface CurrentUser {
   role: UserRole;
 }
 
-const statusOptions: ServiceLogStatus[] = ["Pending", "In Progress", "Completed"];
+const statusOptions: ServiceLogStatus[] = [
+  "Pending",
 
-const priorityOptions: ServiceLogPriority[] = ["Low", "Medium", "High", "Critical"];
+  "In Progress",
+
+  "Completed",
+];
+
+const priorityOptions: ServiceLogPriority[] = [
+  "Low",
+
+  "Medium",
+
+  "High",
+
+  "Critical",
+];
 
 export default function ServiceLogs() {
   // ===========================
@@ -109,9 +120,13 @@ export default function ServiceLogs() {
 
   const [searchTerm, setSearchTerm] = useState("");
 
-  const [statusFilter, setStatusFilter] = useState<"All" | ServiceLogStatus>("All");
+  const [statusFilter, setStatusFilter] = useState<"All" | ServiceLogStatus>(
+    "All",
+  );
 
-  const [priorityFilter, setPriorityFilter] = useState<"All" | ServiceLogPriority>("All");
+  const [priorityFilter, setPriorityFilter] = useState<
+    "All" | ServiceLogPriority
+  >("All");
 
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -177,9 +192,10 @@ export default function ServiceLogs() {
         let filteredMachines = machines;
 
         if (currentRole === "operator" && currentUser?.id) {
-          const assignedMachineIds = await machineAssignmentService.getAssignedMachines(
-            String(currentUser.id),
-          );
+          const assignedMachineIds =
+            await machineAssignmentService.getAssignedMachines(
+              String(currentUser.id),
+            );
 
           filteredMachines = machines.filter((machine) =>
             assignedMachineIds.includes(String(machine.machineId)),
@@ -236,9 +252,13 @@ export default function ServiceLogs() {
   // ===========================
 
   const visibleLogs = useMemo(() => {
-    const assignedMachineIds = assignedMachines.map((machine) => machine.machineId);
+    const assignedMachineIds = assignedMachines.map(
+      (machine) => machine.machineId,
+    );
 
-    return logs.filter((log) => assignedMachineIds.includes(String(log.machineId)));
+    return logs.filter((log) =>
+      assignedMachineIds.includes(String(log.machineId)),
+    );
   }, [logs, assignedMachines]);
 
   // ===========================
@@ -257,9 +277,11 @@ export default function ServiceLogs() {
         log.component.toLowerCase().includes(search) ||
         log.site.toLowerCase().includes(search);
 
-      const matchesStatus = statusFilter === "All" || log.status === statusFilter;
+      const matchesStatus =
+        statusFilter === "All" || log.status === statusFilter;
 
-      const matchesPriority = priorityFilter === "All" || log.priority === priorityFilter;
+      const matchesPriority =
+        priorityFilter === "All" || log.priority === priorityFilter;
 
       return matchesSearch && matchesStatus && matchesPriority;
     });
@@ -291,7 +313,8 @@ export default function ServiceLogs() {
 
       completed: visibleLogs.filter((log) => log.status === "Completed").length,
 
-      progress: visibleLogs.filter((log) => log.status === "In Progress").length,
+      progress: visibleLogs.filter((log) => log.status === "In Progress")
+        .length,
 
       critical: visibleLogs.filter((log) => log.priority === "Critical").length,
     };
@@ -454,11 +477,14 @@ export default function ServiceLogs() {
                   Operator Module
                 </div>
 
-                <h1 className="mt-4 text-3xl font-black tracking-tight text-white">Service Logs</h1>
+                <h1 className="mt-4 text-3xl font-black tracking-tight text-white">
+                  Service Logs
+                </h1>
 
                 <p className="mt-3 max-w-2xl text-sm leading-6 text-blue-100">
-                  View maintenance records, service history, repair activities, inspection details
-                  and completed work logs for your assigned machine.
+                  View maintenance records, service history, repair activities,
+                  inspection details and completed work logs for your assigned
+                  machine.
                 </p>
               </div>
             </div>
@@ -467,20 +493,39 @@ export default function ServiceLogs() {
           {/* STATS */}
 
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <StatCard title="Total Logs" value={stats.total} icon={<Wrench />} />
+            <StatCard
+              title="Total Logs"
+              value={stats.total}
+              icon={<Wrench />}
+            />
 
-            <StatCard title="Completed" value={stats.completed} icon={<CheckCircle2 />} />
+            <StatCard
+              title="Completed"
+              value={stats.completed}
+              icon={<CheckCircle2 />}
+            />
 
-            <StatCard title="In Progress" value={stats.progress} icon={<Clock />} />
+            <StatCard
+              title="In Progress"
+              value={stats.progress}
+              icon={<Clock />}
+            />
 
-            <StatCard title="Critical" value={stats.critical} icon={<AlertTriangle />} />
+            <StatCard
+              title="Critical"
+              value={stats.critical}
+              icon={<AlertTriangle />}
+            />
           </div>
 
           {/* SEARCH */}
 
           <div className="grid grid-cols-1 gap-4 rounded-3xl bg-white p-4 shadow-sm transition-colors duration-300 dark:bg-slate-800 dark:shadow-slate-700/30 sm:grid-cols-2 lg:grid-cols-3">
             <div className="relative">
-              <Search size={18} className="absolute left-4 top-3.5 text-slate-400" />
+              <Search
+                size={18}
+                className="absolute left-4 top-3.5 text-slate-400"
+              />
 
               <input
                 placeholder="Search machine..."
@@ -490,29 +535,43 @@ export default function ServiceLogs() {
               />
             </div>
 
-            <select
-              className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-slate-700 outline-none transition-colors focus:border-blue-400 focus:ring-4 focus:ring-blue-100 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100 dark:focus:border-blue-500 dark:focus:ring-blue-900/50"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as any)}
-            >
-              <option value="All">All Status</option>
+            <AppSelect
+  placeholder="All Status"
+  value={statusFilter}
+  onChange={(value) =>
+    setStatusFilter(value as "All" | ServiceLogStatus)
+  }
+  options={[
+    {
+      value: "All",
+      label: "All Status",
+    },
+    ...statusOptions.map((status) => ({
+      value: status,
+      label: status,
+    })),
+  ]}
+  className="w-full"
+/>
 
-              {statusOptions.map((status) => (
-                <option key={status}>{status}</option>
-              ))}
-            </select>
-
-            <select
-              className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-slate-700 outline-none transition-colors focus:border-blue-400 focus:ring-4 focus:ring-blue-100 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100 dark:focus:border-blue-500 dark:focus:ring-blue-900/50 sm:col-span-2 lg:col-span-1"
-              value={priorityFilter}
-              onChange={(e) => setPriorityFilter(e.target.value as any)}
-            >
-              <option value="All">All Priority</option>
-
-              {priorityOptions.map((priority) => (
-                <option key={priority}>{priority}</option>
-              ))}
-            </select>
+           <AppSelect
+  placeholder="All Priority"
+  value={priorityFilter}
+  onChange={(value) =>
+    setPriorityFilter(value as "All" | ServiceLogPriority)
+  }
+  options={[
+    {
+      value: "All",
+      label: "All Priority",
+    },
+    ...priorityOptions.map((priority) => ({
+      value: priority,
+      label: priority,
+    })),
+  ]}
+  className="w-full"
+/>
           </div>
 
           {/* TABLE */}
@@ -682,7 +741,9 @@ export default function ServiceLogs() {
                 <div className="flex gap-2">
                   <button
                     disabled={currentPage === 1}
-                    onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                    onClick={() =>
+                      setCurrentPage((prev) => Math.max(prev - 1, 1))
+                    }
                     className="rounded-xl border border-slate-200 px-4 py-2 text-sm text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
                   >
                     Prev
@@ -694,7 +755,9 @@ export default function ServiceLogs() {
 
                   <button
                     disabled={currentPage === totalPages || totalPages === 0}
-                    onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                    onClick={() =>
+                      setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+                    }
                     className="rounded-xl border border-slate-200 px-4 py-2 text-sm text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
                   >
                     Next
@@ -734,7 +797,9 @@ function StatCard({ title, value, icon }: any) {
       <div>
         <p className="text-sm text-slate-500 dark:text-slate-400">{title}</p>
 
-        <h2 className="mt-2 text-3xl font-bold text-slate-800 dark:text-slate-100">{value}</h2>
+        <h2 className="mt-2 text-3xl font-bold text-slate-800 dark:text-slate-100">
+          {value}
+        </h2>
       </div>
 
       <div className="rounded-2xl bg-orange-100 p-4 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400">
@@ -807,14 +872,18 @@ function ServiceLogModal({
                 {formData.component}
               </h3>
 
-              <p className="text-[11px] text-slate-500">{formData.serviceType}</p>
+              <p className="text-[11px] text-slate-500">
+                {formData.serviceType}
+              </p>
             </div>
           </div>
 
           {/* Issue */}
 
           <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
-            <h3 className="text-xs font-semibold text-slate-900 dark:text-white">Issue Found</h3>
+            <h3 className="text-xs font-semibold text-slate-900 dark:text-white">
+              Issue Found
+            </h3>
 
             <p className="mt-1 text-xs leading-5 text-slate-600 dark:text-slate-400">
               {formData.issueFound || "-"}
@@ -824,7 +893,9 @@ function ServiceLogModal({
           {/* Action */}
 
           <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
-            <h3 className="text-xs font-semibold text-slate-900 dark:text-white">Action Taken</h3>
+            <h3 className="text-xs font-semibold text-slate-900 dark:text-white">
+              Action Taken
+            </h3>
 
             <p className="mt-1 text-xs leading-5 text-slate-600 dark:text-slate-400">
               {formData.actionTaken || "-"}
@@ -834,7 +905,9 @@ function ServiceLogModal({
           {/* Remarks */}
 
           <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
-            <h3 className="text-xs font-semibold text-slate-900 dark:text-white">Remarks</h3>
+            <h3 className="text-xs font-semibold text-slate-900 dark:text-white">
+              Remarks
+            </h3>
 
             <p className="mt-1 text-xs leading-5 text-slate-600 dark:text-slate-400">
               {formData.remarks || "-"}
@@ -898,7 +971,10 @@ function ConfirmDeleteModal({
 
         <p className="mt-2 text-slate-500 dark:text-slate-400">
           Delete service log for{" "}
-          <strong className="text-slate-700 dark:text-slate-200">{log.machineName}</strong>?
+          <strong className="text-slate-700 dark:text-slate-200">
+            {log.machineName}
+          </strong>
+          ?
         </p>
 
         <div className="mt-6 flex justify-end gap-3">

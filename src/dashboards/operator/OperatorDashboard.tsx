@@ -247,7 +247,9 @@ const StatCard = ({
             {value}
           </p>
 
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{subtitle}</p>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            {subtitle}
+          </p>
         </div>
 
         <div
@@ -318,12 +320,16 @@ const MetricRow = ({
       {label}
     </span>
 
-    <span className="text-sm font-semibold text-slate-900 dark:text-slate-50">{value}</span>
+    <span className="text-sm font-semibold text-slate-900 dark:text-slate-50">
+      {value}
+    </span>
   </div>
 );
 
 const SkeletonBlock = ({ className = "" }: { className?: string }) => (
-  <div className={`animate-pulse rounded-xl bg-slate-200 dark:bg-slate-800 ${className}`} />
+  <div
+    className={`animate-pulse rounded-xl bg-slate-200 dark:bg-slate-800 ${className}`}
+  />
 );
 
 const DashboardSkeleton = () => (
@@ -365,7 +371,9 @@ const ErrorState = ({
         Couldn&apos;t load your machine
       </h2>
 
-      <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{message}</p>
+      <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+        {message}
+      </p>
 
       <button
         onClick={onRetry}
@@ -390,8 +398,8 @@ const NoMachineState = ({ onRetry }: { onRetry: () => void }) => (
       </h2>
 
       <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-        You don&apos;t have a machine assigned to your account. Once a supervisor assigns one, it
-        will appear here automatically.
+        You don&apos;t have a machine assigned to your account. Once a
+        supervisor assigns one, it will appear here automatically.
       </p>
 
       <button
@@ -423,7 +431,8 @@ const OperatorDashboard = () => {
     setError(null);
 
     try {
-      const assignedMachineIds = await machineAssignmentService.getAssignedMachines(currentUser.id);
+      const assignedMachineIds =
+        await machineAssignmentService.getAssignedMachines(currentUser.id);
 
       const machineId = assignedMachineIds[0];
 
@@ -442,7 +451,9 @@ const OperatorDashboard = () => {
       setMachine(machine);
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Something went wrong while loading your machine.",
+        err instanceof Error
+          ? err.message
+          : "Something went wrong while loading your machine.",
       );
     } finally {
       setIsLoading(false);
@@ -476,7 +487,9 @@ const OperatorDashboard = () => {
       category: "Tyre",
       description: "Tyre Health",
       serialNumber: "TYRE-001",
-      condition: Math.round((assignedMachine.components?.tyre?.health ?? 0) / 20),
+      condition: Math.round(
+        (assignedMachine.components?.tyre?.health ?? 0) / 20,
+      ),
       currentHours: assignedMachine.hoursRun || 0,
     },
 
@@ -486,7 +499,9 @@ const OperatorDashboard = () => {
       category: "Engine",
       description: "Engine Health",
       serialNumber: "ENG-001",
-      condition: Math.round((assignedMachine.components?.engine?.health ?? 0) / 20),
+      condition: Math.round(
+        (assignedMachine.components?.engine?.health ?? 0) / 20,
+      ),
       currentHours: assignedMachine.hoursRun || 0,
     },
 
@@ -496,7 +511,9 @@ const OperatorDashboard = () => {
       category: "Hydraulic",
       description: "Hydraulic Health",
       serialNumber: "HYD-001",
-      condition: Math.round((assignedMachine.components?.hydraulic?.health ?? 0) / 20),
+      condition: Math.round(
+        (assignedMachine.components?.hydraulic?.health ?? 0) / 20,
+      ),
       currentHours: assignedMachine.hoursRun || 0,
     },
 
@@ -506,7 +523,9 @@ const OperatorDashboard = () => {
       category: "Transmission",
       description: "Transmission Health",
       serialNumber: "TRN-001",
-      condition: Math.round((assignedMachine.components?.transmission?.health ?? 0) / 20),
+      condition: Math.round(
+        (assignedMachine.components?.transmission?.health ?? 0) / 20,
+      ),
       currentHours: assignedMachine.hoursRun || 0,
     },
   ];
@@ -562,7 +581,7 @@ const OperatorDashboard = () => {
         : "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-400/20";
 
   return (
-    <div className="min-h-screen space-y-6 bg-slate-50 p-4 font-sans text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-50 sm:p-6 lg:p-8">
+    <div className=" w-full min-h-screen space-y-6 bg-slate-50 p-4 font-sans text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-50 sm:p-6 lg:p-8">
       {/* Header */}
       <div className={`${panelClass} p-5 sm:p-6 `}>
         {/* Premium Hero Header */}
@@ -619,7 +638,8 @@ const OperatorDashboard = () => {
                 </h1>
 
                 <p className="mt-2 text-sm text-blue-100">
-                  {assignedMachine.machineType} • Serial {assignedMachine.fleetId}
+                  {assignedMachine.machineType} • Serial{" "}
+                  {assignedMachine.fleetId}
                 </p>
               </div>
             </div>
@@ -659,7 +679,10 @@ const OperatorDashboard = () => {
           <InfoTile label="Machine name" value={assignedMachine.machineName} />
           <InfoTile label="Model" value={assignedMachine.machineType} />
           <InfoTile label="Serial number" value={assignedMachine.fleetId} />
-          <InfoTile label="Total running hours" value={`${formatNumber(totalCurrentHours)} hrs`} />
+          <InfoTile
+            label="Total running hours"
+            value={`${formatNumber(totalCurrentHours)} hrs`}
+          />
         </div>
       </div>
 
@@ -670,7 +693,13 @@ const OperatorDashboard = () => {
           value={`${overallHealth}%`}
           subtitle="Average component condition"
           icon={Gauge}
-          tone={overallHealth >= 70 ? "positive" : overallHealth >= 40 ? "neutral" : "warning"}
+          tone={
+            overallHealth >= 70
+              ? "positive"
+              : overallHealth >= 40
+                ? "neutral"
+                : "warning"
+          }
         />
 
         <StatCard
@@ -706,17 +735,16 @@ const OperatorDashboard = () => {
           <div>
             <h2 className={sectionHeadingClass}>Machine health analytics</h2>
 
-            <p className={sectionSubClass}>Trend of overall machine health over time.</p>
+            <p className={sectionSubClass}>
+              Trend of overall machine health over time.
+            </p>
           </div>
 
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
             <Activity className="h-5 w-5" />
           </div>
         </div>
-
-        <div className="p-5">
           <MachineHealthChart machine={assignedMachine} />
-        </div>
       </div>
 
       {/* Machine details + component summary */}
@@ -728,7 +756,9 @@ const OperatorDashboard = () => {
           <div className="border-b border-slate-200 p-5 dark:border-slate-800">
             <h2 className={sectionHeadingClass}>Machine details</h2>
 
-            <p className={sectionSubClass}>Read-only view of the machine assigned to you.</p>
+            <p className={sectionSubClass}>
+              Read-only view of the machine assigned to you.
+            </p>
           </div>
 
           <div className="p-5 overflow-x-hidden">
@@ -749,7 +779,10 @@ const OperatorDashboard = () => {
             </div>
 
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              <InfoTile label="Machine model" value={assignedMachine.machineType} />
+              <InfoTile
+                label="Machine model"
+                value={assignedMachine.machineType}
+              />
 
               <InfoTile label="Serial number" value={assignedMachine.fleetId} />
 
@@ -769,7 +802,9 @@ const OperatorDashboard = () => {
           <div className="mb-5">
             <h2 className={sectionHeadingClass}>Component health summary</h2>
 
-            <p className={sectionSubClass}>Quick overview of component condition.</p>
+            <p className={sectionSubClass}>
+              Quick overview of component condition.
+            </p>
           </div>
 
           {components.length > 0 ? (
@@ -777,9 +812,13 @@ const OperatorDashboard = () => {
               <div className="relative h-56 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950/40">
                 <div className="absolute inset-0 flex items-center justify-center">
                   <div className="text-center">
-                    <p className="text-3xl font-semibold tracking-tight">{overallHealth}%</p>
+                    <p className="text-3xl font-semibold tracking-tight">
+                      {overallHealth}%
+                    </p>
 
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Overall health</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      Overall health
+                    </p>
                   </div>
                 </div>
 
@@ -854,7 +893,9 @@ const OperatorDashboard = () => {
             <div>
               <h2 className={sectionHeadingClass}>Assigned components</h2>
 
-              <p className={sectionSubClass}>Current status of components on this machine.</p>
+              <p className={sectionSubClass}>
+                Current status of components on this machine.
+              </p>
             </div>
           </div>
 
@@ -875,9 +916,13 @@ const OperatorDashboard = () => {
 
                     <th className="whitespace-nowrap px-5 py-3">Condition</th>
 
-                    <th className="whitespace-nowrap px-5 py-3">Current hours</th>
+                    <th className="whitespace-nowrap px-5 py-3">
+                      Current hours
+                    </th>
 
-                    <th className="whitespace-nowrap px-5 py-3">Remaining life</th>
+                    <th className="whitespace-nowrap px-5 py-3">
+                      Remaining life
+                    </th>
 
                     <th className="whitespace-nowrap px-5 py-3">Risk</th>
                   </tr>
@@ -967,7 +1012,9 @@ const OperatorDashboard = () => {
             <div>
               <h2 className={sectionHeadingClass}>Priority component</h2>
 
-              <p className={sectionSubClass}>Component with the lowest condition score.</p>
+              <p className={sectionSubClass}>
+                Component with the lowest condition score.
+              </p>
             </div>
 
             {mostImportantComponent && (
@@ -988,11 +1035,13 @@ const OperatorDashboard = () => {
               </div>
 
               <h3 className="mt-4 text-lg font-semibold tracking-tight">
-                {mostImportantComponent.description || mostImportantComponent.category}
+                {mostImportantComponent.description ||
+                  mostImportantComponent.category}
               </h3>
 
               <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                {mostImportantComponent.category} &middot; SN {mostImportantComponent.serialNumber}
+                {mostImportantComponent.category} &middot; SN{" "}
+                {mostImportantComponent.serialNumber}
               </p>
 
               <div className="mt-4 space-y-2">
@@ -1030,7 +1079,8 @@ const OperatorDashboard = () => {
               </h3>
 
               <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                Once components are added, the highest-priority one will appear here.
+                Once components are added, the highest-priority one will appear
+                here.
               </p>
             </div>
           )}

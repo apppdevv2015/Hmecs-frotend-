@@ -1,5 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Eye, Loader2, RefreshCw, Search, Truck, X } from "lucide-react";
+import {
+  AlertTriangle,
+  Eye,
+  Loader2,
+  RefreshCw,
+  Search,
+  Truck,
+  X,
+} from "lucide-react";
 import toast from "react-hot-toast";
 import { machineService } from "../../services/companyadmin/machineService";
 
@@ -40,11 +48,21 @@ const normalizeMachine = (item: any, index: number): Machine => {
 
   return {
     id: String(item?.id ?? item?._id ?? item?.machineId ?? index + 1),
-    name: String(item?.name ?? item?.machineName ?? item?.machine_name ?? "N/A"),
-    model: String(item?.model ?? item?.machineModel ?? item?.machine_model ?? "N/A"),
-    serialNumber: String(item?.serialNumber ?? item?.serial_number ?? item?.serialNo ?? "N/A"),
+    name: String(
+      item?.name ?? item?.machineName ?? item?.machine_name ?? "N/A",
+    ),
+    model: String(
+      item?.model ?? item?.machineModel ?? item?.machine_model ?? "N/A",
+    ),
+    serialNumber: String(
+      item?.serialNumber ?? item?.serial_number ?? item?.serialNo ?? "N/A",
+    ),
     equipmentType: String(
-      item?.equipmentType ?? item?.equipment_type ?? item?.type ?? item?.category ?? "N/A",
+      item?.equipmentType ??
+        item?.equipment_type ??
+        item?.type ??
+        item?.category ??
+        "N/A",
     ),
     companyId: item?.companyId ?? item?.company_id,
     status: String(item?.status ?? item?.machineStatus ?? "Active"),
@@ -54,9 +72,14 @@ const normalizeMachine = (item: any, index: number): Machine => {
       item?.currentHours ??
       item?.current_hours ??
       "N/A",
-    healthScore: Number.isFinite(healthScore) && healthScore > 0 ? healthScore : 0,
+    healthScore:
+      Number.isFinite(healthScore) && healthScore > 0 ? healthScore : 0,
     lastUpdated: String(
-      item?.lastUpdated ?? item?.last_updated ?? item?.updatedAt ?? item?.updated_at ?? "N/A",
+      item?.lastUpdated ??
+        item?.last_updated ??
+        item?.updatedAt ??
+        item?.updated_at ??
+        "N/A",
     ),
   };
 };
@@ -82,7 +105,11 @@ const getHealthColor = (score?: number) => {
 const getStatusBadgeClass = (status?: string) => {
   const value = status?.toLowerCase() || "";
 
-  if (value.includes("issue") || value.includes("critical") || value.includes("down")) {
+  if (
+    value.includes("issue") ||
+    value.includes("critical") ||
+    value.includes("down")
+  ) {
     return "border-red-200 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300";
   }
 
@@ -150,7 +177,11 @@ const OperatorMachines: React.FC = () => {
   const activeMachines = useMemo(() => {
     return machines.filter((machine) => {
       const status = machine.status?.toLowerCase() || "";
-      return status.includes("active") || status.includes("running") || status.includes("healthy");
+      return (
+        status.includes("active") ||
+        status.includes("running") ||
+        status.includes("healthy")
+      );
     }).length;
   }, [machines]);
 
@@ -168,9 +199,13 @@ const OperatorMachines: React.FC = () => {
 
   const totalPages = Math.ceil(filteredMachines.length / ROWS_PER_PAGE);
 
-  const startItem = filteredMachines.length === 0 ? 0 : (currentPage - 1) * ROWS_PER_PAGE + 1;
+  const startItem =
+    filteredMachines.length === 0 ? 0 : (currentPage - 1) * ROWS_PER_PAGE + 1;
 
-  const endItem = Math.min(currentPage * ROWS_PER_PAGE, filteredMachines.length);
+  const endItem = Math.min(
+    currentPage * ROWS_PER_PAGE,
+    filteredMachines.length,
+  );
 
   const paginatedMachines = useMemo(() => {
     const startIndex = (currentPage - 1) * ROWS_PER_PAGE;
@@ -228,12 +263,14 @@ const OperatorMachines: React.FC = () => {
                   Machine Operations
                 </div>
 
-                <h1 className="text-3xl font-black tracking-tight text-white">Machines</h1>
+                <h1 className="text-3xl font-black tracking-tight text-white">
+                  Machines
+                </h1>
 
                 <p className="mt-3 max-w-2xl text-sm leading-6 text-blue-100">
-                  Monitor machine status, operational performance, fleet activity, machine health
-                  and real-time operational insights from a centralized machine management
-                  dashboard.
+                  Monitor machine status, operational performance, fleet
+                  activity, machine health and real-time operational insights
+                  from a centralized machine management dashboard.
                 </p>
               </div>
 
@@ -267,14 +304,21 @@ const OperatorMachines: React.FC = () => {
         sm:w-fit
       "
               >
-                <RefreshCw size={18} strokeWidth={2.4} className={loading ? "animate-spin" : ""} />
+                <RefreshCw
+                  size={18}
+                  strokeWidth={2.4}
+                  className={loading ? "animate-spin" : ""}
+                />
                 Refresh
               </button>
             </div>
           </div>
 
           <div className="grid grid-cols-1 gap-4 p-5 sm:grid-cols-2 xl:grid-cols-3">
-            <MetricCard title="Assigned Machines" value={`${machines.length}`} />
+            <MetricCard
+              title="Assigned Machines"
+              value={`${machines.length}`}
+            />
             <MetricCard title="Active Machines" value={`${activeMachines}`} />
             <MetricCard title="Need Attention" value={`${issueMachines}`} />
           </div>
@@ -399,15 +443,22 @@ const OperatorMachines: React.FC = () => {
                             </span>
 
                             <span className="text-xs font-extrabold text-slate-800 dark:text-white">
-                              {machine.healthScore ? `${machine.healthScore}%` : "N/A"}
+                              {machine.healthScore
+                                ? `${machine.healthScore}%`
+                                : "N/A"}
                             </span>
                           </div>
 
                           <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-800">
                             <div
-                              className={`h-2 rounded-full ${getHealthColor(machine.healthScore)}`}
+                              className={`h-2 rounded-full ${getHealthColor(
+                                machine.healthScore,
+                              )}`}
                               style={{
-                                width: `${Math.min(Math.max(machine.healthScore || 0, 0), 100)}%`,
+                                width: `${Math.min(
+                                  Math.max(machine.healthScore || 0, 0),
+                                  100,
+                                )}%`,
                               }}
                             />
                           </div>
@@ -464,7 +515,10 @@ const OperatorMachines: React.FC = () => {
       </div>
 
       {viewMachine && (
-        <MachineDetailsModal machine={viewMachine} onClose={() => setViewMachine(null)} />
+        <MachineDetailsModal
+          machine={viewMachine}
+          onClose={() => setViewMachine(null)}
+        />
       )}
     </div>
   );
@@ -484,13 +538,21 @@ function MetricCard({ title, value }: { title: string; value: string }) {
   );
 }
 
-function MachineDetailsModal({ machine, onClose }: { machine: Machine; onClose: () => void }) {
+function MachineDetailsModal({
+  machine,
+  onClose,
+}: {
+  machine: Machine;
+  onClose: () => void;
+}) {
   return (
     <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-950/85 p-4 backdrop-blur-sm">
       <div className="max-h-[92vh] w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-700 bg-white shadow-2xl dark:bg-[#0b1728]">
         <div className="flex items-center justify-between border-b border-slate-200 bg-slate-950 p-5 dark:border-slate-800">
           <div>
-            <h2 className="text-xl font-extrabold tracking-tight text-white">Machine Details</h2>
+            <h2 className="text-xl font-extrabold tracking-tight text-white">
+              Machine Details
+            </h2>
 
             <p className="mt-1 text-sm font-medium text-slate-300">
               Operator can only view assigned machine information.
@@ -537,22 +599,32 @@ function MachineDetailsModal({ machine, onClose }: { machine: Machine; onClose: 
             <DetailItem label="Serial Number" value={machine.serialNumber} />
             <DetailItem label="Equipment Type" value={machine.equipmentType} />
             <DetailItem label="Status" value={machine.status || "N/A"} />
-            <DetailItem label="Running Hours" value={String(machine.runningHours ?? "N/A")} />
+            <DetailItem
+              label="Running Hours"
+              value={String(machine.runningHours ?? "N/A")}
+            />
             <DetailItem
               label="Health Score"
               value={machine.healthScore ? `${machine.healthScore}%` : "N/A"}
             />
-            <DetailItem label="Last Updated" value={machine.lastUpdated || "N/A"} />
-            {machine.companyId && <DetailItem label="Company ID" value={machine.companyId} />}
+            <DetailItem
+              label="Last Updated"
+              value={machine.lastUpdated || "N/A"}
+            />
+            {machine.companyId && (
+              <DetailItem label="Company ID" value={machine.companyId} />
+            )}
             <DetailItem label="Machine ID" value={machine.id} />
           </div>
 
           <div className="mt-6 rounded-xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-500/30 dark:bg-blue-500/10">
-            <p className="text-sm font-bold text-blue-800 dark:text-blue-300">View-only access</p>
+            <p className="text-sm font-bold text-blue-800 dark:text-blue-300">
+              View-only access
+            </p>
 
             <p className="mt-1 text-sm font-medium leading-6 text-blue-700/80 dark:text-blue-200/80">
-              Operator role can monitor machine records and status only. Machine creation, update
-              and deletion actions are restricted.
+              Operator role can monitor machine records and status only. Machine
+              creation, update and deletion actions are restricted.
             </p>
           </div>
 

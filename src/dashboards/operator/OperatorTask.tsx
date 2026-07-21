@@ -9,7 +9,7 @@ const OperatorTasks = () => {
   const totalPages = Math.ceil(operatorTasks.length / itemsPerPage);
   const paginatedTasks = operatorTasks.slice(
     (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage,
+    currentPage * itemsPerPage
   );
 
   return (
@@ -17,8 +17,12 @@ const OperatorTasks = () => {
       <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-sm font-medium text-blue-600 dark:text-blue-400">Daily Work</p>
-            <h1 className="mt-2 text-2xl font-bold text-slate-900 dark:text-white">My Tasks</h1>
+            <p className="text-sm font-medium text-blue-600 dark:text-blue-400">
+              Daily Work
+            </p>
+            <h1 className="mt-2 text-2xl font-bold text-slate-900 dark:text-white">
+              My Tasks
+            </h1>
             <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
               Track assigned work, priority and task completion status.
             </p>
@@ -41,18 +45,27 @@ const OperatorTasks = () => {
             </thead>
             <tbody>
               {paginatedTasks.map((task) => (
-                <tr key={task.id} className="border-t border-slate-100 dark:border-slate-800">
+                <tr
+                  key={task.id}
+                  className="border-t border-slate-100 dark:border-slate-800"
+                >
                   <td className="px-5 py-4 font-medium text-slate-900 dark:text-white">
                     {task.title}
                   </td>
-                  <td className="px-5 py-4 text-slate-600 dark:text-slate-400">{task.machine}</td>
+                  <td className="px-5 py-4 text-slate-600 dark:text-slate-400">
+                    {task.machine}
+                  </td>
                   <td className="px-5 py-4">
                     <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">
                       {task.priority}
                     </span>
                   </td>
-                  <td className="px-5 py-4 text-slate-600 dark:text-slate-400">{task.status}</td>
-                  <td className="px-5 py-4 text-slate-600 dark:text-slate-400">{task.dueDate}</td>
+                  <td className="px-5 py-4 text-slate-600 dark:text-slate-400">
+                    {task.status}
+                  </td>
+                  <td className="px-5 py-4 text-slate-600 dark:text-slate-400">
+                    {task.dueDate}
+                  </td>
                 </tr>
               ))}
             </tbody>

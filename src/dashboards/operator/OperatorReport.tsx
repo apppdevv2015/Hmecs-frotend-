@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import AppSelect from "../../components/ui/dropdown/AppSelect";
 import { z } from "zod";
 import {
   AlertTriangle,
@@ -246,7 +247,8 @@ function CustomSelect<T extends string>({
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node))
+        setOpen(false);
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
@@ -313,9 +315,13 @@ const OperatorTasks = () => {
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<ReportStatus | "All">("All");
-  const [priorityFilter, setPriorityFilter] = useState<IssuePriority | "All">("All");
+  const [priorityFilter, setPriorityFilter] = useState<IssuePriority | "All">(
+    "All",
+  );
   const [currentPage, setCurrentPage] = useState(1);
-  const [selectedReport, setSelectedReport] = useState<IssueReport | null>(null);
+  const [selectedReport, setSelectedReport] = useState<IssueReport | null>(
+    null,
+  );
 
   const itemsPerPage = 5;
 
@@ -349,12 +355,16 @@ const OperatorTasks = () => {
         r.issueTitle.toLowerCase().includes(search.toLowerCase()) ||
         r.id.toLowerCase().includes(search.toLowerCase());
       const matchesStatus = statusFilter === "All" || r.status === statusFilter;
-      const matchesPriority = priorityFilter === "All" || r.priority === priorityFilter;
+      const matchesPriority =
+        priorityFilter === "All" || r.priority === priorityFilter;
       return matchesSearch && matchesStatus && matchesPriority;
     });
   }, [reports, search, statusFilter, priorityFilter]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredReports.length / itemsPerPage));
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredReports.length / itemsPerPage),
+  );
   const paginatedReports = filteredReports.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage,
@@ -370,7 +380,8 @@ const OperatorTasks = () => {
       },
       {
         label: "Assigned",
-        value: reports.filter((r) => r.status === "Assigned to Engineer").length,
+        value: reports.filter((r) => r.status === "Assigned to Engineer")
+          .length,
         icon: Wrench,
       },
       {
@@ -384,7 +395,9 @@ const OperatorTasks = () => {
 
   const toggleSendTo = (target: ReportTarget) => {
     setSendTo((prev) =>
-      prev.includes(target) ? prev.filter((t) => t !== target) : [...prev, target],
+      prev.includes(target)
+        ? prev.filter((t) => t !== target)
+        : [...prev, target],
     );
   };
 
@@ -443,7 +456,10 @@ const OperatorTasks = () => {
     return true;
   };
 
-  const handleFileSelect = (files: FileList | null, type: "image" | "video") => {
+  const handleFileSelect = (
+    files: FileList | null,
+    type: "image" | "video",
+  ) => {
     if (!files) return;
     const accepted: File[] = [];
     let fileError = "";
@@ -471,7 +487,8 @@ const OperatorTasks = () => {
   };
 
   const removeFile = (name: string, type: "image" | "video") => {
-    if (type === "image") setImages((prev) => prev.filter((f) => f.name !== name));
+    if (type === "image")
+      setImages((prev) => prev.filter((f) => f.name !== name));
     else setVideos((prev) => prev.filter((f) => f.name !== name));
   };
 
@@ -504,7 +521,9 @@ const OperatorTasks = () => {
       });
       setReports((prev) => [newReport, ...prev]);
       setCurrentPage(1);
-      setSuccessMsg(`Report ${newReport.id} submitted successfully to ${sendTo.join(", ")}.`);
+      setSuccessMsg(
+        `Report ${newReport.id} submitted successfully to ${sendTo.join(", ")}.`,
+      );
       resetForm();
     } catch {
       setFormErrors((prev) => ({
@@ -556,9 +575,10 @@ const OperatorTasks = () => {
               </h1>
 
               <p className="mt-3 max-w-2xl text-sm leading-6 text-blue-100">
-                Report machine issues with detailed descriptions, priority levels, photos and
-                videos. Reports are automatically routed to supervisors, engineers and
-                administrators for investigation and resolution.
+                Report machine issues with detailed descriptions, priority
+                levels, photos and videos. Reports are automatically routed to
+                supervisors, engineers and administrators for investigation and
+                resolution.
               </p>
             </div>
 
@@ -585,9 +605,13 @@ const OperatorTasks = () => {
                   >
                     <Icon className="h-5 w-5 text-white" />
 
-                    <p className="mt-3 text-2xl font-black text-white">{item.value}</p>
+                    <p className="mt-3 text-2xl font-black text-white">
+                      {item.value}
+                    </p>
 
-                    <p className="mt-1 text-xs font-medium text-blue-100">{item.label}</p>
+                    <p className="mt-1 text-xs font-medium text-blue-100">
+                      {item.label}
+                    </p>
                   </div>
                 );
               })}
@@ -621,7 +645,8 @@ const OperatorTasks = () => {
                     {machine.name}
                   </p>
                   <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-400">
-                    Vehicle No: {machine.vehicleNo} &middot; Assigned since {machine.assignedSince}
+                    Vehicle No: {machine.vehicleNo} &middot; Assigned since{" "}
+                    {machine.assignedSince}
                   </p>
                 </div>
                 <span className="shrink-0 self-start rounded-full border border-blue-500/30 bg-blue-500/15 px-3 py-1 text-xs font-semibold text-blue-400 sm:self-auto">
@@ -660,7 +685,7 @@ const OperatorTasks = () => {
                     updateField("issueTitle", e.target.value);
                   }}
                   placeholder="Example: Hydraulic oil leakage near rear axle"
-                  className={`w-full rounded-xl border px-4 py-3 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none transition focus:ring-2 ${
+                  className={`w-full rounded-[8px ] border px-4 py-3 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none transition focus:ring-2 ${
                     formErrors.issueTitle
                       ? "border-red-500 focus:ring-red-500/20"
                       : "border-slate-300 dark:border-slate-700 focus:border-blue-500 focus:ring-blue-500/40"
@@ -668,7 +693,9 @@ const OperatorTasks = () => {
                 />
 
                 <div className="mt-1 min-h-[20px]">
-                  <p className="text-xs font-medium text-red-400">{formErrors.issueTitle || ""}</p>
+                  <p className="text-xs font-medium text-red-400">
+                    {formErrors.issueTitle || ""}
+                  </p>
                 </div>
               </div>
 
@@ -678,17 +705,20 @@ const OperatorTasks = () => {
                   <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-400">
                     Priority
                   </label>
-                  <select
+                  <AppSelect
                     value={priority}
-                    onChange={(e) => setPriority(e.target.value as IssuePriority)}
-                    className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/40 appearance-none cursor-pointer"
-                    style={{ colorScheme: "light dark" }}
-                  >
-                    <option value="Low">Low</option>
-                    <option value="Medium">Medium</option>
-                    <option value="High">High</option>
-                    <option value="Critical">Critical</option>
-                  </select>
+                    onChange={(value) => {
+                      setPriority(value as IssuePriority);
+                      updateField("priority", value);
+                    }}
+                    options={[
+                      { label: "Low", value: "Low" },
+                      { label: "Medium", value: "Medium" },
+                      { label: "High", value: "High" },
+                      { label: "Critical", value: "Critical" },
+                    ]}
+                    placeholder="Select Priority"
+                  />
                 </div>
 
                 <div>
@@ -696,26 +726,28 @@ const OperatorTasks = () => {
                     Report To <span className="text-red-400">*</span>
                   </label>
                   <div className="flex flex-wrap gap-2 pt-1">
-                    {targetOptions.map((target) => {
-                      const active = sendTo.includes(target);
-                      return (
-                        <button
-                          type="button"
-                          key={target}
-                          onClick={() => toggleSendTo(target)}
-                          className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${
-                            active
-                              ? "border-blue-500 bg-blue-600 text-white shadow-sm shadow-blue-500/20"
-                              : "border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-400 dark:hover:border-slate-600 hover:text-slate-900 dark:hover:text-slate-200"
-                          }`}
-                        >
-                          {target}
-                        </button>
-                      );
-                    })}
-                  </div>
+  {targetOptions.map((target) => {
+    const active = sendTo.includes(target);
+    return (
+      <button
+        type="button"
+        key={target}
+        onClick={() => toggleSendTo(target)}
+        className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${
+          active
+            ? "border-blue-500 bg-blue-600 text-white shadow-sm shadow-blue-500/20"
+            : "border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-400 dark:hover:border-slate-600 hover:text-slate-900 dark:hover:text-slate-200"
+        }`}
+      >
+        {target}
+      </button>
+    );
+  })}
+</div>
                   {formErrors.sendTo && (
-                    <p className="mt-1 text-xs font-medium text-red-400">{formErrors.sendTo}</p>
+                    <p className="mt-1 text-xs font-medium text-red-400">
+                      {formErrors.sendTo}
+                    </p>
                   )}
                 </div>
               </div>
@@ -742,7 +774,9 @@ const OperatorTasks = () => {
                 />
 
                 <div className="mt-1 flex items-start justify-between gap-3 min-h-[20px]">
-                  <p className="text-xs font-medium text-red-400">{formErrors.description || ""}</p>
+                  <p className="text-xs font-medium text-red-400">
+                    {formErrors.description || ""}
+                  </p>
 
                   <p className="shrink-0 text-xs text-slate-500">
                     {description.trim().length}/1000
@@ -758,7 +792,9 @@ const OperatorTasks = () => {
                 <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-white">
                   Upload Images
                 </p>
-                <p className="mt-1 text-xs text-slate-500">JPG, PNG &middot; up to 10MB each</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  JPG, PNG &middot; up to 10MB each
+                </p>
                 <input
                   type="file"
                   accept="image/*"
@@ -773,7 +809,9 @@ const OperatorTasks = () => {
                 <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-white">
                   Upload Videos
                 </p>
-                <p className="mt-1 text-xs text-slate-500">MP4, MOV &middot; up to 10MB each</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  MP4, MOV &middot; up to 10MB each
+                </p>
                 <input
                   type="file"
                   accept="video/*"
@@ -785,7 +823,9 @@ const OperatorTasks = () => {
             </div>
 
             {formErrors.media && (
-              <p className="mt-2 text-xs font-medium text-red-400">{formErrors.media}</p>
+              <p className="mt-2 text-xs font-medium text-red-400">
+                {formErrors.media}
+              </p>
             )}
 
             {/* Selected media list */}
@@ -801,7 +841,10 @@ const OperatorTasks = () => {
                       className="flex items-center justify-between rounded-lg border border-slate-200 dark:border-transparent bg-white dark:bg-slate-900 px-3 py-2"
                     >
                       <span className="flex min-w-0 items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
-                        <ImageIcon size={15} className="shrink-0 text-blue-400" />
+                        <ImageIcon
+                          size={15}
+                          className="shrink-0 text-blue-400"
+                        />
                         <span className="truncate">{file.name}</span>
                         <span className="shrink-0 text-xs text-slate-500">
                           ({(file.size / 1024 / 1024).toFixed(1)} MB)
@@ -825,7 +868,10 @@ const OperatorTasks = () => {
                       className="flex items-center justify-between rounded-lg border border-slate-200 dark:border-transparent bg-white dark:bg-slate-900 px-3 py-2"
                     >
                       <span className="flex min-w-0 items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
-                        <FileVideo size={15} className="shrink-0 text-blue-400" />
+                        <FileVideo
+                          size={15}
+                          className="shrink-0 text-blue-400"
+                        />
                         <span className="truncate">{file.name}</span>
                         <span className="shrink-0 text-xs text-slate-500">
                           ({(file.size / 1024 / 1024).toFixed(1)} MB)
@@ -848,7 +894,9 @@ const OperatorTasks = () => {
             )}
 
             {formErrors.submit && (
-              <p className="mt-3 text-sm font-medium text-red-400">{formErrors.submit}</p>
+              <p className="mt-3 text-sm font-medium text-red-400">
+                {formErrors.submit}
+              </p>
             )}
 
             <button
@@ -874,7 +922,9 @@ const OperatorTasks = () => {
           <div className="flex min-w-0 flex-col rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
             {/* history header + filters */}
             <div className="border-b border-slate-200 dark:border-slate-800 p-4 sm:p-5">
-              <h2 className="text-base font-bold text-slate-900 dark:text-white">Report History</h2>
+              <h2 className="text-base font-bold text-slate-900 dark:text-white">
+                Report History
+              </h2>
               <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-400">
                 All issue reports you have submitted for this machine.
               </p>
@@ -894,48 +944,49 @@ const OperatorTasks = () => {
                       setCurrentPage(1);
                     }}
                     placeholder="Search by ID or title..."
-                    className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 py-2.5 pl-9 pr-3 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"
+                    className="w-full rounded-[8px] border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 py-2.5 pl-9 pr-3 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"
                   />
                 </div>
 
                 {/* status filter */}
-                <select
+                <AppSelect
                   value={statusFilter}
-                  onChange={(e) => {
-                    setStatusFilter(e.target.value as ReportStatus | "All");
+                  onChange={(value) => {
+                    setStatusFilter(value as ReportStatus | "All");
                     setCurrentPage(1);
                   }}
-                  className="w-full min-w-0 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2.5 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 sm:w-auto appearance-none cursor-pointer"
-                  style={{ colorScheme: "light dark" }}
-                >
-                  <option value="All">All Status</option>
-                  <option value="Pending Review">Pending Review</option>
-                  <option value="Assigned to Engineer">Assigned</option>
-                  <option value="Resolved">Resolved</option>
-                </select>
+                  options={[
+                    { label: "All Status", value: "All" },
+                    { label: "Pending Review", value: "Pending Review" },
+                    { label: "Assigned", value: "Assigned to Engineer" },
+                    { label: "Resolved", value: "Resolved" },
+                  ]}
+                />
 
                 {/* priority filter */}
-                <select
+                <AppSelect
                   value={priorityFilter}
-                  onChange={(e) => {
-                    setPriorityFilter(e.target.value as IssuePriority | "All");
+                  onChange={(value) => {
+                    setPriorityFilter(value as IssuePriority | "All");
                     setCurrentPage(1);
                   }}
-                  className="w-full min-w-0 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2.5 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 sm:w-auto appearance-none cursor-pointer"
-                  style={{ colorScheme: "light dark" }}
-                >
-                  <option value="All">All Priority</option>
-                  <option value="Low">Low</option>
-                  <option value="Medium">Medium</option>
-                  <option value="High">High</option>
-                  <option value="Critical">Critical</option>
-                </select>
+                  options={[
+                    { label: "All Priority", value: "All" },
+                    { label: "Low", value: "Low" },
+                    { label: "Medium", value: "Medium" },
+                    { label: "High", value: "High" },
+                    { label: "Critical", value: "Critical" },
+                  ]}
+                />
               </div>
             </div>
 
             {filteredReports.length === 0 ? (
               <div className="flex flex-1 flex-col items-center justify-center gap-2 p-12 text-center">
-                <ClipboardCheck size={30} className="text-slate-400 dark:text-slate-700" />
+                <ClipboardCheck
+                  size={30}
+                  className="text-slate-400 dark:text-slate-700"
+                />
                 <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">
                   No reports found
                 </p>
@@ -981,7 +1032,9 @@ const OperatorTasks = () => {
                             <p className="font-semibold leading-snug text-slate-900 dark:text-white">
                               {report.issueTitle}
                             </p>
-                            <p className="mt-0.5 text-xs text-slate-500">{report.id}</p>
+                            <p className="mt-0.5 text-xs text-slate-500">
+                              {report.id}
+                            </p>
                           </td>
                           <td className="px-5 py-4">
                             <span
@@ -1015,7 +1068,8 @@ const OperatorTasks = () => {
                 {/* pagination */}
                 <div className="flex flex-col gap-3 border-t border-slate-200 dark:border-slate-800 p-4 sm:flex-row sm:items-center sm:justify-between">
                   <p className="text-xs text-slate-500">
-                    Showing {paginatedReports.length} of {filteredReports.length} reports
+                    Showing {paginatedReports.length} of{" "}
+                    {filteredReports.length} reports
                   </p>
                   <div className="flex items-center gap-2">
                     <button
@@ -1048,17 +1102,19 @@ const OperatorTasks = () => {
       {/* ── DETAIL MODAL ───────────────────────────────────────────── */}
       {selectedReport && (
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/80 p-0 backdrop-blur-sm sm:items-center sm:p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"
           onClick={() => setSelectedReport(null)}
         >
           <div
-            className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-2xl sm:rounded-2xl sm:p-6"
+           className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             {/* modal header */}
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-xs font-semibold text-blue-400">{selectedReport.id}</p>
+                <p className="text-xs font-semibold text-blue-400">
+                  {selectedReport.id}
+                </p>
                 <h3 className="mt-1 text-base font-bold leading-snug text-slate-900 dark:text-white">
                   {selectedReport.issueTitle}
                 </h3>
@@ -1118,11 +1174,14 @@ const OperatorTasks = () => {
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                     Submitted On
                   </p>
-                  <p className="mt-1 text-slate-900 dark:text-white">{selectedReport.createdAt}</p>
+                  <p className="mt-1 text-slate-900 dark:text-white">
+                    {selectedReport.createdAt}
+                  </p>
                 </div>
               </div>
 
-              {(selectedReport.images.length > 0 || selectedReport.videos.length > 0) && (
+              {(selectedReport.images.length > 0 ||
+                selectedReport.videos.length > 0) && (
                 <div>
                   <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
                     Attachments

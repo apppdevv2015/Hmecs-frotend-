@@ -46,7 +46,9 @@ type Props = {
 };
 
 const MachineHealthDashboard: React.FC<Props> = ({ machine }) => {
-  const [chartData, setChartData] = useState<{ time: string; machineHealth: number }[]>([]);
+  const [chartData, setChartData] = useState<
+    { time: string; machineHealth: number }[]
+  >([]);
 
   const getComponentHealth = (category: string) => {
     switch (category.toLowerCase()) {
@@ -100,7 +102,9 @@ const MachineHealthDashboard: React.FC<Props> = ({ machine }) => {
 
   const healthyCount = miniHealth.filter((item) => item.value >= 80).length;
 
-  const warningCount = miniHealth.filter((item) => item.value >= 50 && item.value < 80).length;
+  const warningCount = miniHealth.filter(
+    (item) => item.value >= 50 && item.value < 80,
+  ).length;
 
   const criticalCount = miniHealth.filter((item) => item.value < 50).length;
 
@@ -130,9 +134,13 @@ const MachineHealthDashboard: React.FC<Props> = ({ machine }) => {
         <div className="rounded-2xl border border-slate-800 bg-[#081226] p-4 shadow-xl sm:p-5 xl:col-span-9">
           {/* Heading */}
           <div className="mb-5">
-            <h2 className="text-xl font-bold text-white sm:text-2xl">Machine Health Monitoring</h2>
+            <h2 className="text-xl font-bold text-white sm:text-2xl">
+              Machine Health Monitoring
+            </h2>
 
-            <p className="text-sm text-slate-400">Realtime Operator Monitoring</p>
+            <p className="text-sm text-slate-400">
+              Realtime Operator Monitoring
+            </p>
           </div>
 
           {/* Real Machine Health Graph */}
@@ -143,13 +151,17 @@ const MachineHealthDashboard: React.FC<Props> = ({ machine }) => {
                   Machine Health Signal
                 </h3>
 
-                <p className="text-sm text-slate-500">Live Machine Monitoring</p>
+                <p className="text-sm text-slate-500">
+                  Live Machine Monitoring
+                </p>
               </div>
 
               <div className="flex w-fit items-center gap-2 rounded-full bg-emerald-500/10 px-4 py-2">
                 <div className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
 
-                <span className="text-sm font-medium text-emerald-400">Live</span>
+                <span className="text-sm font-medium text-emerald-400">
+                  Live
+                </span>
               </div>
             </div>
 
@@ -222,7 +234,9 @@ const MachineHealthDashboard: React.FC<Props> = ({ machine }) => {
 
         {/* Health Side Card */}
         <div className="rounded-2xl border border-slate-800 bg-[#081226] p-4 sm:p-5 xl:col-span-3">
-          <h2 className="mb-6 text-lg font-semibold text-white">Component Health</h2>
+          <h2 className="mb-6 text-lg font-semibold text-white">
+            Component Health
+          </h2>
 
           <div className="space-y-5">
             {miniHealth.map((item) => (
@@ -230,7 +244,9 @@ const MachineHealthDashboard: React.FC<Props> = ({ machine }) => {
                 <div className="mb-2 flex items-center justify-between">
                   <span className="text-sm text-slate-300">{item.name}</span>
 
-                  <span className="text-sm font-semibold text-green-400">{item.value}%</span>
+                  <span className="text-sm font-semibold text-green-400">
+                    {item.value}%
+                  </span>
                 </div>
 
                 <div className="h-3 overflow-hidden rounded-full bg-slate-800">
@@ -253,7 +269,11 @@ const MachineHealthDashboard: React.FC<Props> = ({ machine }) => {
               </h3>
 
               <span className="w-fit rounded-full bg-green-500/20 px-3 py-1 text-xs font-semibold text-green-400">
-                {overallHealth >= 80 ? "Healthy" : overallHealth >= 50 ? "Warning" : "Critical"}
+                {overallHealth >= 80
+                  ? "Healthy"
+                  : overallHealth >= 50
+                    ? "Warning"
+                    : "Critical"}
               </span>
             </div>
 
@@ -283,7 +303,9 @@ const MachineHealthDashboard: React.FC<Props> = ({ machine }) => {
           <div className="rounded-2xl border border-slate-800 bg-[#081226] p-5">
             <p className="text-sm text-slate-400">Healthy Components</p>
 
-            <h2 className="mt-2 text-2xl sm:text-3xl font-bold text-green-400">{healthyCount}</h2>
+            <h2 className="mt-2 text-2xl sm:text-3xl font-bold text-green-400">
+              {healthyCount}
+            </h2>
 
             <p className="mt-2 text-sm text-slate-500">Running stable</p>
           </div>
@@ -291,7 +313,9 @@ const MachineHealthDashboard: React.FC<Props> = ({ machine }) => {
           <div className="rounded-2xl border border-slate-800 bg-[#081226] p-5">
             <p className="text-sm text-slate-400">Warning Alerts</p>
 
-            <h2 className="mt-2 text-3xl font-bold text-yellow-400">{warningCount}</h2>
+            <h2 className="mt-2 text-3xl font-bold text-yellow-400">
+              {warningCount}
+            </h2>
 
             <p className="mt-2 text-sm text-yellow-500">Needs attention</p>
           </div>
@@ -299,7 +323,9 @@ const MachineHealthDashboard: React.FC<Props> = ({ machine }) => {
           <div className="rounded-2xl border border-slate-800 bg-[#081226] p-5">
             <p className="text-sm text-slate-400">Critical Issues</p>
 
-            <h2 className="mt-2 text-3xl font-bold text-red-400">{criticalCount}</h2>
+            <h2 className="mt-2 text-3xl font-bold text-red-400">
+              {criticalCount}
+            </h2>
 
             <p className="mt-2 text-sm text-red-500">Immediate action</p>
           </div>
