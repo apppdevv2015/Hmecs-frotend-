@@ -1,9 +1,4 @@
-export type MaintenanceStatus =
-  | "Open"
-  | "Closed"
-  | "Pending"
-  | "In Progress"
-  | "Completed";
+export type MaintenanceStatus = "Open" | "Closed" | "Pending" | "In Progress" | "Completed";
 
 export type MaintenancePayload = {
   id?: string;
@@ -27,8 +22,7 @@ type GetLogsOptions = {
   scope?: "auto" | "company" | "engineer" | "all";
 };
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:4000/api";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:4000/api";
 
 import StorageService, { STORAGE_KEYS } from "../storage.service";
 
@@ -91,12 +85,7 @@ const getCurrentRole = () => {
 const isEngineerRole = () => {
   const role = getCurrentRole();
 
-  return (
-    role === "engineer" ||
-    role === "mechanic" ||
-    role === "technician" ||
-    role === "operator"
-  );
+  return role === "engineer" || role === "mechanic" || role === "technician" || role === "operator";
 };
 
 const getCurrentUserId = () => {
@@ -127,9 +116,7 @@ const getCompanyIdFromToken = () => {
   try {
     const payload = getTokenPayload();
 
-    return String(
-      payload?.companyId || payload?.company_id || payload?.company?.id || "",
-    );
+    return String(payload?.companyId || payload?.company_id || payload?.company?.id || "");
   } catch {
     return "";
   }
@@ -142,8 +129,7 @@ const getCompanyIdFromUser = () => {
 };
 
 const getCompanyId = () => {
-  const localCompanyId =
-    StorageService.get<string>(STORAGE_KEYS.COMPANY_ID) || "";
+  const localCompanyId = StorageService.get<string>(STORAGE_KEYS.COMPANY_ID) || "";
   const tokenCompanyId = getCompanyIdFromToken();
   const userCompanyId = getCompanyIdFromUser();
 
@@ -183,15 +169,12 @@ const parseResponseBody = async (response: Response) => {
   }
 };
 
-const request = async <T = any>(
-  endpoint: string,
-  options: RequestOptions = {},
-): Promise<T> => {
+const request = async <T = any>(endpoint: string, options: RequestOptions = {}): Promise<T> => {
   const token = getToken();
   const { skipJsonHeader, headers, ...restOptions } = options;
   const finalUrl = buildUrl(endpoint);
 
-
+  console.log("Maintenance API URL:", finalUrl);
 
   const method = restOptions.method?.toUpperCase() || "GET";
 
@@ -218,7 +201,6 @@ const request = async <T = any>(
       ...(headers || {}),
     },
 
-    
     cache: isMutation ? "no-store" : "no-cache",
   });
 
@@ -278,16 +260,12 @@ const getDataArray = (response: any) => {
   if (Array.isArray(response?.logs)) return response.logs;
   if (Array.isArray(response?.maintenance)) return response.maintenance;
   if (Array.isArray(response?.maintenanceLogs)) return response.maintenanceLogs;
-  if (Array.isArray(response?.maintenance_logs))
-    return response.maintenance_logs;
+  if (Array.isArray(response?.maintenance_logs)) return response.maintenance_logs;
 
   if (Array.isArray(response?.data?.logs)) return response.data.logs;
-  if (Array.isArray(response?.data?.maintenance))
-    return response.data.maintenance;
-  if (Array.isArray(response?.data?.maintenanceLogs))
-    return response.data.maintenanceLogs;
-  if (Array.isArray(response?.data?.maintenance_logs))
-    return response.data.maintenance_logs;
+  if (Array.isArray(response?.data?.maintenance)) return response.data.maintenance;
+  if (Array.isArray(response?.data?.maintenanceLogs)) return response.data.maintenanceLogs;
+  if (Array.isArray(response?.data?.maintenance_logs)) return response.data.maintenance_logs;
   if (Array.isArray(response?.data?.data)) return response.data.data;
 
   if (Array.isArray(response?.result)) return response.result;
@@ -333,13 +311,9 @@ export const maintenanceService = {
   async getLogs(options: GetLogsOptions = {}) {
     const roleIsEngineer = isEngineerRole();
 
-    const companyId =
-      options.companyId !== undefined ? options.companyId : getCompanyId();
+    const companyId = options.companyId !== undefined ? options.companyId : getCompanyId();
 
-    const engineerId =
-      options.engineerId !== undefined
-        ? options.engineerId
-        : getCurrentUserId();
+    const engineerId = options.engineerId !== undefined ? options.engineerId : getCurrentUserId();
 
     const scope = options.scope || "auto";
 
@@ -401,17 +375,9 @@ export const maintenanceService = {
     } else if (scope === "company") {
       endpoints = [...commonEndpoints, ...companyEndpoints];
     } else if (scope === "all") {
-      endpoints = [
-        ...commonEndpoints,
-        ...companyEndpoints,
-        ...ArtisansEndpoints,
-      ];
+      endpoints = [...commonEndpoints, ...companyEndpoints, ...ArtisansEndpoints];
     } else if (roleIsEngineer) {
-      endpoints = [
-        ...ArtisansEndpoints,
-        ...commonEndpoints,
-        ...companyEndpoints,
-      ];
+      endpoints = [...ArtisansEndpoints, ...commonEndpoints, ...companyEndpoints];
     } else {
       endpoints = [...commonEndpoints, ...companyEndpoints];
     }

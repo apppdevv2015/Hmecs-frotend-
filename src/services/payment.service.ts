@@ -10,9 +10,8 @@ export interface PaymentResponse {
   message: string;
   paymentStatus: "pending" | "success" | "failed";
 }
-export const createPayment = async (
-  data: PaymentRequest
-): Promise<PaymentResponse> => {
+export const createPayment = async (data: PaymentRequest): Promise<PaymentResponse> => {
+  console.log("Dummy payment request:", data);
 
   // Future API will be added here
   // const response = await fetch("/api/payments/create", {

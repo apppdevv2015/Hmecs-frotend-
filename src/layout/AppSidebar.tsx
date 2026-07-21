@@ -34,18 +34,13 @@ export default function AppSidebar({ role = "super_admin" }: AppSidebarProps) {
   const isSuperAdmin = role === "super_admin";
 
   const profileEmail =
-    getStoredUserEmail() ||
-    profile?.email ||
-    profile?.subtitle ||
-    "admin@gmail.com";
+    getStoredUserEmail() || profile?.email || profile?.subtitle || "admin@gmail.com";
 
   const mainGroups = isSuperAdmin
     ? navGroups
     : navGroups.filter((group) => group.title !== "Settings");
 
-  const settingsGroup = isSuperAdmin
-    ? null
-    : navGroups.find((group) => group.title === "Settings");
+  const settingsGroup = isSuperAdmin ? null : navGroups.find((group) => group.title === "Settings");
 
   const [openGroup, setOpenGroup] = useState<string | null>(null);
 
@@ -75,13 +70,7 @@ export default function AppSidebar({ role = "super_admin" }: AppSidebarProps) {
     });
   };
 
-  const {
-    isMobileOpen,
-    isExpanded,
-    isHovered,
-    toggleMobileSidebar,
-    setIsHovered,
-  } = useSidebar();
+  const { isMobileOpen, isExpanded, isHovered, toggleMobileSidebar, setIsHovered } = useSidebar();
 
   const isDesktopOpen = isExpanded || isHovered;
   const showText = isMobileOpen || isDesktopOpen;
@@ -110,10 +99,7 @@ export default function AppSidebar({ role = "super_admin" }: AppSidebarProps) {
     const userData = StorageService.get<any>(STORAGE_KEYS.USER) || {};
 
     const role = normalizeRole(
-      userData?.role ||
-        userData?.role_name ||
-        StorageService.get(STORAGE_KEYS.ROLE) ||
-        "",
+      userData?.role || userData?.role_name || StorageService.get(STORAGE_KEYS.ROLE) || "",
     );
     if (role === "super_admin" || role === "superadmin") {
       return "/super-admin/profile";
@@ -181,10 +167,7 @@ export default function AppSidebar({ role = "super_admin" }: AppSidebarProps) {
     const isActive = isItemActive(item);
 
     const isComingSoonItem =
-      item.isComingSoon ||
-      !item.path ||
-      item.path.trim() === "" ||
-      item.path === "#";
+      item.isComingSoon || !item.path || item.path.trim() === "" || item.path === "#";
 
     if (item.children && !item.isComingSoon) {
       const isOpen = openSubMenu === item.name;
@@ -211,9 +194,7 @@ export default function AppSidebar({ role = "super_admin" }: AppSidebarProps) {
                 {item.icon}
               </span>
 
-              {showText && (
-                <span className="truncate tracking-[0.01em]">{item.name}</span>
-              )}
+              {showText && <span className="truncate tracking-[0.01em]">{item.name}</span>}
             </span>
 
             {showText && (
@@ -266,9 +247,7 @@ export default function AppSidebar({ role = "super_admin" }: AppSidebarProps) {
             {isComingSoonItem && (
               <span
                 className={`shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] ${
-                  isActive
-                    ? "bg-blue-400/25 text-white"
-                    : "bg-white/10 text-white/75"
+                  isActive ? "bg-blue-400/25 text-white" : "bg-white/10 text-white/75"
                 }`}
               >
                 Soon
@@ -293,11 +272,7 @@ export default function AppSidebar({ role = "super_admin" }: AppSidebarProps) {
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         className={`fixed left-0 top-0 z-[60] flex h-screen flex-col border-r border-white/10 bg-[#3437e8] text-white shadow-[18px_0_40px_rgba(15,23,42,0.12)] transition-all duration-300 dark:border-white/5 dark:bg-[#0f1724] dark:text-white dark:shadow-black/30
-          ${
-            isMobileOpen
-              ? "translate-x-0 w-[280px]"
-              : "-translate-x-full w-[280px]"
-          }
+          ${isMobileOpen ? "translate-x-0 w-[280px]" : "-translate-x-full w-[280px]"}
           ${isDesktopOpen ? "lg:w-[280px]" : "lg:w-[92px]"}
           lg:translate-x-0`}
       >
@@ -313,11 +288,7 @@ export default function AppSidebar({ role = "super_admin" }: AppSidebarProps) {
       shrink-0
     "
           >
-            <img
-              src={logo1}
-              alt="HME Logo"
-              className="w-full h-full object-contain"
-            />
+            <img src={logo1} alt="HME Logo" className="w-full h-full object-contain" />
           </div>
         </div>
 
@@ -368,9 +339,7 @@ export default function AppSidebar({ role = "super_admin" }: AppSidebarProps) {
                     </div>
                   </>
                 ) : (
-                  <div className="space-y-1.5">
-                    {group.items.map((item) => renderLink(item))}
-                  </div>
+                  <div className="space-y-1.5">{group.items.map((item) => renderLink(item))}</div>
                 )}
               </div>
             );
@@ -398,13 +367,9 @@ export default function AppSidebar({ role = "super_admin" }: AppSidebarProps) {
                 </div>
 
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[14px] font-semibold text-white">
-                    {profile.title}
-                  </p>
+                  <p className="truncate text-[14px] font-semibold text-white">{profile.title}</p>
 
-                  <p className="truncate text-[12px] font-normal text-white/65">
-                    {profileEmail}
-                  </p>
+                  <p className="truncate text-[12px] font-normal text-white/65">{profileEmail}</p>
                 </div>
               </button>
 

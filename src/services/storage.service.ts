@@ -26,6 +26,7 @@ export const STORAGE_KEYS = {
   USER_ROLE: "userRole",
   USER_TYPE: "user_type",
   USER_NAME: "userName",
+  REFRESH_TOKEN: "refreshToken",
 
   // Dashboard & Data
   DASHBOARD: "dashboard",
@@ -45,15 +46,9 @@ class StorageService {
    */
   static set<T>(key: string, value: T): void {
     try {
-      localStorage.setItem(
-        key,
-        JSON.stringify(value)
-      );
+      localStorage.setItem(key, JSON.stringify(value));
     } catch (error) {
-      console.error(
-        `[StorageService] Save Error (${key})`,
-        error
-      );
+      console.error(`[StorageService] Save Error (${key})`, error);
     }
   }
 
@@ -68,10 +63,7 @@ class StorageService {
 
       return JSON.parse(item) as T;
     } catch (error) {
-      console.error(
-        `[StorageService] Read Error (${key})`,
-        error
-      );
+      console.error(`[StorageService] Read Error (${key})`, error);
 
       return null;
     }
@@ -84,10 +76,7 @@ class StorageService {
     try {
       localStorage.removeItem(key);
     } catch (error) {
-      console.error(
-        `[StorageService] Remove Error (${key})`,
-        error
-      );
+      console.error(`[StorageService] Remove Error (${key})`, error);
     }
   }
 
@@ -98,10 +87,7 @@ class StorageService {
     try {
       localStorage.clear();
     } catch (error) {
-      console.error(
-        "[StorageService] Clear Error",
-        error
-      );
+      console.error("[StorageService] Clear Error", error);
     }
   }
 
@@ -115,32 +101,24 @@ class StorageService {
   /**
    * Save Data With Timestamp
    */
-  static setWithTimestamp<T>(
-    key: string,
-    value: T
-  ): void {
+  static setWithTimestamp<T>(key: string, value: T): void {
     try {
       localStorage.setItem(
         key,
         JSON.stringify({
           data: value,
           timestamp: Date.now(),
-        })
+        }),
       );
     } catch (error) {
-      console.error(
-        `[StorageService] Timestamp Save Error (${key})`,
-        error
-      );
+      console.error(`[StorageService] Timestamp Save Error (${key})`, error);
     }
   }
 
   /**
    * Get Data With Timestamp
    */
-  static getWithTimestamp<T>(
-    key: string
-  ): {
+  static getWithTimestamp<T>(key: string): {
     data: T;
     timestamp: number;
   } | null {
@@ -151,10 +129,7 @@ class StorageService {
 
       return JSON.parse(item);
     } catch (error) {
-      console.error(
-        `[StorageService] Timestamp Read Error (${key})`,
-        error
-      );
+      console.error(`[StorageService] Timestamp Read Error (${key})`, error);
 
       return null;
     }
@@ -163,19 +138,10 @@ class StorageService {
   /**
    * Check Cache Expiry
    */
-  static isExpired(
-    timestamp: number,
-    maxAgeInMinutes: number
-  ): boolean {
-    const age =
-      Date.now() - timestamp;
+  static isExpired(timestamp: number, maxAgeInMinutes: number): boolean {
+    const age = Date.now() - timestamp;
 
-    return (
-      age >
-      maxAgeInMinutes *
-        60 *
-        1000
-    );
+    return age > maxAgeInMinutes * 60 * 1000;
   }
 
   /**
@@ -183,15 +149,9 @@ class StorageService {
    */
   static sessionSet<T>(key: string, value: T): void {
     try {
-      sessionStorage.setItem(
-        key,
-        JSON.stringify(value)
-      );
+      sessionStorage.setItem(key, JSON.stringify(value));
     } catch (error) {
-      console.error(
-        `[StorageService] Session Save Error (${key})`,
-        error
-      );
+      console.error(`[StorageService] Session Save Error (${key})`, error);
     }
   }
 
@@ -206,10 +166,7 @@ class StorageService {
 
       return JSON.parse(item) as T;
     } catch (error) {
-      console.error(
-        `[StorageService] Session Read Error (${key})`,
-        error
-      );
+      console.error(`[StorageService] Session Read Error (${key})`, error);
 
       return null;
     }
@@ -222,10 +179,7 @@ class StorageService {
     try {
       sessionStorage.removeItem(key);
     } catch (error) {
-      console.error(
-        `[StorageService] Session Remove Error (${key})`,
-        error
-      );
+      console.error(`[StorageService] Session Remove Error (${key})`, error);
     }
   }
 
@@ -236,10 +190,7 @@ class StorageService {
     try {
       sessionStorage.clear();
     } catch (error) {
-      console.error(
-        "[StorageService] Session Clear Error",
-        error
-      );
+      console.error("[StorageService] Session Clear Error", error);
     }
   }
 }

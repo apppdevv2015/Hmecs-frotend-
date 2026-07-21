@@ -1,13 +1,6 @@
 import { useNotifications } from "./context/NotificationContext";
-import { PageSkeleton } from "./components/common/Skeleton";
 
-
-import {
-  BrowserRouter as Router,
-  Routes,
-  Route,
-  Navigate,
-} from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 
 import { Suspense, lazy } from "react";
 
@@ -31,20 +24,6 @@ const CartPage = lazy(() => import("./pages/Cart/CartPage"));
 const SignIn = lazy(() => import("./pages/AuthPages/SignIn"));
 const SignUp = lazy(() => import("./pages/AuthPages/SignUp"));
 const SuperAdminLogin = lazy(() => import("./pages/AuthPages/SuperAdminLogin"));
-
-const FeaturesPage = lazy(() => import("./pages/Landing/FeaturesPage"));
-
-const MaintenancePage = lazy(() => import("./pages/Landing/MaintenancePage"));
-
-const ReportsPage = lazy(() => import("./pages/Landing/ReportsPage"));
-
-const AboutPage = lazy(() => import("./pages/Landing/AboutPage"));
-
-const ContactPage = lazy(() => import("./pages/Landing/ContactPage"));
-
-const NotificationsPage = lazy(
-  () => import("./components/notifications/NotificationsPage"),
-);
 
 // ---------------- Common ----------------
 
@@ -70,210 +49,132 @@ const Blank = lazy(() => import("./pages/Blank"));
 
 // ---------------- Super Admin ----------------
 
-const Home = lazy(() => import("./pages/SuperAdmin/SuperAdminDashboard"));
+const Home = lazy(() => import("./dashboards/super-admin/SuperAdminDashboard"));
 
-const FleetIntelligence = lazy(
-  () => import("./pages/SuperAdmin/CompanyIntelligence"),
-);
+const FleetIntelligence = lazy(() => import("./dashboards/super-admin/CompanyIntelligence"));
 
-const PlanManagement = lazy(
-  () => import("./pages/SuperAdmin/PlanManagement/PlanManagement"),
-);
+const PlanManagement = lazy(() => import("./dashboards/super-admin/PlanManagement/PlanManagement"));
 
-const UsersPage = lazy(
-  () => import("./pages/SuperAdmin/user-management/UsersPage"),
-);
+const UsersPage = lazy(() => import("./dashboards/super-admin/user-management/UsersPage"));
 
-const RolesPage = lazy(
-  () => import("./pages/SuperAdmin/user-management/RolesPage"),
-);
+const RolesPage = lazy(() => import("./dashboards/super-admin/user-management/RolesPage"));
 
-const RoleDetailsPage = lazy(
-  () => import("./components/super-admin/dashboard/RoleDetails"),
-);
+const RoleDetailsPage = lazy(() => import("./dashboards/super-admin/RoleDetails"));
 
 const CompanyAdminsPage = lazy(
-  () => import("./pages/SuperAdmin/CompanyManagment/CompanyAdminsPage"),
+  () => import("./dashboards/super-admin/CompanyManagment/CompanyAdminsPage"),
 );
 
-const PlanAndBilling = lazy(
-  () => import("./pages/SuperAdmin/Invoices/PlanAndBilling"),
-);
+// const PlanAndBilling = lazy(
+//   () => import("./dashboards/super-admin/Invoices/PlanAndBilling"),
+// );
 
-const InvoicePreviewPage = lazy(
-  () => import("./pages/SuperAdmin/Invoices/InvoicePreviewPage"),
-);
+// const InvoicePreviewPage = lazy(
+//   () => import("./dashboards/super-admin/Invoices/InvoicePreviewPage"),
+// );
 
-const SuperAdminComponents = lazy(
-  () => import("./pages/SuperAdmin/Asset Managment/Components"),
-);
+// const SuperAdminComponents = lazy(
+//   () => import("./dashboards/super-admin/Asset Managment/Components"),
+// );
 
-const SuperAdminMachinesPage = lazy(
-  () => import("./pages/SuperAdmin/Asset Managment/machines"),
-);
+// const SuperAdminMachinesPage = lazy(
+//   () => import("./dashboards/super-admin/Asset Managment/machines"),
+// );
 
-const FleetMonitoring = lazy(
-  () => import("./pages/SuperAdmin/Asset Managment/FleetMonitoring"),
-);
+// const FleetMonitoring = lazy(
+//   () => import("./dashboards/super-admin/Asset Managment/FleetMonitoring"),
+// );
 
-const Operators = lazy(
-  () => import("./pages/SuperAdmin/CompanyManagment/Operators"),
-);
+const Operators = lazy(() => import("./dashboards/super-admin/CompanyManagment/Operators"));
 
-const Mechanics = lazy(
-  () => import("./pages/SuperAdmin/CompanyManagment/Artisuns"),
-);
+const Mechanics = lazy(() => import("./dashboards/super-admin/CompanyManagment/mechanics"));
 
-const ServiceLog1 = lazy(
-  () => import("./pages/SuperAdmin/Asset Managment/ServiceLog"),
-);
+// const ServiceLog1 = lazy(
+//   () => import("./dashboards/super-admin/Asset Managment/ServiceLog"),
+// );
 
 // ---------------- Company Admin ----------------
 
 const CompanyAdminDashboard = lazy(
-  () => import("./pages/CompanyAdmin/CompanyAdminDashboard"),
+  () => import("./dashboards/company-admin/CompanyAdminDashboard"),
 );
 
-const ComponentRegister = lazy(
-  () => import("./pages/CompanyAdmin/ComponentRegister"),
-);
+const ComponentRegister = lazy(() => import("./dashboards/company-admin/ComponentRegister"));
 
-const FleetHeatMap = lazy(() => import("./pages/CompanyAdmin/FleetHeatMap"));
+const MaintenanceLog = lazy(() => import("./dashboards/company-admin/MaintenanceLog"));
 
-const UpdatePage = lazy(() => import("./pages/CompanyAdmin/UpdateData"));
+const FleetHeatMap = lazy(() => import("./dashboards/company-admin/FleetHeatMap"));
 
-const AddComponent = lazy(() => import("./pages/CompanyAdmin/AddComponent"));
+const AddComponent = lazy(() => import("./dashboards/company-admin/AddComponent"));
 
-const StaffManagement = lazy(
-  () => import("./pages/CompanyAdmin/StaffManagement"),
-);
+const StaffManagement = lazy(() => import("./dashboards/company-admin/StaffManagement"));
 
-const MachineManagement = lazy(
-  () => import("./pages/CompanyAdmin/MachineManagement"),
-);
+const MachineManagement = lazy(() => import("./dashboards/company-admin/MachineManagement"));
 
-const AlertsPage = lazy(() => import("./pages/CompanyAdmin/AlertsPage"));
+const AlertsPage = lazy(() => import("./dashboards/company-admin/AlertsPage"));
 
-const SubscriptionHistory = lazy(
-  () => import("./pages/CompanyAdmin/SubscriptionHistory"),
-);
+const SubscriptionHistory = lazy(() => import("./dashboards/company-admin/SubscriptionHistory"));
 
-const ReportingManagement = lazy(
-  () => import("./pages/CompanyAdmin/ReportingManagement"),
-);
+// const ReportingManagement = lazy(
+//   () => import("./pages/CompanyAdmin/ReportingManagement"),
+// );
 
-const ServiceLog = lazy(() => import("./pages/CompanyAdmin/ServiceLog"));
+// const ServiceLog = lazy(() => import("./pages/CompanyAdmin/ServiceLog"));
 
-// ---------------- Artisans ----------------
+// ---------------- Engineer ----------------
 
-const ArtisansDashboard = lazy(
-  () => import("./pages/ArtisansDashboard/ArtisansDashboard"),
-);
+const ArtisansDashboard = lazy(() => import("./dashboards/artisans/ArtisansDashboard"));
 
-const ArtisansTasks = lazy(
-  () => import("./pages/ArtisansDashboard/ArtisansTasks"),
-);
+const ArtisansTasks = lazy(() => import("./dashboards/artisans/ArtisansTasks"));
 
-const ArtisansReport = lazy(
-  () => import("./pages/ArtisansDashboard/ArtisansReport"),
-);
+const ArtisansReport = lazy(() => import("./dashboards/artisans/ArtisansReport"));
 
-const ArtisansAlerts = lazy(
-  () => import("./pages/ArtisansDashboard/ArtisansAlerts"),
-);
+const ArtisansAlerts = lazy(() => import("./dashboards/artisans/ArtisansAlerts"));
 
-const ArtisansMaintenance = lazy(
-  () => import("./pages/ArtisansDashboard/ArtisansMaintenance"),
-);
+const ArtisansMaintenance = lazy(() => import("./dashboards/artisans/ArtisansMaintenance"));
 
-const ArtisansFleetHeat = lazy(
-  () => import("./pages/ArtisansDashboard/ArtisansFleetHeat"),
-);
-const ArtisansUpdateData = lazy(
-  () => import("./pages/ArtisansDashboard/UpdateData"),
-);
+const ArtisansFleetHeat = lazy(() => import("./dashboards/artisans/ArtisansFleetHeat"));
 
-const ArtisansServiceLogs = lazy(
-  () => import("./pages/ArtisansDashboard/ArtisansServiceLogs"),
-);
+const ArtisansServiceLogs = lazy(() => import("./dashboards/artisans/ArtisansServiceLogs"));
 // ---------------- Operator ----------------
 
-const OperatorDashboard = lazy(
-  () => import("./pages/OperatorDashboard/OperatorDashboard"),
-);
+const OperatorDashboard = lazy(() => import("./dashboards/operator/OperatorDashboard"));
 
-const OperatorMachines = lazy(
-  () => import("./pages/OperatorDashboard/OperatorMachines"),
-);
+const OperatorMachines = lazy(() => import("./dashboards/operator/OperatorMachines"));
 
-const OperatorChecklist = lazy(
-  () => import("./pages/OperatorDashboard/OperatorComponents"),
-);
+const OperatorChecklist = lazy(() => import("./dashboards/operator/OperatorComponents"));
 
-const OperatorTasks = lazy(
-  () => import("./pages/OperatorDashboard/OperatorReport"),
-);
+const OperatorTasks = lazy(() => import("./dashboards/operator/OperatorReport"));
 
-const OperatorReportIssue = lazy(
-  () => import("./pages/OperatorDashboard/OperatorTask"),
-);
+const OperatorReportIssue = lazy(() => import("./dashboards/operator/OperatorTask"));
 
-const OperatorAlerts = lazy(
-  () => import("./pages/OperatorDashboard/OperatorAlerts"),
-);
+const OperatorAlerts = lazy(() => import("./dashboards/operator/OperatorAlerts"));
 
-const OperatorRunningLogs = lazy(
-  () => import("./pages/OperatorDashboard/OperatorAlerts"),
-);
+const OperatorRunningLogs = lazy(() => import("./dashboards/operator/OperatorAlerts"));
 
-const OperatorFleet = lazy(
-  () => import("./pages/OperatorDashboard/OperatorFleet"),
-);
-const OperatorDataUpdate = lazy(
-  () => import("./pages/OperatorDashboard/UpdateData"),
-);
+const OperatorFleet = lazy(() => import("./dashboards/operator/OperatorFleet"));
 
-const OperatorServiceLog = lazy(
-  () => import("./pages/OperatorDashboard/OperatorServiceLog"),
-);
+const OperatorServiceLog = lazy(() => import("./dashboards/operator/OperatorServiceLog"));
 
 // ---------------- Supervisor ----------------
 
-const SupervisorDashboard = lazy(
-  () => import("./pages/Supervisor/SupervisorDashboard"),
-);
+const SupervisorDashboard = lazy(() => import("./dashboards/supervisor/SupervisorDashboard"));
 
-const SupervisorMachines = lazy(
-  () => import("./pages/Supervisor/SupervisorMachines"),
-);
+const SupervisorMachines = lazy(() => import("./dashboards/supervisor/SupervisorMachines"));
 
-const SupervisorOperators = lazy(
-  () => import("./pages/Supervisor/SupervisorOperators"),
-);
+const SupervisorOperators = lazy(() => import("./dashboards/supervisor/SupervisorOperators"));
 
-const SupervisorTasks = lazy(
-  () => import("./pages/Supervisor/SupervisorTasks"),
-);
+const SupervisorTasks = lazy(() => import("./dashboards/supervisor/SupervisorTasks"));
 
-const SupervisorReports = lazy(
-  () => import("./pages/Supervisor/ReportingManagement"),
-);
+const SupervisorReports = lazy(() => import("./dashboards/supervisor/ReportingManagement"));
 
-const SupervisorAlerts = lazy(
-  () => import("./pages/Supervisor/SupervisorAlerts"),
-);
+const SupervisorAlerts = lazy(() => import("./dashboards/supervisor/SupervisorAlerts"));
 
-const SupervisorComponent = lazy(
-  () => import("./pages/Supervisor/SupervisorComponent"),
-);
+const SupervisorComponent = lazy(() => import("./dashboards/supervisor/SupervisorComponent"));
 
-const SupervisorFleet = lazy(() => import("./pages/Supervisor/Fleet"));
+const SupervisorFleet = lazy(() => import("./dashboards/supervisor/Fleet"));
 
-const SupervisorUpdateData = lazy(
-  () => import("./pages/Supervisor/UpdateData"),
-);
-
-const SupervisorLog = lazy(() => import("./pages/Supervisor/ServiceLog"));
+const SupervisorLog = lazy(() => import("./dashboards/supervisor/ServiceLog"));
 
 import AuthInitializer from "./routes/AuthInitializer";
 
@@ -293,6 +194,28 @@ export default function App() {
 
     // Connect WebSocket
     socketService.connect(user.id || user.userId, role || user.role, token);
+
+    // Listen Notifications
+    const unsubscribe = socketService.onMessage((data) => {
+      console.log("WS MESSAGE:", data);
+
+      if (data.type === "ALERT") {
+        console.log("ALERT RECEIVED:", data.data);
+
+        addNotification({
+          title: data.data.title,
+          message: data.data.message,
+          severity: data.data.severity || "info",
+        });
+
+        alert(data.data.message);
+      }
+    });
+
+    return () => {
+      unsubscribe();
+      socketService.disconnect();
+    };
   }, []);
 
   return (
@@ -300,58 +223,14 @@ export default function App() {
       <ScrollToTop />
       <AuthInitializer />
 
-      <Suspense fallback={<PageSkeleton />}>
+      <Suspense fallback={<div>Loading...</div>}>
         <Routes>
           {/* Public Routes */}
           <Route
             path="/"
             element={
-              <Suspense fallback={<PageSkeleton />}>
+              <Suspense fallback={<div>Loading...</div>}>
                 <LandingPage />
-              </Suspense>
-            }
-          />
-          <Route
-            path="/features"
-            element={
-              <Suspense fallback={<PageSkeleton />}>
-                <FeaturesPage />
-              </Suspense>
-            }
-          />
-
-          <Route
-            path="/maintenance"
-            element={
-              <Suspense fallback={<PageSkeleton />}>
-                <MaintenancePage />
-              </Suspense>
-            }
-          />
-
-          <Route
-            path="/reports"
-            element={
-              <Suspense fallback={<PageSkeleton />}>
-                <ReportsPage />
-              </Suspense>
-            }
-          />
-
-          <Route
-            path="/about"
-            element={
-              <Suspense fallback={<PageSkeleton />}>
-                <AboutPage />
-              </Suspense>
-            }
-          />
-
-          <Route
-            path="/contact"
-            element={
-              <Suspense fallback={<PageSkeleton />}>
-                <ContactPage />
               </Suspense>
             }
           />
@@ -359,7 +238,7 @@ export default function App() {
           <Route
             path="/plans"
             element={
-              <Suspense fallback={<PageSkeleton />}>
+              <Suspense fallback={<div>Loading...</div>}>
                 <PricingPage />
               </Suspense>
             }
@@ -367,7 +246,7 @@ export default function App() {
           <Route
             path="/cart"
             element={
-              <Suspense fallback={<PageSkeleton />}>
+              <Suspense fallback={<div>Loading...</div>}>
                 <CartPage />
               </Suspense>
             }
@@ -375,7 +254,7 @@ export default function App() {
           <Route
             path="/signup"
             element={
-              <Suspense fallback={<PageSkeleton />}>
+              <Suspense fallback={<div>Loading...</div>}>
                 <SignUp />
               </Suspense>
             }
@@ -383,7 +262,7 @@ export default function App() {
           <Route
             path="/signin"
             element={
-              <Suspense fallback={<PageSkeleton />}>
+              <Suspense fallback={<div>Loading...</div>}>
                 <SignIn />
               </Suspense>
             }
@@ -391,7 +270,7 @@ export default function App() {
           <Route
             path="/super-admin/login"
             element={
-              <Suspense fallback={<PageSkeleton />}>
+              <Suspense fallback={<div>Loading...</div>}>
                 <SuperAdminLogin />
               </Suspense>
             }
@@ -401,9 +280,7 @@ export default function App() {
           {/* Super Admin Routes */}
           <Route
             element={
-              <RoleProtectedRoute
-                allowedRoles={["super_admin", "superadmin", "system_admin"]}
-              />
+              <RoleProtectedRoute allowedRoles={["super_admin", "superadmin", "system_admin"]} />
             }
           >
             <Route element={<AppLayout role="super_admin" />}>
@@ -415,7 +292,7 @@ export default function App() {
               <Route
                 path="/super-admin/dashboard"
                 element={
-                  <Suspense fallback={<PageSkeleton />}>
+                  <Suspense fallback={<div>Loading...</div>}>
                     <Home />
                   </Suspense>
                 }
@@ -426,7 +303,7 @@ export default function App() {
               <Route
                 path="/super-admin/intelligence"
                 element={
-                  <Suspense fallback={<PageSkeleton />}>
+                  <Suspense fallback={<div>Loading...</div>}>
                     <FleetIntelligence />
                   </Suspense>
                 }
@@ -435,20 +312,11 @@ export default function App() {
               <Route path="/admin-management/users" element={<UsersPage />} />
               <Route path="/admin-management/roles" element={<RolesPage />} />
 
-              <Route
-                path="/admin-management/roles/:roleId"
-                element={<RoleDetailsPage />}
-              />
+              <Route path="/admin-management/roles/:roleId" element={<RoleDetailsPage />} />
 
-              <Route
-                path="/admin-management/plans"
-                element={<PlanManagement />}
-              />
+              <Route path="/admin-management/plans" element={<PlanManagement />} />
 
-              <Route
-                path="/super-admin/company-admins"
-                element={<CompanyAdminsPage />}
-              />
+              <Route path="/super-admin/company-admins" element={<CompanyAdminsPage />} />
 
               <Route
                 path="/company-admins"
@@ -458,51 +326,42 @@ export default function App() {
               <Route path="/super-admin/operators" element={<Operators />} />
               <Route path="/super-admin/mechanics" element={<Mechanics />} />
 
-              <Route
+              {/* <Route
                 path="/super-admin/plans-billing"
                 element={<PlanAndBilling />}
               />
               <Route
                 path="/super-admin/invoice/:id"
                 element={<InvoicePreviewPage />}
-              />
+              /> */}
 
-              <Route
+              {/* <Route
                 path="/super-admin/machines"
                 element={<SuperAdminMachinesPage />}
-              />
+              /> */}
 
-              <Route
+              {/* <Route
                 path="/super-admin/fleet"
                 element={
-                  <Suspense fallback={<PageSkeleton />}>
+                  <Suspense fallback={<div>Loading...</div>}>
                     <FleetMonitoring />
                   </Suspense>
                 }
-              />
+              /> */}
 
-              <Route
+              {/* <Route
                 path="/super-admin/components"
                 element={<SuperAdminComponents />}
               />
 
               <Route
-                path="/super-admin/notifications"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <NotificationsPage />
-                  </Suspense>
-                }
-              />
-
-              <Route
                 path="/super-admin/service-logs"
                 element={
-                  <Suspense fallback={<PageSkeleton />}>
+                  <Suspense fallback={<div>Loading...</div>}>
                     <ServiceLog1 />
                   </Suspense>
                 }
-              />
+              /> */}
 
               <Route path="/blank" element={<Blank />} />
               <Route path="/form-elements" element={<FormElements />} />
@@ -519,95 +378,63 @@ export default function App() {
           </Route>
 
           {/* Company Admin Routes */}
-          <Route
+          {/* <Route
             element={
               <RoleProtectedRoute
                 allowedRoles={["company_admin", "admin", "companyadmin"]}
               />
             }
-          >
-            <Route element={<AppLayout role="company_admin" />}>
-              <Route
-                path="/company-admin"
-                element={<Navigate to="/company-admin/dashboard" replace />}
-              />
+          > */}
+          <Route element={<AppLayout role="company_admin" />}>
+            <Route
+              path="/company-admin"
+              element={<Navigate to="/company-admin/dashboard" replace />}
+            />
 
-              <Route
-                path="/company-admin/dashboard"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <CompanyAdminDashboard />
-                  </Suspense>
-                }
-              />
+            <Route
+              path="/company-admin/dashboard"
+              element={
+                <Suspense fallback={<div>Loading...</div>}>
+                  <CompanyAdminDashboard />
+                </Suspense>
+              }
+            />
 
-              <Route path="/company-admin/profile" element={<UserProfiles />} />
+            <Route path="/company-admin/profile" element={<UserProfiles />} />
 
-              <Route
-                path="/company-admin/register"
-                element={<ComponentRegister />}
-              />
+            <Route path="/company-admin/register" element={<ComponentRegister />} />
 
-              <Route path="/company-admin/heatmap" element={<FleetHeatMap />} />
+            <Route path="/company-admin/maintenance" element={<MaintenanceLog />} />
 
-              <Route
-                path="/company-admin/add-component"
-                element={<AddComponent />}
-              />
+            <Route path="/company-admin/heatmap" element={<FleetHeatMap />} />
 
-              <Route path="/company-admin/alerts" element={<AlertsPage />} />
+            <Route path="/company-admin/add-component" element={<AddComponent />} />
 
-              <Route
-                path="/company-admin/data-update"
-                element={<UpdatePage />}
-              />
-
-              <Route
-                path="/company-admin/staff"
-                element={<StaffManagement />}
-              />
-              <Route
-                path="/company-admin/machines"
-                element={<MachineManagement />}
-              />
-              <Route
-                path="/company-admin/subscriptions"
-                element={<SubscriptionHistory />}
-              />
-              <Route
+            <Route path="/company-admin/alerts" element={<AlertsPage />} />
+            <Route path="/company-admin/staff" element={<StaffManagement />} />
+            <Route path="/company-admin/machines" element={<MachineManagement />} />
+            <Route path="/company-admin/subscriptions" element={<SubscriptionHistory />} />
+            {/* <Route
                 path="/company-admin/reporting"
                 element={<ReportingManagement />}
               />
-
-              <Route
-                path="/company-admin/notifications"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <NotificationsPage />
-                  </Suspense>
-                }
-              />
-
               <Route
                 path="/company-admin/service-log"
                 element={
-                  <Suspense fallback={<PageSkeleton />}>
+                  <Suspense fallback={<div>Loading...</div>}>
                     <ServiceLog />
                   </Suspense>
                 }
               />
-            </Route>
+            </Route> */}
           </Route>
           <Route element={<RoleProtectedRoute allowedRoles={["artisans"]} />}>
             <Route element={<AppLayout role="artisans" />}>
-              <Route
-                path="/artisans"
-                element={<Navigate to="/artisans/dashboard" replace />}
-              />
+              <Route path="/artisans" element={<Navigate to="/artisans/dashboard" replace />} />
               <Route
                 path="/artisans/dashboard"
                 element={
-                  <Suspense fallback={<PageSkeleton />}>
+                  <Suspense fallback={<div>Loading...</div>}>
                     <ArtisansDashboard />
                   </Suspense>
                 }
@@ -620,62 +447,23 @@ export default function App() {
 
               <Route path="/artisans/alerts" element={<ArtisansAlerts />} />
 
-              <Route
-                path="/artisans/maintenance"
-                element={<ArtisansMaintenance />}
-              />
+              <Route path="/artisans/maintenance" element={<ArtisansMaintenance />} />
 
-              <Route
-                path="/artisans/fleet-heat"
-                element={<ArtisansFleetHeat />}
-              />
-              
-              <Route
-                path="/artisans/data-update"
-                element={<ArtisansUpdateData />}
-              />
+              <Route path="/artisans/fleet-heat" element={<ArtisansFleetHeat />} />
 
-              <Route
-                path="/artisans/notifications"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <NotificationsPage />
-                  </Suspense>
-                }
-              />
-
-              <Route
-                path="/artisans/service-logs"
-                element={<ArtisansServiceLogs />}
-              />
+              <Route path="/artisans/service-logs" element={<ArtisansServiceLogs />} />
             </Route>
           </Route>
 
           {/* Operator Routes */}
-          <Route
-            element={
-              <RoleProtectedRoute allowedRoles={["operator", "planner"]} />
-            }
-          >
+          <Route element={<RoleProtectedRoute allowedRoles={["operator", "planner"]} />}>
             <Route element={<AppLayout role="operator" />}>
-              <Route
-                path="/operator"
-                element={<Navigate to="/operator/dashboard" replace />}
-              />
-
-              <Route
-                path="/operator/notifications"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <NotificationsPage />
-                  </Suspense>
-                }
-              />
+              <Route path="/operator" element={<Navigate to="/operator/dashboard" replace />} />
 
               <Route
                 path="/operator/dashboard"
                 element={
-                  <Suspense fallback={<PageSkeleton />}>
+                  <Suspense fallback={<div>Loading...</div>}>
                     <OperatorDashboard />
                   </Suspense>
                 }
@@ -685,113 +473,66 @@ export default function App() {
 
               <Route path="/operator/machines" element={<OperatorMachines />} />
 
-              <Route
-                path="/operator/running-logs"
-                element={<OperatorRunningLogs />}
-              />
+              <Route path="/operator/running-logs" element={<OperatorRunningLogs />} />
 
               <Route path="/operator/alerts" element={<OperatorAlerts />} />
-              <Route
-                path="/operator/checklist"
-                element={<OperatorChecklist />}
-              />
+              <Route path="/operator/checklist" element={<OperatorChecklist />} />
               <Route path="/operator/tasks" element={<OperatorTasks />} />
               <Route
                 path="/operator/fleet"
                 element={
-                  <Suspense fallback={<PageSkeleton />}>
+                  <Suspense fallback={<div>Loading...</div>}>
                     <OperatorFleet />
-                  </Suspense>
-                }
-              />
-              <Route
-                path="/operator/data-update"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <OperatorDataUpdate />
                   </Suspense>
                 }
               />
               <Route
                 path="/operator/service-logs"
                 element={
-                  <Suspense fallback={<PageSkeleton />}>
+                  <Suspense fallback={<div>Loading...</div>}>
                     <OperatorServiceLog />
                   </Suspense>
                 }
               />
 
-              <Route
-                path="/operator/report-issue"
-                element={<OperatorReportIssue />}
-              />
+              <Route path="/operator/report-issue" element={<OperatorReportIssue />} />
             </Route>
           </Route>
 
           {/* Supervisor Routes */}
           <Route element={<RoleProtectedRoute allowedRoles={["supervisor"]} />}>
             <Route element={<AppLayout role="supervisor" />}>
-              <Route
-                path="/supervisor"
-                element={<Navigate to="/supervisor/dashboard" replace />}
-              />
+              <Route path="/supervisor" element={<Navigate to="/supervisor/dashboard" replace />} />
 
               <Route
                 path="/supervisor/dashboard"
                 element={
-                  <Suspense fallback={<PageSkeleton />}>
+                  <Suspense fallback={<div>Loading...</div>}>
                     <SupervisorDashboard />
                   </Suspense>
                 }
               />
 
-              <Route
-                path="/supervisor/machines"
-                element={<SupervisorMachines />}
-              />
-              <Route
-                path="/supervisor/operators"
-                element={<SupervisorOperators />}
-              />
+              <Route path="/supervisor/machines" element={<SupervisorMachines />} />
+              <Route path="/supervisor/operators" element={<SupervisorOperators />} />
 
-              <Route
-                path="/supervisor/components"
-                element={<SupervisorComponent />}
-              />
-
-              <Route
-                path="/supervisor/notifications"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <NotificationsPage />
-                  </Suspense>
-                }
-              />
-
+              <Route path="/supervisor/components" element={<SupervisorComponent />} />
               <Route
                 path="/supervisor/service-log"
                 element={
-                  <Suspense fallback={<PageSkeleton />}>
+                  <Suspense fallback={<div>Loading...</div>}>
                     <SupervisorLog />
                   </Suspense>
                 }
               />
               <Route path="/supervisor/fleet" element={<SupervisorFleet />} />
 
-              <Route
-                path="/supervisor/data-update"
-                element={<SupervisorUpdateData />}
-              />
-              <Route
-                path="/supervisor/updatedata"
-                element={<SupervisorUpdateData />}
-              />
-
               <Route path="/supervisor/tasks" element={<SupervisorTasks />} />
+
               <Route
                 path="/supervisor/reports"
                 element={
-                  <Suspense fallback={<PageSkeleton />}>
+                  <Suspense fallback={<div>Loading...</div>}>
                     <SupervisorReports />
                   </Suspense>
                 }
@@ -802,10 +543,7 @@ export default function App() {
           </Route>
 
           {/* Coming Soon Routes */}
-          <Route
-            path="/company-admin/coming-soon/:module"
-            element={<ComingSoon />}
-          />
+          <Route path="/company-admin/coming-soon/:module" element={<ComingSoon />} />
 
           <Route path="/coming-soon" element={<ComingSoon />} />
 

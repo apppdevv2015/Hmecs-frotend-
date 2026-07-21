@@ -50,6 +50,8 @@ class OfflineQueueService {
           db.createObjectStore(STORE_NAME, {
             keyPath: "id",
           });
+
+          console.log("[Offline DB] Store created");
         }
       };
     });
@@ -80,6 +82,8 @@ class OfflineQueueService {
         store.add(payload);
 
         tx.oncomplete = () => {
+          console.log("[Offline Queue] Saved:", payload.endpoint);
+
           resolve();
         };
 
@@ -156,8 +160,13 @@ class OfflineQueueService {
     requests.sort((a, b) => a.timestamp - b.timestamp);
 
     if (requests.length === 0) {
+      console.log("[Offline Sync] No pending requests");
+
       return;
     }
+
+    console.log(`[Offline Sync] Found ${requests.length} requests`);
+
     for (const item of requests) {
       try {
         const response = await fetch(item.endpoint, {
@@ -171,6 +180,8 @@ class OfflineQueueService {
         if (response.ok) {
           await this.removeRequest(item.id);
 
+          console.log("[Offline Sync] Success:", item.endpoint);
+
           // Notify app to refetch data
           window.dispatchEvent(
             new CustomEvent("offline-sync-success", {
@@ -180,11 +191,7 @@ class OfflineQueueService {
             }),
           );
         } else {
-          console.error(
-            "[Offline Sync] Failed:",
-            response.status,
-            item.endpoint,
-          );
+          console.error("[Offline Sync] Failed:", response.status, item.endpoint);
         }
       } catch (error) {
         console.error("[Offline Sync] Error:", error);

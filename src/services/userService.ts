@@ -1,5 +1,6 @@
-import { apiCall } from "./apiHandler";
+import { apiRequest } from "./api";
 import StorageService, { STORAGE_KEYS } from "./storage.service";
+import { decodeToken } from "../utils/token";
 
 export type ApiRole = {
   id: number;
@@ -32,6 +33,7 @@ export type ApiUser = {
   created_at?: string;
   updatedAt?: string;
   updated_at?: string;
+  companyId?: string | number | null;
   company_id?: string | number | null;
   company_code?: string | null;
   company_name?: string | null;
@@ -54,6 +56,7 @@ export type AddUserPayload = {
   role_name?: string;
   role_id?: number;
   company?: string;
+  companyId?: string | number;
   company_id?: string | number;
 };
 
@@ -67,6 +70,7 @@ export type UpdateUserPayload = {
   role_id?: string | number;
   roleId?: string | number;
 
+  companyId?: string | number;
   company_id?: string | number;
   company_name?: string;
 
@@ -122,22 +126,15 @@ const roleNameMap: Record<string, string> = {
 };
 
 const isValidUUID = (value: string) => {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-    value,
-  );
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 };
 
 const getCompanyIdFromToken = () => {
-  try {
-    const token = StorageService.get<string>(STORAGE_KEYS.TOKEN);
-    if (!token) return "";
+  const token = StorageService.get<string>(STORAGE_KEYS.TOKEN);
+  if (!token) return "";
 
-    const payload = JSON.parse(atob(token.split(".")[1]));
-
-    return payload.company_id || payload.companyId || payload.company?.id || "";
-  } catch {
-    return "";
-  }
+  const payload = decodeToken<any>(token);
+  return payload?.companyId || payload?.company_id || payload?.company?.id || "";
 };
 
 const splitName = (name = "") => {
@@ -158,20 +155,14 @@ const getValidCompanyId = (company?: string | number) => {
   return undefined;
 };
 
-export const normalizeUsersResponse = (
-  response: UsersResponse | ApiUser[],
-): ApiUser[] => {
+export const normalizeUsersResponse = (response: UsersResponse | ApiUser[]): ApiUser[] => {
   if (Array.isArray(response)) return response;
 
   if (Array.isArray(response.users)) return response.users;
   if (Array.isArray(response.results)) return response.results;
   if (Array.isArray(response.data)) return response.data;
 
-  if (
-    response.data &&
-    !Array.isArray(response.data) &&
-    Array.isArray(response.data.users)
-  ) {
+  if (response.data && !Array.isArray(response.data) && Array.isArray(response.data.users)) {
     return response.data.users;
   }
 
@@ -180,11 +171,12 @@ export const normalizeUsersResponse = (
 
 export const userService = {
   getRoles: async (): Promise<ApiRole[]> => {
-    const response = await apiCall<
-      { data?: ApiRole[]; roles?: ApiRole[] } | ApiRole[]
-    >("/auth/roles", {
-      method: "GET",
-    });
+    const response = await apiRequest<{ data?: ApiRole[]; roles?: ApiRole[] } | ApiRole[]>(
+      "/auth/roles",
+      {
+        method: "GET",
+      },
+    );
 
     if (Array.isArray(response)) return response;
 
@@ -207,20 +199,18 @@ export const userService = {
     if (role.trim()) params.append("role", role.trim());
     if (status.trim()) params.append("status", status.trim());
 
-    return apiCall<UsersResponse | ApiUser[]>(
-      `/auth/users?${params.toString()}`,
+    return apiRequest<UsersResponse | ApiUser[]>(`/auth/users?${params.toString()}`, {
+      method: "GET",
+    });
+  },
+
+  getUserById: async (id: string | number): Promise<ApiUser> => {
+    const response = await apiRequest<ApiUser | { data?: ApiUser; user?: ApiUser }>(
+      `/auth/users/${id}`,
       {
         method: "GET",
       },
     );
-  },
-
-  getUserById: async (id: string | number): Promise<ApiUser> => {
-    const response = await apiCall<
-      ApiUser | { data?: ApiUser; user?: ApiUser }
-    >(`/auth/users/${id}`, {
-      method: "GET",
-    });
 
     if ("data" in response && response.data) return response.data;
     if ("user" in response && response.user) return response.user;
@@ -234,31 +224,25 @@ export const userService = {
     const lastName = payload.last_name || nameParts.lastName;
 
     const roleName =
-      payload.role_name ||
-      (payload.role ? roleNameMap[payload.role] || payload.role : undefined);
+      payload.role_name || (payload.role ? roleNameMap[payload.role] || payload.role : undefined);
 
     const roleId = payload.role_id;
-    const companyId = payload.company_id || getValidCompanyId(payload.company);
+    const companyId = payload.companyId || payload.company_id || getValidCompanyId(payload.company);
 
-    return apiCall(
-      "/auth/users",
-      {
-        method: "POST",
-        body: JSON.stringify({
-          first_name: firstName,
-          last_name: lastName,
-          email: payload.email.trim(),
-          password: payload.password,
-          mobile_number: (payload.mobile_number || payload.phone || "").trim(),
-          ...(roleName ? { role_name: roleName } : {}),
-          ...(roleId ? { role_id: roleId } : {}),
-          ...(companyId ? { company_id: companyId } : {}),
-        }),
-      },
-      {
-        showSuccess: true,
-      },
-    );
+    return apiRequest("/auth/users", {
+      method: "POST",
+      body: JSON.stringify({
+        first_name: firstName,
+        last_name: lastName,
+        email: payload.email.trim(),
+        password: payload.password,
+        mobile_number: (payload.mobile_number || payload.phone || "").trim(),
+        role_name: roleName,
+        role_id: roleId,
+        companyId: companyId,
+        company_id: companyId,
+      }),
+    });
   },
 
   updateUser: async (
@@ -271,67 +255,46 @@ export const userService = {
 
     const roleId = payload.roleId || payload.role_id;
 
-    return apiCall<UpdateUserResponse>(
-      `/auth/users/${id}`,
-      {
-        method: "PUT",
-        body: JSON.stringify({
-          ...(payload.first_name !== undefined
-            ? { first_name: payload.first_name }
-            : {}),
-          ...(payload.last_name !== undefined
-            ? { last_name: payload.last_name }
-            : {}),
-          ...(payload.email ? { email: payload.email.trim() } : {}),
-          ...(payload.mobile_number
-            ? { mobile_number: payload.mobile_number.trim() }
-            : {}),
-          ...(roleName ? { role_name: roleName } : {}),
+    return apiRequest<UpdateUserResponse>(`/auth/users/${id}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        ...(payload.first_name !== undefined ? { first_name: payload.first_name } : {}),
+        ...(payload.last_name !== undefined ? { last_name: payload.last_name } : {}),
+        ...(payload.email ? { email: payload.email.trim() } : {}),
+        ...(payload.mobile_number ? { mobile_number: payload.mobile_number.trim() } : {}),
+        ...(roleName ? { role_name: roleName } : {}),
 
-          ...(roleId ? { role_id: roleId } : {}),
+        ...(roleId ? { role_id: roleId } : {}),
 
-          ...(payload.company_id ? { company_id: payload.company_id } : {}),
-          ...(payload.company_name
-            ? { company_name: payload.company_name }
-            : {}),
-          ...(payload.status ? { status: payload.status } : {}),
-          ...(typeof payload.is_active === "boolean"
-            ? { is_active: payload.is_active }
-            : {}),
-        }),
-      },
-      {
-        showSuccess: true,
-       
-      },
-    );
+        ...(payload.companyId || payload.company_id
+          ? {
+              companyId: payload.companyId || payload.company_id,
+              company_id: payload.companyId || payload.company_id,
+            }
+          : {}),
+        ...(payload.company_name ? { company_name: payload.company_name } : {}),
+        ...(payload.status ? { status: payload.status } : {}),
+        ...(typeof payload.is_active === "boolean" ? { is_active: payload.is_active } : {}),
+      }),
+    });
   },
 
   deleteUser: async (id: string | number) => {
-    return apiCall(
-      `/auth/users/${id}`,
-      {
-        method: "DELETE",
-      },
-      {
-        showSuccess: true,
-      },
-    );
+    return apiRequest(`/auth/users/${id}`, {
+      method: "DELETE",
+    });
   },
 
   getActiveSubscription: async (): Promise<any> => {
-    return apiCall<any>("/plans/active", {
+    return apiRequest<any>("/plans/active", {
       method: "GET",
     });
   },
 
   getSubscriptionHistory: async (): Promise<any[]> => {
-    const response = await apiCall<any[] | { data?: any[] }>(
-      "/plans/subscriptions",
-      {
-        method: "GET",
-      },
-    );
+    const response = await apiRequest<any[] | { data?: any[] }>("/plans/subscriptions", {
+      method: "GET",
+    });
 
     if (Array.isArray(response)) return response;
 
@@ -339,7 +302,7 @@ export const userService = {
   },
 
   getMachines: async (): Promise<any[]> => {
-    const response = await apiCall<any[] | { data?: any[] }>("/machines", {
+    const response = await apiRequest<any[] | { data?: any[] }>("/machines", {
       method: "GET",
     });
 
@@ -349,15 +312,9 @@ export const userService = {
   },
 
   registerMachine: async (machineData: any): Promise<any> => {
-    return apiCall<any>(
-      "/machines",
-      {
-        method: "POST",
-        body: JSON.stringify(machineData),
-      },
-      {
-        showSuccess: true,
-      },
-    );
+    return apiRequest<any>("/machines", {
+      method: "POST",
+      body: JSON.stringify(machineData),
+    });
   },
 };

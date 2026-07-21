@@ -23,9 +23,7 @@ const updateSW = registerSW({
       updateSW(true);
     }
   },
-  onOfflineReady() {
-    
-  },
+  onOfflineReady() {},
 });
 
 // Sync on app startup if online
@@ -43,7 +41,6 @@ if (navigator.onLine) {
 }
 
 window.addEventListener("online", async () => {
-
   // Sync app-level queue
   await offlineQueueService.syncRequests();
 
@@ -56,14 +53,13 @@ window.addEventListener("online", async () => {
 });
 
 createRoot(document.getElementById("root")!).render(
-  
-    <Provider store={store}>
-      <HelmetProvider>
-        <ThemeProvider>
-          <NotificationProvider>
-            <App />
-          </NotificationProvider>
-        </ThemeProvider>
-      </HelmetProvider>
-    </Provider>
+  <Provider store={store}>
+    <HelmetProvider>
+      <ThemeProvider>
+        <NotificationProvider>
+          <App />
+        </NotificationProvider>
+      </ThemeProvider>
+    </HelmetProvider>
+  </Provider>,
 );

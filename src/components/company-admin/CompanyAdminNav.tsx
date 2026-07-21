@@ -56,18 +56,8 @@ export const CompanyAdminNav: React.FC = () => {
           const isActive = currentPath === item.path;
 
           return (
-            <Link
-              key={item.path}
-              to={item.path}
-              className={getNavClass(isActive)}
-            >
-              <span
-                className={
-                  isActive
-                    ? "text-white"
-                    : "text-blue-500 dark:text-blue-400"
-                }
-              >
+            <Link key={item.path} to={item.path} className={getNavClass(isActive)}>
+              <span className={isActive ? "text-white" : "text-blue-500 dark:text-blue-400"}>
                 {item.icon}
               </span>
 

@@ -165,19 +165,13 @@ export default function SuperAdminLogin() {
           </div>
 
           <div className="mb-8 text-center">
-            <h1 className="text-2xl font-bold text-white">
-              Super Admin Login
-            </h1>
-            <p className="mt-2 text-sm text-slate-400">
-              HME Component Intelligence System
-            </p>
+            <h1 className="text-2xl font-bold text-white">Super Admin Login</h1>
+            <p className="mt-2 text-sm text-slate-400">HME Component Intelligence System</p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-5" noValidate>
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-300">
-                Email Address
-              </label>
+              <label className="mb-2 block text-sm font-medium text-slate-300">Email Address</label>
 
               <div className="relative">
                 <Mail className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
@@ -194,9 +188,7 @@ export default function SuperAdminLogin() {
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-300">
-                Password
-              </label>
+              <label className="mb-2 block text-sm font-medium text-slate-300">Password</label>
 
               <div className="relative">
                 <Lock className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
@@ -216,11 +208,7 @@ export default function SuperAdminLogin() {
                   className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-white"
                   aria-label={showPassword ? "Hide password" : "Show password"}
                 >
-                  {showPassword ? (
-                    <EyeOff className="h-5 w-5" />
-                  ) : (
-                    <Eye className="h-5 w-5" />
-                  )}
+                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                 </button>
               </div>
             </div>

@@ -1,11 +1,4 @@
-import {
-  createContext,
-  useContext,
-  useState,
-  useMemo,
-  useEffect,
-  ReactNode,
-} from "react";
+import { createContext, useContext, useState, useMemo, useEffect, ReactNode } from "react";
 
 import socketService from "../services/socketService";
 
@@ -20,13 +13,7 @@ export interface Notification {
   /** Optional list of recipient roles (if provided by backend) */
   recipientRoles?: string[];
 
-  category:
-    | "Machine"
-    | "Task"
-    | "Report"
-    | "Maintenance"
-    | "Component"
-    | "Subscription";
+  category: "Machine" | "Task" | "Report" | "Maintenance" | "Component" | "Subscription";
 
   machineName?: string;
 
@@ -45,9 +32,7 @@ interface NotificationContextType {
   notifications: Notification[];
   unreadCount: number;
 
-  addNotification: (
-    notification: Partial<Omit<Notification, "id" | "timestamp" | "read">>,
-  ) => void;
+  addNotification: (notification: Partial<Omit<Notification, "id" | "timestamp" | "read">>) => void;
 
   markAsRead: (id: string) => void;
 
@@ -106,9 +91,7 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const removeNotification = (id: string) => {
-    setNotifications((prev) =>
-      prev.filter((notification) => notification.id !== id),
-    );
+    setNotifications((prev) => prev.filter((notification) => notification.id !== id));
   };
 
   const clearNotifications = () => {
@@ -117,11 +100,8 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     const unsubscribe = socketService.onMessage((data) => {
-
       // Defensive guards: socket payloads may vary. Ignore non-object messages.
       try {
-        
-
         if (!data || typeof data !== "object") return;
 
         const type = (data as any).type || null;
@@ -132,7 +112,6 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
         const payload = (data as any).data || (data as any);
 
         if (!payload || typeof payload !== "object") return;
-         
 
         addNotification({
           title: payload.title || payload.component || "Notification",
@@ -179,9 +158,7 @@ export const useNotifications = () => {
   const context = useContext(NotificationContext);
 
   if (!context) {
-    throw new Error(
-      "useNotifications must be used inside NotificationProvider",
-    );
+    throw new Error("useNotifications must be used inside NotificationProvider");
   }
 
   return context;

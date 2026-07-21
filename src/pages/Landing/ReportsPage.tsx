@@ -49,8 +49,7 @@ const reportCategories: ReportCategory[] = [
   {
     icon: Settings,
     title: "Machine Reports",
-    description:
-      "Analyze machine runtime, health score, operating hours, and productivity trends.",
+    description: "Analyze machine runtime, health score, operating hours, and productivity trends.",
   },
   {
     icon: Wrench,
@@ -144,8 +143,7 @@ const workflowSteps = [
   {
     icon: FileText,
     title: "Report Generation",
-    description:
-      "Structured reports are compiled automatically, ready for export as PDF or Excel.",
+    description: "Structured reports are compiled automatically, ready for export as PDF or Excel.",
   },
   {
     icon: ClipboardCheck,
@@ -206,116 +204,115 @@ export default function ReportsPage() {
 
       <main>
         {/* HERO */}
-       <section className="relative overflow-hidden border-b border-slate-200 bg-gradient-to-br from-blue-50 via-sky-50 to-cyan-50 px-5 py-16 dark:border-slate-800 dark:from-slate-950 dark:via-slate-900 dark:to-blue-950 sm:px-6 lg:px-8 lg:py-20">
-  {/* Background Effects */}
-  <div className="absolute -left-40 top-10 h-96 w-96 rounded-full bg-blue-400/15 blur-[120px]" />
+        <section className="relative overflow-hidden border-b border-slate-200 bg-gradient-to-br from-blue-50 via-sky-50 to-cyan-50 px-5 py-16 dark:border-slate-800 dark:from-slate-950 dark:via-slate-900 dark:to-blue-950 sm:px-6 lg:px-8 lg:py-20">
+          {/* Background Effects */}
+          <div className="absolute -left-40 top-10 h-96 w-96 rounded-full bg-blue-400/15 blur-[120px]" />
 
-  <div className="absolute -right-32 bottom-0 h-[420px] w-[420px] rounded-full bg-cyan-400/15 blur-[140px]" />
+          <div className="absolute -right-32 bottom-0 h-[420px] w-[420px] rounded-full bg-cyan-400/15 blur-[140px]" />
 
-  <div
-    className="absolute inset-0 opacity-[0.04]"
-    style={{
-      backgroundImage: `
+          <div
+            className="absolute inset-0 opacity-[0.04]"
+            style={{
+              backgroundImage: `
         linear-gradient(to right,#2563eb 1px,transparent 1px),
         linear-gradient(to bottom,#2563eb 1px,transparent 1px)
       `,
-      backgroundSize: "52px 52px",
-    }}
-  />
+              backgroundSize: "52px 52px",
+            }}
+          />
 
-  <div className="relative z-10 mx-auto grid max-w-7xl items-center gap-14 lg:grid-cols-2">
-    {/* Left */}
-    <div
-      className={`transition-all duration-700 ${
-        visible ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"
-      }`}
-    >
-      <p className="text-sm font-bold uppercase tracking-[0.32em] text-blue-600">
-        Reports & Analytics
-      </p>
+          <div className="relative z-10 mx-auto grid max-w-7xl items-center gap-14 lg:grid-cols-2">
+            {/* Left */}
+            <div
+              className={`transition-all duration-700 ${
+                visible ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"
+              }`}
+            >
+              <p className="text-sm font-bold uppercase tracking-[0.32em] text-blue-600">
+                Reports & Analytics
+              </p>
 
-      <h1 className="mt-5 text-4xl font-extrabold leading-[1.08] tracking-[-0.03em] text-slate-950 dark:text-white sm:text-5xl lg:text-6xl">
-        Make Better Decisions
-        <span className="bg-gradient-to-r from-blue-600 via-blue-500 to-cyan-500 bg-clip-text text-transparent">
-          {" "}
-          With Intelligent Reports
-        </span>
-      </h1>
+              <h1 className="mt-5 text-4xl font-extrabold leading-[1.08] tracking-[-0.03em] text-slate-950 dark:text-white sm:text-5xl lg:text-6xl">
+                Make Better Decisions
+                <span className="bg-gradient-to-r from-blue-600 via-blue-500 to-cyan-500 bg-clip-text text-transparent">
+                  {" "}
+                  With Intelligent Reports
+                </span>
+              </h1>
 
-      <p className="mt-6 max-w-xl text-lg leading-8 text-slate-600 dark:text-slate-300">
-        HMEC delivers AI-powered reports, maintenance analytics, machine
-        performance insights, and component health summaries to help mining
-        teams improve operational efficiency, increase productivity, and reduce
-        unexpected downtime.
-      </p>
+              <p className="mt-6 max-w-xl text-lg leading-8 text-slate-600 dark:text-slate-300">
+                HMEC delivers AI-powered reports, maintenance analytics, machine performance
+                insights, and component health summaries to help mining teams improve operational
+                efficiency, increase productivity, and reduce unexpected downtime.
+              </p>
 
-      <div className="mt-10 flex flex-wrap gap-4">
-        <Link
-          to="/plans"
-          className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-blue-600/20 transition-all duration-300 hover:-translate-y-1 hover:bg-blue-700 hover:shadow-blue-600/30"
-        >
-          Explore Plans
-          <ArrowRight className="h-4 w-4" />
-        </Link>
+              <div className="mt-10 flex flex-wrap gap-4">
+                <Link
+                  to="/plans"
+                  className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-blue-600/20 transition-all duration-300 hover:-translate-y-1 hover:bg-blue-700 hover:shadow-blue-600/30"
+                >
+                  Explore Plans
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
 
-        <Link
-          to="/company-admin/coming-soon/demo"
-          className="rounded-xl border border-slate-300 bg-white/90 px-6 py-3 text-sm font-bold text-slate-800 backdrop-blur transition-all duration-300 hover:-translate-y-1 hover:border-blue-600 hover:text-blue-600 dark:border-slate-700 dark:bg-slate-900/80 dark:text-white dark:hover:border-blue-500 dark:hover:text-blue-400"
-        >
-          Book Demo
-        </Link>
-      </div>
-    </div>
-
-    {/* Right Dashboard */}
-    <div
-      className={`rounded-3xl border border-white/60 bg-white/80 p-7 shadow-2xl backdrop-blur-xl transition-all duration-700 dark:border-slate-800 dark:bg-slate-900/80 ${
-        visible ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"
-      }`}
-    >
-      <p className="text-sm font-bold uppercase tracking-[0.28em] text-blue-600">
-        Reporting Summary
-      </p>
-
-      <div className="mt-8 space-y-6">
-        {reportingSummary.map((item) => (
-          <div key={item.label}>
-            <div className="mb-2 flex items-center justify-between text-sm font-semibold text-slate-900 dark:text-white">
-              <span>{item.label}</span>
-
-              <span className="font-bold text-blue-600 dark:text-blue-400">
-                {item.value}
-              </span>
+                <Link
+                  to="/company-admin/coming-soon/demo"
+                  className="rounded-xl border border-slate-300 bg-white/90 px-6 py-3 text-sm font-bold text-slate-800 backdrop-blur transition-all duration-300 hover:-translate-y-1 hover:border-blue-600 hover:text-blue-600 dark:border-slate-700 dark:bg-slate-900/80 dark:text-white dark:hover:border-blue-500 dark:hover:text-blue-400"
+                >
+                  Book Demo
+                </Link>
+              </div>
             </div>
 
-            <div className="h-2 rounded-full bg-slate-200 dark:bg-slate-800">
-              <div
-                className={`h-2 rounded-full bg-gradient-to-r from-blue-600 to-cyan-500 ${item.width}`}
-              />
+            {/* Right Dashboard */}
+            <div
+              className={`rounded-3xl border border-white/60 bg-white/80 p-7 shadow-2xl backdrop-blur-xl transition-all duration-700 dark:border-slate-800 dark:bg-slate-900/80 ${
+                visible ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"
+              }`}
+            >
+              <p className="text-sm font-bold uppercase tracking-[0.28em] text-blue-600">
+                Reporting Summary
+              </p>
+
+              <div className="mt-8 space-y-6">
+                {reportingSummary.map((item) => (
+                  <div key={item.label}>
+                    <div className="mb-2 flex items-center justify-between text-sm font-semibold text-slate-900 dark:text-white">
+                      <span>{item.label}</span>
+
+                      <span className="font-bold text-blue-600 dark:text-blue-400">
+                        {item.value}
+                      </span>
+                    </div>
+
+                    <div className="h-2 rounded-full bg-slate-200 dark:bg-slate-800">
+                      <div
+                        className={`h-2 rounded-full bg-gradient-to-r from-blue-600 to-cyan-500 ${item.width}`}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-8 grid grid-cols-2 gap-4">
+                {summaryCards.map((card) => (
+                  <div
+                    key={card.label}
+                    className="rounded-2xl border border-slate-100 bg-white p-5 text-center shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg dark:border-slate-800 dark:bg-slate-950"
+                  >
+                    <h3 className="text-3xl font-extrabold text-blue-600 dark:text-blue-400">
+                      {card.value}
+                    </h3>
+
+                    <p className="mt-2 text-sm font-medium text-slate-500 dark:text-slate-400">
+                      {card.label}
+                    </p>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
-        ))}
-      </div>
-
-      <div className="mt-8 grid grid-cols-2 gap-4">
-        {summaryCards.map((card) => (
-          <div
-            key={card.label}
-            className="rounded-2xl border border-slate-100 bg-white p-5 text-center shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg dark:border-slate-800 dark:bg-slate-950"
-          >
-            <h3 className="text-3xl font-extrabold text-blue-600 dark:text-blue-400">
-              {card.value}
-            </h3>
-
-            <p className="mt-2 text-sm font-medium text-slate-500 dark:text-slate-400">
-              {card.label}
-            </p>
-          </div>
-        ))}
-      </div>
-    </div>
-  </div>
-</section>
+        </section>
 
         {/* REPORT CATEGORIES */}
         <section className="bg-slate-50 px-5 py-20 dark:bg-slate-900/30 sm:px-6 lg:px-8">
@@ -330,9 +327,8 @@ export default function ReportsPage() {
               </h2>
 
               <p className="mt-5 text-base leading-7 text-slate-600 dark:text-slate-300">
-                Access detailed reports for every machine, component,
-                maintenance activity, and operational performance from a
-                single platform.
+                Access detailed reports for every machine, component, maintenance activity, and
+                operational performance from a single platform.
               </p>
             </div>
 
@@ -413,15 +409,11 @@ export default function ReportsPage() {
                   <div key={item.title}>
                     <div className="mb-2 flex justify-between text-sm font-semibold text-slate-900 dark:text-white">
                       <span>{item.title}</span>
-                      <span className="text-blue-600 dark:text-blue-400">
-                        {item.value}
-                      </span>
+                      <span className="text-blue-600 dark:text-blue-400">{item.value}</span>
                     </div>
 
                     <div className="h-2 rounded-full bg-slate-200 dark:bg-slate-800">
-                      <div
-                        className={`h-2 rounded-full bg-blue-600 ${item.width}`}
-                      />
+                      <div className={`h-2 rounded-full bg-blue-600 ${item.width}`} />
                     </div>
                   </div>
                 ))}
@@ -442,10 +434,9 @@ export default function ReportsPage() {
               </h2>
 
               <p className="mt-6 text-base leading-8 text-slate-600 dark:text-slate-300">
-                HMEC transforms machine telemetry into meaningful operational
-                reports. Track fleet utilization, maintenance performance,
-                component condition, downtime trends, and productivity
-                metrics through one intelligent reporting platform.
+                HMEC transforms machine telemetry into meaningful operational reports. Track fleet
+                utilization, maintenance performance, component condition, downtime trends, and
+                productivity metrics through one intelligent reporting platform.
               </p>
 
               <div className="mt-8 space-y-5">
@@ -455,9 +446,7 @@ export default function ReportsPage() {
                       ✓
                     </div>
 
-                    <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                      {item}
-                    </p>
+                    <p className="text-sm font-medium text-slate-700 dark:text-slate-300">{item}</p>
                   </div>
                 ))}
               </div>
@@ -488,9 +477,8 @@ export default function ReportsPage() {
               </h2>
 
               <p className="mt-5 text-slate-600 dark:text-slate-300">
-                Every report generated by HMEC follows an automated workflow
-                that converts raw machine information into meaningful
-                operational insights.
+                Every report generated by HMEC follows an automated workflow that converts raw
+                machine information into meaningful operational insights.
               </p>
             </div>
 
@@ -537,10 +525,9 @@ export default function ReportsPage() {
               </h2>
 
               <p className="mt-5 text-base leading-7 text-slate-600 dark:text-slate-300">
-                Every report generated by HMEC is designed to improve
-                operational visibility, reduce downtime, optimize
-                maintenance planning and help organizations make
-                data-driven decisions with confidence.
+                Every report generated by HMEC is designed to improve operational visibility, reduce
+                downtime, optimize maintenance planning and help organizations make data-driven
+                decisions with confidence.
               </p>
             </div>
 
@@ -587,9 +574,8 @@ export default function ReportsPage() {
                 </h2>
 
                 <p className="mt-6 text-base leading-8 text-slate-600 dark:text-slate-300">
-                  HMEC centralizes operational reporting, maintenance
-                  history, machine analytics and component health into one
-                  intelligent dashboard, enabling faster and smarter
+                  HMEC centralizes operational reporting, maintenance history, machine analytics and
+                  component health into one intelligent dashboard, enabling faster and smarter
                   decisions.
                 </p>
               </div>
@@ -627,9 +613,8 @@ export default function ReportsPage() {
             </h2>
 
             <p className="mx-auto mt-6 max-w-2xl text-base leading-8 text-blue-100">
-              Generate powerful reports, monitor equipment performance, and
-              gain complete visibility into your mining operations with
-              HMEC.
+              Generate powerful reports, monitor equipment performance, and gain complete visibility
+              into your mining operations with HMEC.
             </p>
 
             <div className="mt-10 flex flex-wrap justify-center gap-4">

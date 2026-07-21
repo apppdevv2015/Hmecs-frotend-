@@ -1,13 +1,7 @@
 "use client";
 
 import type React from "react";
-import {
-  createContext,
-  useState,
-  useContext,
-  useEffect,
-  useMemo,
-} from "react";
+import { createContext, useState, useContext, useEffect, useMemo } from "react";
 
 import StorageService, { STORAGE_KEYS } from "../services/storage.service";
 
@@ -42,9 +36,7 @@ const applyThemeToDocument = (theme: Theme) => {
   root.style.colorScheme = theme;
 };
 
-export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
-  children,
-}) => {
+export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [theme, setThemeState] = useState<Theme>(getInitialTheme);
 
   useEffect(() => {
@@ -73,12 +65,10 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
       toggleTheme,
       setTheme,
     }),
-    [theme]
+    [theme],
   );
 
-  return (
-    <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
-  );
+  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 };
 
 export const useTheme = () => {

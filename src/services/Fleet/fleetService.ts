@@ -1,8 +1,4 @@
-export type UserRole =
-  | "super_admin"
-  | "company_admin"
-  | "operator"
-  | "Artisans";
+export type UserRole = "super_admin" | "company_admin" | "operator" | "Artisans";
 
 export type ComponentHealthStatus = "ok" | "warn" | "critical";
 
@@ -337,9 +333,7 @@ export const fleetService = {
     }
 
     if (role === "operator" && operatorId) {
-      data = data.filter(
-        (machine) => machine.operator.operatorId === operatorId,
-      );
+      data = data.filter((machine) => machine.operator.operatorId === operatorId);
     }
 
     return data;

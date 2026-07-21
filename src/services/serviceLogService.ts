@@ -15,8 +15,7 @@ const dummyServiceLogs: ServiceLog[] = [
     status: "Completed",
     priority: "Medium",
     issueFound: "Engine oil level was low and filter required replacement.",
-    actionTaken:
-      "Changed engine oil, replaced oil filter and checked coolant level.",
+    actionTaken: "Changed engine oil, replaced oil filter and checked coolant level.",
     remarks: "Machine is running normally after service.",
     createdAt: "2026-05-15",
   },
@@ -34,8 +33,7 @@ const dummyServiceLogs: ServiceLog[] = [
     status: "In Progress",
     priority: "High",
     issueFound: "Hydraulic pressure drop detected during operation.",
-    actionTaken:
-      "Checked hydraulic pump and hoses. Further inspection required.",
+    actionTaken: "Checked hydraulic pump and hoses. Further inspection required.",
     remarks: "Machine should be monitored before heavy usage.",
     createdAt: "2026-05-14",
   },
@@ -82,9 +80,7 @@ export const serviceLogService = {
     return Promise.resolve(dummyServiceLogs);
   },
 
-  async createServiceLog(
-    payload: Omit<ServiceLog, "id" | "createdAt">
-  ): Promise<ServiceLog> {
+  async createServiceLog(payload: Omit<ServiceLog, "id" | "createdAt">): Promise<ServiceLog> {
     const newServiceLog: ServiceLog = {
       ...payload,
       id: `SL-${Date.now()}`,
@@ -94,10 +90,7 @@ export const serviceLogService = {
     return Promise.resolve(newServiceLog);
   },
 
-  async updateServiceLog(
-    id: string,
-    payload: Partial<ServiceLog>
-  ): Promise<ServiceLog> {
+  async updateServiceLog(id: string, payload: Partial<ServiceLog>): Promise<ServiceLog> {
     const existingLog = dummyServiceLogs.find((log) => log.id === id);
 
     const updatedLog: ServiceLog = {

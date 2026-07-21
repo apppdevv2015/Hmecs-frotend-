@@ -1,4 +1,3 @@
-
 import { Rocket, Timer, ChevronLeft, ArrowRight } from "lucide-react";
 import { useNavigate } from "react-router";
 import StorageService, { STORAGE_KEYS } from "../services/storage.service";
@@ -77,7 +76,7 @@ const decodeJwtPayload = (token: string): JwtPayload | null => {
         .map((char) => {
           return `%${`00${char.charCodeAt(0).toString(16)}`.slice(-2)}`;
         })
-        .join("")
+        .join(""),
     );
 
     return JSON.parse(jsonPayload);
@@ -173,13 +172,12 @@ export default function ComingSoon() {
         {/* Text Content */}
         <div className="space-y-4">
           <h1 className="text-4xl md:text-6xl font-black text-slate-900 dark:text-white tracking-tighter">
-            We're building something{" "}
-            <span className="text-orange-500">Amazing</span>
+            We're building something <span className="text-orange-500">Amazing</span>
           </h1>
 
           <p className="text-slate-500 dark:text-slate-400 text-lg font-medium max-w-lg mx-auto">
-            This module is currently under development to provide you with the
-            best fleet intelligence experience. Stay tuned!
+            This module is currently under development to provide you with the best fleet
+            intelligence experience. Stay tuned!
           </p>
         </div>
 

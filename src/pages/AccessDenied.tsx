@@ -5,7 +5,7 @@ export default function AccessDenied() {
   const token = StorageService.get<string>(STORAGE_KEYS.TOKEN);
   const user = StorageService.get<any>(STORAGE_KEYS.USER) || {};
 
-const role = user?.role?.toLowerCase();
+  const role = user?.role?.toLowerCase();
 
   const getDashboardPath = () => {
     if (!token) return "/signin";
@@ -36,9 +36,7 @@ const role = user?.role?.toLowerCase();
           🚫
         </div>
 
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-          Access Denied
-        </h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Access Denied</h1>
 
         <p className="mt-2 text-sm text-gray-500 dark:text-slate-400">
           You do not have permission to access this page.

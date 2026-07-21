@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
-import StorageService, {
-  STORAGE_KEYS,
-} from "../../services/storage.service";
+import StorageService, { STORAGE_KEYS } from "../../services/storage.service";
 import { showSuccessToast } from "../../utils/toastUtils";
 
 function normalizeRole(role?: string | null) {
@@ -16,33 +14,22 @@ function normalizeRole(role?: string | null) {
 
 function getProfilePath() {
   try {
-    const userData =
-      StorageService.get<any>(STORAGE_KEYS.USER) || {};
+    const userData = StorageService.get<any>(STORAGE_KEYS.USER) || {};
 
     const role = normalizeRole(
       userData?.role ||
         userData?.role_name ||
         userData?.user?.role ||
         userData?.user?.role_name ||
-        StorageService.get<string>(
-          STORAGE_KEYS.ROLE,
-        ) ||
+        StorageService.get<string>(STORAGE_KEYS.ROLE) ||
         "",
     );
 
-    if (
-      role === "super_admin" ||
-      role === "superadmin" ||
-      role === "system_admin"
-    ) {
+    if (role === "super_admin" || role === "superadmin" || role === "system_admin") {
       return "/super-admin/profile";
     }
 
-    if (
-      role === "company_admin" ||
-      role === "companyadmin" ||
-      role === "admin"
-    ) {
+    if (role === "company_admin" || role === "companyadmin" || role === "admin") {
       return "/company-admin/profile";
     }
 
@@ -62,38 +49,23 @@ function getProfilePath() {
 
 export default function UserDropdown() {
   const [isOpen, setIsOpen] = useState(false);
-  const [showLogoutModal, setShowLogoutModal] =
-    useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
-  const dropdownRef =
-    useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const navigate = useNavigate();
 
   useEffect(() => {
-    function handleClickOutside(
-      event: MouseEvent,
-    ) {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(
-          event.target as Node,
-        )
-      ) {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsOpen(false);
       }
     }
 
-    document.addEventListener(
-      "mousedown",
-      handleClickOutside,
-    );
+    document.addEventListener("mousedown", handleClickOutside);
 
     return () => {
-      document.removeEventListener(
-        "mousedown",
-        handleClickOutside,
-      );
+      document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
 
@@ -108,20 +80,13 @@ export default function UserDropdown() {
       STORAGE_KEYS.EMAIL,
       STORAGE_KEYS.NAME,
       STORAGE_KEYS.COMPANY_ID,
-    ].forEach((key) =>
-      StorageService.remove(key),
-    );
+    ].forEach((key) => StorageService.remove(key));
 
-    StorageService.sessionRemove(
-      "login-toast-shown",
-    );
+    StorageService.sessionRemove("login-toast-shown");
 
-    showSuccessToast(
-      "Logout Successfully",
-      {
-        duration: 1500,
-      },
-    );
+    showSuccessToast("Logout Successfully", {
+      duration: 1500,
+    });
 
     setIsOpen(false);
 
@@ -135,62 +100,37 @@ export default function UserDropdown() {
   let userData: any = null;
 
   try {
-    userData =
-      StorageService.get<any>(
-        STORAGE_KEYS.USER,
-      ) || null;
+    userData = StorageService.get<any>(STORAGE_KEYS.USER) || null;
   } catch {
     userData = null;
   }
 
   const userName =
     userData?.name ||
-    `${
-      userData?.first_name || ""
-    } ${
-      userData?.last_name || ""
-    }`.trim() ||
-    StorageService.get<string>(
-      STORAGE_KEYS.NAME,
-    ) ||
-    StorageService.get<string>(
-      STORAGE_KEYS.USER_NAME,
-    ) ||
+    `${userData?.first_name || ""} ${userData?.last_name || ""}`.trim() ||
+    StorageService.get<string>(STORAGE_KEYS.NAME) ||
+    StorageService.get<string>(STORAGE_KEYS.USER_NAME) ||
     "User";
 
   const userEmail =
-    userData?.email ||
-    StorageService.get<string>(
-      STORAGE_KEYS.EMAIL,
-    ) ||
-    "user@example.com";
+    userData?.email || StorageService.get<string>(STORAGE_KEYS.EMAIL) || "user@example.com";
 
-  const profilePath =
-    getProfilePath();
+  const profilePath = getProfilePath();
 
   return (
     <>
-      <div
-        ref={dropdownRef}
-        className="relative"
-      >
+      <div ref={dropdownRef} className="relative">
         <button
           type="button"
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            setIsOpen(
-              (prev) => !prev,
-            );
+            setIsOpen((prev) => !prev);
           }}
           className="flex items-center text-gray-700 dark:text-gray-400"
         >
           <span className="h-10 w-10 overflow-hidden rounded-full border border-gray-200 dark:border-gray-700 lg:h-11 lg:w-11">
-            <img
-              src="/images/user/owner.jpg"
-              alt="User"
-              className="h-full w-full object-cover"
-            />
+            <img src="/images/user/owner.jpg" alt="User" className="h-full w-full object-cover" />
           </span>
 
           <span className="ml-3 mr-1 hidden max-w-[120px] truncate font-medium text-theme-sm text-gray-700 dark:text-gray-300 lg:block">
@@ -199,9 +139,7 @@ export default function UserDropdown() {
 
           <svg
             className={`hidden transition-transform duration-200 lg:block ${
-              isOpen
-                ? "rotate-180"
-                : ""
+              isOpen ? "rotate-180" : ""
             } stroke-gray-500 dark:stroke-gray-400`}
             width="18"
             height="20"
@@ -220,9 +158,7 @@ export default function UserDropdown() {
 
         {isOpen && (
           <div
-            onClick={(e) =>
-              e.stopPropagation()
-            }
+            onClick={(e) => e.stopPropagation()}
             className="absolute right-0 z-99999 mt-3 w-[270px] overflow-hidden rounded-2xl border border-gray-200 bg-white p-3 shadow-2xl dark:border-gray-800 dark:bg-gray-900"
           >
             <div className="rounded-xl bg-gray-50 p-3 dark:bg-white/[0.03]">
@@ -239,9 +175,7 @@ export default function UserDropdown() {
               <li>
                 <Link
                   to={profilePath}
-                  onClick={() =>
-                    setIsOpen(false)
-                  }
+                  onClick={() => setIsOpen(false)}
                   className="flex items-center rounded-xl px-3 py-2 font-medium text-gray-700 text-theme-sm transition hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5"
                 >
                   Edit Profile
@@ -251,11 +185,7 @@ export default function UserDropdown() {
 
             <button
               type="button"
-              onClick={() =>
-                setShowLogoutModal(
-                  true,
-                )
-              }
+              onClick={() => setShowLogoutModal(true)}
               className="mt-3 flex w-full items-center justify-center rounded-xl bg-red-50 px-3 py-2.5 text-center font-semibold text-red-600 text-theme-sm transition hover:bg-red-100 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
             >
               Log Out
@@ -297,11 +227,7 @@ export default function UserDropdown() {
 
             <div className="mt-6 flex gap-3">
               <button
-                onClick={() =>
-                  setShowLogoutModal(
-                    false,
-                  )
-                }
+                onClick={() => setShowLogoutModal(false)}
                 className="flex-1 rounded-xl border border-gray-300 bg-white px-4 py-3 font-semibold text-gray-700 transition hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
               >
                 Cancel
@@ -309,9 +235,7 @@ export default function UserDropdown() {
 
               <button
                 onClick={() => {
-                  setShowLogoutModal(
-                    false,
-                  );
+                  setShowLogoutModal(false);
                   handleLogout();
                 }}
                 className="flex-1 rounded-xl bg-red-600 px-4 py-3 font-semibold text-white transition hover:bg-red-700"

@@ -64,8 +64,7 @@ type ProfileFormData = {
   address: string;
 };
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:4000/api";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:4000/api";
 
 const getToken = () => StorageService.get<string>(STORAGE_KEYS.TOKEN) || "";
 
@@ -109,10 +108,7 @@ const getStoredUser = (): ProfileUser => {
     return {
       id: decoded?.id || decoded?.user?.id || decoded?.data?.user?.id,
       name:
-        decoded?.name ||
-        decoded?.user?.name ||
-        StorageService.get<string>(STORAGE_KEYS.NAME) ||
-        "",
+        decoded?.name || decoded?.user?.name || StorageService.get<string>(STORAGE_KEYS.NAME) || "",
       email:
         decoded?.email ||
         decoded?.user?.email ||
@@ -197,12 +193,7 @@ const getFirstName = (user: ProfileUser) => {
 const getLastName = (user: ProfileUser) => {
   const fullName = getFullName(user);
 
-  return (
-    user.last_name ||
-    user.lastName ||
-    fullName.split(" ").slice(1).join(" ") ||
-    ""
-  );
+  return user.last_name || user.lastName || fullName.split(" ").slice(1).join(" ") || "";
 };
 
 const getCompanyName = (user: ProfileUser) => {
@@ -254,15 +245,7 @@ const buildFormData = (user: ProfileUser): ProfileFormData => {
   };
 };
 
-const InfoRow = ({
-  icon,
-  label,
-  value,
-}: {
-  icon: ReactNode;
-  label: string;
-  value: string;
-}) => {
+const InfoRow = ({ icon, label, value }: { icon: ReactNode; label: string; value: string }) => {
   return (
     <div className="flex items-start gap-3 border-b border-slate-100 px-4 py-3 last:border-b-0 dark:border-slate-800">
       <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300">
@@ -270,9 +253,7 @@ const InfoRow = ({
       </div>
 
       <div className="min-w-0">
-        <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
-          {label}
-        </p>
+        <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">{label}</p>
 
         <p className="mt-0.5 truncate text-sm font-semibold text-slate-800 dark:text-white">
           {value || "-"}
@@ -350,9 +331,7 @@ const SelectInput = ({
 
 export default function UserProfile() {
   const [user, setUser] = useState<ProfileUser>(() => getStoredUser());
-  const [formData, setFormData] = useState<ProfileFormData>(() =>
-    buildFormData(getStoredUser()),
-  );
+  const [formData, setFormData] = useState<ProfileFormData>(() => buildFormData(getStoredUser()));
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -364,9 +343,9 @@ export default function UserProfile() {
   const phone = user.mobile_number || user.phone || formData.phone;
 
   const defaultProfileImage =
-  "https://i.pinimg.com/1200x/ed/5d/68/ed5d686b135d8923f3f10b5b44f64f9e.jpg";
+    "https://i.pinimg.com/1200x/ed/5d/68/ed5d686b135d8923f3f10b5b44f64f9e.jpg";
 
-const profileImage = user.profile_image || user.avatar || defaultProfileImage;
+  const profileImage = user.profile_image || user.avatar || defaultProfileImage;
 
   const memberSince = getCreatedDate(user);
 
@@ -482,8 +461,6 @@ const profileImage = user.profile_image || user.avatar || defaultProfileImage;
   return (
     <div className="w-full space-y-6 p-4 sm:p-6 lg:p-8">
       <div className="mx-auto w-full max-w-[1500px]">
-
-
         {loading && (
           <div className="mb-5 flex items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-700 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-300">
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -504,16 +481,13 @@ const profileImage = user.profile_image || user.avatar || defaultProfileImage;
                 HME Intelligence
               </p>
 
-              <h2 className="mt-3 text-3xl font-bold text-white">
-                Welcome, {fullName}
-              </h2>
+              <h2 className="mt-3 text-3xl font-bold text-white">Welcome, {fullName}</h2>
 
               <p className="mt-2 max-w-xl text-sm leading-6 text-blue-100">
-                View and manage your company profile, account settings, and
-                system activity from one place.
+                View and manage your company profile, account settings, and system activity from one
+                place.
               </p>
             </div>
-
           </div>
         </section>
 
@@ -538,9 +512,7 @@ const profileImage = user.profile_image || user.avatar || defaultProfileImage;
                 </button>
               </div>
 
-              <h3 className="mt-4 text-xl font-bold text-slate-900 dark:text-white">
-                {fullName}
-              </h3>
+              <h3 className="mt-4 text-xl font-bold text-slate-900 dark:text-white">{fullName}</h3>
 
               <p className="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">
                 {roleName}
@@ -559,25 +531,12 @@ const profileImage = user.profile_image || user.avatar || defaultProfileImage;
                 value={companyName}
               />
 
-              <InfoRow
-                icon={<ShieldCheck className="h-4 w-4" />}
-                label="Role"
-                value={roleName}
-              />
+              <InfoRow icon={<ShieldCheck className="h-4 w-4" />} label="Role" value={roleName} />
 
-              <InfoRow
-                icon={<Phone className="h-4 w-4" />}
-                label="Phone"
-                value={phone}
-              />
+              <InfoRow icon={<Phone className="h-4 w-4" />} label="Phone" value={phone} />
 
-              <InfoRow
-                icon={<Mail className="h-4 w-4" />}
-                label="Email"
-                value={email}
-              />
+              <InfoRow icon={<Mail className="h-4 w-4" />} label="Email" value={email} />
             </div>
-
           </aside>
 
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">

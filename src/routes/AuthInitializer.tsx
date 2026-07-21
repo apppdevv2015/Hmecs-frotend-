@@ -1,9 +1,7 @@
 import { useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
-import StorageService, {
-  STORAGE_KEYS,
-} from "../services/storage.service";
+import StorageService, { STORAGE_KEYS } from "../services/storage.service";
 
 function normalizeRole(role?: string | null) {
   return String(role || "")
@@ -40,22 +38,15 @@ export default function AuthInitializer() {
 
     if (!redirectPath) return;
 
-    const authRoutes = [
-      "/",
-      "/signin",
-      "/signup",
-      "/super-admin/login",
-    ];
+    const authRoutes = ["/", "/signin", "/signup", "/super-admin/login"];
 
     // Current page auth page nahi hai to kuch mat karo
     if (!authRoutes.includes(location.pathname)) {
       return;
     }
 
-    const navigation =
-      performance.getEntriesByType(
-        "navigation"
-      )[0] as PerformanceNavigationTiming | undefined;
+    const navigation = performance.getEntriesByType("navigation")[0] as
+      PerformanceNavigationTiming | undefined;
 
     // Sirf browser refresh par redirect karo
     if (navigation?.type !== "reload") {
