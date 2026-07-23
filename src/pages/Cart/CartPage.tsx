@@ -8,6 +8,7 @@ import Footer from "../../components/landing/Footer";
 import toast from "react-hot-toast";
 import { initiatePayFastCheckout } from "../../services/payfastService";
 import { userService } from "../../services/userService";
+import StorageService, { STORAGE_KEYS } from "../../services/storage.service";
 
 export default function CartPage() {
   const navigate = useNavigate();
@@ -21,9 +22,9 @@ export default function CartPage() {
 
   const getToken = () => {
     return (
-      localStorage.getItem("token") ||
-      localStorage.getItem("authToken") ||
-      localStorage.getItem("accessToken")
+      StorageService.get<string>(STORAGE_KEYS.TOKEN) ||
+      StorageService.get<string>(STORAGE_KEYS.AUTH_TOKEN) ||
+      StorageService.get<string>(STORAGE_KEYS.ACCESS_TOKEN)
     );
   };
 
@@ -32,16 +33,11 @@ export default function CartPage() {
   };
 
   useEffect(() => {
-    const savedPlan = localStorage.getItem("selectedPlan");
+    const savedPlan = StorageService.get<PricingPlan>(STORAGE_KEYS.SELECTED_PLAN);
     refreshLoginStatus();
 
     if (savedPlan) {
-      try {
-        setPlan(JSON.parse(savedPlan));
-      } catch {
-        localStorage.removeItem("selectedPlan");
-        toast.error("Selected plan data is invalid");
-      }
+      setPlan(savedPlan);
     }
   }, []);
 
@@ -156,7 +152,6 @@ export default function CartPage() {
 
       if (!paymentUrl || !paymentData) {
         toast.error("Invalid PayFast response");
-        console.log("Invalid PayFast Response:", response);
         return;
       }
 

@@ -1,4 +1,5 @@
-import { apiRequest } from "./api";
+import { apiCall } from "./apiHandler";
+import StorageService, { STORAGE_KEYS } from "./storage.service";
 
 export type ApiRole = {
   id: number;
@@ -21,9 +22,12 @@ export type ApiUser = {
   mobile_number?: string;
   mobileNumber?: string;
   phone?: string;
-  role?: string | { id?: number; name?: string };
+
+  role?: string | { id?: string | number; name?: string };
   role_name?: string;
-  role_id?: number;
+  role_id?: string | number;
+  roleId?: string | number;
+
   createdAt?: string;
   created_at?: string;
   updatedAt?: string;
@@ -58,10 +62,14 @@ export type UpdateUserPayload = {
   last_name?: string;
   email?: string;
   mobile_number?: string;
+
   role_name?: string;
-  role_id?: number;
+  role_id?: string | number;
+  roleId?: string | number;
+
   company_id?: string | number;
   company_name?: string;
+
   status?: string;
   is_active?: boolean;
 };
@@ -87,6 +95,14 @@ export type UsersResponse = {
   };
 };
 
+export type UpdateUserResponse = {
+  success: boolean;
+  message: string;
+  data: ApiUser;
+  error: string | null;
+  timestamp: string;
+};
+
 const roleNameMap: Record<string, string> = {
   "Super Admin": "super_admin",
   "Company Admin": "admin",
@@ -101,16 +117,8 @@ const roleNameMap: Record<string, string> = {
   engineer: "engineer",
   mechanic: "engineer",
   planner: "planner",
-  operator: "planner",
+  operator: "Operator",
   viewer: "viewer",
-};
-
-const roleIdMap: Record<string, number> = {
-  super_admin: 1,
-  admin: 2,
-  engineer: 3,
-  planner: 4,
-  viewer: 5,
 };
 
 const isValidUUID = (value: string) => {
@@ -121,7 +129,7 @@ const isValidUUID = (value: string) => {
 
 const getCompanyIdFromToken = () => {
   try {
-    const token = localStorage.getItem("token");
+    const token = StorageService.get<string>(STORAGE_KEYS.TOKEN);
     if (!token) return "";
 
     const payload = JSON.parse(atob(token.split(".")[1]));
@@ -172,7 +180,7 @@ export const normalizeUsersResponse = (
 
 export const userService = {
   getRoles: async (): Promise<ApiRole[]> => {
-    const response = await apiRequest<
+    const response = await apiCall<
       { data?: ApiRole[]; roles?: ApiRole[] } | ApiRole[]
     >("/auth/roles", {
       method: "GET",
@@ -185,7 +193,7 @@ export const userService = {
 
   getUsers: async ({
     page = 1,
-    limit = 5,
+    limit = 10,
     search = "",
     role = "",
     status = "",
@@ -199,7 +207,7 @@ export const userService = {
     if (role.trim()) params.append("role", role.trim());
     if (status.trim()) params.append("status", status.trim());
 
-    return apiRequest<UsersResponse | ApiUser[]>(
+    return apiCall<UsersResponse | ApiUser[]>(
       `/auth/users?${params.toString()}`,
       {
         method: "GET",
@@ -208,12 +216,11 @@ export const userService = {
   },
 
   getUserById: async (id: string | number): Promise<ApiUser> => {
-    const response = await apiRequest<ApiUser | { data?: ApiUser; user?: ApiUser }>(
-      `/auth/users/${id}`,
-      {
-        method: "GET",
-      },
-    );
+    const response = await apiCall<
+      ApiUser | { data?: ApiUser; user?: ApiUser }
+    >(`/auth/users/${id}`, {
+      method: "GET",
+    });
 
     if ("data" in response && response.data) return response.data;
     if ("user" in response && response.user) return response.user;
@@ -230,70 +237,96 @@ export const userService = {
       payload.role_name ||
       (payload.role ? roleNameMap[payload.role] || payload.role : undefined);
 
-    const roleId = payload.role_id || (roleName ? roleIdMap[roleName] : undefined);
+    const roleId = payload.role_id;
     const companyId = payload.company_id || getValidCompanyId(payload.company);
 
-    return apiRequest("/auth/users", {
-      method: "POST",
-      body: JSON.stringify({
-        first_name: firstName,
-        last_name: lastName,
-        email: payload.email.trim(),
-        password: payload.password,
-        mobile_number: (payload.mobile_number || payload.phone || "").trim(),
-        ...(roleName ? { role_name: roleName } : {}),
-        ...(roleId ? { role_id: roleId } : {}),
-        ...(companyId ? { company_id: companyId } : {}),
-      }),
-    });
+    return apiCall(
+      "/auth/users",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          first_name: firstName,
+          last_name: lastName,
+          email: payload.email.trim(),
+          password: payload.password,
+          mobile_number: (payload.mobile_number || payload.phone || "").trim(),
+          ...(roleName ? { role_name: roleName } : {}),
+          ...(roleId ? { role_id: roleId } : {}),
+          ...(companyId ? { company_id: companyId } : {}),
+        }),
+      },
+      {
+        showSuccess: true,
+      },
+    );
   },
 
-  updateUser: async (id: string | number, payload: UpdateUserPayload) => {
+  updateUser: async (
+    id: string | number,
+    payload: UpdateUserPayload,
+  ): Promise<UpdateUserResponse> => {
     const roleName = payload.role_name
       ? roleNameMap[payload.role_name] || payload.role_name
       : undefined;
 
-    const roleId = payload.role_id || (roleName ? roleIdMap[roleName] : undefined);
+    const roleId = payload.roleId || payload.role_id;
 
-    return apiRequest(`/auth/users/${id}`, {
-      method: "PUT",
-      body: JSON.stringify({
-        ...(payload.first_name !== undefined
-          ? { first_name: payload.first_name }
-          : {}),
-        ...(payload.last_name !== undefined
-          ? { last_name: payload.last_name }
-          : {}),
-        ...(payload.email ? { email: payload.email.trim() } : {}),
-        ...(payload.mobile_number
-          ? { mobile_number: payload.mobile_number.trim() }
-          : {}),
-        ...(roleName ? { role_name: roleName } : {}),
-        ...(roleId ? { role_id: roleId } : {}),
-        ...(payload.company_id ? { company_id: payload.company_id } : {}),
-        ...(payload.company_name ? { company_name: payload.company_name } : {}),
-        ...(payload.status ? { status: payload.status } : {}),
-        ...(typeof payload.is_active === "boolean"
-          ? { is_active: payload.is_active }
-          : {}),
-      }),
-    });
+    return apiCall<UpdateUserResponse>(
+      `/auth/users/${id}`,
+      {
+        method: "PUT",
+        body: JSON.stringify({
+          ...(payload.first_name !== undefined
+            ? { first_name: payload.first_name }
+            : {}),
+          ...(payload.last_name !== undefined
+            ? { last_name: payload.last_name }
+            : {}),
+          ...(payload.email ? { email: payload.email.trim() } : {}),
+          ...(payload.mobile_number
+            ? { mobile_number: payload.mobile_number.trim() }
+            : {}),
+          ...(roleName ? { role_name: roleName } : {}),
+
+          ...(roleId ? { role_id: roleId } : {}),
+
+          ...(payload.company_id ? { company_id: payload.company_id } : {}),
+          ...(payload.company_name
+            ? { company_name: payload.company_name }
+            : {}),
+          ...(payload.status ? { status: payload.status } : {}),
+          ...(typeof payload.is_active === "boolean"
+            ? { is_active: payload.is_active }
+            : {}),
+        }),
+      },
+      {
+        showSuccess: true,
+       
+      },
+    );
   },
 
   deleteUser: async (id: string | number) => {
-    return apiRequest(`/auth/users/${id}`, {
-      method: "DELETE",
-    });
+    return apiCall(
+      `/auth/users/${id}`,
+      {
+        method: "DELETE",
+      },
+      {
+        showSuccess: true,
+      },
+    );
   },
 
   getActiveSubscription: async (): Promise<any> => {
-    return apiRequest<any>("/plans/active", {
+    return apiCall<any>("/plans/active", {
       method: "GET",
     });
   },
 
   getSubscriptionHistory: async (): Promise<any[]> => {
-    const response = await apiRequest<any[] | { data?: any[] }>(
+    const response = await apiCall<any[] | { data?: any[] }>(
       "/plans/subscriptions",
       {
         method: "GET",
@@ -306,7 +339,7 @@ export const userService = {
   },
 
   getMachines: async (): Promise<any[]> => {
-    const response = await apiRequest<any[] | { data?: any[] }>("/machines", {
+    const response = await apiCall<any[] | { data?: any[] }>("/machines", {
       method: "GET",
     });
 
@@ -316,9 +349,15 @@ export const userService = {
   },
 
   registerMachine: async (machineData: any): Promise<any> => {
-    return apiRequest<any>("/machines", {
-      method: "POST",
-      body: JSON.stringify(machineData),
-    });
+    return apiCall<any>(
+      "/machines",
+      {
+        method: "POST",
+        body: JSON.stringify(machineData),
+      },
+      {
+        showSuccess: true,
+      },
+    );
   },
 };

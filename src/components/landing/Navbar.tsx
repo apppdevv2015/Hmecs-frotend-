@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { Menu, Moon, Sun, X } from "lucide-react";
-import logo1 from "../../assets/images/landingpageimages/logo1.png";
+import logo1 from "../../assets/images/landingpageimages/logo1.webp";
+import StorageService, { STORAGE_KEYS } from "../../services/storage.service";
 
 type NavbarProps = {
   active?: string;
@@ -9,18 +10,17 @@ type NavbarProps = {
 };
 
 const navLinks = [
-  { id: "home", label: "Home" },
-  { id: "features", label: "Features" },
-  { id: "maintenance", label: "Maintenance" },
-  { id: "reports", label: "Reports" },
-  { id: "about", label: "About" },
-  { id: "contact", label: "Contact" },
+  { path: "/", label: "Home" },
+  { path: "/features", label: "Features" },
+  { path: "/maintenance", label: "Maintenance" },
+  { path: "/reports", label: "Reports" },
+  { path: "/about", label: "About" },
+  { path: "/contact", label: "Contact" },
 ];
 
 export default function Navbar({ active = "home", setActive }: NavbarProps) {
   const [isDark, setIsDark] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -28,17 +28,15 @@ export default function Navbar({ active = "home", setActive }: NavbarProps) {
   const isAuthPage =
     location.pathname === "/signin" || location.pathname === "/signup";
 
-
-
   const token =
-    localStorage.getItem("token") ||
-    localStorage.getItem("authToken") ||
-    localStorage.getItem("accessToken");
+    StorageService.get<string>(STORAGE_KEYS.TOKEN) ||
+    StorageService.get<string>(STORAGE_KEYS.AUTH_TOKEN) ||
+    StorageService.get<string>(STORAGE_KEYS.ACCESS_TOKEN);
 
   const showDashboard = Boolean(token) && !isAuthPage;
 
   useEffect(() => {
-    const savedTheme = localStorage.getItem("theme");
+    const savedTheme = StorageService.get<string>(STORAGE_KEYS.THEME);
 
     const shouldUseDark =
       savedTheme === "dark" ||
@@ -48,38 +46,20 @@ export default function Navbar({ active = "home", setActive }: NavbarProps) {
     setIsDark(shouldUseDark);
   }, []);
 
-
   const toggleTheme = () => {
     const nextDark = !isDark;
 
     document.documentElement.classList.toggle("dark", nextDark);
-    localStorage.setItem("theme", nextDark ? "dark" : "light");
+    StorageService.set(STORAGE_KEYS.THEME, nextDark ? "dark" : "light");
 
     setIsDark(nextDark);
   };
 
-  const scrollToSection = (id: string) => {
-    setActive?.(id);
-    setIsMenuOpen(false);
-
-    const section = document.getElementById(id);
-
-    if (section) {
-      section.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
-      return;
-    }
-
-    navigate(`/#${id}`);
-  };
-
   const handleDashboardClick = () => {
     const role =
-      localStorage.getItem("role") ||
-      localStorage.getItem("userRole") ||
-      localStorage.getItem("user_type");
+      StorageService.get<string>(STORAGE_KEYS.ROLE) ||
+      StorageService.get<string>(STORAGE_KEYS.USER_ROLE) ||
+      StorageService.get<string>(STORAGE_KEYS.USER_TYPE);
 
     setIsMenuOpen(false);
 
@@ -122,65 +102,68 @@ export default function Navbar({ active = "home", setActive }: NavbarProps) {
   }, [location.hash]);
 
   return (
-    <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/90 text-slate-900 shadow-sm backdrop-blur-xl transition-colors duration-300 dark:border-white/10 dark:bg-[#050817]/95 dark:text-white">
-      <div className="mx-auto flex h-[86px] max-w-7xl items-center justify-between px-4 sm:px-6 lg:h-[90px] lg:px-8">
+ <header className="fixed inset-x-0 top-0 z-[9999] border-b border-slate-200/60 bg-white/80 shadow-[0_8px_30px_rgba(15,23,42,0.08)] backdrop-blur-3xl transition-all duration-300 dark:border-white/10 dark:bg-[#050817]/80 dark:text-white">
+      <div className="mx-auto flex h-[90px] max-w-7xl items-center justify-between px-5 sm:px-6 lg:px-8">
+        {/* Logo */}
         <Link to="/" className="flex items-center">
           <img
             src={logo1}
             alt="HME Logo"
-            className="h-[60px] w-auto object-contain sm:h-[76px]"
+            className="h-[58px] w-auto object-contain transition-transform duration-300 hover:scale-105 sm:h-[70px]"
           />
         </Link>
 
-        <nav className="hidden items-center gap-7 lg:flex">
+        {/* Desktop Navigation */}
+        <nav className="hidden items-center gap-9 lg:flex">
           {navLinks.map((link) => (
-            <button
-              key={link.id}
-              type="button"
-              onClick={() => scrollToSection(link.id)}
-              className={`relative text-sm font-semibold tracking-tight transition ${
-                active === link.id
-                  ? "text-blue-600 dark:text-white"
-                  : "text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-white"
+            <Link
+              key={link.path}
+              to={link.path}
+            className={`group relative py-2 text-[15px] font-semibold tracking-wide transition-all duration-300 hover:-translate-y-[1px] ${
+                location.pathname === link.path
+                  ? "text-slate-900 dark:text-white"
+                  : "text-slate-700/90 hover:text-blue-600 dark:text-slate-300 dark:hover:text-white"
               }`}
             >
               {link.label}
 
-              {active === link.id && (
-                <span className="absolute -bottom-2 left-0 h-[2px] w-full rounded-full bg-blue-600 dark:bg-white" />
-              )}
-            </button>
+              <span
+                className={`absolute -bottom-1 left-0 h-[3px] rounded-full bg-gradient-to-r from-cyan-400 via-blue-500 to-indigo-500 transition-all duration-300 ${
+                  location.pathname === link.path
+                    ? "w-full"
+                    : "w-0 group-hover:w-full"
+                }`}
+              />
+            </Link>
           ))}
         </nav>
 
+        {/* Right Side */}
         <div className="flex items-center gap-2 sm:gap-3">
           <button
             type="button"
             onClick={toggleTheme}
-            className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-slate-100 text-slate-800 transition hover:bg-slate-200 dark:border-white/15 dark:bg-white/10 dark:text-white dark:hover:bg-white/15"
+         className="flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white/80 text-slate-800 shadow-md backdrop-blur-xl transition-all duration-300 hover:scale-105 hover:rotate-180 dark:border-white/15 dark:bg-white/10 dark:text-white dark:hover:bg-white/15"
             aria-label="Toggle theme"
           >
             {isDark ? <Sun size={20} /> : <Moon size={20} />}
           </button>
 
-         
-            <>
-              <Link
-                to="/signin"
-                className="hidden text-sm font-semibold text-slate-600 transition hover:text-blue-600 dark:text-slate-300 dark:hover:text-white sm:inline-flex"
-              >
-                Login
-              </Link>
+          <Link
+            to="/signin"
+            className="hidden text-sm font-semibold text-slate-600 transition hover:text-blue-600 dark:text-slate-300 dark:hover:text-white sm:inline-flex"
+          >
+            Login
+          </Link>
 
-              <Link
-                to="/plans"
-                className="hidden rounded-lg bg-slate-950 px-3.5 py-2 text-xs font-bold text-white shadow-md transition hover:-translate-y-0.5 hover:bg-blue-600 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-100 sm:inline-flex"
-              >
-                Get Started
-              </Link>
-            </>
-          
+          <Link
+            to="/plans"
+            className="hidden rounded-lg bg-slate-950 px-3.5 py-2 text-xs font-bold text-white shadow-md transition hover:-translate-y-0.5 hover:bg-blue-600 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-100 sm:inline-flex"
+          >
+            Get Started
+          </Link>
 
+          {/* Mobile Menu Button */}
           <button
             type="button"
             onClick={() => setIsMenuOpen((prev) => !prev)}
@@ -192,44 +175,41 @@ export default function Navbar({ active = "home", setActive }: NavbarProps) {
         </div>
       </div>
 
+      {/* Mobile Menu */}
       {isMenuOpen && (
-        <div className="border-t border-slate-200 bg-white px-4 py-4 shadow-lg dark:border-white/10 dark:bg-[#050817] lg:hidden">
+        <div className="fixed top-[90px] left-0 right-0 z-[9998] border-t border-slate-200 bg-white/95 px-4 py-4 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-[#050817]/95 lg:hidden">
           <div className="space-y-2">
             {navLinks.map((link) => (
-              <button
-                key={link.id}
-                type="button"
-                onClick={() => scrollToSection(link.id)}
-                className={`block w-full rounded-xl px-4 py-3 text-left text-sm font-semibold transition ${
-                  active === link.id
+              <Link
+                key={link.path}
+                to={link.path}
+                onClick={() => setIsMenuOpen(false)}
+                className={`block rounded-xl px-4 py-3 text-left text-sm font-semibold transition ${
+                  location.pathname === link.path
                     ? "bg-blue-50 text-blue-600 dark:bg-white/10 dark:text-white"
                     : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/10"
                 }`}
               >
                 {link.label}
-              </button>
+              </Link>
             ))}
 
             <div className="grid grid-cols-2 gap-3 pt-3">
-             
-                <>
-                  <Link
-                    to="/signin"
-                    onClick={() => setIsMenuOpen(false)}
-                    className="rounded-xl border border-slate-200 px-4 py-3 text-center text-sm font-bold text-slate-700 dark:border-white/15 dark:text-white"
-                  >
-                    Login
-                  </Link>
+              <Link
+                to="/signin"
+                onClick={() => setIsMenuOpen(false)}
+                className="rounded-xl border border-slate-200 px-4 py-3 text-center text-sm font-bold text-slate-700 dark:border-white/15 dark:text-white"
+              >
+                Login
+              </Link>
 
-                  <Link
-                    to="/plans"
-                    onClick={() => setIsMenuOpen(false)}
-                    className="rounded-xl bg-blue-600 px-4 py-3 text-center text-sm font-bold text-white"
-                  >
-                    Get Started
-                  </Link>
-                </>
-              
+              <Link
+                to="/plans"
+                onClick={() => setIsMenuOpen(false)}
+                className="rounded-xl bg-blue-600 px-4 py-3 text-center text-sm font-bold text-white"
+              >
+                Get Started
+              </Link>
             </div>
           </div>
         </div>

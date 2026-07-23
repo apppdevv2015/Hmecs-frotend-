@@ -1,5 +1,11 @@
 import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import { CheckCircle2, Pencil, Trash2, X, XCircle } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
+
+import { showErrorToast, showSuccessToast } from "../../../utils/toastUtils";
+
 import {
   createSubscriptionPlan,
   deleteSubscriptionPlan,
@@ -9,29 +15,57 @@ import {
 } from "../../../services/subscriptionService";
 
 type Plan = {
-  id: number;
+  id: string;
   name: string;
   featuresText: string;
   price: string;
   machines: number;
+  staffLimit: number;
   validityDays: number;
+  isPublic: boolean;
+  isActive: boolean;
   createdAt: string;
 };
 
-type Toast = {
-  type: "success" | "error";
-  message: string;
-};
-
 const emptyPlan: Plan = {
-  id: 0,
+  id: "",
   name: "",
   featuresText: "",
   price: "",
   machines: 0,
+  staffLimit: 0,
   validityDays: 30,
+  isPublic: true,
+  isActive: true,
   createdAt: "",
 };
+
+const planSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(3, "Plan name must be at least 3 characters")
+    .max(50, "Plan name cannot exceed 50 characters")
+    .regex(/^[A-Za-z ]+$/, "Only alphabets and spaces are allowed"),
+
+  price: z
+    .string()
+    .trim()
+    .min(1, "Price is required")
+    .refine((v) => !isNaN(Number(v)) && Number(v) > 0, {
+      message: "Enter a valid price",
+    }),
+
+  staffLimit: z.number().min(1, "Staff limit must be at least 1"),
+
+  machines: z.number().min(1, "Machine limit must be at least 1"),
+
+  validityDays: z.number().min(1, "Validity days must be at least 1"),
+
+  featuresText: z.string().optional(),
+});
+
+type PlanFormData = z.infer<typeof planSchema>;
 
 const featuresToText = (
   features: Record<string, boolean> | string[] | null | undefined,
@@ -64,16 +98,18 @@ const getNumericPrice = (price: string) => {
 
 const mapApiPlanToPlan = (plan: SubscriptionPlanApi): Plan => {
   const apiPlan = plan as any;
-  const priceValue = String(apiPlan.price ?? 0);
 
   return {
-    id: Number(apiPlan.id ?? 0),
-    name: apiPlan.plan_name || apiPlan.name || "Untitled Plan",
-    featuresText: featuresToText(apiPlan.features),
-    price: priceValue.startsWith("$") ? priceValue : `$${priceValue}`,
-    machines: Number(apiPlan.machine_limit ?? 0),
-    validityDays: Number(apiPlan.validity_days ?? 30),
-    createdAt: apiPlan.created_at || "",
+    id: apiPlan.id || "",
+    name: apiPlan.planName || "Untitled Plan",
+    featuresText: "",
+    price: `$${apiPlan.price ?? 0}`,
+    machines: Number(apiPlan.machineLimit ?? 0),
+    staffLimit: Number(apiPlan.staffLimit ?? 0),
+    validityDays: Number(apiPlan.validityDays ?? 30),
+    isPublic: Boolean(apiPlan.isPublic),
+    isActive: Boolean(apiPlan.isActive),
+    createdAt: "",
   };
 };
 
@@ -85,25 +121,10 @@ export default function Plans() {
   const [deleting, setDeleting] = useState(false);
 
   const [error, setError] = useState("");
-  const [toast, setToast] = useState<Toast | null>(null);
-  const [toastVisible, setToastVisible] = useState(false);
 
   const [createPlan, setCreatePlan] = useState<Plan | null>(null);
   const [editPlan, setEditPlan] = useState<Plan | null>(null);
   const [deletePlan, setDeletePlan] = useState<Plan | null>(null);
-
-  const showToast = (type: "success" | "error", message: string) => {
-    setToast({ type, message });
-    setToastVisible(true);
-
-    window.setTimeout(() => {
-      setToastVisible(false);
-    }, 2600);
-
-    window.setTimeout(() => {
-      setToast(null);
-    }, 3000);
-  };
 
   const fetchPlans = async () => {
     try {
@@ -111,8 +132,6 @@ export default function Plans() {
       setError("");
 
       const response: any = await getSubscriptionPlans();
-
-      console.log("Plans API Response:", response);
 
       const apiPlans = Array.isArray(response)
         ? response
@@ -128,8 +147,8 @@ export default function Plans() {
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Failed to load plans";
+
       setError(message);
-      showToast("error", message);
     } finally {
       setLoading(false);
     }
@@ -138,6 +157,20 @@ export default function Plans() {
   useEffect(() => {
     fetchPlans();
   }, []);
+
+  useEffect(() => {
+    const isModalOpen = !!createPlan || !!editPlan || !!deletePlan;
+
+    if (isModalOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "auto";
+    }
+
+    return () => {
+      document.body.style.overflow = "auto";
+    };
+  }, [createPlan, editPlan, deletePlan]);
 
   const validatePlan = (plan: Plan) => {
     const numericPrice = getNumericPrice(plan.price);
@@ -165,8 +198,7 @@ export default function Plans() {
     const validationMessage = validatePlan(createPlan);
 
     if (validationMessage) {
-      setError(validationMessage);
-      showToast("error", validationMessage);
+      showErrorToast(validationMessage);
       return;
     }
 
@@ -177,24 +209,26 @@ export default function Plans() {
       const payload = {
         plan_name: createPlan.name.trim(),
         machine_limit: Number(createPlan.machines),
+        staff_limit: Number(createPlan.staffLimit),
         price: getNumericPrice(createPlan.price),
         validity_days: Number(createPlan.validityDays),
-
-        // Keep this only for create API compatibility if backend supports features.
-        // Update API will not send features.
         features: textToFeaturesPayload(createPlan.featuresText),
       } as any;
 
-      await createSubscriptionPlan(payload);
+      const response: any = await createSubscriptionPlan(payload);
+
+      if (!response?.success) {
+        showErrorToast(response?.message || "Failed to create plan");
+        return;
+      }
+
+      showSuccessToast(response?.message || "Plan created successfully");
 
       setCreatePlan(null);
-      showToast("success", "Plan created successfully");
+
       await fetchPlans();
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Failed to create plan";
-      setError(message);
-      showToast("error", message);
+    } catch (err: any) {
+      showErrorToast(err?.message || "Failed to create plan");
     } finally {
       setCreating(false);
     }
@@ -206,8 +240,7 @@ export default function Plans() {
     const validationMessage = validatePlan(editPlan);
 
     if (validationMessage) {
-      setError(validationMessage);
-      showToast("error", validationMessage);
+      showErrorToast(validationMessage);
       return;
     }
 
@@ -218,46 +251,74 @@ export default function Plans() {
       const payload = {
         plan_name: editPlan.name.trim(),
         machine_limit: Number(editPlan.machines),
+        staff_limit: Number(editPlan.staffLimit),
         price: getNumericPrice(editPlan.price),
         validity_days: Number(editPlan.validityDays),
       } as any;
 
-      await updateSubscriptionPlan(editPlan.id, payload);
+      const response: any = await updateSubscriptionPlan(editPlan.id, payload);
+
+      if (!response?.success) {
+        showErrorToast(response?.message || "Failed to update plan");
+        return;
+      }
+
+      setPlans((prev) =>
+        prev.map((plan) =>
+          String(plan.id) === String(editPlan.id)
+            ? {
+                ...plan,
+                name: editPlan.name,
+                price: `$${Number(getNumericPrice(editPlan.price))}`,
+                machines: Number(editPlan.machines),
+                validityDays: Number(editPlan.validityDays),
+                staffLimit: Number(editPlan.staffLimit),
+                isPublic: plan.isPublic,
+                isActive: plan.isActive,
+              }
+            : plan,
+        ),
+      );
 
       setEditPlan(null);
-      showToast("success", "Plan updated successfully");
+
+      showSuccessToast(response?.message || "Plan updated successfully");
+
       await fetchPlans();
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Failed to update plan";
-      setError(message);
-      showToast("error", message);
+    } catch (err: any) {
+      setError(err?.message || "Failed to update plan");
+      showErrorToast(err?.message || "Failed to update plan");
     } finally {
       setUpdating(false);
     }
   };
 
   const handleConfirmDelete = async () => {
-    if (!deletePlan) return;
+  if (!deletePlan) return;
 
-    try {
-      setDeleting(true);
-      setError("");
+  try {
+    setDeleting(true);
+    setError("");
 
-      await deleteSubscriptionPlan(deletePlan.id);
+    const response: any = await deleteSubscriptionPlan(deletePlan.id);
 
-      setDeletePlan(null);
-      showToast("success", "Plan deleted successfully");
-      await fetchPlans();
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Failed to delete plan";
-      setError(message);
-      showToast("error", message);
-    } finally {
-      setDeleting(false);
+    if (!response?.success) {
+      showErrorToast(response?.message || "Failed to delete plan");
+      return;
     }
-  };
+
+    setDeletePlan(null);
+
+    showSuccessToast(response?.message || "Plan deleted successfully");
+
+    await fetchPlans();
+  } catch (err: any) {
+    setError(err?.message || "Failed to delete plan");
+    showErrorToast(err?.message || "Failed to delete plan");
+  } finally {
+    setDeleting(false);
+  }
+};
 
   const inputClass =
     "h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 dark:border-slate-700 dark:bg-slate-800 dark:text-white";
@@ -267,92 +328,37 @@ export default function Plans() {
 
   return (
     <div className="relative min-h-screen bg-gray-50 p-4 dark:bg-slate-950 md:p-6">
-      {toast && (
-        <div
-          className={`fixed right-5 top-5 z-[999999] w-[340px] transform rounded-2xl border bg-white p-4 shadow-2xl transition-all duration-300 ease-out dark:bg-slate-900 ${
-            toastVisible
-              ? "translate-y-0 opacity-100"
-              : "-translate-y-4 opacity-0"
-          } ${
-            toast.type === "success"
-              ? "border-green-200 dark:border-green-500/30"
-              : "border-red-200 dark:border-red-500/30"
-          }`}
-        >
-          <div className="flex items-start gap-3">
-            <div
-              className={`mt-0.5 flex h-9 w-9 items-center justify-center rounded-full ${
-                toast.type === "success"
-                  ? "bg-green-50 text-green-600 dark:bg-green-500/10"
-                  : "bg-red-50 text-red-600 dark:bg-red-500/10"
-              }`}
-            >
-              {toast.type === "success" ? (
-                <CheckCircle2 size={20} />
-              ) : (
-                <XCircle size={20} />
-              )}
-            </div>
+      <div className="rounded-[28px] border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-[#081028]">
+        <div className="overflow-hidden rounded-t-2xl border border-blue-700/30 bg-gradient-to-r from-blue-800 via-blue-700 to-blue-800 px-6 py-6 shadow-lg">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+            {/* Left Section */}
+            <div>
+              <div className="mb-3 inline-flex items-center rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.15em] text-white backdrop-blur-sm">
+                Subscription Management
+              </div>
 
-            <div className="flex-1">
-              <p className="text-sm font-bold text-slate-900 dark:text-white">
-                {toast.type === "success" ? "Success" : "Error"}
-              </p>
+              <h1 className="text-3xl font-black tracking-tight text-white">
+                Plans
+              </h1>
 
-              <p className="mt-1 text-sm leading-5 text-slate-500 dark:text-slate-400">
-                {toast.message}
+              <p className="mt-2 text-sm font-medium text-blue-100">
+                Manage subscription plans, pricing, features, and plan
+                availability across the platform.
               </p>
             </div>
 
+            {/* Right Section */}
             <button
               type="button"
               onClick={() => {
-                setToastVisible(false);
-                window.setTimeout(() => setToast(null), 300);
+                setError("");
+                setCreatePlan(emptyPlan);
               }}
-              className="rounded-lg p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800"
+              className="flex h-12 items-center justify-center rounded-2xl bg-white px-5 text-sm font-semibold text-blue-700 shadow-md transition-all duration-200 hover:bg-blue-50 hover:shadow-lg"
             >
-              <X size={16} />
+              + Create Plan
             </button>
           </div>
-
-          <div
-            className={`mt-3 h-1 overflow-hidden rounded-full ${
-              toast.type === "success"
-                ? "bg-green-100 dark:bg-green-500/20"
-                : "bg-red-100 dark:bg-red-500/20"
-            }`}
-          >
-            <div
-              className={`h-full rounded-full transition-all duration-[2600ms] ease-linear ${
-                toastVisible ? "w-0" : "w-full"
-              } ${toast.type === "success" ? "bg-green-500" : "bg-red-500"}`}
-            />
-          </div>
-        </div>
-      )}
-
-      <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-        <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-xl font-bold text-slate-900 dark:text-white">
-              Plans
-            </h1>
-            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-              All subscription plans from pricing API.
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => {
-              setError("");
-              setCreatePlan(emptyPlan);
-            }}
-            className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
-          >
-            + Create Plan
-          </button>
         </div>
 
         {loading && (
@@ -374,58 +380,76 @@ export default function Plans() {
         )}
 
         {!loading && plans.length > 0 && (
-          <div className="overflow-x-auto">
-            <div className="min-w-[1000px] divide-y divide-slate-100 dark:divide-slate-800">
+          <div
+            className="overflow-x-auto [&::-webkit-scrollbar]:hidden"
+            style={{
+              scrollbarWidth: "none",
+              msOverflowStyle: "none",
+            }}
+          >
+            <div
+              className="min-w-[1000px] divide-y divide-slate-100 dark:divide-slate-800"
+              style={{
+                scrollbarWidth: "none",
+              }}
+            >
               {plans.map((plan) => (
                 <div
                   key={plan.id}
-                  className="grid grid-cols-[150px_1fr_120px_140px_140px_100px] items-center gap-4 px-1 py-5 text-sm transition hover:bg-slate-50 dark:hover:bg-slate-800/60"
+                  className="grid grid-cols-[180px_120px_140px_140px_140px_120px_120px_100px] items-center gap-4 rounded-2xl px-4 py-5 text-sm transition hover:bg-slate-50 dark:hover:bg-slate-800/60"
                 >
-                  <div className="font-semibold capitalize text-slate-800 dark:text-white">
+                  <div className="font-bold text-slate-800 dark:text-white">
                     {plan.name}
                   </div>
 
-                  <div className="max-w-md text-slate-500 dark:text-slate-400">
-                    {plan.featuresText ? (
-                      <div className="flex flex-wrap gap-2">
-                        {plan.featuresText
-                          .split(",")
-                          .filter(Boolean)
-                          .map((feature, index) => (
-                            <span
-                              key={`${feature}-${index}`}
-                              className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700 dark:bg-blue-500/10 dark:text-blue-300"
-                            >
-                              {feature.trim()}
-                            </span>
-                          ))}
-                      </div>
-                    ) : (
-                      <span>No features added</span>
-                    )}
-                  </div>
-
-                  <div className="font-medium text-slate-700 dark:text-slate-200">
+                  <div className="font-semibold text-green-600">
                     {plan.price}
                   </div>
 
-                  <div className="text-slate-600 dark:text-slate-300">
-                    {plan.machines} machines
+                  <div className="text-slate-700 dark:text-slate-300">
+                    {plan.machines} Machines
                   </div>
 
-                  <div className="text-slate-600 dark:text-slate-300">
-                    {plan.validityDays} days
+                  <div className="text-slate-700 dark:text-slate-300">
+                    {plan.staffLimit} Staff
                   </div>
 
-                  <div className="flex items-center justify-end gap-3">
+                  <div className="text-slate-700 dark:text-slate-300">
+                    {plan.validityDays} Days
+                  </div>
+
+                  <div>
+                    <span
+                      className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                        plan.isPublic
+                          ? "bg-green-100 text-green-700 dark:bg-green-500/10 dark:text-green-300"
+                          : "bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-300"
+                      }`}
+                    >
+                      {plan.isPublic ? "Public" : "Private"}
+                    </span>
+                  </div>
+
+                  <div>
+                    <span
+                      className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                        plan.isActive
+                          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"
+                          : "bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-300"
+                      }`}
+                    >
+                      {plan.isActive ? "Active" : "Inactive"}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2">
                     <button
                       type="button"
                       onClick={() => {
                         setError("");
                         setEditPlan({ ...plan });
                       }}
-                      className="rounded-lg p-2 text-slate-500 transition hover:bg-blue-50 hover:text-blue-600 dark:text-slate-400 dark:hover:bg-blue-500/10"
-                      title="Edit Plan"
+                      className="rounded-xl bg-blue-50 p-2 text-blue-600 transition hover:bg-blue-100 dark:bg-blue-500/10"
                     >
                       <Pencil size={16} />
                     </button>
@@ -436,8 +460,7 @@ export default function Plans() {
                         setError("");
                         setDeletePlan(plan);
                       }}
-                      className="rounded-lg p-2 text-red-500 transition hover:bg-red-50 hover:text-red-600 dark:text-slate-400 dark:hover:bg-red-500/10"
-                      title="Delete Plan"
+                      className="rounded-xl bg-red-50 p-2 text-red-600 transition hover:bg-red-100 dark:bg-red-500/10"
                     >
                       <Trash2 size={16} />
                     </button>
@@ -480,8 +503,14 @@ export default function Plans() {
       )}
 
       {deletePlan && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-xl dark:border-slate-800 dark:bg-slate-900">
+        <div
+          className="fixed inset-0 z-[999999] flex items-center justify-center overflow-y-auto bg-black/70 p-4 backdrop-blur-sm"
+          onClick={() => setDeletePlan(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative z-[999999] w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900"
+          >
             <h2 className="text-xl font-bold text-slate-900 dark:text-white">
               Delete Plan
             </h2>
@@ -519,6 +548,7 @@ export default function Plans() {
     </div>
   );
 }
+// Plans.tsx — ONLY these two functions change, baaki sab same rehta hai
 
 function PlanModal({
   title,
@@ -543,9 +573,32 @@ function PlanModal({
   disabled: boolean;
   showFeatures: boolean;
 }) {
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<PlanFormData>({
+    resolver: zodResolver(planSchema),
+    defaultValues: {
+      name: plan.name,
+      price: String(getNumericPrice(plan.price) || ""),
+      machines: plan.machines,
+      staffLimit: plan.staffLimit,
+      validityDays: plan.validityDays,
+      featuresText: plan.featuresText,
+    },
+    mode: "onTouched",
+  });
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-2xl rounded-3xl border border-slate-200 bg-white p-6 shadow-xl dark:border-slate-800 dark:bg-slate-900">
+    <div
+      className="fixed inset-0 z-[999999] flex items-center justify-center overflow-y-auto bg-black/70 p-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="relative z-[999999] w-full max-w-2xl rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900"
+      >
         <div className="mb-5 flex items-center justify-between">
           <h2 className="text-xl font-bold text-slate-900 dark:text-white">
             {title}
@@ -567,6 +620,8 @@ function PlanModal({
           inputClass={inputClass}
           labelClass={labelClass}
           showFeatures={showFeatures}
+          register={register}
+          errors={errors}
         />
 
         <div className="mt-6 flex justify-end gap-3">
@@ -581,7 +636,7 @@ function PlanModal({
 
           <button
             type="button"
-            onClick={onSubmit}
+            onClick={handleSubmit(onSubmit)}
             disabled={disabled}
             className="rounded-xl bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
@@ -599,43 +654,89 @@ function PlanForm({
   inputClass,
   labelClass,
   showFeatures,
+  register,
+  errors,
 }: {
   plan: Plan;
   setPlan: Dispatch<SetStateAction<Plan | null>>;
   inputClass: string;
   labelClass: string;
   showFeatures: boolean;
+  register: any;
+  errors: any;
 }) {
   const updatePlanField = <K extends keyof Plan>(key: K, value: Plan[K]) => {
     setPlan((prev) => {
       if (!prev) return prev;
-      return {
-        ...prev,
-        [key]: value,
-      };
+      return { ...prev, [key]: value };
     });
   };
 
+  const errorClass =
+    "mt-1.5 text-xs font-medium text-red-500 dark:text-red-400";
+
+  const getInputClass = (hasError: boolean) =>
+    `${inputClass} ${hasError ? "border-red-400 focus:border-red-500 focus:ring-red-500/10 dark:border-red-500/70" : ""}`;
+
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      {/* Plan Name */}
       <div>
         <label className={labelClass}>Plan Name</label>
         <input
+          {...register("name")}
           value={plan.name}
-          onChange={(e) => updatePlanField("name", e.target.value)}
-          className={inputClass}
+          onChange={(e) => {
+            register("name").onChange(e);
+            updatePlanField("name", e.target.value);
+          }}
+          className={getInputClass(!!errors.name)}
           placeholder="Enter plan name"
         />
+        {errors.name && <p className={errorClass}>{errors.name.message}</p>}
       </div>
 
+      {/* Price */}
       <div>
-        <label className={labelClass}>Price</label>
+        <label className={labelClass}>Price ($)</label>
         <input
+          {...register("price")}
           value={plan.price}
-          onChange={(e) => updatePlanField("price", e.target.value)}
-          className={inputClass}
+          onChange={(e) => {
+            register("price").onChange(e);
+            updatePlanField("price", e.target.value);
+          }}
+          className={getInputClass(!!errors.price)}
           placeholder="99"
         />
+        {errors.price && <p className={errorClass}>{errors.price.message}</p>}
+      </div>
+
+      {/* Machine Limit */}
+
+      {/* Staff Limit */}
+      <div>
+        <label className={labelClass}>Staff Limit</label>
+
+        <input
+          type="number"
+          min={1}
+          {...register("staffLimit", { valueAsNumber: true })}
+          value={plan.staffLimit}
+          onChange={(e) => {
+            register("staffLimit", {
+              valueAsNumber: true,
+            }).onChange(e);
+
+            updatePlanField("staffLimit", Number(e.target.value));
+          }}
+          className={getInputClass(!!errors.staffLimit)}
+          placeholder="20"
+        />
+
+        {errors.staffLimit && (
+          <p className={errorClass}>{errors.staffLimit.message}</p>
+        )}
       </div>
 
       <div>
@@ -643,40 +744,55 @@ function PlanForm({
         <input
           type="number"
           min={1}
+          {...register("machines", { valueAsNumber: true })}
           value={plan.machines}
-          onChange={(e) =>
-            updatePlanField("machines", Number(e.target.value))
-          }
-          className={inputClass}
+          onChange={(e) => {
+            register("machines", { valueAsNumber: true }).onChange(e);
+            updatePlanField("machines", Number(e.target.value));
+          }}
+          className={getInputClass(!!errors.machines)}
           placeholder="10"
         />
+        {errors.machines && (
+          <p className={errorClass}>{errors.machines.message}</p>
+        )}
       </div>
 
+      {/* Validity Days */}
       <div>
         <label className={labelClass}>Validity Days</label>
         <input
           type="number"
           min={1}
+          {...register("validityDays", { valueAsNumber: true })}
           value={plan.validityDays}
-          onChange={(e) =>
-            updatePlanField("validityDays", Number(e.target.value))
-          }
-          className={inputClass}
+          onChange={(e) => {
+            register("validityDays", { valueAsNumber: true }).onChange(e);
+            updatePlanField("validityDays", Number(e.target.value));
+          }}
+          className={getInputClass(!!errors.validityDays)}
           placeholder="30"
         />
+        {errors.validityDays && (
+          <p className={errorClass}>{errors.validityDays.message}</p>
+        )}
       </div>
 
+      {/* Features — Create only */}
       {showFeatures && (
         <div className="md:col-span-2">
           <label className={labelClass}>Features</label>
           <textarea
+            {...register("featuresText")}
             value={plan.featuresText}
-            onChange={(e) => updatePlanField("featuresText", e.target.value)}
+            onChange={(e) => {
+              register("featuresText").onChange(e);
+              updatePlanField("featuresText", e.target.value);
+            }}
             rows={4}
             className="w-full resize-none rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
             placeholder="Engine Monitoring, Hydraulic Monitoring, Tyre Monitoring"
           />
-
           <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
             Add features with comma separation. Example: Engine Monitoring,
             Hydraulic Monitoring
@@ -684,6 +800,7 @@ function PlanForm({
         </div>
       )}
 
+      {/* Edit-mode notice */}
       {!showFeatures && (
         <div className="md:col-span-2 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-700 dark:border-orange-500/20 dark:bg-orange-500/10 dark:text-orange-300">
           Update API only accepts plan name, machine limit, price and validity

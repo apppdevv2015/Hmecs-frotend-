@@ -1,6 +1,6 @@
 export const pricingComparison = [
   ["Machine Limit", "10 Machines", "50 Machines", "Unlimited"],
-  ["User Roles", "Admin", "Admin, Engineer", "All Roles"],
+  ["User Roles", "Admin", "Admin, Artisans", "All Roles"],
   ["Maintenance Tasks", "Basic", "Advanced", "Advanced + Custom"],
   [
     "Modules",

@@ -1,4 +1,3 @@
-import toast from "react-hot-toast";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { useForm } from "react-hook-form";
@@ -12,6 +11,14 @@ import Checkbox from "../form/input/Checkbox";
 import Button from "../ui/button/Button";
 import { authService } from "../../services/authService";
 import { userService } from "../../services/userService";
+import StorageService, { STORAGE_KEYS } from "../../services/storage.service";
+
+import loginBg  from "../../assets/images/loginbg.jpg"
+import {
+  showSuccessToast,
+  showErrorToast,
+  dismissAllToasts,
+} from "../../utils/toastUtils";
 
 import Navbar from "../../components/landing/Navbar";
 import Footer from "../../components/landing/Footer";
@@ -23,10 +30,9 @@ const signInSchema = z.object({
     .min(1, "Email is required.")
     .email("Please enter a valid email address."),
 
-  password: z
-    .string()
-    .min(1, "Password is required.")
-    .min(5, "Password must be at least 6 characters."),
+ password: z
+  .string()
+  .min(1, "Password is required.")
 });
 
 type SignInFormData = z.infer<typeof signInSchema>;
@@ -43,6 +49,9 @@ type LoginUser = {
   company?: string;
   company_name?: string;
   role_id?: string | number;
+
+  companyId?: string;
+  company_id?: string;
 };
 
 type LoginResponse = {
@@ -53,6 +62,8 @@ type LoginResponse = {
   user?: LoginUser;
   admin?: LoginUser;
   company?: LoginUser;
+  companyId?: string;
+  company_id?: string;
   data?: {
     message?: string;
     token?: string;
@@ -61,22 +72,30 @@ type LoginResponse = {
     user?: LoginUser;
     admin?: LoginUser;
     company?: LoginUser;
+    companyId?: string;
+    company_id?: string;
   };
 };
 
 type DecodedToken = {
+  id?: string | number;
   role?: string;
   role_name?: string;
   email?: string;
   name?: string;
   companyName?: string;
   company?: string;
+  companyId?: string;
+  company_id?: string;
   user?: LoginUser;
   data?: {
+    id?: string | number;
     role?: string;
     role_name?: string;
     email?: string;
     name?: string;
+    companyId?: string;
+    company_id?: string;
     user?: LoginUser;
   };
   roles?: string[];
@@ -109,9 +128,17 @@ const getRedirectPathByRole = (role?: string | number | null) => {
     operator: "/operator/dashboard",
     planner: "/operator/dashboard",
 
-    mechanic: "/mechanic/dashboard",
+    supervisor: "/supervisor/dashboard",
 
-    engineer: "/engineer/dashboard",
+    technical_support: "/support/dashboard",
+    technicalsupport: "/support/dashboard",
+    support: "/support/dashboard",
+
+    engineer: "/artisans/dashboard",
+    mechanic: "/artisans/dashboard",
+
+    artisan: "/artisans/dashboard",
+    artisans: "/artisans/dashboard",
 
     viewer: "/viewer/dashboard",
   };
@@ -120,11 +147,12 @@ const getRedirectPathByRole = (role?: string | number | null) => {
 };
 
 const clearAuthStorage = () => {
-  localStorage.removeItem("token");
-  localStorage.removeItem("user");
-  localStorage.removeItem("role");
-  localStorage.removeItem("email");
-  localStorage.removeItem("name");
+  StorageService.remove(STORAGE_KEYS.TOKEN);
+  StorageService.remove(STORAGE_KEYS.USER);
+  StorageService.remove(STORAGE_KEYS.ROLE);
+  StorageService.remove(STORAGE_KEYS.EMAIL);
+  StorageService.remove(STORAGE_KEYS.NAME);
+  StorageService.remove(STORAGE_KEYS.COMPANY_ID);
 };
 
 const decodeToken = (token: string): DecodedToken | null => {
@@ -139,7 +167,7 @@ const decodeToken = (token: string): DecodedToken | null => {
         .atob(base64)
         .split("")
         .map((char) => `%${`00${char.charCodeAt(0).toString(16)}`.slice(-2)}`)
-        .join("")
+        .join(""),
     );
 
     return JSON.parse(jsonPayload);
@@ -155,6 +183,31 @@ const getUserFullName = (user?: LoginUser) => {
 };
 
 const getLoginData = (response: LoginResponse) => response?.data || response;
+
+const getCompanyIdFromLogin = (
+  loginData: LoginResponse["data"] | LoginResponse,
+  apiUser?: LoginUser,
+  decodedToken?: DecodedToken | null,
+) => {
+  return (
+    apiUser?.companyId ||
+    apiUser?.company_id ||
+    loginData?.companyId ||
+    loginData?.company_id ||
+    loginData?.company?.companyId ||
+    loginData?.company?.company_id ||
+    String(loginData?.company?.id || "") ||
+    decodedToken?.companyId ||
+    decodedToken?.company_id ||
+    decodedToken?.user?.companyId ||
+    decodedToken?.user?.company_id ||
+    decodedToken?.data?.companyId ||
+    decodedToken?.data?.company_id ||
+    decodedToken?.data?.user?.companyId ||
+    decodedToken?.data?.user?.company_id ||
+    ""
+  );
+};
 
 const getApiErrorMessage = (error: unknown) => {
   const defaultMessage = "Invalid email or password";
@@ -200,26 +253,20 @@ const showLoginSuccessToast = (role?: string | number | null) => {
     super_admin: "Super Admin login successfully",
     superadmin: "Super Admin login successfully",
     system_admin: "Super Admin login successfully",
-
     admin: "Company Admin login successfully",
     company_admin: "Company Admin login successfully",
     companyadmin: "Company Admin login successfully",
-
     operator: "Operator login successfully",
     planner: "Operator login successfully",
-
+    supervisor: "Supervisor login successfully",
     mechanic: "Mechanic login successfully",
-
-    engineer: "Engineer login successfully",
-
+    artisuns: "Artisuns login successfully",
     viewer: "Viewer login successfully",
   };
 
-  toast.dismiss();
-
-  toast.success(messages[normalizedRole] || "Login successfully", {
+  showSuccessToast(messages[normalizedRole] || "Login successfully", {
     duration: 2500,
-    position: "top-right",
+    id: "login-success",
   });
 };
 
@@ -235,7 +282,7 @@ export default function SignInForm() {
       email: "",
       password: "",
     }),
-    []
+    [],
   );
 
   const {
@@ -248,19 +295,49 @@ export default function SignInForm() {
   } = useForm<SignInFormData>({
     resolver: zodResolver(signInSchema),
     defaultValues,
-    mode: "onSubmit",
+    mode: "onTouched",
     reValidateMode: "onChange",
+    shouldFocusError: true,
   });
 
   useEffect(() => {
-    const rememberMe = localStorage.getItem("rememberMe");
-    const rememberedEmail = localStorage.getItem("rememberEmail");
+    const rememberMe = StorageService.get<string>(STORAGE_KEYS.REMEMBER_ME);
+    const rememberedEmail = StorageService.get<string>(
+      STORAGE_KEYS.REMEMBER_EMAIL,
+    );
 
     if (rememberMe === "true" && rememberedEmail) {
       setValue("email", rememberedEmail, { shouldValidate: false });
       setIsChecked(true);
     }
   }, [setValue]);
+
+
+ useEffect(() => {
+  const navigationEntries = performance.getEntriesByType(
+    "navigation"
+  ) as PerformanceNavigationTiming[];
+
+  const isRefresh =
+    navigationEntries.length > 0 &&
+    navigationEntries[0].type === "reload";
+
+  if (!isRefresh) return;
+
+  const token = StorageService.get<string>(STORAGE_KEYS.TOKEN);
+
+  if (!token) return;
+
+  const role = StorageService.get<string>(STORAGE_KEYS.ROLE);
+
+  const redirect = getRedirectPathByRole(role);
+
+  if (redirect) {
+    // navigate(redirect, { replace: true });
+  
+  }
+}, [navigate]);
+
 
   const onSubmit = async (formData: SignInFormData) => {
     try {
@@ -289,10 +366,8 @@ export default function SignInForm() {
           message: "Token not found in login response.",
         });
 
-        toast.dismiss();
-        toast.error("Token not found in login response", {
+        showErrorToast("Token not found in login response", {
           duration: 3000,
-          position: "top-right",
         });
 
         return;
@@ -326,20 +401,29 @@ export default function SignInForm() {
           message,
         });
 
-        toast.dismiss();
-        toast.error(message, {
+        showErrorToast(message, {
           duration: 3000,
-          position: "top-right",
         });
 
         return;
       }
 
+      const companyId = getCompanyIdFromLogin(loginData, apiUser, decodedToken);
+
       const finalUser: LoginUser = {
-        id: apiUser?.id,
+        id:
+          apiUser?.id ||
+          decodedToken?.id ||
+          decodedToken?.user?.id ||
+          decodedToken?.data?.id ||
+          decodedToken?.data?.user?.id,
+
         role: normalizedRole,
         role_name: apiUser?.role_name,
         role_id: apiUser?.role_id,
+
+        companyId,
+
         email:
           decodedToken?.email ||
           decodedToken?.user?.email ||
@@ -347,6 +431,7 @@ export default function SignInForm() {
           decodedToken?.data?.user?.email ||
           apiUser?.email ||
           email,
+
         name:
           decodedToken?.name ||
           decodedToken?.user?.name ||
@@ -354,13 +439,16 @@ export default function SignInForm() {
           decodedToken?.data?.user?.name ||
           apiUser?.name ||
           getUserFullName(apiUser),
+
         first_name: apiUser?.first_name,
         last_name: apiUser?.last_name,
+
         companyName:
           decodedToken?.companyName ||
           decodedToken?.user?.companyName ||
           apiUser?.companyName ||
           apiUser?.company_name,
+
         company:
           decodedToken?.company ||
           decodedToken?.user?.company ||
@@ -368,11 +456,17 @@ export default function SignInForm() {
           apiUser?.company_name,
       };
 
-      localStorage.setItem("token", token);
-      localStorage.setItem("user", JSON.stringify(finalUser));
-      localStorage.setItem("role", normalizedRole);
-      localStorage.setItem("email", finalUser.email || "");
-      localStorage.setItem("name", finalUser.name || "");
+      StorageService.set(STORAGE_KEYS.TOKEN, token);
+      StorageService.set(STORAGE_KEYS.USER, finalUser);
+      StorageService.set(STORAGE_KEYS.ROLE, normalizedRole);
+      StorageService.set(STORAGE_KEYS.EMAIL, finalUser.email || "");
+      StorageService.set(STORAGE_KEYS.NAME, finalUser.name || "");
+
+      if (finalUser.companyId) {
+        StorageService.set(STORAGE_KEYS.COMPANY_ID, finalUser.companyId);
+      } else {
+        StorageService.remove(STORAGE_KEYS.COMPANY_ID);
+      }
 
       let finalRedirect = redirectPath;
 
@@ -389,11 +483,11 @@ export default function SignInForm() {
       }
 
       if (isChecked) {
-        localStorage.setItem("rememberMe", "true");
-        localStorage.setItem("rememberEmail", email);
+        StorageService.set(STORAGE_KEYS.REMEMBER_ME, "true");
+        StorageService.set(STORAGE_KEYS.REMEMBER_EMAIL, email);
       } else {
-        localStorage.removeItem("rememberMe");
-        localStorage.removeItem("rememberEmail");
+        StorageService.remove(STORAGE_KEYS.REMEMBER_ME);
+        StorageService.remove(STORAGE_KEYS.REMEMBER_EMAIL);
       }
 
       const searchParams = new URLSearchParams(window.location.search);
@@ -401,7 +495,10 @@ export default function SignInForm() {
 
       showLoginSuccessToast(normalizedRole);
 
-      navigate(redirectParam || finalRedirect, { replace: true });
+      setTimeout(() => {
+        navigate(redirectParam || finalRedirect, {
+        });
+      }, 500);
     } catch (error) {
       console.error("Login API Error:", error);
 
@@ -413,25 +510,19 @@ export default function SignInForm() {
         type: "server",
         message,
       });
-
-      toast.dismiss();
-      toast.error(message || "Invalid email or password", {
-        duration: 3000,
-        position: "top-right",
-      });
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-white">
+    <div className="min-h-screen pt-[30px] bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-white">
       <Navbar active={active} setActive={setActive} />
 
       <main
-        className="relative flex min-h-[640px] items-center justify-center overflow-hidden bg-cover bg-center bg-no-repeat px-4 pb-10 pt-32"
-        style={{
-          backgroundImage: "url('/signin-bg.jpg')",
-        }}
-      >
+  className="relative flex min-h-[640px] items-center justify-center overflow-hidden bg-cover bg-center bg-no-repeat px-4 pb-10 pt-32"
+  // style={{
+  //   backgroundImage: `linear-gradient(rgba(255,255,255,0.2), rgba(255,255,255,0.2)), url(${loginBg})`,
+  // }}
+>
         <div className="absolute inset-0 bg-white/70 backdrop-blur-[2px] dark:bg-slate-950/65" />
         <div className="absolute left-10 top-32 h-40 w-40 rounded-full bg-blue-600/20 blur-3xl" />
 

@@ -1,4 +1,5 @@
-import { apiRequest } from "./api";
+// import { apiRequest } from "./api";
+import { apiCall } from "./apiHandler";
 
 export type ApiRole = {
   id: number | string;
@@ -19,7 +20,7 @@ export type UpdateRolePayload = {
 };
 
 export const getRoles = async (page = 1, limit = 10) => {
-  return apiRequest<{
+  return apiCall<{
     message?: string;
     roles?: ApiRole[];
     data?: ApiRole[] | { roles?: ApiRole[] };
@@ -28,33 +29,56 @@ export const getRoles = async (page = 1, limit = 10) => {
   });
 };
 
-export const createRole = async (payload: CreateRolePayload) => {
-  return apiRequest<{
-    message?: string;
-    data?: {
-      role?: ApiRole;
-    };
-  }>("/auth/roles", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
+type RoleResponse = {
+  success: boolean;
+  message: string;
+  data: ApiRole;
+  error: string | null;
+  timestamp: string;
+};
+
+export const createRole = async (
+  payload: CreateRolePayload,
+): Promise<RoleResponse> => {
+  return apiCall<RoleResponse>(
+    "/auth/roles",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+    {
+      showSuccess: true,
+      successMessage: "Role created successfully",
+    },
+  );
 };
 
 export const updateRole = async (
   id: number | string,
-  payload: UpdateRolePayload
+  payload: UpdateRolePayload,
 ) => {
-  return apiRequest<{ message?: string; data?: ApiRole }>(
+  return apiCall<RoleResponse>(
     `/auth/roles/${id}`,
     {
       method: "PUT",
       body: JSON.stringify(payload),
-    }
+    },
+    {
+      showSuccess: true,
+      successMessage: "Role updated successfully",
+    },
   );
 };
 
 export const deleteRole = async (id: number | string) => {
-  return apiRequest<{ message?: string }>(`/auth/roles/${id}`, {
-    method: "DELETE",
-  });
+  return apiCall<{ message?: string }>(
+    `/auth/roles/${id}`,
+    {
+      method: "DELETE",
+    },
+    {
+      showSuccess: true,
+      successMessage: "Role deleted successfully",
+    },
+  );
 };

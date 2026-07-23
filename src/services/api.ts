@@ -1,48 +1,203 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+import offlineQueueService from "./offlineQueue.service";
+
+import { showErrorToast, showSuccessToast } from "../utils/toastUtils";
+
+export const getApiBaseUrl = () => {
+  const envUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000/api/v1";
+  if (typeof window !== "undefined" && window.location && window.location.hostname) {
+    const currentHost = window.location.hostname;
+    return envUrl.replace(/localhost|127\.0\.0\.1/g, currentHost);
+  }
+  return envUrl;
+};
+
+import StorageService, { STORAGE_KEYS } from "./storage.service";
+
+import { fetchWithCache } from "./api-cache.service";
+
+const parseRequestBody = (body: any) => {
+  if (!body) return undefined;
+
+  if (typeof body === "string") {
+    try {
+      return JSON.parse(body);
+    } catch {
+      return body;
+    }
+  }
+
+  return body;
+};
 
 export async function apiRequest<T>(
   endpoint: string,
   options: RequestInit = {},
 ): Promise<T> {
-  const token = localStorage.getItem("token");
+  const token = StorageService.get<string>(STORAGE_KEYS.TOKEN);
 
-  const baseUrl = String(API_BASE_URL || "").replace(/\/$/, "");
+  const baseUrl = getApiBaseUrl().replace(/\/$/, "");
+
   const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+
   const finalUrl = `${baseUrl}${cleanEndpoint}`;
 
-  console.log("API_BASE_URL:", API_BASE_URL);
-  console.log("API Endpoint:", endpoint);
-  console.log("Final API URL:", finalUrl);
+  /**
+   * Generate cache key
+   */
+  const cacheKey = endpoint.replace(/[/?=&]/g, "_").replace(/_+/g, "_");
 
-  const response = await fetch(finalUrl, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      "ngrok-skip-browser-warning": "true",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...options.headers,
-    },
-  });
+  /**
+   * Request method
+   */
+  const method = String(options.method || "GET").toUpperCase();
 
-  let data: any = null;
+  /**
+   * Mutation methods
+   */
+  const isMutationMethod = ["POST", "PUT", "PATCH", "DELETE"].includes(method);
 
-  try {
-    const text = await response.text();
-    data = text ? JSON.parse(text) : null;
-  } catch {
-    data = null;
-  }
+  /**
+   * Skip auth/payment queue
+   */
+  const shouldSkipOfflineQueue =
+    endpoint.includes("/login") ||
+    endpoint.includes("/logout") ||
+    endpoint.includes("/checkout") ||
+    endpoint.includes("/payment");
 
-  if (!response.ok) {
-    console.error("API Error:", {
-      status: response.status,
-      statusText: response.statusText,
-      url: finalUrl,
-      data,
+  
+
+  if (isMutationMethod && !shouldSkipOfflineQueue && !navigator.onLine) {
+    
+    console.warn(`[Offline Queue] Saved: ${endpoint}`);
+    console.log("OFFLINE QUEUE HIT");
+    await offlineQueueService.saveRequest({
+      endpoint: finalUrl,
+
+      method,
+
+      body: parseRequestBody(options.body),
+      headers: {
+        "Content-Type": "application/json",
+
+        ...(token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {}),
+      },
     });
 
-    throw new Error(data?.message || data?.error || "Something went wrong");
+    return {
+      success: true,
+      offline: true,
+      queued: true,
+      message: "Saved offline. Will sync automatically.",
+    } as T;
   }
 
-  return data as T;
+  /**
+   * Main request function
+   */
+  const makeRequest = async (): Promise<T> => {
+    try {
+      const response = await fetch(finalUrl, {
+        ...options,
+
+        cache: isMutationMethod ? "no-store" : "no-cache",
+
+        headers: {
+          "Content-Type": "application/json",
+
+          "ngrok-skip-browser-warning": "true",
+
+          ...(token
+            ? {
+                Authorization: `Bearer ${token}`,
+              }
+            : {}),
+
+          ...options.headers,
+        },
+      });
+
+      let data: any = null;
+
+      try {
+        const text = await response.text();
+
+        data = text ? JSON.parse(text) : null;
+      } catch {
+        data = null;
+      }
+
+      if (!response.ok) {
+        console.error("API Error:", {
+          status: response.status,
+          statusText: response.statusText,
+          url: finalUrl,
+          data,
+        });
+
+        const error: any = new Error(
+          data?.message || data?.error || "Something went wrong",
+        );
+
+        error.errors = data?.errors || {};
+        error.status = response.status;
+        error.response = data;
+
+        throw error;
+      }
+
+      return data as T;
+    } catch (error) {
+      console.log("FETCH FAILED");
+      console.log("ONLINE STATUS:", navigator.onLine);
+      console.log("ERROR:", error);
+
+      if (isMutationMethod && !shouldSkipOfflineQueue) {
+        console.warn(`[Offline Queue] Queued: ${endpoint}`);
+
+        await offlineQueueService.saveRequest({
+          endpoint: finalUrl,
+
+          method,
+
+          body: parseRequestBody(options.body),
+
+          headers: {
+            "Content-Type": "application/json",
+
+            ...(token
+              ? {
+                  Authorization: `Bearer ${token}`,
+                }
+              : {}),
+          },
+        });
+        ///////////////////////////////////////////////////////////////////////////////////////////////////
+        throw error;
+      }
+
+      throw error;
+    }
+  };
+
+  /**
+   * Cache GET APIs
+   */
+  const shouldCache =
+    method === "GET" &&
+    !endpoint.includes("/login") &&
+    !endpoint.includes("/logout");
+
+  if (shouldCache) {
+    return fetchWithCache<T>(cacheKey, makeRequest, 2);
+  }
+
+  /**
+   * Normal request
+   */
+  return makeRequest();
 }
