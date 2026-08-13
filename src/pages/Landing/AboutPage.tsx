@@ -126,7 +126,9 @@ export default function AboutPage() {
           <div className="mx-auto grid max-w-7xl items-center gap-10 lg:grid-cols-2 lg:gap-16">
             <div
               className={`transition-all duration-700 ${
-                visible ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"
+                visible
+                  ? "translate-y-0 opacity-100"
+                  : "translate-y-3 opacity-0"
               }`}
             >
               <p className="text-xs font-black uppercase tracking-[0.3em] text-blue-600">
@@ -135,14 +137,17 @@ export default function AboutPage() {
 
               <h1 className="mt-4 text-3xl font-black leading-tight tracking-tight text-slate-950 dark:text-white sm:text-4xl lg:text-5xl">
                 Track Every Machine.{" "}
-                <span className="text-blue-600 dark:text-blue-400">Prevent Every Breakdown.</span>
+                <span className="text-blue-600 dark:text-blue-400">
+                  Prevent Every Breakdown.
+                </span>
               </h1>
 
               <p className="mt-5 max-w-xl text-base leading-7 text-slate-600 dark:text-slate-300">
-                HMEC gives you a single dashboard to watch over every truck, dozer, loader and
-                excavator in your fleet. Instead of finding out about a problem after a machine
-                stops working, your team sees engine, hydraulic and tyre health as it changes — and
-                acts before it turns into downtime.
+                HMEC gives you a single dashboard to watch over every truck,
+                dozer, loader and excavator in your fleet. Instead of finding
+                out about a problem after a machine stops working, your team
+                sees engine, hydraulic and tyre health as it changes — and acts
+                before it turns into downtime.
               </p>
 
               <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -158,7 +163,9 @@ export default function AboutPage() {
             {/* BACKEND TODO: replace this placeholder block with the real hero photo */}
             <div
               className={`relative overflow-hidden rounded-[1.75rem] border border-slate-200 bg-slate-50 shadow-xl transition-all duration-700 dark:border-slate-800 dark:bg-slate-900 ${
-                visible ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"
+                visible
+                  ? "translate-y-0 opacity-100"
+                  : "translate-y-3 opacity-0"
               }`}
             >
               <img
@@ -188,8 +195,9 @@ export default function AboutPage() {
                 How HMEC Tracks Your Machines
               </h2>
               <p className="mt-4 text-sm leading-7 text-slate-600 dark:text-slate-300">
-                Component-level data from every machine feeds into one system, so your team knows
-                exactly what's happening before a small issue becomes an expensive repair.
+                Component-level data from every machine feeds into one system,
+                so your team knows exactly what's happening before a small issue
+                becomes an expensive repair.
               </p>
             </div>
 
@@ -255,8 +263,9 @@ export default function AboutPage() {
                 Reach Out For Better Fleet Uptime
               </h2>
               <p className="mt-4 max-w-md text-sm leading-7 text-slate-600 dark:text-slate-300">
-                Whether you run five machines or five hundred, HMEC scales with your fleet and keeps
-                every role — from operator to super admin — aligned on machine health.
+                Whether you run five machines or five hundred, HMEC scales with
+                your fleet and keeps every role — from operator to super admin —
+                aligned on machine health.
               </p>
 
               <div className="mt-6 inline-flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-900">
@@ -293,14 +302,16 @@ export default function AboutPage() {
                   4 Steps We Use To Prevent Machine Failure
                 </h2>
                 <p className="mt-5 max-w-md text-sm leading-7 text-slate-600 dark:text-slate-300">
-                  From the moment a machine is added to HMEC, it stays under watch — so your team is
-                  always a step ahead of a breakdown, not reacting to one.
+                  From the moment a machine is added to HMEC, it stays under
+                  watch — so your team is always a step ahead of a breakdown,
+                  not reacting to one.
                 </p>
 
                 <div className="mt-7 flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900">
                   <Target className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
                   <p className="text-xs font-semibold text-slate-600 dark:text-slate-300">
-                    The goal: fewer surprises on site, more planned service windows.
+                    The goal: fewer surprises on site, more planned service
+                    windows.
                   </p>
                 </div>
               </div>
@@ -344,7 +355,9 @@ export default function AboutPage() {
                 key={stat.label}
                 className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-6 text-center dark:border-slate-800 dark:bg-slate-900"
               >
-                <p className="text-2xl font-black text-blue-600 sm:text-3xl">{stat.value}</p>
+                <p className="text-2xl font-black text-blue-600 sm:text-3xl">
+                  {stat.value}
+                </p>
                 <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
                   {stat.label}
                 </p>
@@ -361,8 +374,8 @@ export default function AboutPage() {
             </h2>
 
             <p className="mx-auto mt-4 max-w-xl text-blue-100">
-              See how HMEC can track your trucks, dozers and excavators from day one — book a
-              walkthrough with our team.
+              See how HMEC can track your trucks, dozers and excavators from day
+              one — book a walkthrough with our team.
             </p>
 
             <div className="mt-8 flex flex-wrap items-center justify-center gap-3">

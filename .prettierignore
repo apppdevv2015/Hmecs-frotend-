@@ -1,7 +1,0 @@
-node_modules
-dist
-build
-stats.html
-package-lock.json
-public
-.env*

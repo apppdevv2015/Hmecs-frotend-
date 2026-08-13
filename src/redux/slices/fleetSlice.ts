@@ -1,6 +1,14 @@
-import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
+import {
+  createSlice,
+  createAsyncThunk,
+  PayloadAction,
+} from "@reduxjs/toolkit";
 
-import { fleetService, type FleetMachine, type UserRole } from "../../services/Fleet/fleetService";
+import {
+  fleetService,
+  type FleetMachine,
+  type UserRole,
+} from "../../services/Fleet/fleetService";
 
 /* ==========================================
    TYPES
@@ -17,134 +25,216 @@ interface FleetStats {
 }
 
 interface FleetState {
-  fleetMachines: FleetMachine[];
+  fleetMachines:
+    FleetMachine[];
 
-  selectedMachine: FleetMachine | null;
+  selectedMachine:
+    | FleetMachine
+    | null;
 
-  stats: FleetStats | null;
+  stats:
+    | FleetStats
+    | null;
 
   loading: boolean;
 
-  error: string | null;
+  error:
+    | string
+    | null;
 }
 
 /* ==========================================
    INITIAL STATE
 ========================================== */
 
-const initialState: FleetState = {
-  fleetMachines: [],
+const initialState: FleetState =
+  {
+    fleetMachines:
+      [],
 
-  selectedMachine: null,
+    selectedMachine:
+      null,
 
-  stats: null,
+    stats: null,
 
-  loading: false,
+    loading: false,
 
-  error: null,
-};
+    error: null,
+  };
 
 /* ==========================================
    THUNKS
 ========================================== */
 
-export const fetchFleetMachines = createAsyncThunk(
-  "fleet/fetchFleetMachines",
+export const fetchFleetMachines =
+  createAsyncThunk(
+    "fleet/fetchFleetMachines",
 
-  async (
-    params: {
-      role?: UserRole;
-      companyId?: string;
-      operatorId?: string;
-    } = {},
-    { rejectWithValue },
-  ) => {
-    try {
-      const response = await fleetService.getFleetMachines(
-        params.role,
-        params.companyId,
-        params.operatorId,
-      );
+    async (
+      params: {
+        role?: UserRole;
+        companyId?: string;
+        operatorId?: string;
+      } = {},
+      {
+        rejectWithValue,
+      },
+    ) => {
+      try {
+        const response =
+          await fleetService.getFleetMachines(
+            params.role,
+            params.companyId,
+            params.operatorId,
+          );
 
-      return response;
-    } catch (error: any) {
-      return rejectWithValue(error?.message || "Failed to fetch fleet machines");
-    }
-  },
-);
+        return response;
+      } catch (
+        error: any
+      ) {
+        return rejectWithValue(
+          error?.message ||
+            "Failed to fetch fleet machines",
+        );
+      }
+    },
+  );
 
-export const fetchFleetStats = createAsyncThunk(
-  "fleet/fetchFleetStats",
+export const fetchFleetStats =
+  createAsyncThunk(
+    "fleet/fetchFleetStats",
 
-  async (_, { rejectWithValue }) => {
-    try {
-      const response = await fleetService.getFleetStats();
+    async (
+      _,
+      {
+        rejectWithValue,
+      },
+    ) => {
+      try {
+        const response =
+          await fleetService.getFleetStats();
 
-      return response;
-    } catch (error: any) {
-      return rejectWithValue(error?.message || "Failed to fetch fleet stats");
-    }
-  },
-);
+        return response;
+      } catch (
+        error: any
+      ) {
+        return rejectWithValue(
+          error?.message ||
+            "Failed to fetch fleet stats",
+        );
+      }
+    },
+  );
 
 /* ==========================================
    SLICE
 ========================================== */
 
-const fleetSlice = createSlice({
-  name: "fleet",
+const fleetSlice =
+  createSlice({
+    name: "fleet",
 
-  initialState,
+    initialState,
 
-  reducers: {
-    setSelectedFleetMachine: (state, action: PayloadAction<FleetMachine | null>) => {
-      state.selectedMachine = action.payload;
+    reducers: {
+      setSelectedFleetMachine:
+        (
+          state,
+          action: PayloadAction<FleetMachine | null>,
+        ) => {
+          state.selectedMachine =
+            action.payload;
+        },
+
+      clearFleetError:
+        (
+          state,
+        ) => {
+          state.error =
+            null;
+        },
+
+      clearFleetData:
+        (
+          state,
+        ) => {
+          state.fleetMachines =
+            [];
+
+          state.stats =
+            null;
+        },
     },
 
-    clearFleetError: (state) => {
-      state.error = null;
+    extraReducers: (
+      builder,
+    ) => {
+      builder
+
+        // FETCH MACHINES
+        .addCase(
+          fetchFleetMachines.pending,
+          (
+            state,
+          ) => {
+            state.loading =
+              true;
+
+            state.error =
+              null;
+          },
+        )
+
+        .addCase(
+          fetchFleetMachines.fulfilled,
+          (
+            state,
+            action,
+          ) => {
+            state.loading =
+              false;
+
+            state.fleetMachines =
+              action.payload;
+          },
+        )
+
+        .addCase(
+          fetchFleetMachines.rejected,
+          (
+            state,
+            action,
+          ) => {
+            state.loading =
+              false;
+
+            state.error =
+              action.payload as string;
+          },
+        )
+
+        // FETCH STATS
+        .addCase(
+          fetchFleetStats.fulfilled,
+          (
+            state,
+            action,
+          ) => {
+            state.stats =
+              action.payload;
+          },
+        );
     },
-
-    clearFleetData: (state) => {
-      state.fleetMachines = [];
-
-      state.stats = null;
-    },
-  },
-
-  extraReducers: (builder) => {
-    builder
-
-      // FETCH MACHINES
-      .addCase(fetchFleetMachines.pending, (state) => {
-        state.loading = true;
-
-        state.error = null;
-      })
-
-      .addCase(fetchFleetMachines.fulfilled, (state, action) => {
-        state.loading = false;
-
-        state.fleetMachines = action.payload;
-      })
-
-      .addCase(fetchFleetMachines.rejected, (state, action) => {
-        state.loading = false;
-
-        state.error = action.payload as string;
-      })
-
-      // FETCH STATS
-      .addCase(fetchFleetStats.fulfilled, (state, action) => {
-        state.stats = action.payload;
-      });
-  },
-});
+  });
 
 /* ==========================================
    EXPORTS
 ========================================== */
 
-export const { setSelectedFleetMachine, clearFleetError, clearFleetData } = fleetSlice.actions;
+export const {
+  setSelectedFleetMachine,
+  clearFleetError,
+  clearFleetData,
+} = fleetSlice.actions;
 
 export default fleetSlice.reducer;

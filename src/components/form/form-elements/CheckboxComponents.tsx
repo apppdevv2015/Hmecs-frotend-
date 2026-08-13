@@ -16,7 +16,11 @@ export default function CheckboxComponents() {
           </span>
         </div>
         <div className="flex items-center gap-3">
-          <Checkbox checked={isCheckedTwo} onChange={setIsCheckedTwo} label="Checked" />
+          <Checkbox
+            checked={isCheckedTwo}
+            onChange={setIsCheckedTwo}
+            label="Checked"
+          />
         </div>
         <div className="flex items-center gap-3">
           <Checkbox

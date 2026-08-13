@@ -1,4 +1,3 @@
-/// <reference types="vitest" />
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import svgr from "vite-plugin-svgr";
@@ -35,13 +34,19 @@ export default defineConfig({
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
       },
 
-      includeAssets: ["apple-touch-icon.png", "pwa-192x192.png", "pwa-512x512.png", "favicon.ico"],
+      includeAssets: [
+        "apple-touch-icon.png",
+        "pwa-192x192.png",
+        "pwa-512x512.png",
+        "favicon.ico",
+      ],
 
       manifest: {
         id: "/hme-component-intelligence-system",
         name: "HME Component Intelligence System",
         short_name: "HME",
-        description: "Advanced fleet component lifecycle monitoring and risk management.",
+        description:
+          "Advanced fleet component lifecycle monitoring and risk management.",
         theme_color: "#0f172a",
         background_color: "#ffffff",
         display: "standalone",
@@ -86,10 +91,5 @@ export default defineConfig({
         },
       },
     },
-  },
-
-  test: {
-    globals: true,
-    environment: "jsdom",
   },
 });

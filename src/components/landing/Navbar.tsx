@@ -25,7 +25,8 @@ export default function Navbar({ active = "home", setActive }: NavbarProps) {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const isAuthPage = location.pathname === "/signin" || location.pathname === "/signup";
+  const isAuthPage =
+    location.pathname === "/signin" || location.pathname === "/signup";
 
   const token =
     StorageService.get<string>(STORAGE_KEYS.TOKEN) ||
@@ -38,7 +39,8 @@ export default function Navbar({ active = "home", setActive }: NavbarProps) {
     const savedTheme = StorageService.get<string>(STORAGE_KEYS.THEME);
 
     const shouldUseDark =
-      savedTheme === "dark" || (!savedTheme && document.documentElement.classList.contains("dark"));
+      savedTheme === "dark" ||
+      (!savedTheme && document.documentElement.classList.contains("dark"));
 
     document.documentElement.classList.toggle("dark", shouldUseDark);
     setIsDark(shouldUseDark);
@@ -100,7 +102,7 @@ export default function Navbar({ active = "home", setActive }: NavbarProps) {
   }, [location.hash]);
 
   return (
-    <header className="fixed inset-x-0 top-0 z-[9999] border-b border-slate-200/60 bg-white/80 shadow-[0_8px_30px_rgba(15,23,42,0.08)] backdrop-blur-3xl transition-all duration-300 dark:border-white/10 dark:bg-[#050817]/80 dark:text-white">
+ <header className="fixed inset-x-0 top-0 z-[9999] border-b border-slate-200/60 bg-white/80 shadow-[0_8px_30px_rgba(15,23,42,0.08)] backdrop-blur-3xl transition-all duration-300 dark:border-white/10 dark:bg-[#050817]/80 dark:text-white">
       <div className="mx-auto flex h-[90px] max-w-7xl items-center justify-between px-5 sm:px-6 lg:px-8">
         {/* Logo */}
         <Link to="/" className="flex items-center">
@@ -117,7 +119,7 @@ export default function Navbar({ active = "home", setActive }: NavbarProps) {
             <Link
               key={link.path}
               to={link.path}
-              className={`group relative py-2 text-[15px] font-semibold tracking-wide transition-all duration-300 hover:-translate-y-[1px] ${
+            className={`group relative py-2 text-[15px] font-semibold tracking-wide transition-all duration-300 hover:-translate-y-[1px] ${
                 location.pathname === link.path
                   ? "text-slate-900 dark:text-white"
                   : "text-slate-700/90 hover:text-blue-600 dark:text-slate-300 dark:hover:text-white"
@@ -127,7 +129,9 @@ export default function Navbar({ active = "home", setActive }: NavbarProps) {
 
               <span
                 className={`absolute -bottom-1 left-0 h-[3px] rounded-full bg-gradient-to-r from-cyan-400 via-blue-500 to-indigo-500 transition-all duration-300 ${
-                  location.pathname === link.path ? "w-full" : "w-0 group-hover:w-full"
+                  location.pathname === link.path
+                    ? "w-full"
+                    : "w-0 group-hover:w-full"
                 }`}
               />
             </Link>
@@ -139,7 +143,7 @@ export default function Navbar({ active = "home", setActive }: NavbarProps) {
           <button
             type="button"
             onClick={toggleTheme}
-            className="flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white/80 text-slate-800 shadow-md backdrop-blur-xl transition-all duration-300 hover:scale-105 hover:rotate-180 dark:border-white/15 dark:bg-white/10 dark:text-white dark:hover:bg-white/15"
+         className="flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white/80 text-slate-800 shadow-md backdrop-blur-xl transition-all duration-300 hover:scale-105 hover:rotate-180 dark:border-white/15 dark:bg-white/10 dark:text-white dark:hover:bg-white/15"
             aria-label="Toggle theme"
           >
             {isDark ? <Sun size={20} /> : <Moon size={20} />}

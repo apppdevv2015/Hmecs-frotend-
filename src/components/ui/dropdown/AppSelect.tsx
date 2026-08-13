@@ -3,10 +3,15 @@ import * as SelectPrimitive from "@radix-ui/react-select";
 import { Check, ChevronDown, X, Loader2 } from "lucide-react";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { useEffect } from "react";
+
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
+
+
+
 
 export interface SelectOption {
   label: string;
@@ -16,10 +21,11 @@ export interface SelectOption {
 }
 
 export interface CustomSelectProps {
+  
   options: SelectOption[];
 
   value?: string;
-
+ 
   defaultValue?: string;
 
   onChange?: (value: string) => void;
@@ -50,6 +56,7 @@ export interface CustomSelectProps {
   id?: string;
   "aria-label"?: string;
 }
+
 
 const CustomSelect = React.memo(
   React.forwardRef<HTMLButtonElement, CustomSelectProps>(function CustomSelect(
@@ -92,19 +99,8 @@ const CustomSelect = React.memo(
     const hasError = error || Boolean(errorMessage);
     const isDisabled = disabled || loading;
 
-    const justClosedRef = React.useRef(false);
-
-    const handleOpenChange = React.useCallback((open: boolean) => {
-      if (!open) {
-        setSearchTerm("");
-        justClosedRef.current = true;
-
-        window.setTimeout(() => {
-          justClosedRef.current = false;
-        }, 250);
-      }
-    }, []);
-
+  
+  
     const filteredOptions = React.useMemo(() => {
       if (!searchable || searchTerm.trim() === "") return options;
       const term = searchTerm.trim().toLowerCase();
@@ -112,9 +108,9 @@ const CustomSelect = React.memo(
     }, [options, searchable, searchTerm]);
 
     const selectedOption = React.useMemo(() => {
-      if (!value) return undefined;
-      return options.find((opt) => opt.value === value);
-    }, [options, value]);
+  if (!value) return undefined;
+  return options.find((opt) => opt.value === value);
+}, [options, value]);
 
     const handleClear = React.useCallback(
       (e: React.SyntheticEvent) => {
@@ -125,30 +121,22 @@ const CustomSelect = React.memo(
       [onChange],
     );
 
-    React.useEffect(() => {
-      const observer = new MutationObserver(() => {
-        console.log("BODY overflow:", document.body.style.overflow);
-        console.log("HTML overflow:", document.documentElement.style.overflow);
-      });
 
-      observer.observe(document.body, {
-        attributes: true,
-        attributeFilter: ["style"],
-      });
+    
 
-      observer.observe(document.documentElement, {
-        attributes: true,
-        attributeFilter: ["style"],
-      });
 
-      return () => observer.disconnect();
-    }, []);
 
-    const showClear = clearable && !isDisabled && Boolean(selectedOption?.value);
+
+    const showClear =
+      clearable && !isDisabled && Boolean(selectedOption?.value);
 
     return (
       <div
-        className={cn(fullWidth ? "w-full" : "inline-block", "flex flex-col gap-1.5", className)}
+        className={cn(
+          fullWidth ? "w-full" : "inline-block",
+          "flex flex-col gap-1.5",
+          className,
+        )}
       >
         {label && (
           <label
@@ -164,7 +152,6 @@ const CustomSelect = React.memo(
           value={value}
           defaultValue={defaultValue}
           onValueChange={onChange}
-          onOpenChange={handleOpenChange}
           disabled={isDisabled}
           required={required}
           name={name}
@@ -172,15 +159,11 @@ const CustomSelect = React.memo(
           <SelectPrimitive.Trigger
             ref={ref}
             id={selectId}
-            onPointerDown={(e) => {
-              if (justClosedRef.current) {
-                e.preventDefault();
-                justClosedRef.current = false;
-              }
-            }}
             aria-label={ariaLabel ?? label}
             aria-invalid={hasError || undefined}
-            aria-describedby={cn(helperText && helperId, hasError && errorId) || undefined}
+            aria-describedby={
+              cn(helperText && helperId, hasError && errorId) || undefined
+            }
             className={cn(
               "touch-manipulation",
               "flex min-h-11 w-full items-center justify-between gap-2 rounded-lg",
@@ -207,13 +190,23 @@ const CustomSelect = React.memo(
           >
             <span className="flex min-w-0 flex-1 items-center gap-2">
               {leftIcon && (
-                <span className="shrink-0 text-gray-400 dark:text-gray-500">{leftIcon}</span>
+                <span className="shrink-0 text-gray-400 dark:text-gray-500">
+                  {leftIcon}
+                </span>
               )}
-              <SelectPrimitive.Value placeholder={placeholder} className="truncate" />
+              <SelectPrimitive.Value
+                placeholder={placeholder}
+                className="truncate"
+              />
             </span>
 
             <span className="flex shrink-0 items-center gap-1">
-              {loading && <Loader2 className="h-4 w-4 animate-spin text-gray-400" aria-hidden />}
+              {loading && (
+                <Loader2
+                  className="h-4 w-4 animate-spin text-gray-400"
+                  aria-hidden
+                />
+              )}
 
               {!loading && showClear && (
                 <span
@@ -297,8 +290,12 @@ const CustomSelect = React.memo(
                       <SelectPrimitive.ItemIndicator className="absolute start-2 inline-flex items-center">
                         <Check className="h-4 w-4 text-blue-600" aria-hidden />
                       </SelectPrimitive.ItemIndicator>
-                      {option.icon && <span className="shrink-0">{option.icon}</span>}
-                      <SelectPrimitive.ItemText>{option.label}</SelectPrimitive.ItemText>
+                      {option.icon && (
+                        <span className="shrink-0">{option.icon}</span>
+                      )}
+                      <SelectPrimitive.ItemText>
+                        {option.label}
+                      </SelectPrimitive.ItemText>
                     </SelectPrimitive.Item>
                   ))
                 )}
@@ -317,7 +314,11 @@ const CustomSelect = React.memo(
           </p>
         )}
         {hasError && errorMessage && (
-          <p id={errorId} role="alert" className="text-xs text-red-500 dark:text-red-400">
+          <p
+            id={errorId}
+            role="alert"
+            className="text-xs text-red-500 dark:text-red-400"
+          >
             {errorMessage}
           </p>
         )}

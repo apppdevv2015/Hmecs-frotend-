@@ -43,9 +43,17 @@ const Radio: React.FC<RadioProps> = ({
           checked
             ? "border-brand-500 bg-brand-500"
             : "bg-transparent border-gray-300 dark:border-gray-700"
-        } ${disabled ? "bg-gray-100 dark:bg-gray-700 border-gray-200 dark:border-gray-700" : ""}`}
+        } ${
+          disabled
+            ? "bg-gray-100 dark:bg-gray-700 border-gray-200 dark:border-gray-700"
+            : ""
+        }`}
       >
-        <span className={`h-2 w-2 rounded-full bg-white ${checked ? "block" : "hidden"}`}></span>
+        <span
+          className={`h-2 w-2 rounded-full bg-white ${
+            checked ? "block" : "hidden"
+          }`}
+        ></span>
       </span>
       {label}
     </label>

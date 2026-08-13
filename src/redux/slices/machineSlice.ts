@@ -1,6 +1,9 @@
 import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
 
-import { machineService, type MachinePayload } from "../../services/companyadmin/machineService";
+import {
+  machineService,
+  type MachinePayload,
+} from "../../services/companyadmin/machineService";
 
 /* ==========================================
    TYPES
@@ -84,10 +87,16 @@ const normalizeMachine = (item: any): Machine => ({
   machineId: String(item?.machineId || item?.machine_id || item?.id || ""),
 
   name: String(
-    item?.name || item?.machineName || item?.machine_name || item?.model || "Unnamed Machine",
+    item?.name ||
+      item?.machineName ||
+      item?.machine_name ||
+      item?.model ||
+      "Unnamed Machine",
   ),
 
-  model: String(item?.model || item?.equipmentType || item?.equipment_type || ""),
+  model: String(
+    item?.model || item?.equipmentType || item?.equipment_type || "",
+  ),
 
   serialNumber: item?.serialNumber || item?.serial_number || "",
 
@@ -248,9 +257,13 @@ const machineSlice = createSlice({
         state.error = action.payload as string;
       })
 
+      
+
       // DELETE
       .addCase(deleteMachine.fulfilled, (state, action) => {
-        state.machines = state.machines.filter((machine) => machine.id !== action.payload);
+        state.machines = state.machines.filter(
+          (machine) => machine.id !== action.payload,
+        );
       });
   },
 });

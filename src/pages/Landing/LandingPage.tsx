@@ -30,7 +30,8 @@ const heroTexts = [
   {
     smallTitle: "Tyre Safety Intelligence",
     title: "Tyre Pressure Intelligence",
-    subtitle: "Track tyre pressure, temperature, and safety alerts for better fleet performance.",
+    subtitle:
+      "Track tyre pressure, temperature, and safety alerts for better fleet performance.",
   },
   {
     smallTitle: "Hydraulic System Insights",
@@ -118,7 +119,9 @@ export default function LandingPage() {
       ".reveal, .reveal-left, .reveal-right, .reveal-scale",
     );
 
-    const sectionElements = document.querySelectorAll("section[id], footer[id]");
+    const sectionElements = document.querySelectorAll(
+      "section[id], footer[id]",
+    );
 
     const revealObserver = new IntersectionObserver(
       (entries) => {
@@ -172,7 +175,10 @@ export default function LandingPage() {
   return (
     <main className="min-h-screen overflow-x-hidden bg-white text-slate-900 transition-colors duration-300 dark:bg-slate-950 dark:text-white">
       <Navbar active={active} setActive={setActive} />
-      <section id="home" className="relative  h-[100svh] w-full overflow-hidden bg-slate-950">
+      <section
+        id="home"
+        className="relative  h-[100svh] w-full overflow-hidden bg-slate-950"
+      >
         {loadVideo && (
           <video
             src={video1}
@@ -190,7 +196,10 @@ export default function LandingPage() {
 
         <div className="relative z-10 flex h-[calc(100svh-90px)] w-full items-center px-5 sm:px-8 lg:px-20">
           <div className="max-w-xl text-left">
-            <div key={activeTextIndex} className="animate-[textSlideRightToLeft_6s_ease-in-out]">
+            <div
+              key={activeTextIndex}
+              className="animate-[textSlideRightToLeft_6s_ease-in-out]"
+            >
               <p className="mb-3 text-xs font-extrabold uppercase tracking-wide text-orange-400 sm:text-sm">
                 {activeText.smallTitle}
               </p>
@@ -254,8 +263,8 @@ export default function LandingPage() {
               </h1>
 
               <p className="mt-4 max-w-lg text-sm leading-7 text-slate-600 dark:text-slate-300 sm:text-base">
-                Monitor engine temperature, hydraulic pressure, suspension health and tyre pressure
-                in one intelligent system.
+                Monitor engine temperature, hydraulic pressure, suspension
+                health and tyre pressure in one intelligent system.
               </p>
 
               <div className="mt-6 flex flex-wrap gap-3">
@@ -296,7 +305,9 @@ export default function LandingPage() {
                 <div className="mt-1 flex items-end gap-2">
                   <h3 className="text-2xl font-black text-blue-600">98%</h3>
 
-                  <span className="pb-1 text-[11px] font-bold text-emerald-500">Normal</span>
+                  <span className="pb-1 text-[11px] font-bold text-emerald-500">
+                    Normal
+                  </span>
                 </div>
               </div>
             </div>
@@ -311,15 +322,18 @@ export default function LandingPage() {
       >
         <div className="mx-auto grid max-w-7xl items-center gap-12 px-5 sm:px-6 lg:grid-cols-2 lg:px-8">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.3em] text-blue-600">About HME</p>
+            <p className="text-xs font-black uppercase tracking-[0.3em] text-blue-600">
+              About HME
+            </p>
 
             <h2 className="mt-4 max-w-xl text-3xl font-black tracking-tight text-slate-950 dark:text-white sm:text-4xl">
-              Built to improve road equipment operations with better intelligence.
+              Built to improve road equipment operations with better
+              intelligence.
             </h2>
 
             <p className="mt-5 max-w-2xl text-base leading-8 text-slate-600 dark:text-slate-300">
-              HME Component Intelligence System helps teams monitor machine health and reduce
-              downtime using real-time data.
+              HME Component Intelligence System helps teams monitor machine
+              health and reduce downtime using real-time data.
             </p>
 
             <div className="mt-8 grid gap-4 sm:grid-cols-2">
@@ -328,7 +342,9 @@ export default function LandingPage() {
                   key={point}
                   className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900"
                 >
-                  <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{point}</p>
+                  <p className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                    {point}
+                  </p>
                 </div>
               ))}
             </div>
@@ -406,7 +422,9 @@ export default function LandingPage() {
                   <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-slate-950/20 to-transparent" />
 
                   <div className="absolute bottom-3 left-3 right-3">
-                    <h3 className="text-base font-bold text-white">{item.title}</h3>
+                    <h3 className="text-base font-bold text-white">
+                      {item.title}
+                    </h3>
 
                     <p className="text-xs text-slate-200">{item.label}</p>
                   </div>
@@ -415,7 +433,9 @@ export default function LandingPage() {
                 <div className="p-4">
                   <div className="flex items-end justify-between">
                     <div>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">Current</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Current
+                      </p>
 
                       <h4 className="text-lg font-bold text-slate-950 dark:text-white">
                         {item.value}
@@ -542,7 +562,9 @@ export default function LandingPage() {
                   key={label}
                   className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"
                 >
-                  <p className="text-xs font-semibold text-slate-500">{label}</p>
+                  <p className="text-xs font-semibold text-slate-500">
+                    {label}
+                  </p>
 
                   <h4 className="mt-2 text-2xl font-black text-slate-950 dark:text-white">
                     {value}
@@ -562,7 +584,8 @@ export default function LandingPage() {
           </h2>
 
           <p className="mx-auto mt-5 max-w-2xl text-blue-100">
-            Monitor engine, hydraulics, transmission, and tyre pressure in one intelligent system.
+            Monitor engine, hydraulics, transmission, and tyre pressure in one
+            intelligent system.
           </p>
 
           <Link

@@ -18,7 +18,11 @@ class SocketService {
       if (role) params.append("role", role);
       if (token) params.append("token", token);
 
-      const socketUrl = `${import.meta.env.VITE_SOCKET_URL}?${params.toString()}`;
+      const rawSocketUrl = import.meta.env.VITE_SOCKET_URL || "ws://localhost:4000/ws/alerts";
+      const host = (typeof window !== "undefined" && window.location && window.location.hostname) ? window.location.hostname : "localhost";
+      const resolvedSocketUrl = rawSocketUrl.replace(/localhost|127\.0\.0\.1/g, host);
+
+      const socketUrl = `${resolvedSocketUrl}?${params.toString()}`;
 
       this.socket = new WebSocket(socketUrl);
 
@@ -32,33 +36,25 @@ class SocketService {
         try {
           const data = JSON.parse(event.data);
 
-          console.log("📩 WebSocket Message:", data);
-
           window.dispatchEvent(
             new CustomEvent("websocket-message", {
               detail: data,
             }),
           );
         } catch {
-          console.log("📩 Raw Message:", event.data);
+        
         }
       };
-
       this.socket.onerror = (error) => {
         console.error("🚨 WebSocket Error:", error);
       };
-
       this.socket.onclose = (event) => {
-        console.log("❌ WebSocket Disconnected", event.code, event.reason);
-
         this.socket = null;
 
         if (this.reconnectAttempts < this.maxReconnectAttempts) {
           this.reconnectAttempts++;
 
-          console.log(
-            `🔄 Reconnecting (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`,
-          );
+         
 
           setTimeout(() => {
             this.connect(userId, role, token);

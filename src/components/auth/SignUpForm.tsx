@@ -1,48 +1,111 @@
 import { useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Controller, useForm } from "react-hook-form";
 import PhoneField from "../common/PhoneField";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Check } from "lucide-react";
 
-// Raw SVG icons and form layouts import
 import { EyeCloseIcon, EyeIcon } from "../../icons";
 import Label from "../form/Label";
 import Input from "../form/input/InputField";
-import { authService } from "../../services/authService";
+import { authService } from "../../services/Auth/authService";
 import StorageService, { STORAGE_KEYS } from "../../services/storage.service";
-import { showLoadingToast, updateToast } from "../../utils/toastUtils";
-import { signUpSchema } from "../../validations/auth.validation";
-import { getSanitizedErrorMessage } from "../../utils/errorHelper";
-import { translateError } from "../../errors/auth.errors";
 import {
-  getTokenFromResponse,
-  getUserFromResponse,
-  getRoleFromResponse,
-} from "../../utils/authParser";
+  showSuccessToast,
+  showErrorToast,
+  showLoadingToast,
+  updateToast,
+} from "../../utils/toastUtils";
+
 import Navbar from "../../components/landing/Navbar";
 import Footer from "../../components/landing/Footer";
 
-// Infer SignUpFormData types from validation schemas
+const signUpSchema = z.object({
+  firstName: z
+    .string()
+    .trim()
+    .min(1, "First name is required")
+    .min(2, "First name must be at least 2 characters"),
+
+  lastName: z.string().trim().min(1, "Last name is required"),
+
+  companyName: z.string().trim().min(1, "Company name is required"),
+
+  phone: z
+    .string()
+    .trim()
+    .min(1, "Phone number is required")
+    .regex(/^[6-9]\d{9}$/, "Please enter a valid 10 digit phone number"),
+
+  email: z
+    .string()
+    .trim()
+    .min(1, "Company email is required")
+    .email("Please enter a valid email address"),
+
+  password: z
+    .string()
+    .trim()
+    .min(1, "Password is required")
+    .min(8, "Password must be at least 8 characters")
+    .regex(
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/,
+      "Password must contain uppercase, lowercase, number and special character",
+    ),
+});
+
 type SignUpFormData = z.infer<typeof signUpSchema>;
+
+const getApiErrorMessage = (error: unknown) => {
+  const defaultMessage = "Signup failed. Please try again.";
+
+  if (!(error instanceof Error) || !error.message) {
+    return defaultMessage;
+  }
+
+  const message = error.message.toLowerCase();
+
+  const blockedWords = [
+    "select",
+    "insert",
+    "update",
+    "delete",
+    "relation",
+    "sql",
+    "database",
+    "users",
+    "roles",
+    "companies",
+    "join",
+    "where",
+    "limit",
+    "constraint",
+    "violates",
+  ];
+
+  const isBackendError = blockedWords.some((word) => message.includes(word));
+
+  if (isBackendError) {
+    return defaultMessage;
+  }
+
+  return error.message;
+};
 
 export default function SignUpForm() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Resolves post-registration redirection pathway
-  const redirectTo = new URLSearchParams(location.search).get("redirect") || "/cart";
+  const redirectTo =
+    new URLSearchParams(location.search).get("redirect") || "/cart";
 
-  // Generates redirection URL parameters for returning to sign-in page
-  const signinRedirectPath = `/signin?redirect=${encodeURIComponent(redirectTo)}`;
+  const signinRedirectPath = `/signin?redirect=${encodeURIComponent(
+    redirectTo,
+  )}`;
 
-  // Active state indicator for UI components
   const [active, setActive] = useState("");
-  // Password visibility flag state
   const [showPassword, setShowPassword] = useState(false);
 
-  // Form initialization using React Hook Form and zod validation schemas
   const {
     control,
     register,
@@ -65,15 +128,12 @@ export default function SignUpForm() {
     shouldFocusError: true,
   });
 
-  // Handler triggered on submit validation success
   const onSubmit = async (data: SignUpFormData) => {
-    // Shows standard UI load indicator toast
-    showLoadingToast("Creating account...", {
+    const toastId = showLoadingToast("Creating account...", {
       id: "signup-loading",
     });
 
     try {
-      // Calls registration API service
       const response = await authService.register({
         company_name: data.companyName.trim(),
         fname: data.firstName.trim(),
@@ -83,44 +143,59 @@ export default function SignUpForm() {
         mobile_number: data.phone.trim(),
       });
 
-      console.log("Signup API Success:", response);
+     
 
-      // Extracts authentication token, user profile, and permission roles from response
-      const token = getTokenFromResponse(response);
-      const user = getUserFromResponse(response);
-      const role = getRoleFromResponse(response, user);
+      const registerResponse = response as any;
 
-      // Stores registration token inside storage service if present
+      const token =
+        registerResponse?.token ||
+        registerResponse?.accessToken ||
+        registerResponse?.access_token ||
+        registerResponse?.data?.token ||
+        registerResponse?.data?.accessToken ||
+        registerResponse?.data?.access_token ||
+        registerResponse?.admin?.token ||
+        registerResponse?.data?.admin?.token ||
+        registerResponse?.company?.token ||
+        registerResponse?.data?.company?.token;
+
+      const user =
+        registerResponse?.user ||
+        registerResponse?.data?.user ||
+        registerResponse?.data;
+
+      const role =
+        user?.role ||
+        user?.role_name ||
+        user?.roleName ||
+        registerResponse?.role ||
+        registerResponse?.role_name ||
+        registerResponse?.data?.role ||
+        registerResponse?.data?.role_name;
+
       if (token) {
         StorageService.set(STORAGE_KEYS.TOKEN, token);
       }
 
-      // Stores role credentials inside storage service if present
       if (role) {
         StorageService.set(STORAGE_KEYS.ROLE, String(role));
       }
 
-      // Stores user profile payload inside storage service if present
       if (user) {
         StorageService.set(STORAGE_KEYS.USER, user);
       }
 
-      // Triggers success notification alert toast
       updateToast("signup-loading", "Account created successfully", "success");
 
-      // Redirects user to checkout plan or dashboard view
       setTimeout(() => {
-        navigate(redirectTo, { replace: true });
+        navigate("/cart", { replace: true });
       }, 700);
     } catch (error) {
       console.error("Signup API Error:", error);
 
-      // Filters and translates raw backend errors to friendly English texts
-      const rawMessage = getSanitizedErrorMessage(error, "Signup failed. Please try again.");
-      const message = translateError(rawMessage);
+      const message = getApiErrorMessage(error);
 
-      // Binds API errors to relevant input form fields
-      if (rawMessage.toLowerCase().includes("password")) {
+      if (message.toLowerCase().includes("password")) {
         setError("password", {
           type: "server",
           message,
@@ -132,68 +207,73 @@ export default function SignUpForm() {
         });
       }
 
-      // Updates loading toast with final error description
       updateToast("signup-loading", message, "error");
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-white">
-      {/* Navigation menu header bar */}
+    <div className="min-h-screen pt-[90px] bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-white">
+      <style>
+        {`
+          input:-webkit-autofill,
+          input:-webkit-autofill:hover,
+          input:-webkit-autofill:focus,
+          input:-webkit-autofill:active {
+            -webkit-background-clip: text !important;
+            -webkit-text-fill-color: #0f172a !important;
+            transition: background-color 999999s ease-in-out 0s !important;
+            box-shadow: inset 0 0 0 1000px #ffffff !important;
+            caret-color: #0f172a !important;
+          }
+
+          .dark input:-webkit-autofill,
+          .dark input:-webkit-autofill:hover,
+          .dark input:-webkit-autofill:focus,
+          .dark input:-webkit-autofill:active {
+            -webkit-background-clip: text !important;
+            -webkit-text-fill-color: #ffffff !important;
+            transition: background-color 999999s ease-in-out 0s !important;
+            box-shadow: inset 0 0 0 1000px #0f172a !important;
+            caret-color: #ffffff !important;
+          }
+        `}
+      </style>
+
       <Navbar active={active} setActive={setActive} />
 
       <main
         className="relative flex min-h-[720px] items-center justify-center overflow-hidden bg-cover bg-center bg-no-repeat px-4 pb-10"
         style={{
-          backgroundImage: `url('${import.meta.env.VITE_APP_SIGNIN_BG}')`,
+          backgroundImage: "url('/signin-bg.jpg')",
         }}
       >
-        {/* Background layout overlay filters and shapes */}
         <div className="absolute inset-0 bg-white/70 backdrop-blur-[2px] dark:bg-slate-950/65" />
         <div className="absolute left-10 top-32 h-40 w-40 rounded-full bg-blue-600/20 blur-3xl" />
 
-        {/* Outer card container layout */}
         <div className="relative z-10 w-full max-w-4xl overflow-hidden rounded-2xl border border-slate-200/80 bg-white/90 shadow-2xl shadow-slate-950/20 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/90 dark:shadow-black/30">
           <div className="grid lg:grid-cols-[0.85fr_1.15fr]">
-            {/* Sidebar information card container */}
             <div className="hidden flex-col justify-center border-r border-slate-200 bg-slate-50/90 p-6 dark:border-slate-800 dark:bg-slate-800/60 lg:flex">
-              {/* Branding Logo Character Icon */}
               <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-600 text-lg font-black text-white shadow-lg shadow-blue-600/30">
-                {import.meta.env.VITE_APP_LOGO_LETTER || "H"}
+                H
               </div>
 
-              {/* Dynamic registration title header */}
               <h2 className="mt-5 text-2xl font-black text-slate-950 dark:text-white">
-                Start your {import.meta.env.VITE_APP_NAME || "HME"} account
+                Start your HME account
               </h2>
 
               <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
-                Create your mining company account and manage fleet, maintenance, alerts, and
-                reports in one place.
+                Create your mining company account and manage fleet,
+                maintenance, alerts, and reports in one place.
               </p>
 
-              {/* Product feature bullets */}
               <div className="mt-6 space-y-2 text-sm text-slate-600 dark:text-slate-300">
-                <p className="flex items-center gap-2">
-                  <Check className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0" />
-                  Fleet & Machine Tracking
-                </p>
-                <p className="flex items-center gap-2">
-                  <Check className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0" />
-                  Maintenance Planning
-                </p>
-                <p className="flex items-center gap-2">
-                  <Check className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0" />
-                  Alert Monitoring
-                </p>
-                <p className="flex items-center gap-2">
-                  <Check className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0" />
-                  Offline-first system
-                </p>
+                <p>✔ Fleet & Machine Tracking</p>
+                <p>✔ Maintenance Planning</p>
+                <p>✔ Alert Monitoring</p>
+                <p>✔ Offline-first system</p>
               </div>
             </div>
 
-            {/* Registration Form container */}
             <div className="p-5 sm:p-6">
               <div className="mb-4 text-center lg:text-left">
                 <h1 className="text-2xl font-black tracking-tight text-slate-950 dark:text-white">
@@ -207,7 +287,6 @@ export default function SignUpForm() {
 
               <form onSubmit={handleSubmit(onSubmit)} noValidate>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  {/* First Name container */}
                   <div>
                     <Label>First Name *</Label>
 
@@ -225,13 +304,13 @@ export default function SignUpForm() {
                       })}
                     />
 
-                    {/* Inline validation alert trigger */}
                     <div className="mt-1 h-3">
-                      <p className="text-xs text-red-500">{errors.firstName?.message || ""}</p>
+                      <p className="text-xs text-red-500">
+                        {errors.firstName?.message || ""}
+                      </p>
                     </div>
                   </div>
 
-                  {/* Last Name container */}
                   <div>
                     <Label>Last Name *</Label>
 
@@ -249,15 +328,15 @@ export default function SignUpForm() {
                       })}
                     />
 
-                    {/* Inline validation alert trigger */}
                     <div className="mt-1 h-3">
                       {errors.lastName?.message && (
-                        <p className="mt-1 text-xs text-red-500">{errors.lastName.message}</p>
+                        <p className="mt-1 text-xs text-red-500">
+                          {errors.lastName.message}
+                        </p>
                       )}
                     </div>
                   </div>
 
-                  {/* Company Name container */}
                   <div className="sm:col-span-2">
                     <Label>Company Name *</Label>
 
@@ -275,13 +354,13 @@ export default function SignUpForm() {
                       })}
                     />
 
-                    {/* Inline validation alert trigger */}
                     <div className="mt-1 h-3">
-                      <p className="text-xs text-red-500">{errors.companyName?.message || ""}</p>
+                      <p className="text-xs text-red-500">
+                        {errors.companyName?.message || ""}
+                      </p>
                     </div>
                   </div>
 
-                  {/* Phone container */}
                   <div className="mt-1 h-3">
                     <Label>Phone *</Label>
 
@@ -298,14 +377,13 @@ export default function SignUpForm() {
                               clearErrors("phone");
                             }
                           }}
-                          error={undefined} // Hides defaults
+                          error={undefined} // PhoneField ka default error hide
                           label=""
                           defaultCountry="ZA"
                         />
                       )}
                     />
 
-                    {/* Inline validation alert trigger */}
                     <div className="mt-1 h-5">
                       <p className="text-xs text-red-500">
                         {errors.phone ? "Invalid phone number." : ""}
@@ -313,7 +391,6 @@ export default function SignUpForm() {
                     </div>
                   </div>
 
-                  {/* Email container */}
                   <div>
                     <Label>Company Email *</Label>
 
@@ -333,16 +410,15 @@ export default function SignUpForm() {
                         },
                       })}
                     />
-
-                    {/* Inline validation alert trigger */}
                     <div className="mt-1 h-5">
                       {errors.email?.message && (
-                        <p className="mt-1 text-xs text-red-500">{errors.email.message}</p>
+                        <p className="mt-1 text-xs text-red-500">
+                          {errors.email.message}
+                        </p>
                       )}
                     </div>
                   </div>
 
-                  {/* Password container */}
                   <div>
                     <Label>Password *</Label>
 
@@ -363,7 +439,6 @@ export default function SignUpForm() {
                         })}
                       />
 
-                      {/* Password visibility toggler icon button */}
                       <button
                         type="button"
                         onClick={() => setShowPassword((prev) => !prev)}
@@ -377,14 +452,14 @@ export default function SignUpForm() {
                       </button>
                     </div>
 
-                    {/* Inline validation alert trigger */}
                     <div className="mt-1 h-1">
-                      <p className="text-xs text-red-500">{errors.password?.message || ""}</p>
+                      <p className="text-xs text-red-500">
+                        {errors.password?.message || ""}
+                      </p>
                     </div>
                   </div>
                 </div>
 
-                {/* Primary submit register account button */}
                 <button
                   type="submit"
                   disabled={isSubmitting}
@@ -394,7 +469,6 @@ export default function SignUpForm() {
                 </button>
               </form>
 
-              {/* Redirect option to Sign In page */}
               <div className="mt-4 rounded-2xl bg-slate-50 p-3 text-center dark:bg-slate-800/60">
                 <p className="text-sm text-slate-600 dark:text-slate-400">
                   Already have an account?{" "}
@@ -411,7 +485,6 @@ export default function SignUpForm() {
         </div>
       </main>
 
-      {/* Footer container block */}
       <div className="[&_.reveal]:!translate-y-0 [&_.reveal]:!opacity-100">
         <Footer />
       </div>

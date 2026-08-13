@@ -6,11 +6,15 @@ import { clientsClaim } from "workbox-core";
 
 import { registerRoute, NavigationRoute } from "workbox-routing";
 import { NetworkOnly } from "workbox-strategies";
-import { CacheFirst, NetworkFirst, StaleWhileRevalidate } from "workbox-strategies";
+import {
+  CacheFirst,
+  NetworkFirst,
+  StaleWhileRevalidate,
+} from "workbox-strategies";
 
 import { CacheableResponsePlugin } from "workbox-cacheable-response";
 import { ExpirationPlugin } from "workbox-expiration";
-
+  
 declare let self: ServiceWorkerGlobalScope & {
   __WB_MANIFEST: any;
 };
@@ -86,7 +90,8 @@ registerRoute(
 
 registerRoute(
   ({ url }) =>
-    url.origin === "https://fonts.googleapis.com" || url.origin === "https://fonts.gstatic.com",
+    url.origin === "https://fonts.googleapis.com" ||
+    url.origin === "https://fonts.gstatic.com",
 
   new CacheFirst({
     cacheName: CACHE_NAMES.FONTS,
@@ -102,7 +107,8 @@ registerRoute(
 
 // Images cache
 registerRoute(
-  ({ request, url }) => request.destination === "image" && !url.pathname.includes("favicon.ico"),
+  ({ request, url }) =>
+    request.destination === "image" && !url.pathname.includes("favicon.ico"),
 
   new CacheFirst({
     cacheName: CACHE_NAMES.IMAGES,
@@ -117,7 +123,8 @@ registerRoute(
 );
 
 registerRoute(
-  ({ request }) => request.destination === "script" || request.destination === "style",
+  ({ request }) =>
+    request.destination === "script" || request.destination === "style",
 
   new StaleWhileRevalidate({
     cacheName: CACHE_NAMES.STATIC,
@@ -290,6 +297,7 @@ async function queueRequestIfOffline(request: Request) {
     });
 
     await saveOfflineRequest(request.url, method, body, headers);
+
   } catch (error) {
     console.error("[SW] Error queueing request:", error);
   }
@@ -310,12 +318,17 @@ async function syncOfflineRequests() {
       request.onerror = () => reject(request.error);
     });
 
+
+
     for (const item of allRequests) {
       try {
         const response = await fetch(item.endpoint, {
           method: item.method,
           headers: item.headers,
-          body: item.body && item.method !== "GET" ? JSON.stringify(item.body) : undefined,
+          body:
+            item.body && item.method !== "GET"
+              ? JSON.stringify(item.body)
+              : undefined,
         });
 
         if (response.ok) {
@@ -323,11 +336,21 @@ async function syncOfflineRequests() {
           const txDelete = db.transaction(STORE_NAME, "readwrite");
           const storeDelete = txDelete.objectStore(STORE_NAME);
           storeDelete.delete(item.id);
+
         } else {
-          console.warn("[SW Sync] Failed with status:", response.status, item.endpoint);
+          console.warn(
+            "[SW Sync] Failed with status:",
+            response.status,
+            item.endpoint,
+          );
         }
       } catch (error) {
-        console.error("[SW Sync] Error:", error, "for endpoint:", item.endpoint);
+        console.error(
+          "[SW Sync] Error:",
+          error,
+          "for endpoint:",
+          item.endpoint,
+        );
       }
     }
   } catch (error) {

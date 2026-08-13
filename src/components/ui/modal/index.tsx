@@ -35,17 +35,23 @@ export const Modal: React.FC<ModalProps> = ({
     };
   }, [isOpen, onClose]);
 
-  useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "unset";
-    }
+ useEffect(() => {
+  const originalOverflow = document.body.style.overflow;
+  const originalPaddingRight = document.body.style.paddingRight;
+  if (isOpen) {
+    document.body.style.overflow = "hidden";
+    const scrollbarWidth =
+      window.innerWidth - document.documentElement.clientWidth;
 
-    return () => {
-      document.body.style.overflow = "unset";
-    };
-  }, [isOpen]);
+    if (scrollbarWidth > 0) {
+      document.body.style.paddingRight = `${scrollbarWidth}px`;
+    }
+  }
+  return () => {
+    document.body.style.overflow = originalOverflow;
+    document.body.style.paddingRight = originalPaddingRight;
+  };
+}, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -54,7 +60,7 @@ export const Modal: React.FC<ModalProps> = ({
     : "relative w-full rounded-3xl bg-white  dark:bg-gray-900";
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center overflow-y-auto modal z-99999">
+    <div className="fixed inset-0 overflow-hidden flex items-center justify-center z-99999">
       {!isFullscreen && (
         <div
           className="fixed inset-0 h-full w-full bg-gray-400/50 backdrop-blur-[32px]"

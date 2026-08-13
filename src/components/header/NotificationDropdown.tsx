@@ -5,15 +5,14 @@ import { useNavigate } from "react-router-dom";
 import { ArrowRight, X } from "lucide-react";
 
 import StorageService, { STORAGE_KEYS } from "../../services/storage.service";
-import {
-  Notification,
-  useNotifications,
-  Severity,
-  Category,
-} from "../../context/NotificationContext";
+import { Notification, useNotifications, Severity, Category } from "../../context/NotificationContext";
 // ─────────────────────────────────────────────────────────────────────────
 
+
+
 type ActorRole = "Supervisor" | "Engineer" | "Artisan" | "Operator" | "Admin";
+
+
 
 const SEVERITY_PRIORITY: Record<Severity, number> = {
   critical: 0,
@@ -22,7 +21,10 @@ const SEVERITY_PRIORITY: Record<Severity, number> = {
   success: 3,
 };
 
-const SEVERITY_STYLES: Record<Severity, { dot: string; badge: string; label: string }> = {
+const SEVERITY_STYLES: Record<
+  Severity,
+  { dot: string; badge: string; label: string }
+> = {
   critical: {
     dot: "bg-red-500",
     badge: "bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400",
@@ -30,7 +32,8 @@ const SEVERITY_STYLES: Record<Severity, { dot: string; badge: string; label: str
   },
   warning: {
     dot: "bg-amber-500",
-    badge: "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400",
+    badge:
+      "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400",
     label: "Warning",
   },
   info: {
@@ -41,18 +44,22 @@ const SEVERITY_STYLES: Record<Severity, { dot: string; badge: string; label: str
 
   success: {
     dot: "bg-green-500",
-    badge: "bg-green-50 text-green-700 dark:bg-green-500/10 dark:text-green-400",
+    badge:
+      "bg-green-50 text-green-700 dark:bg-green-500/10 dark:text-green-400",
     label: "Success",
   },
 };
 
 const CATEGORY_STYLES: Record<Category, string> = {
-  Machine: "bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400",
+  Machine:
+    "bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400",
   Report: "bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400",
   Task: "bg-purple-50 text-purple-700 dark:bg-purple-500/10 dark:text-purple-400",
-  Maintenance: "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400",
+  Maintenance:
+    "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400",
   Component: "bg-teal-50 text-teal-700 dark:bg-teal-500/10 dark:text-teal-400",
-  Subscription: "bg-gray-100 text-gray-700 dark:bg-gray-500/10 dark:text-gray-300",
+  Subscription:
+    "bg-gray-100 text-gray-700 dark:bg-gray-500/10 dark:text-gray-300",
 };
 
 function getRelativeTime(timestamp: string): string {
@@ -83,7 +90,8 @@ function getInitials(name: string) {
 /** Sorts by severity priority first, then most recent first within the same severity. */
 function sortNotifications(items: Notification[]): Notification[] {
   return [...items].sort((a, b) => {
-    const severityDiff = SEVERITY_PRIORITY[a.severity] - SEVERITY_PRIORITY[b.severity];
+    const severityDiff =
+      SEVERITY_PRIORITY[a.severity] - SEVERITY_PRIORITY[b.severity];
     if (severityDiff !== 0) return severityDiff;
     return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
   });
@@ -93,19 +101,27 @@ export default function NotificationDropdown() {
   const [isOpen, setIsOpen] = useState(false);
   const [filter, setFilter] = useState<"all" | "unread">("all");
 
-  const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
+  const { notifications, unreadCount, markAsRead, markAllAsRead } =
+    useNotifications();
 
   const navigate = useNavigate();
 
   const currentRole = StorageService.get<string>(STORAGE_KEYS.ROLE);
 
-  const sortedNotifications = useMemo(() => sortNotifications(notifications), [notifications]);
+  
+
+  const sortedNotifications = useMemo(
+    () => sortNotifications(notifications),
+    [notifications],
+  );
 
   const notifying = unreadCount > 0;
   const unreadBadgeLabel = unreadCount > 9 ? "9+" : String(unreadCount);
 
   const visibleNotifications =
-    filter === "unread" ? sortedNotifications.filter((n) => !n.read) : sortedNotifications;
+    filter === "unread"
+      ? sortedNotifications.filter((n) => !n.read)
+      : sortedNotifications;
 
   function toggleDropdown() {
     setIsOpen((prev) => !prev);
@@ -160,7 +176,12 @@ export default function NotificationDropdown() {
           </span>
         )}
 
-        <svg className="fill-current" width="20" height="20" viewBox="0 0 20 20">
+        <svg
+          className="fill-current"
+          width="20"
+          height="20"
+          viewBox="0 0 20 20"
+        >
           <path
             fillRule="evenodd"
             clipRule="evenodd"
@@ -237,7 +258,12 @@ export default function NotificationDropdown() {
           {visibleNotifications.length === 0 && (
             <li className="flex flex-1 flex-col items-center justify-center gap-2 py-16 text-center">
               <span className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-500">
-                <svg className="fill-current" width="20" height="20" viewBox="0 0 20 20">
+                <svg
+                  className="fill-current"
+                  width="20"
+                  height="20"
+                  viewBox="0 0 20 20"
+                >
                   <path
                     fillRule="evenodd"
                     clipRule="evenodd"
@@ -249,7 +275,9 @@ export default function NotificationDropdown() {
               <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
                 No Notifications
               </p>
-              <p className="text-xs text-gray-400 dark:text-gray-500">You're all caught up.</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500">
+                You're all caught up.
+              </p>
             </li>
           )}
 
@@ -323,7 +351,10 @@ export default function NotificationDropdown() {
             className="group flex w-full items-center justify-center gap-1.5 rounded-xl bg-gray-50 px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-blue-50 hover:text-blue-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-blue-500/10 dark:hover:text-blue-400"
           >
             View all notifications
-            <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
+            <ArrowRight
+              size={14}
+              className="transition-transform group-hover:translate-x-0.5"
+            />
           </button>
         </div>
       </Dropdown>

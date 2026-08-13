@@ -124,7 +124,8 @@ const roleAccess = [
   {
     icon: LayoutDashboard,
     role: "Super Admin",
-    detail: "Platform-wide oversight, billing and cross-company fleet analytics.",
+    detail:
+      "Platform-wide oversight, billing and cross-company fleet analytics.",
   },
   {
     icon: Users,
@@ -167,33 +168,42 @@ export default function FeaturesPage() {
       <Navbar />
 
       <main>
+ 
         <section className="border-y border-slate-200 bg-white py-20 dark:border-slate-800 dark:bg-slate-950">
+         
           <div className="relative z-10 mx-auto max-w-3xl px-5 text-center sm:px-6 lg:px-8">
-            <p className="text-sm font-bold uppercase tracking-[0.32em] text-blue-600">
-              Role-Based Access
-            </p>
 
-            {/* Heading */}
-            <h2 className="mt-5 text-3xl font-extrabold leading-[1.08] tracking-[-0.03em] text-slate-950 dark:text-white sm:text-4xl lg:text-5xl">
-              One platform,
-              <span className="bg-gradient-to-r from-blue-600 via-blue-500 to-cyan-500 bg-clip-text text-transparent">
-                {" "}
-                tuned for every role
-              </span>{" "}
-              on your team
-            </h2>
+  <p className="text-sm font-bold uppercase tracking-[0.32em] text-blue-600">
+    Role-Based Access
+  </p>
 
-            {/* Description */}
-            <p className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-slate-600 dark:text-slate-300">
-              Every user sees exactly what their role needs—nothing more. Permissions, dashboards,
-              and workflows are intelligently tailored for each role, from{" "}
-              <span className="font-semibold text-slate-900 dark:text-white">Super Admin</span> to{" "}
-              <span className="font-semibold text-slate-900 dark:text-white">Operator</span>.
-            </p>
+  {/* Heading */}
+  <h2 className="mt-5 text-3xl font-extrabold leading-[1.08] tracking-[-0.03em] text-slate-950 dark:text-white sm:text-4xl lg:text-5xl">
+    One platform,
+    <span className="bg-gradient-to-r from-blue-600 via-blue-500 to-cyan-500 bg-clip-text text-transparent">
+      {" "}
+      tuned for every role
+    </span>{" "}
+    on your team
+  </h2>
 
-            {/* Accent Divider */}
-            <div className="mx-auto mt-8 h-1 w-20 rounded-full bg-gradient-to-r from-blue-600 via-blue-500 to-cyan-400" />
-          </div>
+  {/* Description */}
+  <p className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-slate-600 dark:text-slate-300">
+    Every user sees exactly what their role needs—nothing more. Permissions,
+    dashboards, and workflows are intelligently tailored for each role, from{" "}
+    <span className="font-semibold text-slate-900 dark:text-white">
+      Super Admin
+    </span>{" "}
+    to{" "}
+    <span className="font-semibold text-slate-900 dark:text-white">
+      Operator
+    </span>
+    .
+  </p>
+
+  {/* Accent Divider */}
+  <div className="mx-auto mt-8 h-1 w-20 rounded-full bg-gradient-to-r from-blue-600 via-blue-500 to-cyan-400" />
+</div>
 
           {/* Full Width Image */}
           <div className="mt-14 w-full">
@@ -210,8 +220,8 @@ export default function FeaturesPage() {
               <Lock className="h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400" />
 
               <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
-                Access is enforced server-side for every request, ensuring users can only access the
-                resources assigned to their role.
+                Access is enforced server-side for every request, ensuring users
+                can only access the resources assigned to their role.
               </p>
             </div>
           </div>
@@ -264,11 +274,16 @@ export default function FeaturesPage() {
                 return (
                   <div
                     key={feature.title}
-                    className="group flex flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-md transition-all duration-300 hover:-translate-y-2 hover:shadow-2xl dark:border-slate-800 dark:bg-slate-900"
+                   className="group flex flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-md transition-all duration-300 hover:-translate-y-2 hover:shadow-2xl dark:border-slate-800 dark:bg-slate-900"
                   >
+        
+
                     <div className="relative h-56 w-full overflow-hidden bg-slate-100 dark:bg-slate-800">
                       <img
-                        src={featureImages[feature.title] ?? "/images/features/fleet-overview.webp"}
+                        src={
+                          featureImages[feature.title] ??
+                          "/images/features/fleet-overview.webp"
+                        }
                         alt={feature.title}
                         loading="lazy"
                         className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
@@ -312,7 +327,9 @@ export default function FeaturesPage() {
           <div className="mx-auto grid max-w-7xl items-center gap-10 lg:grid-cols-2 lg:gap-16">
             <div
               className={`transition-all duration-700 ${
-                visible ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"
+                visible
+                  ? "translate-y-0 opacity-100"
+                  : "translate-y-3 opacity-0"
               }`}
             >
               <p className="text-xs font-black uppercase tracking-[0.3em] text-blue-600">
@@ -324,9 +341,10 @@ export default function FeaturesPage() {
               </h1>
 
               <p className="mt-5 max-w-xl text-base leading-7 text-slate-600 dark:text-slate-300">
-                HMEC brings engine, hydraulic, tyre and suspension monitoring, maintenance reporting
-                and role-based fleet management into a single, dependable system built for mining
-                and industrial operations.
+                HMEC brings engine, hydraulic, tyre and suspension monitoring,
+                maintenance reporting and role-based fleet management into a
+                single, dependable system built for mining and industrial
+                operations.
               </p>
 
               <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -350,7 +368,9 @@ export default function FeaturesPage() {
             {/* BACKEND TODO / DESIGN TODO: replace this placeholder block with the real hero photo (e.g. machine on-site, dashboard screenshot) */}
             <div
               className={`relative overflow-hidden rounded-[1.1rem] border border-slate-200 bg-slate-50 shadow-xl transition-all duration-700 dark:border-slate-800 dark:bg-slate-900 ${
-                visible ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"
+                visible
+                  ? "translate-y-0 opacity-100"
+                  : "translate-y-3 opacity-0"
               }`}
             >
               <div className="aspect-[16/10] w-full overflow-hidden ">
@@ -375,7 +395,9 @@ export default function FeaturesPage() {
                 key={stat.label}
                 className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-6 text-center dark:border-slate-800 dark:bg-slate-900"
               >
-                <p className="text-2xl font-black text-blue-600 sm:text-3xl">{stat.value}</p>
+                <p className="text-2xl font-black text-blue-600 sm:text-3xl">
+                  {stat.value}
+                </p>
                 <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
                   {stat.label}
                 </p>
@@ -397,8 +419,9 @@ export default function FeaturesPage() {
               </h2>
 
               <p className="mt-5 max-w-lg text-sm leading-7 text-slate-600 dark:text-slate-300">
-                HMEC correlates component telemetry over time to flag degradation trends early, so
-                your team can schedule service before a breakdown takes a machine off the site.
+                HMEC correlates component telemetry over time to flag
+                degradation trends early, so your team can schedule service
+                before a breakdown takes a machine off the site.
               </p>
 
               <div className="mt-8 space-y-4">
@@ -488,8 +511,8 @@ export default function FeaturesPage() {
             </h2>
 
             <p className="mx-auto mt-4 max-w-xl text-blue-100">
-              Explore pricing plans or book a walkthrough with our team to see HMEC configured for
-              your operation.
+              Explore pricing plans or book a walkthrough with our team to see
+              HMEC configured for your operation.
             </p>
 
             <div className="mt-8 flex flex-wrap items-center justify-center gap-3">

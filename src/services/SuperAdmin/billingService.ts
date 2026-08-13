@@ -11,13 +11,19 @@ export interface BillingQueryParams {
   limit?: number;
 }
 
-const buildQueryString = (params?: BillingQueryParams): string => {
+const buildQueryString = (
+  params?: BillingQueryParams,
+): string => {
   if (!params) return "";
 
   const searchParams = new URLSearchParams();
 
   Object.entries(params).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && value !== "") {
+    if (
+      value !== undefined &&
+      value !== null &&
+      value !== ""
+    ) {
       searchParams.append(key, String(value));
     }
   });
@@ -31,12 +37,17 @@ export const billingService = {
   /**
    * Get all subscriptions
    */
-  async getSubscriptions(params?: BillingQueryParams): Promise<any> {
+  async getSubscriptions(
+    params?: BillingQueryParams,
+  ): Promise<any> {
     const query = buildQueryString(params);
 
-    return apiRequest<any>(`/plans/admin/subscriptions${query}`, {
-      method: "GET",
-    });
+    return apiRequest<any>(
+      `/plans/admin/subscriptions${query}`,
+      {
+        method: "GET",
+      },
+    );
   },
 
   /**
@@ -44,15 +55,27 @@ export const billingService = {
    * Backend currently does not expose
    * GET /plans/admin/subscriptions/:id
    */
-  async getSubscriptionById(id: string): Promise<any> {
+  async getSubscriptionById(
+    id: string,
+  ): Promise<any> {
     if (!id) {
-      throw new Error("Subscription ID is required");
+      throw new Error(
+        "Subscription ID is required",
+      );
     }
 
-    const response: any = await apiRequest<any>("/plans/admin/subscriptions", {
-      method: "GET",
-    });
+    const response: any =
+      await apiRequest<any>(
+        "/plans/admin/subscriptions",
+        {
+          method: "GET",
+        },
+      );
 
-    return response?.data?.find((item: any) => item.id === id) || null;
+    return (
+      response?.data?.find(
+        (item: any) => item.id === id,
+      ) || null
+    );
   },
 };

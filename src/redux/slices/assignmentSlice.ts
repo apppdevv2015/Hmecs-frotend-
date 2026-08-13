@@ -151,7 +151,9 @@ const assignmentSlice = createSlice({
     },
 
     removeAssignment: (state, action: PayloadAction<string>) => {
-      state.assignments = state.assignments.filter((item) => item.operatorId !== action.payload);
+      state.assignments = state.assignments.filter(
+        (item) => item.operatorId !== action.payload,
+      );
     },
 
     clearAssignments: (state) => {

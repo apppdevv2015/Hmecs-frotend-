@@ -12,13 +12,18 @@ export default function Footer() {
           {/* Company */}
           <div className="flex flex-col">
             <Link to="/" className="inline-flex w-fit">
-              <img src={logo1} alt="HMEC Logo" className="h-20 w-auto object-contain" />
+              <img
+                src={logo1}
+                alt="HMEC Logo"
+                className="h-20 w-auto object-contain"
+              />
             </Link>
 
             <p className="mt-6 max-w-[340px] text-[16px] leading-8 text-slate-600 dark:text-slate-400">
-              AI-powered fleet intelligence platform for heavy mining operations. Monitor machine
-              health, manage maintenance, generate intelligent reports, and optimize fleet
-              performance from one unified dashboard.
+              AI-powered fleet intelligence platform for heavy mining
+              operations. Monitor machine health, manage maintenance, generate
+              intelligent reports, and optimize fleet performance from one
+              unified dashboard.
             </p>
           </div>
 
@@ -161,8 +166,11 @@ export default function Footer() {
         {/* Bottom */}
         <div className="mt-10 flex flex-col items-center justify-between gap-4 border-t border-slate-200 pt-6 text-center text-sm text-slate-500 dark:border-slate-800 dark:text-slate-500 md:flex-row">
           <p>
-            © 2026 <span className="font-semibold text-slate-700 dark:text-white">HMEC</span>. All
-            rights reserved.
+            © 2026{" "}
+            <span className="font-semibold text-slate-700 dark:text-white">
+              HMEC
+            </span>
+            . All rights reserved.
           </p>
 
           <div className="flex items-center gap-6">
@@ -173,7 +181,10 @@ export default function Footer() {
               Privacy
             </Link>
 
-            <Link to="/company-admin/coming-soon/terms" className="transition hover:text-blue-600">
+            <Link
+              to="/company-admin/coming-soon/terms"
+              className="transition hover:text-blue-600"
+            >
               Terms
             </Link>
 

@@ -1,4 +1,4 @@
-import { apiRequest } from "../api";
+import { apiCall } from "../apiHandler";
 import StorageService, { STORAGE_KEYS } from "../storage.service";
 
 const getCompanyIdFromToken = () => {
@@ -9,7 +9,9 @@ const getCompanyIdFromToken = () => {
 
     const payload = JSON.parse(atob(token.split(".")[1] || ""));
 
-    return payload?.companyId || payload?.company_id || payload?.company?.id || "";
+    return (
+      payload?.companyId || payload?.company_id || payload?.company?.id || ""
+    );
   } catch {
     return "";
   }
@@ -28,7 +30,11 @@ const getCompanyId = () => {
       ""
     );
   } catch {
-    return StorageService.get<string>(STORAGE_KEYS.COMPANY_ID) || getCompanyIdFromToken() || "";
+    return (
+      StorageService.get<string>(STORAGE_KEYS.COMPANY_ID) ||
+      getCompanyIdFromToken() ||
+      ""
+    );
   }
 };
 
@@ -47,7 +53,9 @@ export type ComponentPayload = {
 
 export const componentService = {
   getCategories: () => {
-    return apiRequest<any[]>("/components/categories");
+    return apiCall<any[]>("/components/categories", {
+      method: "GET",
+    });
   },
 
   getComponents: (machineId?: string) => {
@@ -63,26 +71,49 @@ export const componentService = {
       queryParts.push(`machineId=${encodeURIComponent(machineId)}`);
     }
 
-    return apiRequest<any[]>(`/components/register?${queryParts.join("&")}`);
+    return apiCall<any[]>(`/components/register?${queryParts.join("&")}`, {
+      method: "GET",
+    });
   },
 
   createComponent: (payload: ComponentPayload) => {
-    return apiRequest<any>("/components", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
+    return apiCall<any>(
+      "/components",
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+      {
+        showSuccess: true,
+      },
+    );
   },
 
-  updateComponent: (componentId: string, payload: Omit<ComponentPayload, "machineId">) => {
-    return apiRequest<any>(`/components/${componentId}`, {
-      method: "PUT",
-      body: JSON.stringify(payload),
-    });
+  updateComponent: (
+    componentId: string,
+    payload: Omit<ComponentPayload, "machineId">,
+  ) => {
+    return apiCall<any>(
+      `/components/${componentId}`,
+      {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      },
+      {
+        showSuccess: true,
+      },
+    );
   },
 
   deleteComponent: (componentId: string) => {
-    return apiRequest<any>(`/components/${componentId}`, {
-      method: "DELETE",
-    });
+    return apiCall<any>(
+      `/components/${componentId}`,
+      {
+        method: "DELETE",
+      },
+      {
+        showSuccess: true,
+      },
+    );
   },
 };

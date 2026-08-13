@@ -1,6 +1,14 @@
-import { createContext, useContext, useState, useMemo, useEffect, ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useState,
+  useMemo,
+  useEffect,
+  ReactNode,
+} from "react";
 
 import socketService from "../services/socketService";
+import { showErrorToast, showSuccessToast } from "../utils/toastUtils";
 
 export interface Notification {
   id: string;
@@ -13,7 +21,13 @@ export interface Notification {
   /** Optional list of recipient roles (if provided by backend) */
   recipientRoles?: string[];
 
-  category: "Machine" | "Task" | "Report" | "Maintenance" | "Component" | "Subscription";
+  category:
+    | "Machine"
+    | "Task"
+    | "Report"
+    | "Maintenance"
+    | "Component"
+    | "Subscription";
 
   machineName?: string;
 
@@ -32,7 +46,9 @@ interface NotificationContextType {
   notifications: Notification[];
   unreadCount: number;
 
-  addNotification: (notification: Partial<Omit<Notification, "id" | "timestamp" | "read">>) => void;
+  addNotification: (
+    notification: Partial<Omit<Notification, "id" | "timestamp" | "read">>,
+  ) => void;
 
   markAsRead: (id: string) => void;
 
@@ -91,7 +107,9 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const removeNotification = (id: string) => {
-    setNotifications((prev) => prev.filter((notification) => notification.id !== id));
+    setNotifications((prev) =>
+      prev.filter((notification) => notification.id !== id),
+    );
   };
 
   const clearNotifications = () => {
@@ -100,8 +118,11 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     const unsubscribe = socketService.onMessage((data) => {
+
       // Defensive guards: socket payloads may vary. Ignore non-object messages.
       try {
+        
+
         if (!data || typeof data !== "object") return;
 
         const type = (data as any).type || null;
@@ -112,6 +133,9 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
         const payload = (data as any).data || (data as any);
 
         if (!payload || typeof payload !== "object") return;
+         
+
+        const normalizedSeverity = (payload.severity || "info").toLowerCase();
 
         addNotification({
           title: payload.title || payload.component || "Notification",
@@ -120,8 +144,18 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
           actorRole: payload.actorRole || payload.actor_role || "",
           category: payload.category || "Subscription",
           machineName: payload.machineName || payload.machine_name,
-          severity: (payload.severity || "info").toLowerCase() as Notification["severity"],
+          severity: normalizedSeverity as Notification["severity"],
         });
+
+        // 🚀 LIVE TOAST POPUP TRIGGER ON REAL-TIME WEBSOCKET ALERT
+        if (payload.message) {
+          const toastMsg = `${payload.title ? payload.title + ": " : ""}${payload.message}`;
+          if (normalizedSeverity === "critical" || normalizedSeverity === "error" || normalizedSeverity === "warning") {
+            showErrorToast(toastMsg, { duration: 5000 });
+          } else {
+            showSuccessToast(toastMsg, { duration: 4000 });
+          }
+        }
       } catch (e) {
         console.error("Failed to handle WS notification:", e);
       }
@@ -158,7 +192,9 @@ export const useNotifications = () => {
   const context = useContext(NotificationContext);
 
   if (!context) {
-    throw new Error("useNotifications must be used inside NotificationProvider");
+    throw new Error(
+      "useNotifications must be used inside NotificationProvider",
+    );
   }
 
   return context;

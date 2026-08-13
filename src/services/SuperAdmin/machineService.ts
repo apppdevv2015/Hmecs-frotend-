@@ -1,5 +1,10 @@
+import { apiCall } from "../apiHandler";
+import StorageService, { STORAGE_KEYS } from "../storage.service";
+
 export type SuperAdminCompany = {
   id: string;
+  adminId?: string;
+  admin_id?: string;
   name?: string;
   company_name?: string;
   companyName?: string;
@@ -10,6 +15,8 @@ export type SuperAdminCompany = {
   adminName?: string;
   staffCount?: number;
   activePlan?: string;
+  isActive?: boolean;
+  status?: string;
   createdAt?: string;
   created_at?: string;
 };
@@ -46,6 +53,17 @@ export type SuperAdminComponent = {
 
   companyId?: string;
   company_id?: string;
+  companyCode?: string;
+  company_code?: string;
+  companyName?: string;
+  company_name?: string;
+  company?: {
+    id?: string;
+    name?: string;
+    companyCode?: string;
+    company_code?: string;
+    subscriptionStatus?: string;
+  };
 
   machineId?: string;
   machine_id?: string;
@@ -127,6 +145,19 @@ export type SuperAdminComponent = {
     machine_name?: string;
     machineName?: string;
     machineCode?: string;
+    companyId?: string;
+    company_id?: string;
+    companyCode?: string;
+    company_code?: string;
+    companyName?: string;
+    company_name?: string;
+    company?: {
+      id?: string;
+      name?: string;
+      companyCode?: string;
+      company_code?: string;
+      subscriptionStatus?: string;
+    };
   };
 
   createdAt?: string;
@@ -196,68 +227,6 @@ export type UpdateCompanyPayload = {
   status: string;
 };
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000/api/v1";
-
-import StorageService, { STORAGE_KEYS } from "../storage.service";
-
-const getToken = () => StorageService.get<string>(STORAGE_KEYS.TOKEN) || "";
-
-const buildUrl = (endpoint: string) => {
-  const baseUrl = API_BASE_URL.replace(/\/$/, "");
-  const path = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
-
-  return `${baseUrl}${path}`;
-};
-
-const parseApiError = async (response: Response) => {
-  try {
-    const data = await response.json();
-
-    return (
-      data?.message ||
-      data?.error ||
-      data?.data?.message ||
-      `Request failed with ${response.status}`
-    );
-  } catch {
-    return `Request failed with ${response.status}`;
-  }
-};
-
-const request = async <T = any>(endpoint: string, options: RequestInit = {}): Promise<T> => {
-  const token = getToken();
-  const finalUrl = buildUrl(endpoint);
-
-  const response = await fetch(finalUrl, {
-    ...options,
-
-    headers: {
-      "Content-Type": "application/json",
-      "ngrok-skip-browser-warning": "true",
-
-      ...(token
-        ? {
-            Authorization: `Bearer ${token}`,
-          }
-        : {}),
-
-      ...(options.headers || {}),
-    },
-
-    cache: options.method === "GET" ? "no-cache" : "no-store",
-  });
-
-  if (!response.ok) {
-    throw new Error(await parseApiError(response));
-  }
-
-  try {
-    return (await response.json()) as T;
-  } catch {
-    return null as T;
-  }
-};
-
 const normalizeArray = <T>(response: any): T[] => {
   if (Array.isArray(response)) return response;
 
@@ -320,7 +289,12 @@ const normalizeArray = <T>(response: any): T[] => {
     return response.items;
   }
 
-  return [];
+  const message =
+    response?.message ||
+    response?.data?.message ||
+    "Unable to load data. Please try again.";
+
+  throw new Error(message);
 };
 
 const normalizeObject = <T>(response: any, fallback: T): T => {
@@ -340,38 +314,42 @@ const normalizeObject = <T>(response: any, fallback: T): T => {
 
 export const superAdminMachineService = {
   async getCompanies(): Promise<SuperAdminCompany[]> {
-    const response = await request<any>("/auth/users/super-admin/companies", {
+    const response = await apiCall<any>("/auth/users/super-admin/companies", {
       method: "GET",
     });
 
     return normalizeArray<SuperAdminCompany>(response);
   },
 
-  async getMachinesByCompanyId(companyId: string): Promise<SuperAdminMachine[]> {
+  async getMachinesByCompanyId(
+    companyId: string,
+  ): Promise<SuperAdminMachine[]> {
     if (!companyId) {
-      throw new Error("Company ID is required");
+      throw new Error("Unable to load company information. Please try again.");
     }
 
-    const response = await request<any>(`/machines?companyId=${encodeURIComponent(companyId)}`, {
-      method: "GET",
-    });
+    const response = await apiCall<any>(
+      `/machines?companyId=${encodeURIComponent(companyId)}`,
+      {
+        method: "GET",
+      },
+    );
 
     return normalizeArray<SuperAdminMachine>(response);
   },
-
   async getComponentsByMachineId(
     companyId: string,
     machineId: string,
   ): Promise<SuperAdminComponent[]> {
     if (!companyId) {
-      throw new Error("Company ID is required");
+      throw new Error("Unable to load company information. Please try again.");
     }
 
     if (!machineId) {
-      throw new Error("Machine ID is required");
+      throw new Error("Unable to load machine information. Please try again.");
     }
 
-    const response = await request<any>(
+    const response = await apiCall<any>(
       `/components/register?companyId=${encodeURIComponent(
         companyId,
       )}&machineId=${encodeURIComponent(machineId)}`,
@@ -383,12 +361,14 @@ export const superAdminMachineService = {
     return normalizeArray<SuperAdminComponent>(response);
   },
 
-  async getComponentsByCompanyId(companyId: string): Promise<SuperAdminComponent[]> {
+  async getComponentsByCompanyId(
+    companyId: string,
+  ): Promise<SuperAdminComponent[]> {
     if (!companyId) {
-      throw new Error("Company ID is required");
+      throw new Error("Unable to load company information. Please try again.");
     }
 
-    const response = await request<any>(
+    const response = await apiCall<any>(
       `/components/register?companyId=${encodeURIComponent(companyId)}`,
       {
         method: "GET",
@@ -398,13 +378,25 @@ export const superAdminMachineService = {
     return normalizeArray<SuperAdminComponent>(response);
   },
 
-  async createComponent(payload: SuperAdminComponentPayload): Promise<SuperAdminComponent> {
-    const response = await request<any>("/components", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
+  async createComponent(
+    payload: SuperAdminComponentPayload,
+  ): Promise<SuperAdminComponent> {
+    const response = await apiCall<any>(
+      "/components",
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+      {
+        showSuccess: true,
+        successMessage: "Component created successfully",
+      },
+    );
 
-    return normalizeObject<SuperAdminComponent>(response, response as SuperAdminComponent);
+    return normalizeObject<SuperAdminComponent>(
+      response,
+      response as SuperAdminComponent,
+    );
   },
 
   async updateComponent(
@@ -412,30 +404,50 @@ export const superAdminMachineService = {
     payload: Partial<SuperAdminComponentPayload>,
   ): Promise<SuperAdminComponent> {
     if (!componentId) {
-      throw new Error("Component ID is required");
+      throw new Error("Unable to update component. Please try again.");
     }
 
-    const response = await request<any>(`/components/${componentId}`, {
-      method: "PUT",
-      body: JSON.stringify(payload),
-    });
+    const response = await apiCall<any>(
+      `/components/${componentId}`,
+      {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      },
+      {
+        showSuccess: true,
+        successMessage: "Component updated successfully",
+      },
+    );
 
-    return normalizeObject<SuperAdminComponent>(response, response as SuperAdminComponent);
+    return normalizeObject<SuperAdminComponent>(
+      response,
+      response as SuperAdminComponent,
+    );
   },
 
   async deleteComponent(componentId: string): Promise<any> {
     if (!componentId) {
-      throw new Error("Component ID is required");
+      throw new Error("Unable to delete component. Please try again.");
     }
 
-    return request<any>(`/components/${componentId}`, {
-      method: "DELETE",
-    });
+    return apiCall<any>(
+      `/components/${componentId}`,
+      {
+        method: "DELETE",
+      },
+      {
+        showSuccess: true,
+        successMessage: "Component deleted successfully",
+      },
+    );
   },
 
-  async updateCompany(companyId: string, payload: UpdateCompanyPayload): Promise<any> {
+  async updateCompany(
+    companyId: string,
+    payload: UpdateCompanyPayload,
+  ): Promise<any> {
     if (!companyId) {
-      throw new Error("Company ID is required");
+      throw new Error("Unable to update company. Please try again.");
     }
 
     // Split admin full name into first_name / last_name as required by
@@ -445,121 +457,144 @@ export const superAdminMachineService = {
     const firstName = nameParts[0] || trimmedAdminName || "";
     const lastName = nameParts.slice(1).join(" ") || "";
 
-    const response = await request<any>(`/auth/users/${companyId}`, {
-      method: "PUT",
-      body: JSON.stringify({
-        first_name: firstName,
-        last_name: lastName,
-        email: payload.adminEmail,
-        mobile_number: (payload as any).mobileNumber || "",
-      }),
-    });
+    const response = await apiCall<any>(
+      `/auth/users/${companyId}`,
+      {
+        method: "PUT",
+        body: JSON.stringify({
+          first_name: firstName,
+          last_name: lastName,
+          email: payload.adminEmail,
+          mobile_number: (payload as any).mobileNumber || "",
+          is_active: payload.status ? payload.status === "Active" : undefined,
+          companyName: payload.companyName,
+          companyCode: payload.companyCode,
+        }),
+      },
+      {
+        showSuccess: true,
+        successMessage: "Company updated successfully",
+      },
+    );
 
     return normalizeObject<any>(response, response);
   },
 
   async deleteCompany(companyId: string): Promise<any> {
     if (!companyId) {
-      throw new Error("Company ID is required");
+      throw new Error("Unable to delete company. Please try again.");
     }
 
-    return request<any>(`/auth/users/${companyId}`, {
-      method: "DELETE",
-    });
-  },
-
-  async getDashboardRoleDetails(roleId: string): Promise<any> {
-    try {
-      const response = await request<any>(`/auth/company/dashboard/role-details/${roleId}`, {
-        method: "GET",
-      });
-      return response.data || response;
-    } catch (error) {
-      console.error("Failed to fetch dashboard role details:", error);
-      throw error;
-    }
-  },
-
-  async getDashboardRolesActivity(): Promise<any> {
-    try {
-      const response = await request<any>("/auth/company/dashboard/roles-activity", {
-        method: "GET",
-      });
-      return response.data || response;
-    } catch (error) {
-      console.error("Failed to fetch dashboard roles activity:", error);
-      throw error;
-    }
+    return apiCall<any>(
+      `/auth/users/${companyId}`,
+      {
+        method: "DELETE",
+      },
+      {
+        showSuccess: true,
+        successMessage: "Company deleted successfully",
+      },
+    );
   },
 
   async getDashboardMetrics(): Promise<SuperAdminDashboardMetrics> {
     try {
-      const response = await request<any>("/auth/company/dashboard/metrics", {
+      const companies = await this.getCompanies();
+
+      // Get all users
+      const usersResponse = await apiCall<any>("/auth/users", {
         method: "GET",
       });
-      return response.data || response;
+
+      const users = Array.isArray(usersResponse)
+        ? usersResponse
+        : usersResponse?.data?.users || usersResponse?.users || [];
+
+      if (!companies.length) {
+        return {
+          totalAdmins: 0,
+          activePlans: 0,
+          totalOperators: 0,
+          totalMechanics: 0,
+          totalMachines: 0,
+          criticalAlerts: 0,
+        };
+      }
+
+      const companyResults = await Promise.allSettled(
+        companies.map(async (company) => {
+          const companyId = company.id;
+
+          const [machines, components] = await Promise.all([
+            this.getMachinesByCompanyId(companyId),
+
+            this.getComponentsByCompanyId(companyId),
+          ]);
+
+          return {
+            company,
+            machines: machines ?? [],
+            components: components ?? [],
+          };
+        }),
+      );
+
+      return companyResults.reduce<SuperAdminDashboardMetrics>(
+        (acc, result) => {
+          if (result.status !== "fulfilled") {
+            console.error("Dashboard metrics failed:", result.reason);
+
+            return acc;
+          }
+
+          const { company, machines, components } = result.value;
+
+          // Total Machines
+          acc.totalMachines += machines.length;
+
+          // Active Plans
+          if (company.activePlan) {
+            acc.activePlans += 1;
+          }
+
+          // Critical Alerts
+          acc.criticalAlerts += components.filter((component) =>
+            (component.status || "").toLowerCase().includes("critical"),
+          ).length;
+
+          return acc;
+        },
+        {
+          totalAdmins: companies.length,
+
+          // Total Operators
+          totalOperators: users.filter((user: any) => {
+            const role = (user.role_name || user.role?.name || user.role || "")
+              .toString()
+              .toLowerCase()
+              .trim();
+
+            return role.includes("operator");
+          }).length,
+
+          // Total Mechanics
+          totalMechanics: users.filter((user: any) => {
+            const role = (user.role_name || user.role?.name || user.role || "")
+              .toString()
+              .toLowerCase()
+              .trim();
+
+            return role.includes("mechanic") || role.includes("Artisans");
+          }).length,
+
+          activePlans: 0,
+          totalMachines: 0,
+          criticalAlerts: 0,
+        },
+      );
     } catch (error) {
       console.error("Failed to fetch dashboard metrics:", error);
-      throw error;
-    }
-  },
 
-  async getDashboardStats() {
-    try {
-      const response = await request<any>("/auth/company/dashboard", {
-        method: "GET",
-      });
-      return response.data || response;
-    } catch (error) {
-      console.error("Failed to fetch dashboard stats:", error);
-      throw error;
-    }
-  },
-
-  async getDashboardRecentActivity() {
-    try {
-      const response = await request<any>("/auth/company/dashboard/recent-activity", {
-        method: "GET",
-      });
-      return response.data || response;
-    } catch (error) {
-      console.error("Failed to fetch dashboard recent activity:", error);
-      throw error;
-    }
-  },
-
-  async getDashboardPlanDistribution() {
-    try {
-      const response = await request<any>("/auth/company/dashboard/plan-distribution", {
-        method: "GET",
-      });
-      return response.data || response;
-    } catch (error) {
-      console.error("Failed to fetch dashboard plan distribution:", error);
-      throw error;
-    }
-  },
-
-  async getDashboardMachineStatus() {
-    try {
-      const response = await request<any>("/auth/company/dashboard/machine-status", {
-        method: "GET",
-      });
-      return response.data || response;
-    } catch (error) {
-      console.error("Failed to fetch dashboard machine status:", error);
-      throw error;
-    }
-  },
-
-  async getDashboardAlertsSummary() {
-    try {
-      const response = await request<any>("/auth/company/dashboard/alerts-summary", {
-        method: "GET",
-      });
-      return response.data || response;
-    } catch (error) {
-      console.error("Failed to fetch dashboard alerts summary:", error);
       throw error;
     }
   },

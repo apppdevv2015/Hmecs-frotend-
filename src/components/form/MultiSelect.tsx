@@ -26,7 +26,8 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
   placeholder = "Select options",
 }) => {
   const isControlled = value !== undefined;
-  const [internalSelected, setInternalSelected] = useState<string[]>(defaultSelected);
+  const [internalSelected, setInternalSelected] =
+    useState<string[]>(defaultSelected);
   const selectedOptions = isControlled ? value : internalSelected;
   const [isOpen, setIsOpen] = useState(false);
   const [focusedIndex, setFocusedIndex] = useState(-1);
@@ -34,14 +35,18 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
         setIsOpen(false);
       }
     };
 
     if (isOpen) {
       document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
+      return () =>
+        document.removeEventListener("mousedown", handleClickOutside);
     }
   }, [isOpen]);
 
@@ -130,7 +135,8 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
               <div className="flex flex-wrap flex-auto gap-2">
                 {selectedOptions.length > 0 ? (
                   selectedOptions.map((value) => {
-                    const text = options.find((opt) => opt.value === value)?.text || value;
+                    const text =
+                      options.find((opt) => opt.value === value)?.text || value;
                     return (
                       <div
                         key={value}
@@ -181,7 +187,9 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
                   className="w-5 h-5 text-gray-700 outline-hidden cursor-pointer focus:outline-hidden dark:text-gray-400 disabled:cursor-not-allowed"
                 >
                   <svg
-                    className={`stroke-current transition-transform ${isOpen ? "rotate-180" : ""}`}
+                    className={`stroke-current transition-transform ${
+                      isOpen ? "rotate-180" : ""
+                    }`}
                     width="20"
                     height="20"
                     viewBox="0 0 20 20"

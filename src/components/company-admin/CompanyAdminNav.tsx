@@ -1,5 +1,5 @@
 import React from "react";
-import { Link, useLocation } from "react-router";
+import { Link, useLocation } from "react-router-dom";
 
 import {
   LayoutDashboard as Dashboard,
@@ -8,6 +8,7 @@ import {
   Map as HeatMap,
   PlusCircle,
   AlertCircle,
+  Wrench,
 } from "lucide-react";
 
 export const CompanyAdminNav: React.FC = () => {
@@ -19,6 +20,11 @@ export const CompanyAdminNav: React.FC = () => {
       name: "Dashboard",
       path: "/company-admin/dashboard",
       icon: <Dashboard size={18} />,
+    },
+    {
+      name: "Job Cards",
+      path: "/company-admin/job-cards",
+      icon: <Wrench size={18} />,
     },
     {
       name: "Component Register",
@@ -56,8 +62,18 @@ export const CompanyAdminNav: React.FC = () => {
           const isActive = currentPath === item.path;
 
           return (
-            <Link key={item.path} to={item.path} className={getNavClass(isActive)}>
-              <span className={isActive ? "text-white" : "text-blue-500 dark:text-blue-400"}>
+            <Link
+              key={item.path}
+              to={item.path}
+              className={getNavClass(isActive)}
+            >
+              <span
+                className={
+                  isActive
+                    ? "text-white"
+                    : "text-blue-500 dark:text-blue-400"
+                }
+              >
                 {item.icon}
               </span>
 

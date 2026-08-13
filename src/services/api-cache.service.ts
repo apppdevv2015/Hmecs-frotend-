@@ -3,33 +3,47 @@ import StorageService from "./storage.service";
 export const fetchWithCache = async <T>(
   cacheKey: string,
   apiCall: () => Promise<T>,
-  expiryMinutes: number = 5,
+  expiryMinutes: number = 5
 ): Promise<T> => {
-  const cached = StorageService.getWithTimestamp<T>(cacheKey);
+  const cached =
+    StorageService.getWithTimestamp<T>(
+      cacheKey
+    );
 
-  const isOffline = !navigator.onLine;
+  const isOffline =
+    !navigator.onLine;
 
+ 
   if (isOffline && cached) {
-    console.log(`[Cache] Offline mode using cache: ${cacheKey}`);
 
     return cached.data;
   }
 
   try {
-    const response = await apiCall();
+    
+    const response =
+      await apiCall();
 
-    StorageService.setWithTimestamp(cacheKey, response);
+    StorageService.setWithTimestamp(
+      cacheKey,
+      response
+    );
 
     return response;
   } catch (error) {
-    console.warn(`[Cache] API failed: ${cacheKey}`);
+    console.warn(
+      `[Cache] API failed: ${cacheKey}`
+    );
 
     if (cached) {
-      const expired = StorageService.isExpired(cached.timestamp, expiryMinutes);
+      const expired =
+        StorageService.isExpired(
+          cached.timestamp,
+          expiryMinutes
+        );
 
       if (!expired) {
-        console.log(`[Cache] Using fallback cache: ${cacheKey}`);
-
+      
         return cached.data;
       }
     }

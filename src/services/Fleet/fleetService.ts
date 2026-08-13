@@ -1,4 +1,10 @@
-export type UserRole = "super_admin" | "company_admin" | "operator" | "Artisans";
+import { machineService } from "../companyadmin/machineService";
+
+export type UserRole =
+  | "super_admin"
+  | "company_admin"
+  | "operator"
+  | "Artisans";
 
 export type ComponentHealthStatus = "ok" | "warn" | "critical";
 
@@ -46,275 +52,6 @@ export interface FleetMachine {
 }
 
 /* ==========================================================
-   DUMMY DATA
-========================================================== */
-
-const DUMMY_FLEET_DATA: FleetMachine[] = [
-  {
-    machineId: "FLT-1001",
-    machineName: "CAT 320D",
-
-    company: {
-      companyId: "CMP-01",
-      companyName: "Tata Mining",
-    },
-
-    fleetId: "FL-223",
-
-    operator: {
-      operatorId: "OP-01",
-      name: "Rahul Sharma",
-    },
-
-    location: "Delhi Site A",
-    machineType: "Excavator",
-
-    healthPercent: 92,
-    status: "Healthy",
-
-    lastSeen: "2026-06-11T10:30:00Z",
-
-    hoursRun: 1250,
-    fuelLevel: 78,
-
-    components: {
-      tyre: {
-        status: "ok",
-        health: 86,
-      },
-
-      engine: {
-        status: "ok",
-        health: 88,
-      },
-
-      hydraulic: {
-        status: "warn",
-        health: 63,
-      },
-
-      transmission: {
-        status: "ok",
-        health: 78,
-      },
-    },
-
-    maintenanceHistory: [],
-  },
-
-  {
-    machineId: "FLT-1002",
-    machineName: "Komatsu PC210",
-
-    company: {
-      companyId: "CMP-02",
-      companyName: "L&T Construction",
-    },
-
-    fleetId: "FL-224",
-
-    operator: {
-      operatorId: "OP-02",
-      name: "Amit Kumar",
-    },
-
-    location: "Mumbai Project",
-    machineType: "Excavator",
-
-    healthPercent: 85,
-    status: "Healthy",
-
-    lastSeen: "2026-06-11T09:50:00Z",
-
-    hoursRun: 1450,
-    fuelLevel: 70,
-
-    components: {
-      tyre: {
-        status: "ok",
-        health: 82,
-      },
-
-      engine: {
-        status: "ok",
-        health: 90,
-      },
-
-      hydraulic: {
-        status: "ok",
-        health: 80,
-      },
-
-      transmission: {
-        status: "ok",
-        health: 84,
-      },
-    },
-
-    maintenanceHistory: [],
-  },
-
-  {
-    machineId: "FLT-1003",
-    machineName: "Volvo EC950",
-
-    company: {
-      companyId: "CMP-01",
-      companyName: "Tata Mining",
-    },
-
-    fleetId: "FL-225",
-
-    operator: {
-      operatorId: "OP-03",
-      name: "Ravi Singh",
-    },
-
-    location: "Noida Sector 63",
-
-    machineType: "Excavator",
-
-    healthPercent: 67,
-    status: "Warning",
-
-    lastSeen: "2026-06-11T08:20:00Z",
-
-    hoursRun: 2230,
-    fuelLevel: 56,
-
-    components: {
-      tyre: {
-        status: "warn",
-        health: 66,
-      },
-
-      engine: {
-        status: "ok",
-        health: 74,
-      },
-
-      hydraulic: {
-        status: "warn",
-        health: 58,
-      },
-
-      transmission: {
-        status: "ok",
-        health: 71,
-      },
-    },
-
-    maintenanceHistory: [],
-  },
-
-  {
-    machineId: "FLT-1004",
-    machineName: "JCB 3DX",
-
-    company: {
-      companyId: "CMP-03",
-      companyName: "ABC Infra",
-    },
-
-    fleetId: "FL-226",
-
-    operator: {
-      operatorId: "OP-04",
-      name: "Suresh Yadav",
-    },
-
-    location: "Jaipur Plant",
-
-    machineType: "Backhoe Loader",
-
-    healthPercent: 58,
-    status: "Warning",
-
-    lastSeen: "2026-06-11T07:10:00Z",
-
-    hoursRun: 1920,
-    fuelLevel: 44,
-
-    components: {
-      tyre: {
-        status: "warn",
-        health: 54,
-      },
-
-      engine: {
-        status: "warn",
-        health: 61,
-      },
-
-      hydraulic: {
-        status: "warn",
-        health: 59,
-      },
-
-      transmission: {
-        status: "ok",
-        health: 64,
-      },
-    },
-
-    maintenanceHistory: [],
-  },
-
-  {
-    machineId: "FLT-1005",
-    machineName: "CAT D8 Dozer",
-
-    company: {
-      companyId: "CMP-04",
-      companyName: "Mega Infra",
-    },
-
-    fleetId: "FL-227",
-
-    operator: {
-      operatorId: "OP-05",
-      name: "Deepak Verma",
-    },
-
-    location: "Lucknow Highway",
-
-    machineType: "Dozer",
-
-    healthPercent: 32,
-    status: "Critical",
-
-    lastSeen: "2026-06-11T06:15:00Z",
-
-    hoursRun: 4890,
-    fuelLevel: 19,
-
-    components: {
-      tyre: {
-        status: "critical",
-        health: 30,
-      },
-
-      engine: {
-        status: "critical",
-        health: 35,
-      },
-
-      hydraulic: {
-        status: "warn",
-        health: 41,
-      },
-
-      transmission: {
-        status: "critical",
-        health: 33,
-      },
-    },
-
-    maintenanceHistory: [],
-  },
-];
-
-/* ==========================================================
    SERVICE
 ========================================================== */
 
@@ -324,19 +61,127 @@ export const fleetService = {
     companyId?: string,
     operatorId?: string,
   ): Promise<FleetMachine[]> {
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    try {
+      const res: any = await machineService.getCompanyMachines();
+      const raw = Array.isArray(res)
+        ? res
+        : Array.isArray(res?.data)
+          ? res.data
+          : Array.isArray(res?.machines)
+            ? res.machines
+            : [];
 
-    let data = DUMMY_FLEET_DATA;
+      if (Array.isArray(raw) && raw.length > 0) {
+        const liveFleet: FleetMachine[] = raw.map((item: any, idx: number) => {
+          const mId = item.id || item._id || item.machineId || `m_${idx}`;
+          const mName = item.name || item.model || `Machine #${idx + 1}`;
+          const compName =
+            item.company?.companyName || item.company?.name || item.companyName || "N/A";
+          const fId = item.serialNumber || `FL-${220 + idx}`;
+          const opName =
+            item.operatorName || item.assignedOperator || (item.site ? `${item.site} Operator` : "Assigned Operator");
+          const loc = item.site || item.location || "N/A";
 
-    if (role === "company_admin" && companyId) {
-      data = data.filter((machine) => machine.company.companyId === companyId);
+          let tyreHealth: number | null = null;
+          let engineHealth: number | null = null;
+          let hydraulicHealth: number | null = null;
+          let suspensionHealth: number | null = null;
+
+          if (Array.isArray(item.components)) {
+            item.components.forEach((c: any) => {
+              const name = String(c.category || c.name || c.component_type || "").toLowerCase();
+              let val = Number(c.health ?? c.health_percentage ?? 0);
+              if (!val && c.condition) {
+                const cond = Number(c.condition);
+                val = Math.max(0, Math.min(100, Math.round((6 - cond) * 20)));
+              }
+              if (name.includes("tyre") || name.includes("tire"))
+                tyreHealth = val;
+              else if (name.includes("engine")) engineHealth = val;
+              else if (name.includes("hydraulic")) hydraulicHealth = val;
+              else if (
+                name.includes("suspension") ||
+                name.includes("transmission")
+              )
+                suspensionHealth = val;
+            });
+          }
+
+          const healthVals = [tyreHealth, engineHealth, hydraulicHealth, suspensionHealth].filter((v): v is number => v !== null);
+          const avgHealth = healthVals.length > 0
+            ? Math.round(healthVals.reduce((a, b) => a + b, 0) / healthVals.length)
+            : 85;
+
+          const status =
+            avgHealth < 60 ? "Critical" : avgHealth < 75 ? "Warning" : "Healthy";
+
+          const getCompStatus = (h: number | null): ComponentHealthStatus => {
+            if (h === null) return "ok";
+            if (h < 60) return "critical";
+            if (h < 75) return "warn";
+            return "ok";
+          };
+
+          return {
+            machineId: mId,
+            machineName: mName,
+            company: {
+              companyId: item.companyId || item.company?.id || "",
+              companyName: compName,
+            },
+            fleetId: fId,
+            operator: {
+              operatorId: `op_${idx}`,
+              name: opName,
+            },
+            location: loc,
+            machineType: item.equipmentType || "Heavy Haulage",
+            healthPercent: avgHealth,
+            status,
+            lastSeen: item.updatedAt ? new Date(item.updatedAt).toLocaleDateString() : "Just now",
+            hoursRun: Number(item.hoursRun || 0),
+            fuelLevel: 85,
+            components: {
+              tyre: {
+                status: getCompStatus(tyreHealth),
+                health: tyreHealth ?? 85,
+              },
+              engine: {
+                status: getCompStatus(engineHealth),
+                health: engineHealth ?? 88,
+              },
+              hydraulic: {
+                status: getCompStatus(hydraulicHealth),
+                health: hydraulicHealth ?? 75,
+              },
+              transmission: {
+                status: getCompStatus(suspensionHealth),
+                health: suspensionHealth ?? 80,
+              },
+            },
+            maintenanceHistory: [],
+          };
+        });
+
+        let result = liveFleet;
+        if (companyId && companyId !== "all") {
+          const filtered = result.filter(
+            (m) =>
+              m.company.companyId === companyId ||
+              String((m as any).companyId) === String(companyId) ||
+              m.company.companyName.toLowerCase().includes(String(companyId).toLowerCase())
+          );
+          if (filtered.length > 0) {
+            result = filtered;
+          }
+        }
+        return result;
+      }
+      return [];
+    } catch (e) {
+      console.warn("Live fleet API fetch error:", e);
+      return [];
     }
-
-    if (role === "operator" && operatorId) {
-      data = data.filter((machine) => machine.operator.operatorId === operatorId);
-    }
-
-    return data;
   },
 
   async getMachineById(machineId: string) {

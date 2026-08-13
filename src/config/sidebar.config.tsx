@@ -29,9 +29,17 @@ import {
   ListChecks,
   TruckIcon,
   RefreshCcw,
+  UserCheck,
+  AlertCircle,
 } from "lucide-react";
 
-export type UserRole = "super_admin" | "company_admin" | "artisans" | "operator" | "supervisor";
+export type UserRole =
+  | "super_admin"
+  | "company_admin"
+  | "artisans"
+  | "operator"
+  | "supervisor"
+  | "technical_support";
 
 export type NavLinkItem = {
   name: string;
@@ -94,6 +102,11 @@ export const sidebarConfig: Record<
             name: "Plans",
             path: "/admin-management/plans",
             icon: <BadgeCheck className={sidebarIconClass} />,
+          },
+          {
+            name: "Technical Support",
+            path: "/super-admin/technical-support",
+            icon: <UserCheck className={sidebarIconClass} />,
           },
         ],
       },
@@ -194,7 +207,7 @@ export const sidebarConfig: Record<
             path: "/company-admin/heatmap",
             icon: <Map className={sidebarIconClass} />,
           },
-          {
+         {
             name: "Update Data",
             path: "/company-admin/data-update",
             icon: <RefreshCcw className={sidebarIconClass} />,
@@ -334,12 +347,42 @@ export const sidebarConfig: Record<
 
     navGroups: [
       {
-        title: "",
+        title: "Operations",
         items: [
           {
-            name: " Issue Report",
-            path: "/operator/tasks",
+            name: "My Assigned Machines",
+            path: "/operator/machines",
+            icon: <Truck className={operatorIconClass} />,
+          },
+          {
+            name: "Pre-Start Inspection",
+            path: "/operator/pre-start-inspection",
             icon: <ClipboardCheck className={operatorIconClass} />,
+          },
+          {
+            name: "Work Order Capture",
+            path: "/operator/work-order-capture",
+            icon: <ClipboardList className={operatorIconClass} />,
+          },
+          {
+            name: "Active Task",
+            path: "/operator/active-task",
+            icon: <Activity className={operatorIconClass} />,
+          },
+          {
+            name: "Shift Summary",
+            path: "/operator/shift-summary",
+            icon: <FileText className={operatorIconClass} />,
+          },
+        ],
+      },
+      {
+        title: "Monitoring & Logs",
+        items: [
+          {
+            name: "Issue Reports",
+            path: "/operator/issue-reports",
+            icon: <AlertCircle className={operatorIconClass} />,
           },
           {
             name: "Fleet",
@@ -350,12 +393,6 @@ export const sidebarConfig: Record<
             name: "Update Data",
             path: "/operator/data-update",
             icon: <RefreshCcw className={operatorIconClass} />,
-          },
-
-          {
-            name: "Machine",
-            path: "/operator/machines",
-            icon: <Truck className={operatorIconClass} />,
           },
           {
             name: "Components",
@@ -464,6 +501,94 @@ export const sidebarConfig: Record<
       title: "Supervisor",
       subtitle: "supervisor@hme.com",
       email: "supervisor@hme.com",
+    },
+  },
+
+  technical_support: {
+    dashboardItem: {
+      icon: <LayoutDashboard className={sidebarIconClass} />,
+      name: "Dashboard",
+      path: "/support/dashboard",
+    },
+
+    navGroups: [
+      {
+        title: "Ticket Management",
+        items: [
+          {
+            name: "All Tickets",
+            path: "/support/tickets",
+            icon: <FileWarning className={sidebarIconClass} />,
+          },
+          {
+            name: "My Assigned",
+            path: "/support/tickets?assigned=me",
+            icon: <UserCheck className={sidebarIconClass} />,
+          },
+          {
+            name: "Open",
+            path: "/support/tickets?status=Open",
+            icon: <AlertTriangle className={sidebarIconClass} />,
+          },
+          {
+            name: "In Progress",
+            path: "/support/tickets?status=In%20Progress",
+            icon: <Activity className={sidebarIconClass} />,
+          },
+          {
+            name: "Waiting",
+            path: "/support/tickets?status=Waiting%20for%20Customer",
+            icon: <FileClock className={sidebarIconClass} />,
+          },
+          {
+            name: "Resolved",
+            path: "/support/tickets?status=Resolved",
+            icon: <BadgeCheck className={sidebarIconClass} />,
+          },
+          {
+            name: "Closed",
+            path: "/support/tickets?status=Closed",
+            icon: <ClipboardCheck className={sidebarIconClass} />,
+          },
+        ],
+      },
+      {
+        title: "Analytics & System",
+        items: [
+          {
+            name: "Reports",
+            path: "/support/reports",
+            icon: <FileBarChart className={sidebarIconClass} />,
+          },
+          {
+            name: "Activity Logs",
+            path: "/support/activity",
+            icon: <FileClock className={sidebarIconClass} />,
+          },
+          {
+            name: "Notifications",
+            path: "/support/notifications",
+            icon: <FileText className={sidebarIconClass} />,
+          },
+        ],
+      },
+      {
+        title: "Account",
+        items: [
+          {
+            name: "Profile",
+            path: "/support/profile",
+            icon: <UserCog className={sidebarIconClass} />,
+          },
+        ],
+      },
+    ],
+
+    profile: {
+      shortName: "TS",
+      title: "Technical Support",
+      subtitle: "support@hme.com",
+      email: "support@hme.com",
     },
   },
 };

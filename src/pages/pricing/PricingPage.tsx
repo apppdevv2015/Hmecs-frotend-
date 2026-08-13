@@ -3,8 +3,11 @@ import { useNavigate } from "react-router";
 import toast from "react-hot-toast";
 import Header from "../../components/landing/Navbar";
 import Footer from "../../components/landing/Footer";
-import { getSubscriptionPlans, type SubscriptionPlanApi } from "../../services/subscriptionService";
-import { userService } from "../../services/userService";
+import {
+  getSubscriptionPlans,
+  type SubscriptionPlanApi,
+} from "../../services/SuperAdmin/subscriptionService";
+import { userService } from "../../services/Auth/userService";
 import StorageService, { STORAGE_KEYS } from "../../services/storage.service";
 
 type FlexibleSubscriptionPlanApi = SubscriptionPlanApi & {
@@ -78,7 +81,12 @@ const formatPrice = (price: string | number) => {
 };
 
 const getPlanName = (plan: FlexibleSubscriptionPlanApi) => {
-  return (plan.planName || plan.plan_name || plan.name || "Untitled Plan").trim();
+  return (
+    plan.planName ||
+    plan.plan_name ||
+    plan.name ||
+    "Untitled Plan"
+  ).trim();
 };
 
 const getMachineLimit = (plan: FlexibleSubscriptionPlanApi) => {
@@ -138,10 +146,16 @@ const getUnavailableFeatures = (planName: string): string[] => {
   }
 
   if (type === "pro") {
-    return ["Unlimited machine access not included", "Dedicated enterprise support not included"];
+    return [
+      "Unlimited machine access not included",
+      "Dedicated enterprise support not included",
+    ];
   }
 
-  return ["Some advanced modules may be limited", "Enterprise support not included"];
+  return [
+    "Some advanced modules may be limited",
+    "Enterprise support not included",
+  ];
 };
 
 const getFallbackFeatures = (
@@ -213,7 +227,10 @@ const getFallbackFeatures = (
   ];
 };
 
-const mapApiPlanToPricingPlan = (plan: FlexibleSubscriptionPlanApi, index: number): PricingPlan => {
+const mapApiPlanToPricingPlan = (
+  plan: FlexibleSubscriptionPlanApi,
+  index: number,
+): PricingPlan => {
   const planName = getPlanName(plan);
   const machineLimit = getMachineLimit(plan);
   const staffLimit = getStaffLimit(plan);
@@ -245,7 +262,10 @@ const mapApiPlanToPricingPlan = (plan: FlexibleSubscriptionPlanApi, index: numbe
     validity: `${validityDays} Days`,
     features: finalFeatures,
     unavailableFeatures: getUnavailableFeatures(planName),
-    popular: lowerPlanName.includes("pro") || lowerPlanName.includes("plus") || index === 1,
+    popular:
+      lowerPlanName.includes("pro") ||
+      lowerPlanName.includes("plus") ||
+      index === 1,
     icon: planName.charAt(0).toUpperCase(),
     rawPlan: plan,
   };
@@ -273,7 +293,9 @@ function PricingHero() {
 
         {/* Heading */}
         <h1 className="mx-auto max-w-5xl text-5xl font-black leading-tight tracking-tight sm:text-6xl">
-          <span className="text-slate-900 dark:text-white">Smart Pricing for</span>
+          <span className="text-slate-900 dark:text-white">
+            Smart Pricing for
+          </span>
 
           <br />
 
@@ -284,8 +306,9 @@ function PricingHero() {
 
         {/* Description */}
         <p className="mx-auto mt-6 max-w-3xl text-lg leading-8 text-slate-600 dark:text-slate-300">
-          Choose the right subscription plan to monitor machines, track components, manage staff,
-          and scale your mining operations with intelligent insights.
+          Choose the right subscription plan to monitor machines, track
+          components, manage staff, and scale your mining operations with
+          intelligent insights.
         </p>
       </div>
     </div>
@@ -305,19 +328,24 @@ function PricingCard({
   const [, setShowConfirm] = useState(false);
 
   const isDemo =
-    plan.name.toLowerCase().includes("free") || plan.name.toLowerCase().includes("demo");
+    plan.name.toLowerCase().includes("free") ||
+    plan.name.toLowerCase().includes("demo");
 
   const isDemoDisabled = isDemo && hasUsedDemo;
 
   const isCurrentPlan =
-    activePlan && activePlan.trim().toLowerCase() === plan.name.trim().toLowerCase();
+    activePlan &&
+    activePlan.trim().toLowerCase() === plan.name.trim().toLowerCase();
 
   const proceedToCart = () => {
-    const machineLimit = plan.rawPlan.machineLimit ?? plan.rawPlan.machine_limit ?? 0;
+    const machineLimit =
+      plan.rawPlan.machineLimit ?? plan.rawPlan.machine_limit ?? 0;
 
-    const staffLimitValue = plan.rawPlan.staffLimit ?? plan.rawPlan.staff_limit ?? 0;
+    const staffLimitValue =
+      plan.rawPlan.staffLimit ?? plan.rawPlan.staff_limit ?? 0;
 
-    const validityDays = plan.rawPlan.validityDays ?? plan.rawPlan.validity_days ?? 30;
+    const validityDays =
+      plan.rawPlan.validityDays ?? plan.rawPlan.validity_days ?? 30;
 
     StorageService.set(STORAGE_KEYS.SELECTED_PLAN, {
       id: plan.id,
@@ -395,16 +423,24 @@ function PricingCard({
         )}
 
         {/* Title */}
-        <h3 className="text-[30px] font-extrabold tracking-tight">{plan.name}</h3>
+        <h3 className="text-[30px] font-extrabold tracking-tight">
+          {plan.name}
+        </h3>
 
         {/* Subtitle */}
-        <p className="mt-3 min-h-[52px] text-sm leading-6 text-white/90">{plan.subtitle}</p>
+        <p className="mt-3 min-h-[52px] text-sm leading-6 text-white/90">
+          {plan.subtitle}
+        </p>
 
         {/* Price */}
         <div className="mt-8 flex items-end gap-2">
-          <span className="text-[56px] font-black leading-none">{plan.price}</span>
+          <span className="text-[56px] font-black leading-none">
+            {plan.price}
+          </span>
 
-          <span className="mb-2 text-sm font-medium text-white/80">{plan.period}</span>
+          <span className="mb-2 text-sm font-medium text-white/80">
+            {plan.period}
+          </span>
         </div>
 
         {/* CTA */}
@@ -421,7 +457,11 @@ function PricingCard({
           shadow-lg
         `}
         >
-          {isDemoDisabled ? "Upgrade Now" : isCurrentPlan ? "Current Plan" : "Get Started"}
+          {isDemoDisabled
+            ? "Upgrade Now"
+            : isCurrentPlan
+              ? "Current Plan"
+              : "Get Started"}
         </button>
       </div>
 
@@ -429,7 +469,9 @@ function PricingCard({
       <div className="px-7 py-7">
         {/* Features */}
         <div className="mt-8">
-          <p className="mb-5 text-sm font-bold text-slate-800 dark:text-white">Benefits</p>
+          <p className="mb-5 text-sm font-bold text-slate-800 dark:text-white">
+            Benefits
+          </p>
 
           <div className="space-y-4">
             {plan.features.slice(0, 5).map((feature) => (
@@ -491,7 +533,11 @@ function PricingPlans({
           <div className="mx-auto flex flex-wrap items-stretch justify-center gap-8 max-w-[1400px] pt-8 pb-10">
             {visiblePlans.map((plan) => (
               <div key={plan.id} className="flex h-full">
-                <PricingCard plan={plan} activePlan={activePlan} hasUsedDemo={hasUsedDemo} />
+                <PricingCard
+                  plan={plan}
+                  activePlan={activePlan}
+                  hasUsedDemo={hasUsedDemo}
+                />
               </div>
             ))}
           </div>
@@ -531,14 +577,18 @@ const comparisonRows = [
   {
     label: "Advanced Reports",
     value: (plan: PricingPlan) =>
-      plan.unavailableFeatures.some((item) => item.toLowerCase().includes("report"))
+      plan.unavailableFeatures.some((item) =>
+        item.toLowerCase().includes("report"),
+      )
         ? "× Not Included"
         : "✓ Included",
   },
   {
     label: "Priority Support",
     value: (plan: PricingPlan) =>
-      plan.unavailableFeatures.some((item) => item.toLowerCase().includes("support"))
+      plan.unavailableFeatures.some((item) =>
+        item.toLowerCase().includes("support"),
+      )
         ? "× Not Included"
         : "✓ Included",
   },
@@ -577,7 +627,8 @@ function PricingComparison({ plans }: { plans: PricingPlan[] }) {
           <div
             className="h-full w-full"
             style={{
-              backgroundImage: "radial-gradient(circle at 1px 1px, #0f172a 1px, transparent 0)",
+              backgroundImage:
+                "radial-gradient(circle at 1px 1px, #0f172a 1px, transparent 0)",
               backgroundSize: "32px 32px",
             }}
           />
@@ -596,8 +647,8 @@ function PricingComparison({ plans }: { plans: PricingPlan[] }) {
           </h2>
 
           <p className="mx-auto mt-5 max-w-3xl text-base leading-7 text-slate-600 dark:text-slate-300">
-            Compare machine access, reports, monitoring, intelligence, and support to choose the
-            best plan for your business.
+            Compare machine access, reports, monitoring, intelligence, and
+            support to choose the best plan for your business.
           </p>
         </div>
 
@@ -629,7 +680,9 @@ function PricingComparison({ plans }: { plans: PricingPlan[] }) {
                           Plan
                         </span>
 
-                        <span className="mt-2 text-lg font-black">{plan.name}</span>
+                        <span className="mt-2 text-lg font-black">
+                          {plan.name}
+                        </span>
                       </div>
                     </th>
                   ))}
@@ -660,7 +713,10 @@ function PricingComparison({ plans }: { plans: PricingPlan[] }) {
                       const isIncluded = String(value).startsWith("✓");
 
                       return (
-                        <td key={`${plan.id}-${row.label}`} className="px-6 py-5 text-center">
+                        <td
+                          key={`${plan.id}-${row.label}`}
+                          className="px-6 py-5 text-center"
+                        >
                           <div
                             className={`inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold transition-all
                             ${
@@ -698,8 +754,8 @@ function PricingCTA() {
         </h2>
 
         <p className="mx-auto mt-5 max-w-2xl text-blue-50">
-          Start with a plan that fits your fleet and scale your maintenance intelligence as your
-          company grows.
+          Start with a plan that fits your fleet and scale your maintenance
+          intelligence as your company grows.
         </p>
 
         <a
@@ -760,7 +816,12 @@ export default function PricingPage() {
               userService.getSubscriptionHistory(),
             ]);
 
-            setActivePlan(activeSub?.plan_name || activeSub?.planName || activeSub?.name || null);
+            setActivePlan(
+              activeSub?.plan_name ||
+                activeSub?.planName ||
+                activeSub?.name ||
+                null,
+            );
 
             setHasUsedDemo(
               Array.isArray(history) &&
@@ -769,7 +830,10 @@ export default function PricingPage() {
                     sub?.plan_name || sub?.planName || sub?.name || "",
                   ).toLowerCase();
 
-                  return historyPlanName.includes("demo") || historyPlanName.includes("free");
+                  return (
+                    historyPlanName.includes("demo") ||
+                    historyPlanName.includes("free")
+                  );
                 }),
             );
           } catch (error) {
@@ -777,7 +841,11 @@ export default function PricingPage() {
           }
         }
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Failed to load pricing plans");
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Failed to load pricing plans",
+        );
       } finally {
         setLoading(false);
       }
@@ -789,9 +857,13 @@ export default function PricingPage() {
   const visiblePlans = useMemo(() => {
     return [...plans]
       .sort((a, b) => {
-        const priceA = Number(String(a.rawPlan.price ?? "0").replace(/[^\d.]/g, ""));
+        const priceA = Number(
+          String(a.rawPlan.price ?? "0").replace(/[^\d.]/g, ""),
+        );
 
-        const priceB = Number(String(b.rawPlan.price ?? "0").replace(/[^\d.]/g, ""));
+        const priceB = Number(
+          String(b.rawPlan.price ?? "0").replace(/[^\d.]/g, ""),
+        );
 
         return priceA - priceB;
       })
