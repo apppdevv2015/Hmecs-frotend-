@@ -31,12 +31,7 @@ import {
   RefreshCcw,
 } from "lucide-react";
 
-export type UserRole =
-  | "super_admin"
-  | "company_admin"
-  | "artisans"
-  | "operator"
-  | "supervisor";
+export type UserRole = "super_admin" | "company_admin" | "artisans" | "operator" | "supervisor";
 
 export type NavLinkItem = {
   name: string;
@@ -199,7 +194,7 @@ export const sidebarConfig: Record<
             path: "/company-admin/heatmap",
             icon: <Map className={sidebarIconClass} />,
           },
-         {
+          {
             name: "Update Data",
             path: "/company-admin/data-update",
             icon: <RefreshCcw className={sidebarIconClass} />,

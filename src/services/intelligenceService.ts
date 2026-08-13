@@ -17,9 +17,7 @@ const getCompanyIdFromToken = () => {
 
     const payload = JSON.parse(atob(token.split(".")[1] || ""));
 
-    return (
-      payload?.companyId || payload?.company_id || payload?.company?.id || ""
-    );
+    return payload?.companyId || payload?.company_id || payload?.company?.id || "";
   } catch {
     return "";
   }
@@ -38,11 +36,7 @@ const getCompanyId = () => {
       ""
     );
   } catch {
-    return (
-      StorageService.get<string>(STORAGE_KEYS.COMPANY_ID) ||
-      getCompanyIdFromToken() ||
-      ""
-    );
+    return StorageService.get<string>(STORAGE_KEYS.COMPANY_ID) || getCompanyIdFromToken() || "";
   }
 };
 
@@ -76,10 +70,7 @@ const parseApiError = async (response: Response) => {
   }
 };
 
-async function apiRequest<T>(
-  endpoint: string,
-  options?: RequestInit,
-): Promise<T> {
+async function apiRequest<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const response = await fetch(buildUrl(endpoint), {
     ...options,
 
@@ -148,10 +139,6 @@ export const intelligenceService = {
       throw new Error("companyId is required to fetch dashboard stats");
     }
 
-    return apiRequest(
-      `/intelligence/dashboard-stats?companyId=${encodeURIComponent(
-        companyId,
-      )}`,
-    );
+    return apiRequest(`/intelligence/dashboard-stats?companyId=${encodeURIComponent(companyId)}`);
   },
 };

@@ -63,7 +63,6 @@ const AppHeader: React.FC = () => {
             )}
           </button>
 
-         
           <div className="hidden lg:block">
             <form>
               <div className="relative">

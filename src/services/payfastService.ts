@@ -12,7 +12,7 @@ export type PayFastCheckoutResponse = {
 
 export const initiatePayFastCheckout = async (
   planId: string | number,
-  idempotencyKey?: string
+  idempotencyKey?: string,
 ): Promise<PayFastCheckoutResponse> => {
   const response = await apiRequest<any>("/auth/subscriptions/checkout", {
     method: "POST",
@@ -20,11 +20,8 @@ export const initiatePayFastCheckout = async (
       plan_id: planId,
       idempotency_key: idempotencyKey,
       return_url:
-        import.meta.env.VITE_PAYFAST_RETURN_URL ||
-        "http://localhost:5173/signin?payment=success",
-      cancel_url:
-        import.meta.env.VITE_PAYFAST_CANCEL_URL ||
-        "http://localhost:5173/payment/cancel",
+        import.meta.env.VITE_PAYFAST_RETURN_URL || "http://localhost:5173/signin?payment=success",
+      cancel_url: import.meta.env.VITE_PAYFAST_CANCEL_URL || "http://localhost:5173/payment/cancel",
     }),
   });
 

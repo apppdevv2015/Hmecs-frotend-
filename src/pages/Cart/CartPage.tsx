@@ -117,13 +117,9 @@ export default function CartPage() {
       const loadingToast = toast.loading("Opening PayFast payment page...");
 
       const idempotencyKey =
-        crypto.randomUUID?.() ||
-        Math.random().toString(36).substring(2) + Date.now().toString(36);
+        crypto.randomUUID?.() || Math.random().toString(36).substring(2) + Date.now().toString(36);
 
-      const response = await initiatePayFastCheckout(
-        selectedPlan.id,
-        idempotencyKey,
-      );
+      const response = await initiatePayFastCheckout(selectedPlan.id, idempotencyKey);
 
       toast.dismiss(loadingToast);
 
@@ -143,10 +139,7 @@ export default function CartPage() {
       }
 
       const paymentUrl =
-        response?.checkout_url ||
-        response?.payment_url ||
-        response?.redirect_url ||
-        response?.url;
+        response?.checkout_url || response?.payment_url || response?.redirect_url || response?.url;
 
       const paymentData = response?.data;
 
@@ -193,8 +186,7 @@ export default function CartPage() {
             Redirecting to plans...
           </h2>
           <p className="text-slate-500 dark:text-slate-400 font-medium leading-relaxed">
-            Please wait while we take you to the plans page to upgrade your
-            account.
+            Please wait while we take you to the plans page to upgrade your account.
           </p>
           <div className="flex justify-center gap-1.5">
             <div className="h-1.5 w-1.5 bg-orange-500 rounded-full animate-bounce [animation-delay:-0.3s]" />
@@ -279,8 +271,7 @@ export default function CartPage() {
                   <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-black text-white">
                     ✓
                   </span>
-                  Selected subscription:{" "}
-                  <span className="font-bold capitalize">{plan.name}</span>
+                  Selected subscription: <span className="font-bold capitalize">{plan.name}</span>
                 </li>
 
                 <li className="flex gap-3 text-sm text-slate-700 dark:text-slate-200">
@@ -314,9 +305,7 @@ export default function CartPage() {
 
             <div className="border-t border-slate-200 bg-slate-50 p-5 dark:border-white/10 dark:bg-slate-950/40 md:p-7 lg:border-l lg:border-t-0">
               <div className="rounded-2xl border border-slate-200 bg-white p-5 text-center dark:border-white/10 dark:bg-slate-900">
-                <h2 className="text-xl font-black text-blue-600 md:text-2xl">
-                  Total Cost
-                </h2>
+                <h2 className="text-xl font-black text-blue-600 md:text-2xl">Total Cost</h2>
 
                 <p className="mt-4 text-4xl font-black text-blue-700 dark:text-blue-400">
                   {plan.price}
@@ -329,18 +318,12 @@ export default function CartPage() {
 
               <div className="mt-6 space-y-4 text-sm">
                 <div className="flex justify-between gap-4 border-b border-slate-200 pb-3 dark:border-white/10">
-                  <span className="text-slate-500 dark:text-slate-400">
-                    Plan
-                  </span>
-                  <span className="font-bold capitalize tracking-wide">
-                    {plan.name}
-                  </span>
+                  <span className="text-slate-500 dark:text-slate-400">Plan</span>
+                  <span className="font-bold capitalize tracking-wide">{plan.name}</span>
                 </div>
 
                 <div className="flex justify-between gap-4">
-                  <span className="text-lg font-black text-blue-600">
-                    Total
-                  </span>
+                  <span className="text-lg font-black text-blue-600">Total</span>
                   <span className="text-lg font-black text-blue-700 dark:text-blue-400">
                     {plan.price}
                   </span>

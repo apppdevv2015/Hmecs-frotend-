@@ -74,10 +74,8 @@ const SEVERITY_META: Record<
 
   warning: {
     icon: AlertCircle,
-    iconWrap:
-      "bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400",
-    badge:
-      "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400",
+    iconWrap: "bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400",
+    badge: "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400",
     ring: "border-amber-500 bg-amber-500 text-white shadow-sm shadow-amber-500/20",
     accentBar: "bg-amber-500",
     label: "Warning",
@@ -94,10 +92,8 @@ const SEVERITY_META: Record<
 
   success: {
     icon: CheckCircle2,
-    iconWrap:
-      "bg-green-50 text-green-600 dark:bg-green-500/10 dark:text-green-400",
-    badge:
-      "bg-green-50 text-green-700 dark:bg-green-500/10 dark:text-green-400",
+    iconWrap: "bg-green-50 text-green-600 dark:bg-green-500/10 dark:text-green-400",
+    badge: "bg-green-50 text-green-700 dark:bg-green-500/10 dark:text-green-400",
     ring: "border-green-500 bg-green-500 text-white shadow-sm shadow-green-500/20",
     accentBar: "bg-green-500",
     label: "Success",
@@ -107,8 +103,7 @@ const SEVERITY_META: Record<
 const CATEGORY_META: Record<Category, { icon: typeof Cpu; badge: string }> = {
   Machine: {
     icon: Cpu,
-    badge:
-      "bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400",
+    badge: "bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400",
   },
   Report: {
     icon: FileText,
@@ -116,13 +111,11 @@ const CATEGORY_META: Record<Category, { icon: typeof Cpu; badge: string }> = {
   },
   Task: {
     icon: ListChecks,
-    badge:
-      "bg-purple-50 text-purple-700 dark:bg-purple-500/10 dark:text-purple-400",
+    badge: "bg-purple-50 text-purple-700 dark:bg-purple-500/10 dark:text-purple-400",
   },
   Maintenance: {
     icon: Wrench,
-    badge:
-      "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400",
+    badge: "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400",
   },
   Component: {
     icon: Settings2,
@@ -166,8 +159,7 @@ function getInitials(name: string) {
 /** Sorts by severity priority first, then most recent first within the same severity. */
 function sortNotifications(items: Notification[]): Notification[] {
   return [...items].sort((a, b) => {
-    const severityDiff =
-      SEVERITY_PRIORITY[a.severity] - SEVERITY_PRIORITY[b.severity];
+    const severityDiff = SEVERITY_PRIORITY[a.severity] - SEVERITY_PRIORITY[b.severity];
     if (severityDiff !== 0) return severityDiff;
     return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
   });
@@ -191,21 +183,15 @@ export default function NotificationsPage() {
 
   const unreadCount = roleScoped.filter((n) => !n.read).length;
 
-  const criticalCount = roleScoped.filter(
-    (n) => n.severity === "critical" && !n.read,
-  ).length;
-  const successCount = roleScoped.filter(
-    (n) => n.severity === "success",
-  ).length;
+  const criticalCount = roleScoped.filter((n) => n.severity === "critical" && !n.read).length;
+  const successCount = roleScoped.filter((n) => n.severity === "success").length;
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
 
     return roleScoped.filter((n) => {
-      if (severityFilter !== "All" && n.severity !== severityFilter)
-        return false;
-      if (categoryFilter !== "All" && n.category !== categoryFilter)
-        return false;
+      if (severityFilter !== "All" && n.severity !== severityFilter) return false;
+      if (categoryFilter !== "All" && n.category !== categoryFilter) return false;
       if (readFilter === "unread" && n.read) return false;
       if (
         query &&
@@ -227,37 +213,35 @@ export default function NotificationsPage() {
       <div className="mx-auto max-w-6xl">
         {/* Header */}
         <div className="mb-6 overflow-hidden rounded-3xl bg-gradient-to-r from-blue-700 via-indigo-700 to-indigo-500 p-8 shadow-lg">
-  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-    <div className="flex items-center gap-3">
-      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15 text-white backdrop-blur">
-        <Bell size={20} />
-      </span>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15 text-white backdrop-blur">
+                <Bell size={20} />
+              </span>
 
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight text-white">
-          Notifications
-        </h1>
+              <div>
+                <h1 className="text-3xl font-bold tracking-tight text-white">Notifications</h1>
 
-        <p className="mt-1 text-sm text-blue-100">
-          Role-wise activity across your fleet, reports, and billing.
-        </p>
-      </div>
-    </div>
+                <p className="mt-1 text-sm text-blue-100">
+                  Role-wise activity across your fleet, reports, and billing.
+                </p>
+              </div>
+            </div>
 
-    <div className="flex items-center gap-2">
-      {unreadCount > 0 && (
-        <button
-          type="button"
-          onClick={markAllAsRead}
-          className="flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 font-medium text-blue-700 shadow transition hover:bg-blue-50"
-        >
-          <CheckCheck size={16} />
-          Mark all as read
-        </button>
-      )}
-    </div>
-  </div>
-</div>
+            <div className="flex items-center gap-2">
+              {unreadCount > 0 && (
+                <button
+                  type="button"
+                  onClick={markAllAsRead}
+                  className="flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 font-medium text-blue-700 shadow transition hover:bg-blue-50"
+                >
+                  <CheckCheck size={16} />
+                  Mark all as read
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
 
         {/* Stat cards */}
         <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -341,35 +325,31 @@ export default function NotificationsPage() {
 
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex flex-wrap gap-1.5">
-              {(["All", "critical", "warning", "info", "success"] as const).map(
-                (option) => {
-                  const isActive = severityFilter === option;
-                  const meta = option !== "All" ? SEVERITY_META[option] : null;
-                  const OptionIcon = meta?.icon;
-                  return (
-                    <button
-                      key={option}
-                      type="button"
-                      onClick={() => {
-                        setSeverityFilter(option);
-                        setVisibleCount(PAGE_SIZE);
-                      }}
-                      className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
-                        isActive
-                          ? meta
-                            ? meta.ring
-                            : "border-gray-800 bg-gray-800 text-white shadow-sm dark:border-gray-200 dark:bg-gray-200 dark:text-gray-900"
-                          : "border-gray-200 text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
-                      }`}
-                    >
-                      {OptionIcon && <OptionIcon size={12} />}
-                      {option === "All"
-                        ? "All"
-                        : option.charAt(0).toUpperCase() + option.slice(1)}
-                    </button>
-                  );
-                },
-              )}
+              {(["All", "critical", "warning", "info", "success"] as const).map((option) => {
+                const isActive = severityFilter === option;
+                const meta = option !== "All" ? SEVERITY_META[option] : null;
+                const OptionIcon = meta?.icon;
+                return (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => {
+                      setSeverityFilter(option);
+                      setVisibleCount(PAGE_SIZE);
+                    }}
+                    className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                      isActive
+                        ? meta
+                          ? meta.ring
+                          : "border-gray-800 bg-gray-800 text-white shadow-sm dark:border-gray-200 dark:bg-gray-200 dark:text-gray-900"
+                        : "border-gray-200 text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+                    }`}
+                  >
+                    {OptionIcon && <OptionIcon size={12} />}
+                    {option === "All" ? "All" : option.charAt(0).toUpperCase() + option.slice(1)}
+                  </button>
+                );
+              })}
             </div>
 
             <span className="mx-1 hidden h-4 w-px bg-gray-200 dark:bg-gray-700 sm:block" />
@@ -443,9 +423,7 @@ export default function NotificationsPage() {
             <span className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-500">
               <Inbox size={20} />
             </span>
-            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-              No Notifications
-            </p>
+            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">No Notifications</p>
             <p className="text-xs text-gray-400 dark:text-gray-500">
               Nothing matches these filters right now.
             </p>
@@ -470,9 +448,7 @@ export default function NotificationsPage() {
                     }`}
                   >
                     {!notification.read && (
-                      <span
-                        className={`absolute inset-y-0 left-0 w-1 ${severity.accentBar}`}
-                      />
+                      <span className={`absolute inset-y-0 left-0 w-1 ${severity.accentBar}`} />
                     )}
 
                     <span

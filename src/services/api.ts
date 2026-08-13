@@ -1,7 +1,5 @@
 import offlineQueueService from "./offlineQueue.service";
 
-import { showErrorToast, showSuccessToast } from "../utils/toastUtils";
-
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 import StorageService, { STORAGE_KEYS } from "./storage.service";
@@ -22,11 +20,35 @@ const parseRequestBody = (body: any) => {
   return body;
 };
 
-export async function apiRequest<T>(
-  endpoint: string,
-  options: RequestInit = {},
-): Promise<T> {
+const invalidateCache = (endpoint: string) => {
+  try {
+    const cleanEndpoint = endpoint.startsWith("/") ? endpoint.slice(1) : endpoint;
+    const segments = cleanEndpoint.split("?")[0].split("/");
+    const basePath = segments
+      .slice(0, 2)
+      .join("_")
+      .replace(/[/?=&]/g, "_")
+      .replace(/_+/g, "_");
+
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.includes(basePath)) {
+        localStorage.removeItem(key);
+        i--;
+      }
+    }
+    console.log(`[Cache Invalidate] Cleared cache keys starting with: ${basePath}`);
+  } catch (e) {
+    console.error("Failed to invalidate cache:", e);
+  }
+};
+
+export async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const token = StorageService.get<string>(STORAGE_KEYS.TOKEN);
+  const accessToken =
+    StorageService.get<string>(STORAGE_KEYS.ACCESS_TOKEN) ||
+    StorageService.get<string>(STORAGE_KEYS.AUTH_TOKEN);
+  const refreshToken = StorageService.get<string>(STORAGE_KEYS.REFRESH_TOKEN);
 
   const baseUrl = String(API_BASE_URL || "").replace(/\/$/, "");
 
@@ -58,10 +80,14 @@ export async function apiRequest<T>(
     endpoint.includes("/checkout") ||
     endpoint.includes("/payment");
 
-  
+  /**
+   * Save request if offline
+   */
+  console.log("METHOD =>", method);
+  console.log("ONLINE =>", navigator.onLine);
+  console.log("ENDPOINT =>", endpoint);
 
   if (isMutationMethod && !shouldSkipOfflineQueue && !navigator.onLine) {
-    
     console.warn(`[Offline Queue] Saved: ${endpoint}`);
     console.log("OFFLINE QUEUE HIT");
     await offlineQueueService.saveRequest({
@@ -72,10 +98,15 @@ export async function apiRequest<T>(
       body: parseRequestBody(options.body),
       headers: {
         "Content-Type": "application/json",
-
-        ...(token
+        ...(accessToken || token
           ? {
-              Authorization: `Bearer ${token}`,
+              Authorization: `Bearer ${accessToken || token}`,
+            }
+          : {}),
+        ...(refreshToken
+          ? {
+              "x-refresh-token": refreshToken,
+              "x-refresh": refreshToken,
             }
           : {}),
       },
@@ -101,15 +132,18 @@ export async function apiRequest<T>(
 
         headers: {
           "Content-Type": "application/json",
-
           "ngrok-skip-browser-warning": "true",
-
-          ...(token
+          ...(accessToken || token
             ? {
-                Authorization: `Bearer ${token}`,
+                Authorization: `Bearer ${accessToken || token}`,
               }
             : {}),
-
+          ...(refreshToken
+            ? {
+                "x-refresh-token": refreshToken,
+                "x-refresh": refreshToken,
+              }
+            : {}),
           ...options.headers,
         },
       });
@@ -132,15 +166,17 @@ export async function apiRequest<T>(
           data,
         });
 
-        const error: any = new Error(
-          data?.message || data?.error || "Something went wrong",
-        );
+        const error: any = new Error(data?.message || data?.error || "Something went wrong");
 
         error.errors = data?.errors || {};
         error.status = response.status;
         error.response = data;
 
         throw error;
+      }
+
+      if (isMutationMethod) {
+        invalidateCache(endpoint);
       }
 
       return data as T;
@@ -161,10 +197,15 @@ export async function apiRequest<T>(
 
           headers: {
             "Content-Type": "application/json",
-
-            ...(token
+            ...(accessToken || token
               ? {
-                  Authorization: `Bearer ${token}`,
+                  Authorization: `Bearer ${accessToken || token}`,
+                }
+              : {}),
+            ...(refreshToken
+              ? {
+                  "x-refresh-token": refreshToken,
+                  "x-refresh": refreshToken,
                 }
               : {}),
           },
@@ -181,9 +222,7 @@ export async function apiRequest<T>(
    * Cache GET APIs
    */
   const shouldCache =
-    method === "GET" &&
-    !endpoint.includes("/login") &&
-    !endpoint.includes("/logout");
+    method === "GET" && !endpoint.includes("/login") && !endpoint.includes("/logout");
 
   if (shouldCache) {
     return fetchWithCache<T>(cacheKey, makeRequest, 2);

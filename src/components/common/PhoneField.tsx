@@ -2,11 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { CountryCode } from "libphonenumber-js";
 import { ChevronDown, Search } from "lucide-react";
 
-import {
-  getCountries,
-  getCountryCallingCode,
-  parsePhoneNumberFromString,
-} from "libphonenumber-js";
+import { getCountries, getCountryCallingCode, parsePhoneNumberFromString } from "libphonenumber-js";
 
 import en from "react-phone-number-input/locale/en.json";
 
@@ -46,10 +42,7 @@ const buildCountries = (): CountryOption[] => {
     .sort((a, b) => a.label.localeCompare(b.label));
 };
 
-const validatePhoneNumber = (
-  value: string,
-  country: CountryCode,
-): string | undefined => {
+const validatePhoneNumber = (value: string, country: CountryCode): string | undefined => {
   if (!value.trim()) {
     return "Phone number is required";
   }
@@ -85,11 +78,9 @@ export default function PhoneField({
 }: PhoneFieldProps) {
   const countries = useMemo(() => buildCountries(), []);
 
-  const initialCountry =
-    countries.find((c) => c.value === defaultCountry) || countries[0];
+  const initialCountry = countries.find((c) => c.value === defaultCountry) || countries[0];
 
-  const [selectedCountry, setSelectedCountry] =
-    useState<CountryOption>(initialCountry);
+  const [selectedCountry, setSelectedCountry] = useState<CountryOption>(initialCountry);
 
   const [isTouched, setIsTouched] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -103,10 +94,7 @@ export default function PhoneField({
       return isTouched ? "Phone number is required" : undefined;
     }
 
-    const phoneNumber = parsePhoneNumberFromString(
-      value,
-      selectedCountry.value,
-    );
+    const phoneNumber = parsePhoneNumberFromString(value, selectedCountry.value);
 
     if (!phoneNumber?.nationalNumber || phoneNumber.nationalNumber.length < 6) {
       return undefined;
@@ -142,10 +130,7 @@ export default function PhoneField({
     if (!isMenuOpen) return;
 
     const handleClickOutside = (event: MouseEvent) => {
-      if (
-        wrapperRef.current &&
-        !wrapperRef.current.contains(event.target as Node)
-      ) {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
         setIsMenuOpen(false);
         setSearch("");
       }
@@ -275,9 +260,7 @@ export default function PhoneField({
 
             <div className="max-h-[150px] overflow-y-auto py-1.5">
               {filteredCountries.length === 0 ? (
-                <p className="px-3.5 py-4 text-center text-sm text-slate-400">
-                  No country found
-                </p>
+                <p className="px-3.5 py-4 text-center text-sm text-slate-400">No country found</p>
               ) : (
                 filteredCountries.map((c) => (
                   <button
@@ -287,9 +270,7 @@ export default function PhoneField({
                     aria-selected={c.value === selectedCountry.value}
                     onClick={() => handleCountrySelect(c)}
                     className={`flex w-full items-center justify-between gap-3 px-3.5 py-2.5 text-left transition-colors ${
-                      c.value === selectedCountry.value
-                        ? "bg-blue-50"
-                        : "hover:bg-slate-50"
+                      c.value === selectedCountry.value ? "bg-blue-50" : "hover:bg-slate-50"
                     }`}
                   >
                     <div className="flex min-w-0 items-center gap-2.5">
@@ -297,9 +278,7 @@ export default function PhoneField({
                         {c.flag}
                       </span>
 
-                      <span className="truncate text-sm text-slate-700">
-                        {c.label}
-                      </span>
+                      <span className="truncate text-sm text-slate-700">{c.label}</span>
                     </div>
 
                     <span className="shrink-0 text-sm font-medium text-slate-500">

@@ -90,9 +90,7 @@ function getStoredRole() {
   }
 }
 
-export default function RoleProtectedRoute({
-  allowedRoles,
-}: RoleProtectedRouteProps) {
+export default function RoleProtectedRoute({ allowedRoles }: RoleProtectedRouteProps) {
   const location = useLocation();
 
   const [isLoading, setIsLoading] = useState(true);
@@ -157,9 +155,7 @@ export default function RoleProtectedRoute({
 
   const normalizedUserRole = normalizeRole(authState.role);
 
-  const normalizedAllowedRoles = allowedRoles.map((role) =>
-    normalizeRole(role),
-  );
+  const normalizedAllowedRoles = allowedRoles.map((role) => normalizeRole(role));
 
   const hasAccess = normalizedAllowedRoles.includes(normalizedUserRole);
 

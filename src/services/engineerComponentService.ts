@@ -187,8 +187,10 @@ export const engineerComponentService = {
   getMachines: async (): Promise<EngineerMachine[]> => {
     try {
       const dbMachinesRes = await machineService.getMachines();
-      const dbMachines = Array.isArray(dbMachinesRes) ? dbMachinesRes : ((dbMachinesRes as any).data || (dbMachinesRes as any).machines || []);
-      
+      const dbMachines = Array.isArray(dbMachinesRes)
+        ? dbMachinesRes
+        : (dbMachinesRes as any).data || (dbMachinesRes as any).machines || [];
+
       if (!dbMachines || dbMachines.length === 0) {
         return [];
       }
@@ -230,7 +232,8 @@ export const engineerComponentService = {
             if (status === "Critical") {
               readingValue = "118°C";
               issue = "Critical overheating detected!";
-              recommendation = "Shut down engine immediately. Inspect cooling system and water pump.";
+              recommendation =
+                "Shut down engine immediately. Inspect cooling system and water pump.";
             } else if (status === "Warning") {
               readingValue = "98°C";
               issue = "High temperature detected";
@@ -275,7 +278,8 @@ export const engineerComponentService = {
             if (status === "Critical") {
               readingValue = "120 bar";
               issue = "Hydraulic pressure dropped below critical threshold!";
-              recommendation = "Shut down hydraulic pump. Inspect for major leaks or valve malfunction.";
+              recommendation =
+                "Shut down hydraulic pump. Inspect for major leaks or valve malfunction.";
             } else if (status === "Warning") {
               readingValue = "175 bar";
               issue = "Pressure slightly low";
@@ -302,13 +306,14 @@ export const engineerComponentService = {
 
         // Determine machine status based on worst component status
         let machineStatus: ComponentStatus = "Good";
-        if (components.some(c => c.status === "Critical")) machineStatus = "Critical";
-        else if (components.some(c => c.status === "Warning")) machineStatus = "Warning";
+        if (components.some((c) => c.status === "Critical")) machineStatus = "Critical";
+        else if (components.some((c) => c.status === "Warning")) machineStatus = "Warning";
 
         // Determine overall health as average of component healths
-        const overallHealth = components.length > 0
-          ? Math.round(components.reduce((sum, c) => sum + c.health, 0) / components.length)
-          : 90;
+        const overallHealth =
+          components.length > 0
+            ? Math.round(components.reduce((sum, c) => sum + c.health, 0) / components.length)
+            : 90;
 
         return {
           id: m.id,
@@ -321,22 +326,18 @@ export const engineerComponentService = {
           components,
         };
       });
-    } 
-    catch (err) {
-  console.error(
-    "Failed to load engineer machines",
-    err
-  );
-  return mockMachines;
-}
+    } catch (err) {
+      console.error("Failed to load engineer machines", err);
+      return mockMachines;
+    }
   },
 
-  getMachineComponents: async (
-    machineId: string
-  ): Promise<EngineerComponent[]> => {
+  getMachineComponents: async (machineId: string): Promise<EngineerComponent[]> => {
     try {
       const machines = await engineerComponentService.getMachines();
-      const machine = machines.find((item) => item.id === machineId || item.machineId === machineId);
+      const machine = machines.find(
+        (item) => item.id === machineId || item.machineId === machineId,
+      );
       return machine?.components || [];
     } catch {
       return [];

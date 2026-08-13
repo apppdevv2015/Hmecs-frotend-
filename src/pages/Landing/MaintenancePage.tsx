@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import Hero from "../../assets/images/landingpageimages/Maintenance/Hero.jpg"
+import Hero from "../../assets/images/landingpageimages/Maintenance/Hero.jpg";
 import {
   Wrench,
   CalendarClock,
@@ -95,10 +95,8 @@ const componentSchedule = [
 ];
 
 const statusStyles: Record<string, string> = {
-  "On Track":
-    "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400",
-  "Due Soon":
-    "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400",
+  "On Track": "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400",
+  "Due Soon": "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400",
   Overdue: "bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400",
 };
 
@@ -153,62 +151,58 @@ export default function MaintenancePage() {
       {/* Page Content */}
       <main>
         {/* INTRO */}
-    <section
-  className="relative overflow-hidden border-b border-slate-200 dark:border-slate-800"
-  style={{
-    backgroundImage:
-      `url(${Hero})`,
-    backgroundSize: "cover",
-    backgroundPosition: "center",
-    backgroundRepeat: "no-repeat",
-  }}
->
-  {/* Dark Overlay */}
-  <div className="absolute inset-0 bg-slate-950/65" />
-
-  {/* Optional Blue Gradient */}
-  <div className="absolute inset-0 bg-gradient-to-r from-blue-950/40 via-slate-950/20 to-slate-950/50" />
-
-  <div className="relative z-10 px-5 py-16 sm:px-6 lg:px-8 lg:py-24">
-    <div
-      className={`mx-auto max-w-4xl text-center transition-all duration-700 ${
-        visible ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"
-      }`}
-    >
-      <p className="text-xs font-black uppercase tracking-[0.3em] text-blue-300">
-        Maintenance
-      </p>
-
-      <h1 className="mt-4 text-3xl font-black leading-tight tracking-tight text-white sm:text-4xl lg:text-6xl">
-        Keep every machine serviced, on schedule
-      </h1>
-
-      <p className="mx-auto mt-5 max-w-2xl text-base leading-8 text-slate-200">
-        Track preventive, predictive and corrective maintenance across your
-        fleet in one place — from the first alert to a closed, logged service
-        record.
-      </p>
-    </div>
-
-    {/* Stats */}
-    <div className="mx-auto mt-14 grid max-w-5xl grid-cols-2 gap-4 sm:grid-cols-4">
-      {summaryStats.map((stat) => (
-        <div
-          key={stat.label}
-          className="rounded-2xl border border-white/20 bg-white/10 px-4 py-6 text-center backdrop-blur-md"
+        <section
+          className="relative overflow-hidden border-b border-slate-200 dark:border-slate-800"
+          style={{
+            backgroundImage: `url(${Hero})`,
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+            backgroundRepeat: "no-repeat",
+          }}
         >
-          <p className="text-2xl font-black text-white sm:text-3xl">
-            {stat.value}
-          </p>
+          {/* Dark Overlay */}
+          <div className="absolute inset-0 bg-slate-950/65" />
 
-          <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-200">
-            {stat.label}
-          </p>
-        </div>
-      ))}
-    </div>
-  </div>
-</section>
+          {/* Optional Blue Gradient */}
+          <div className="absolute inset-0 bg-gradient-to-r from-blue-950/40 via-slate-950/20 to-slate-950/50" />
+
+          <div className="relative z-10 px-5 py-16 sm:px-6 lg:px-8 lg:py-24">
+            <div
+              className={`mx-auto max-w-4xl text-center transition-all duration-700 ${
+                visible ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"
+              }`}
+            >
+              <p className="text-xs font-black uppercase tracking-[0.3em] text-blue-300">
+                Maintenance
+              </p>
+
+              <h1 className="mt-4 text-3xl font-black leading-tight tracking-tight text-white sm:text-4xl lg:text-6xl">
+                Keep every machine serviced, on schedule
+              </h1>
+
+              <p className="mx-auto mt-5 max-w-2xl text-base leading-8 text-slate-200">
+                Track preventive, predictive and corrective maintenance across your fleet in one
+                place — from the first alert to a closed, logged service record.
+              </p>
+            </div>
+
+            {/* Stats */}
+            <div className="mx-auto mt-14 grid max-w-5xl grid-cols-2 gap-4 sm:grid-cols-4">
+              {summaryStats.map((stat) => (
+                <div
+                  key={stat.label}
+                  className="rounded-2xl border border-white/20 bg-white/10 px-4 py-6 text-center backdrop-blur-md"
+                >
+                  <p className="text-2xl font-black text-white sm:text-3xl">{stat.value}</p>
+
+                  <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-200">
+                    {stat.label}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
 
         {/* MAINTENANCE TYPES */}
         <section className="bg-slate-50 px-5 py-20 dark:bg-slate-900/30 sm:px-6 lg:px-8">
@@ -268,15 +262,14 @@ export default function MaintenancePage() {
                 </h2>
 
                 <p className="mt-5 max-w-md text-sm leading-7 text-slate-600 dark:text-slate-300">
-                  Every major component carries its own service history and
-                  next-due date, so nothing slips through on a busy site.
+                  Every major component carries its own service history and next-due date, so
+                  nothing slips through on a busy site.
                 </p>
 
                 <div className="mt-7 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-900">
                   <TrendingDown className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
                   <p className="text-xs font-semibold text-slate-600 dark:text-slate-300">
-                    Overdue components are automatically escalated to the
-                    Supervisor alerts queue.
+                    Overdue components are automatically escalated to the Supervisor alerts queue.
                   </p>
                 </div>
               </div>
@@ -379,8 +372,7 @@ export default function MaintenancePage() {
             </h2>
 
             <p className="mx-auto mt-4 max-w-xl text-blue-100">
-              See how HMEC's maintenance workflow fits your fleet size and
-              service policy.
+              See how HMEC's maintenance workflow fits your fleet size and service policy.
             </p>
 
             <div className="mt-8 flex flex-wrap items-center justify-center gap-3">

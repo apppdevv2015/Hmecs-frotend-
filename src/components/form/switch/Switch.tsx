@@ -29,20 +29,12 @@ const Switch: React.FC<SwitchProps> = ({
   const switchColors =
     color === "blue"
       ? {
-          background: isChecked
-            ? "bg-brand-500 "
-            : "bg-gray-200 dark:bg-white/10", // Blue version
-          knob: isChecked
-            ? "translate-x-full bg-white"
-            : "translate-x-0 bg-white",
+          background: isChecked ? "bg-brand-500 " : "bg-gray-200 dark:bg-white/10", // Blue version
+          knob: isChecked ? "translate-x-full bg-white" : "translate-x-0 bg-white",
         }
       : {
-          background: isChecked
-            ? "bg-gray-800 dark:bg-white/10"
-            : "bg-gray-200 dark:bg-white/10", // Gray version
-          knob: isChecked
-            ? "translate-x-full bg-white"
-            : "translate-x-0 bg-white",
+          background: isChecked ? "bg-gray-800 dark:bg-white/10" : "bg-gray-200 dark:bg-white/10", // Gray version
+          knob: isChecked ? "translate-x-full bg-white" : "translate-x-0 bg-white",
         };
 
   return (
@@ -55,9 +47,7 @@ const Switch: React.FC<SwitchProps> = ({
       <div className="relative">
         <div
           className={`block transition duration-150 ease-linear h-6 w-11 rounded-full ${
-            disabled
-              ? "bg-gray-100 pointer-events-none dark:bg-gray-800"
-              : switchColors.background
+            disabled ? "bg-gray-100 pointer-events-none dark:bg-gray-800" : switchColors.background
           }`}
         ></div>
         <div

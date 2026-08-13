@@ -167,7 +167,6 @@ export default function ContactPage() {
 
         message: data.message.trim(),
       };
-     
 
       toast.success("Message sent! Our team will get back to you shortly.");
       setSubmitted(true);
@@ -246,9 +245,8 @@ export default function ContactPage() {
             </h1>
 
             <p className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-slate-600 dark:text-slate-300">
-              Have a question about pricing, want a walkthrough of HMEC, or need
-              support with your account? Reach out and our team will get back to
-              you within 24 hours.
+              Have a question about pricing, want a walkthrough of HMEC, or need support with your
+              account? Reach out and our team will get back to you within 24 hours.
             </p>
 
             {/* Bottom Divider */}
@@ -310,9 +308,9 @@ export default function ContactPage() {
                 We'll help you find the right fit for your fleet
               </h2>
               <p className="mt-5 max-w-md text-sm leading-7 text-slate-600 dark:text-slate-300">
-                Tell us a bit about your operation — fleet size, number of sites
-                and which roles need access — and our team will follow up with
-                the right plan and a live walkthrough.
+                Tell us a bit about your operation — fleet size, number of sites and which roles
+                need access — and our team will follow up with the right plan and a live
+                walkthrough.
               </p>
 
               <div className="mt-8 space-y-4 border-t border-slate-200 pt-6 dark:border-slate-800">
@@ -351,8 +349,7 @@ export default function ContactPage() {
                     Message sent successfully
                   </h3>
                   <p className="max-w-xs text-sm text-slate-600 dark:text-slate-300">
-                    Thanks for reaching out. Our team will get back to you
-                    shortly.
+                    Thanks for reaching out. Our team will get back to you shortly.
                   </p>
                 </div>
               ) : (
@@ -421,8 +418,7 @@ dark:text-white`}
                   <div className="grid gap-5 sm:grid-cols-2">
                     <div>
                       <label className="mb-1.5 block text-xs font-bold text-slate-700 dark:text-slate-300">
-                        Phone Number{" "}
-                        <span className="text-slate-400">(optional)</span>
+                        Phone Number <span className="text-slate-400">(optional)</span>
                       </label>
 
                       <Controller
@@ -455,8 +451,7 @@ dark:text-white`}
 
                     <div>
                       <label className="mb-1.5 block text-xs font-bold text-slate-700 dark:text-slate-300">
-                        Company{" "}
-                        <span className="text-slate-400">(optional)</span>
+                        Company <span className="text-slate-400">(optional)</span>
                       </label>
                       <div className="relative">
                         <Building2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -566,9 +561,8 @@ dark:text-white`}
 
               {/* Description */}
               <p className="mx-auto mt-5 max-w-2xl text-base leading-8 text-slate-600 dark:text-slate-400 sm:text-lg">
-                We'd love to connect with you. Visit our office, schedule a
-                meeting, or explore our location directly through the
-                interactive map below.
+                We'd love to connect with you. Visit our office, schedule a meeting, or explore our
+                location directly through the interactive map below.
               </p>
 
               {/* Decorative Divider */}
@@ -594,9 +588,7 @@ dark:text-white`}
         <section className="border-t border-slate-200 bg-white px-5 py-20 dark:border-slate-800 dark:bg-slate-950 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-3xl">
             <div className="mb-10 text-center">
-              <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600">
-                FAQ
-              </p>
+              <p className="text-xs font-black uppercase tracking-[0.25em] text-blue-600">FAQ</p>
               <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-950 dark:text-white sm:text-3xl">
                 Common questions
               </h2>

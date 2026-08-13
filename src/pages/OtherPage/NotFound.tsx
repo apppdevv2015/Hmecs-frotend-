@@ -11,19 +11,11 @@ export default function NotFound() {
   const getDashboardPath = () => {
     if (!token) return "/";
 
-    if (
-      role === "superadmin" ||
-      role === "super_admin" ||
-      role === "super admin"
-    ) {
+    if (role === "superadmin" || role === "super_admin" || role === "super admin") {
       return "/super-admin/dashboard";
     }
 
-    if (
-      role === "admin" ||
-      role === "company_admin" ||
-      role === "company admin"
-    ) {
+    if (role === "admin" || role === "company_admin" || role === "company admin") {
       return "/company-admin/dashboard";
     }
 
@@ -55,11 +47,7 @@ export default function NotFound() {
 
           <img src="/images/error/404.svg" alt="404" className="dark:hidden" />
 
-          <img
-            src="/images/error/404-dark.svg"
-            alt="404"
-            className="hidden dark:block"
-          />
+          <img src="/images/error/404-dark.svg" alt="404" className="hidden dark:block" />
 
           <p className="mt-10 mb-6 text-base text-gray-700 dark:text-gray-400 sm:text-lg">
             We can’t seem to find the page you are looking for!

@@ -9,20 +9,13 @@ const dummyAssignments: MachineAssignment[] = [
   {
     userId: "eng_1",
     role: "engineer",
-    machineIds: [
-      "FLT-1001",
-      "FLT-1002",
-      "FLT-1003",
-    ],
+    machineIds: ["FLT-1001", "FLT-1002", "FLT-1003"],
   },
 
   {
     userId: "eng_2",
     role: "engineer",
-    machineIds: [
-      "FLT-1004",
-      "FLT-1005",
-    ],
+    machineIds: ["FLT-1004", "FLT-1005"],
   },
 
   /* OPERATORS */
@@ -47,86 +40,49 @@ const dummyAssignments: MachineAssignment[] = [
 
 export const machineAssignmentService = {
   /* GET ASSIGNED MACHINES */
-  async getAssignedMachines(
-    userId: string,
-  ): Promise<string[]> {
-    return new Promise(
-      (resolve) => {
-        setTimeout(() => {
-          const assignment =
-            dummyAssignments.find(
-              (item) =>
-                item.userId ===
-                userId,
-            );
+  async getAssignedMachines(userId: string): Promise<string[]> {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        const assignment = dummyAssignments.find((item) => item.userId === userId);
 
-          resolve(
-            assignment?.machineIds ||
-              [],
-          );
-        }, 300);
-      },
-    );
+        resolve(assignment?.machineIds || []);
+      }, 300);
+    });
   },
 
   /* ASSIGN MACHINES */
   async assignMachines(
     userId: string,
     machineIds: string[],
-    role:
-      | "engineer"
-      | "operator" = "engineer",
+    role: "engineer" | "operator" = "engineer",
   ): Promise<boolean> {
-    return new Promise(
-      (resolve) => {
-        setTimeout(() => {
-          const existingAssignment =
-            dummyAssignments.find(
-              (item) =>
-                item.userId ===
-                userId,
-            );
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        const existingAssignment = dummyAssignments.find((item) => item.userId === userId);
 
-          /* operator => only one machine */
-          const finalMachineIds =
-            role === "operator"
-              ? machineIds.slice(
-                  0,
-                  1,
-                )
-              : machineIds;
+        /* operator => only one machine */
+        const finalMachineIds = role === "operator" ? machineIds.slice(0, 1) : machineIds;
 
-          if (
-            existingAssignment
-          ) {
-            existingAssignment.machineIds =
-              finalMachineIds;
-          } else {
-            dummyAssignments.push(
-              {
-                userId,
-                role,
-                machineIds:
-                  finalMachineIds,
-              },
-            );
-          }
+        if (existingAssignment) {
+          existingAssignment.machineIds = finalMachineIds;
+        } else {
+          dummyAssignments.push({
+            userId,
+            role,
+            machineIds: finalMachineIds,
+          });
+        }
 
-          resolve(true);
-        }, 300);
-      },
-    );
+        resolve(true);
+      }, 300);
+    });
   },
 
   /* GET ALL ASSIGNMENTS */
   async getAllAssignments() {
-    return new Promise<
-      MachineAssignment[]
-    >((resolve) => {
+    return new Promise<MachineAssignment[]>((resolve) => {
       setTimeout(() => {
-        resolve(
-          dummyAssignments,
-        );
+        resolve(dummyAssignments);
       }, 300);
     });
   },
