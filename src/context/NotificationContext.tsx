@@ -8,6 +8,7 @@ import {
 } from "react";
 
 import socketService from "../services/socketService";
+import { showErrorToast, showSuccessToast } from "../utils/toastUtils";
 
 export interface Notification {
   id: string;
@@ -134,6 +135,8 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
         if (!payload || typeof payload !== "object") return;
          
 
+        const normalizedSeverity = (payload.severity || "info").toLowerCase();
+
         addNotification({
           title: payload.title || payload.component || "Notification",
           message: payload.message || "",
@@ -141,8 +144,18 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
           actorRole: payload.actorRole || payload.actor_role || "",
           category: payload.category || "Subscription",
           machineName: payload.machineName || payload.machine_name,
-          severity: (payload.severity || "info").toLowerCase() as Notification["severity"],
+          severity: normalizedSeverity as Notification["severity"],
         });
+
+        // 🚀 LIVE TOAST POPUP TRIGGER ON REAL-TIME WEBSOCKET ALERT
+        if (payload.message) {
+          const toastMsg = `${payload.title ? payload.title + ": " : ""}${payload.message}`;
+          if (normalizedSeverity === "critical" || normalizedSeverity === "error" || normalizedSeverity === "warning") {
+            showErrorToast(toastMsg, { duration: 5000 });
+          } else {
+            showSuccessToast(toastMsg, { duration: 4000 });
+          }
+        }
       } catch (e) {
         console.error("Failed to handle WS notification:", e);
       }

@@ -12,6 +12,7 @@ import AppSelect from "../../components/ui/dropdown/AppSelect";
 
 import {
   AlertCircle,
+  AlertTriangle,
   BarChart3,
   ChevronRight,
   Database,
@@ -22,11 +23,13 @@ import {
   CheckCircle2 as CheckLineIcon,
   Search,
   Shield,
+  ShieldAlert,
   Trash2,
   Truck,
   X,
   ArrowRight,
 } from "lucide-react";
+import { showErrorToast, showSuccessToast } from "../../utils/toastUtils";
 import {
   BarChart,
   Bar,
@@ -43,9 +46,10 @@ import {
 import CompanyPlanCard from "../../components/company-admin/dashboard/CompanyPlanCard";
 import SubscriptionHistoryTable from "../../components/company-admin/dashboard/SubscriptionHistoryTable";
 import MachineHealthChart from "../../components/company-admin/dashboard/MachineHealthChart";
-import { userService } from "../../services/userService";
+import { userService } from "../../services/Auth/userService";
 import { componentService } from "../../services/companyadmin/componentService";
 import { CompanyAdminNav } from "../../components/company-admin/CompanyAdminNav";
+import socketService from "../../services/socketService";
 
 const getArrayData = <T,>(response: any): T[] => {
   if (Array.isArray(response)) return response;
@@ -62,6 +66,32 @@ const normalizeComponent = (item: any) => ({
   machineId: String(
     item.machineId || item.machine_id || item.machine?.id || "",
   ),
+  companyId: String(
+    item.companyId ||
+      item.company_id ||
+      item.machine?.companyId ||
+      item.machine?.company_id ||
+      "",
+  ),
+  companyCode: String(
+    item.companyCode ||
+      item.company_code ||
+      item.machine?.companyCode ||
+      item.machine?.company_code ||
+      item.company?.companyCode ||
+      item.company?.company_code ||
+      "",
+  ),
+  companyName: String(
+    item.companyName ||
+      item.company_name ||
+      item.machine?.companyName ||
+      item.machine?.company_name ||
+      item.company?.name ||
+      "",
+  ),
+  company: item.company || item.machine?.company,
+  machine: item.machine,
   category: String(item.category || item.categoryName || item.type || ""),
   description: String(item.description || ""),
   serialNumber: String(item.serialNumber || item.serial_number || ""),
@@ -113,27 +143,44 @@ export default function CompanyAdminDashboard() {
   const handleDeleteComponent = async () => {
     if (!deleteTarget) return;
 
+    if (isExpired) {
+      showErrorToast(
+        "Action Denied: You cannot delete components because your subscription plan has expired. Please renew your plan.",
+      );
+      setDeleteTarget(null);
+      return;
+    }
+
     try {
       setDeleting(true);
 
       await componentService.deleteComponent(deleteTarget.id);
+      showSuccessToast("Component deleted successfully");
 
       const componentResponse = await componentService.getComponents();
       const rawComponents = getArrayData<any>(componentResponse);
       setComponents(rawComponents.map(normalizeComponent));
 
       setDeleteTarget(null);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      showErrorToast(err?.message || "Failed to delete component");
     } finally {
       setDeleting(false);
     }
   };
 
   const handleStartEdit = (comp: any) => {
+    if (isExpired) {
+      showErrorToast(
+        "Action Denied: You cannot edit components because your subscription plan has expired. Please renew your plan.",
+      );
+      return;
+    }
+
     setEditingComponent(comp);
     setEditForm({
-      category: comp.cat || "",
+      category: comp.cat || comp.category || "",
       description: comp.description || "",
       serialNumber: comp.serialNumber || "",
       supplier: comp.supplier || "",
@@ -143,6 +190,47 @@ export default function CompanyAdminDashboard() {
       replacementCost: String(comp.replacementCost || 0),
       condition: String(comp.condition || 3),
     });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingComponent) return;
+
+    if (isExpired) {
+      showErrorToast(
+        "Action Denied: You cannot save changes because your subscription plan has expired. Please renew your plan.",
+      );
+      setEditingComponent(null);
+      return;
+    }
+
+    try {
+      setSavingEdit(true);
+
+      await componentService.updateComponent(editingComponent.id, {
+        category: editForm.category,
+        description: editForm.description,
+        serialNumber: editForm.serialNumber,
+        supplier: editForm.supplier,
+        installHours: Number(editForm.installHours) || 0,
+        currentHours: Number(editForm.currentHours) || 0,
+        plannedLife: Number(editForm.plannedLife) || 0,
+        replacementCost: Number(editForm.replacementCost) || 0,
+        condition: Number(editForm.condition) || 3,
+      });
+
+      showSuccessToast("Component updated successfully");
+
+      const componentResponse = await componentService.getComponents();
+      const rawComponents = getArrayData<any>(componentResponse);
+      setComponents(rawComponents.map(normalizeComponent));
+
+      setEditingComponent(null);
+    } catch (err: any) {
+      console.error(err);
+      showErrorToast(err?.message || "Failed to update component");
+    } finally {
+      setSavingEdit(false);
+    }
   };
 
   useEffect(() => {
@@ -193,6 +281,49 @@ export default function CompanyAdminDashboard() {
     fetchDashboardData();
   }, [navigate]);
 
+  // 📡 Real-Time WebSocket Listener & Auto-Sync for Live Alerts & Subscription Changes
+  useEffect(() => {
+    const unsubscribe = socketService.onMessage(async (data: any) => {
+      try {
+        const payload = data?.data || data;
+        const category = (payload?.category || "").toLowerCase();
+        const title = (payload?.title || "").toLowerCase();
+        const message = (payload?.message || "").toLowerCase();
+
+        if (
+          category.includes("sub") ||
+          category.includes("plan") ||
+          title.includes("plan") ||
+          title.includes("subscription") ||
+          message.includes("plan") ||
+          message.includes("expired")
+        ) {
+          const [sub, subHistory] = await Promise.all([
+            userService.getActiveSubscription(),
+            userService.getSubscriptionHistory(),
+          ]);
+          setSubscription(sub);
+          setHistory(subHistory);
+        }
+      } catch (err) {
+        console.error("WS subscription sync error:", err);
+      }
+    });
+
+    // Background 30s live subscription health check
+    const interval = setInterval(async () => {
+      try {
+        const sub = await userService.getActiveSubscription();
+        setSubscription(sub);
+      } catch (e) {}
+    }, 30000);
+
+    return () => {
+      unsubscribe();
+      clearInterval(interval);
+    };
+  }, []);
+
   useEffect(() => {
     if (editingComponent || deleteTarget) {
       document.body.style.overflow = "hidden";
@@ -206,6 +337,7 @@ export default function CompanyAdminDashboard() {
   }, [editingComponent, deleteTarget]);
 
   const summaryStats = React.useMemo(() => {
+    const totalMachines = machines.length;
     const totalComponents = components.length;
 
     const criticalCount = components.filter(
@@ -231,12 +363,13 @@ export default function CompanyAdminDashboard() {
           : `R ${totalReplacementCost}`;
 
     return {
+      totalMachines,
       totalComponents,
       criticalCount,
       warningCount,
       formattedReplacementCost,
     };
-  }, [components]);
+  }, [machines, components]);
 
   const categoryData = React.useMemo(() => {
     const categoryTotals: Record<string, number> = {};
@@ -407,38 +540,6 @@ export default function CompanyAdminDashboard() {
     return riskMap;
   }, [components]);
 
-  const handleSaveEdit = async () => {
-    if (!editingComponent) return;
-
-    try {
-      setSavingEdit(true);
-
-      const payload = {
-        category: editForm.category,
-        description: editForm.description,
-        serialNumber: editForm.serialNumber,
-        supplier: editForm.supplier,
-        installHours: Number(editForm.installHours || 0),
-        currentHours: Number(editForm.currentHours || 0),
-        plannedLife: Number(editForm.plannedLife || 0),
-        replacementCost: Number(editForm.replacementCost || 0),
-        condition: Number(editForm.condition || 3),
-      };
-
-      await componentService.updateComponent(editingComponent.id, payload);
-
-      const componentResponse = await componentService.getComponents();
-      const rawComponents = getArrayData<any>(componentResponse);
-      setComponents(rawComponents.map(normalizeComponent));
-
-      setEditingComponent(null);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setSavingEdit(false);
-    }
-  };
-
   const highRiskComponents = React.useMemo(() => {
     return components
       .filter(
@@ -582,7 +683,19 @@ export default function CompanyAdminDashboard() {
     );
   }
 
-  const isExpired = subscription?.status === "expired";
+  const isExpired =
+    subscription?.status === "expired" ||
+    (subscription?.subscriptionEndDate &&
+      new Date(subscription.subscriptionEndDate).getTime() < Date.now()) ||
+    (subscription?.subscription_end_date &&
+      new Date(subscription.subscription_end_date).getTime() < Date.now());
+
+  const machineLimit =
+    subscription?.plan?.machineLimit ||
+    subscription?.plan?.machine_limit ||
+    subscription?.machine_limit ||
+    50;
+  const isMachineLimitReached = machines.length >= machineLimit;
 
   return (
     <div className="hme-dashboard-pro min-h-screen bg-[#F8F9FC] px-4 py-5 font-sans text-slate-900 antialiased dark:bg-slate-900 dark:text-white sm:px-6 lg:px-8 lg:py-7">
@@ -619,6 +732,62 @@ export default function CompanyAdminDashboard() {
         }
       `}</style>
 
+      {/* ⚠️ PLAN EXPIRED ALERT BANNER (NON-BLOCKING) */}
+      {isExpired && (
+        <div className="mx-auto mb-6 max-w-7xl overflow-hidden rounded-2xl border border-amber-300 bg-amber-50 p-4 shadow-sm dark:border-amber-500/30 dark:bg-amber-950/40">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white shadow-sm">
+                <AlertTriangle size={20} />
+              </div>
+              <div>
+                <h4 className="text-sm font-extrabold text-amber-950 dark:text-amber-200">
+                  Plan Expired – Dashboard in Read-Only Mode
+                </h4>
+                <p className="text-xs font-medium text-amber-800 dark:text-amber-300/90">
+                  Your subscription plan has expired. Creating, updating, or deleting machines and staff is currently restricted. Please renew your plan to restore full operations.
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => navigate("/plans")}
+              className="inline-flex shrink-0 items-center justify-center rounded-xl bg-amber-600 px-5 py-2.5 text-xs font-extrabold text-white shadow-sm transition hover:bg-amber-700"
+            >
+              Renew Plan Now ➔
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ⚠️ MACHINE LIMIT REACHED ALERT BANNER */}
+      {!isExpired && isMachineLimitReached && (
+        <div className="mx-auto mb-6 max-w-7xl overflow-hidden rounded-2xl border border-blue-200 bg-blue-50/80 p-4 shadow-sm dark:border-blue-500/30 dark:bg-blue-950/40">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-sm">
+                <ShieldAlert size={20} />
+              </div>
+              <div>
+                <h4 className="text-sm font-extrabold text-blue-950 dark:text-blue-200">
+                  Machine Capacity Limit Reached ({machines.length} / {machineLimit} Machines)
+                </h4>
+                <p className="text-xs font-medium text-blue-800 dark:text-blue-300/90">
+                  You have reached the maximum machine limit allowed for your current plan. Upgrade your plan to connect more fleet machines.
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => navigate("/plans")}
+              className="inline-flex shrink-0 items-center justify-center rounded-xl bg-blue-600 px-5 py-2.5 text-xs font-extrabold text-white shadow-sm transition hover:bg-blue-700"
+            >
+              Upgrade Plan ➔
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="mx-auto mb-7 max-w-7xl">
         <CompanyAdminNav />
       </div>
@@ -654,8 +823,13 @@ export default function CompanyAdminDashboard() {
           </div>
 
           {/* Right Stats */}
-          <div className="grid w-full grid-cols-2 gap-4 md:grid-cols-4 xl:max-w-[620px]">
+          <div className="grid w-full grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 xl:max-w-[760px]">
             {[
+              {
+                label: "Total Machines",
+                value: String(summaryStats.totalMachines),
+                color: "text-white",
+              },
               {
                 label: "Total Components",
                 value: String(summaryStats.totalComponents),
@@ -679,14 +853,14 @@ export default function CompanyAdminDashboard() {
             ].map((stat, index) => (
               <div
                 key={index}
-                className="rounded-3xl border border-white/15 bg-white/10 px-5 py-4 backdrop-blur-md transition-all duration-300 hover:-translate-y-1 hover:bg-white/15"
+                className="rounded-3xl border border-white/15 bg-white/10 px-4 py-4 backdrop-blur-md transition-all duration-300 hover:-translate-y-1 hover:bg-white/15"
               >
-                <p className="text-[11px] font-semibold uppercase tracking-[0.13em] text-blue-100">
+                <p className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-[0.12em] text-blue-100">
                   {stat.label}
                 </p>
 
                 <p
-                  className={`mt-3 text-[34px] font-extrabold leading-none tracking-tight ${stat.color}`}
+                  className={`mt-3 text-[28px] sm:text-[32px] font-extrabold leading-none tracking-tight ${stat.color}`}
                 >
                   {stat.value}
                 </p>
@@ -1950,17 +2124,23 @@ export default function CompanyAdminDashboard() {
               {/* Left */}
               <div className="max-w-2xl">
                 <div className="inline-flex items-center rounded-full border border-white/20 bg-white/10 px-4 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-100 backdrop-blur-sm">
-                  Enterprise Subscription
+                  {subscription?.plan?.planName
+                    ? `${subscription.plan.planName.toUpperCase()} PLAN`
+                    : "ACTIVE SUBSCRIPTION"}
                 </div>
 
-                <h3 className="mt-4 text-3xl font-extrabold tracking-tight text-white">
-                  Enterprise Access
+                <h3 className="mt-4 text-3xl font-extrabold tracking-tight text-white capitalize">
+                  {subscription?.plan?.planName || "Enterprise"} Access
                 </h3>
 
                 <p className="mt-3 text-[15px] leading-7 text-blue-100">
                   Your organization is currently on the{" "}
-                  <span className="font-bold text-amber-300">Premium</span> plan
-                  with complete access to predictive analytics, GPS telemetry,
+                  <span className="font-bold text-amber-300 uppercase">
+                    {subscription?.plan?.planName ||
+                      subscription?.name ||
+                      "Active"}
+                  </span>{" "}
+                  plan with complete access to predictive analytics, GPS telemetry,
                   AI-powered insights, and executive reporting across your
                   fleet.
                 </p>
@@ -1968,7 +2148,7 @@ export default function CompanyAdminDashboard() {
 
               {/* Right */}
               <button
-                onClick={() => navigate("subscriptions")}
+                onClick={() => navigate("/company-admin/subscriptions")}
                 className="group inline-flex items-center justify-center rounded-2xl bg-white px-8 py-4 text-sm font-bold text-[#3730D9] shadow-xl transition-all duration-300 hover:-translate-y-1 hover:bg-blue-50 hover:shadow-2xl"
               >
                 Manage Subscription
@@ -2002,32 +2182,6 @@ export default function CompanyAdminDashboard() {
           </div>
         </div>
       </div>
-
-      {isExpired && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-md">
-          <div className="max-w-md rounded-[3rem] bg-white p-12 text-center shadow-2xl dark:bg-slate-800">
-            <div className="mx-auto mb-8 flex h-20 w-20 items-center justify-center rounded-[2rem] bg-red-50 text-red-500">
-              <Lock size={40} />
-            </div>
-
-            <h2 className="mb-4 text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-              System Access Locked
-            </h2>
-
-            <p className="mb-10 text-slate-500 leading-relaxed text-lg">
-              Your enterprise subscription has expired. Access to fleet
-              intelligence is restricted until payment is resolved.
-            </p>
-
-            <button
-              onClick={() => navigate("/plans")}
-              className="w-full rounded-[1.5rem] bg-orange-500 py-5 text-lg font-black text-white shadow-2xl shadow-orange-500/40 transition-all hover:bg-orange-600 hover:scale-105 active:scale-95"
-            >
-              Renew Access Now
-            </button>
-          </div>
-        </div>
-      )}
 
       {editingComponent && (
         <div

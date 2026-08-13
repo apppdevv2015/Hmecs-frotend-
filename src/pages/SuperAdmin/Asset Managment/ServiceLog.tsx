@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-// BACKEND TODO: import fleetService when replacing mock data
-// import { fleetService } from "../../../services/Fleet/fleetService";
 import {
   Search,
   Wrench,
@@ -19,6 +17,8 @@ import {
   Factory,
   ChevronUp,
 } from "lucide-react";
+import { superAdminMachineService } from "../../../services/SuperAdmin/machineService";
+import { maintenanceService } from "../../../services/companyadmin/maintenanceService";
 
 // ===========================
 // TYPES
@@ -63,91 +63,6 @@ interface ServiceLog {
   createdAt: string;
 }
 
-// ===========================
-// MOCK DATA — shaped like real API envelopes
-// Replace fetchCompanies / fetchServiceLogs with real API calls
-// ===========================
-
-const MOCK_COMPANIES: Company[] = [
-  { id: "comp_1", name: "Limpopo Mining Corp", location: "Limpopo, ZA", machineCount: 12, industry: "Mining" },
-  { id: "comp_2", name: "Mpumalanga Coal Ltd", location: "Mpumalanga, ZA", machineCount: 9, industry: "Coal" },
-  { id: "comp_3", name: "Northern Cape Iron", location: "Northern Cape, ZA", machineCount: 7, industry: "Iron Ore" },
-  { id: "comp_4", name: "Free State Mining", location: "Free State, ZA", machineCount: 5, industry: "Gold" },
-  { id: "comp_5", name: "KwaZulu Quarry Group", location: "KwaZulu-Natal, ZA", machineCount: 8, industry: "Quarry" },
-];
-
-// BACKEND TODO: replace with real API call
-async function fetchCompanies(): Promise<{ success: boolean; data: Company[]; message: string; timestamp: string }> {
-  await new Promise((r) => setTimeout(r, 600));
-  return { success: true, data: MOCK_COMPANIES, message: "OK", timestamp: new Date().toISOString() };
-}
-
-const ALL_LOGS: ServiceLog[] = [
-  {
-    id: "1", companyId: "comp_1",
-    machineId: "CAT-EX001", machineName: "Caterpillar 6040 Excavator", site: "Limpopo Mine Site",
-    component: "Hydraulic Pump", serviceType: "Preventive Maintenance", engineerId: "ENG-SA-101",
-    serviceDate: "2026-06-10", nextServiceDate: "2026-07-10", runtimeHours: 12450,
-    status: "Completed", priority: "Medium",
-    issueFound: "Hydraulic pressure fluctuation detected", actionTaken: "Pump seals replaced and pressure calibrated",
-    remarks: "Machine operating within normal range", createdAt: new Date().toISOString(),
-  },
-  {
-    id: "2", companyId: "comp_2",
-    machineId: "KOM-HD785", machineName: "Komatsu HD785 Dump Truck", site: "Mpumalanga Coal Mine",
-    component: "Engine Cooling System", serviceType: "Corrective Maintenance", engineerId: "ENG-SA-102",
-    serviceDate: "2026-06-14", nextServiceDate: "2026-07-14", runtimeHours: 18720,
-    status: "In Progress", priority: "High",
-    issueFound: "Engine temperature exceeding threshold", actionTaken: "Radiator inspection and coolant replacement ongoing",
-    remarks: "Monitor engine temperature for 72 hours", createdAt: new Date().toISOString(),
-  },
-  {
-    id: "3", companyId: "comp_3",
-    machineId: "HIT-EX3600", machineName: "Hitachi EX3600 Excavator", site: "Northern Cape Iron Ore Mine",
-    component: "Track Assembly", serviceType: "Emergency Repair", engineerId: "ENG-SA-103",
-    serviceDate: "2026-06-16", nextServiceDate: "2026-06-30", runtimeHours: 22340,
-    status: "Pending", priority: "Critical",
-    issueFound: "Track link damage causing excessive vibration", actionTaken: "Awaiting replacement parts",
-    remarks: "Machine temporarily removed from production", createdAt: new Date().toISOString(),
-  },
-  {
-    id: "4", companyId: "comp_4",
-    machineId: "CAT-D11T", machineName: "Caterpillar D11T Dozer", site: "Free State Mining Project",
-    component: "Transmission System", serviceType: "Inspection", engineerId: "ENG-SA-104",
-    serviceDate: "2026-06-12", nextServiceDate: "2026-07-12", runtimeHours: 16480,
-    status: "Completed", priority: "Low",
-    issueFound: "Minor transmission wear observed", actionTaken: "Lubrication completed and filters replaced",
-    remarks: "No immediate maintenance required", createdAt: new Date().toISOString(),
-  },
-  {
-    id: "5", companyId: "comp_5",
-    machineId: "VOL-A40G", machineName: "Volvo A40G Articulated Hauler", site: "KwaZulu-Natal Quarry",
-    component: "Brake System", serviceType: "Safety Inspection", engineerId: "ENG-SA-105",
-    serviceDate: "2026-06-18", nextServiceDate: "2026-07-18", runtimeHours: 9840,
-    status: "In Progress", priority: "High",
-    issueFound: "Rear brake response delay detected", actionTaken: "Brake line inspection in progress",
-    remarks: "Safety clearance pending", createdAt: new Date().toISOString(),
-  },
-  {
-    id: "6", companyId: "comp_1",
-    machineId: "CAT-EX002", machineName: "Caterpillar 390F Excavator", site: "Limpopo Mine Site B",
-    component: "Swing Motor", serviceType: "Corrective Maintenance", engineerId: "ENG-SA-101",
-    serviceDate: "2026-06-08", nextServiceDate: "2026-07-08", runtimeHours: 8900,
-    status: "Completed", priority: "High",
-    issueFound: "Swing motor making unusual noise under load", actionTaken: "Bearings replaced, swing motor serviced",
-    remarks: "Performance restored to baseline", createdAt: new Date().toISOString(),
-  },
-  {
-    id: "7", companyId: "comp_2",
-    machineId: "KOM-PC800", machineName: "Komatsu PC800 Excavator", site: "Mpumalanga North Block",
-    component: "Boom Cylinder", serviceType: "Emergency Repair", engineerId: "ENG-SA-106",
-    serviceDate: "2026-06-17", nextServiceDate: "2026-06-24", runtimeHours: 31200,
-    status: "Pending", priority: "Critical",
-    issueFound: "Boom cylinder hydraulic seal failure — fluid leaking", actionTaken: "Machine grounded, parts on order",
-    remarks: "Production line halted pending repair", createdAt: new Date().toISOString(),
-  },
-];
-
 const statusOptions: ServiceLogStatus[] = ["Pending", "In Progress", "Completed"];
 const priorityOptions: ServiceLogPriority[] = ["Low", "Medium", "High", "Critical"];
 const itemsPerPage = 6;
@@ -157,7 +72,6 @@ const itemsPerPage = 6;
 // ===========================
 
 export default function ServiceLogs() {
-  // BACKEND TODO: replace with real auth
   const currentUser = { id: "superadmin_1", role: "SuperAdmin", name: "Super Admin" };
 
   // ===========================
@@ -167,7 +81,7 @@ export default function ServiceLogs() {
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>("all");
   const [companiesLoading, setCompaniesLoading] = useState(true);
 
-  const [logs, setLogs] = useState<ServiceLog[]>(ALL_LOGS);
+  const [logs, setLogs] = useState<ServiceLog[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -182,22 +96,85 @@ export default function ServiceLogs() {
   const [companySearch, setCompanySearch] = useState("");
 
   // ===========================
-  // FETCH COMPANIES
+  // FETCH REAL COMPANIES & LOGS
   // ===========================
   useEffect(() => {
-    const load = async () => {
+    const loadCompanies = async () => {
       try {
         setCompaniesLoading(true);
-        const res = await fetchCompanies();
-        if (res.success) setCompanies(res.data);
+        const list = await superAdminMachineService.getCompanies();
+        const arr = Array.isArray(list) ? list : (list as any)?.data || [];
+        const formatted: Company[] = arr.map((c: any) => ({
+          id: String(c.id),
+          name: c.companyName || c.company_name || c.name || "Unnamed Company",
+          location: c.companyCode || c.company_code || "Code N/A",
+          machineCount: Number(c.staffCount || 0),
+          industry: c.activePlan || "Enterprise",
+        }));
+        setCompanies(formatted);
       } catch (e) {
         console.error("Failed to fetch companies:", e);
       } finally {
         setCompaniesLoading(false);
       }
     };
-    load();
+
+    loadCompanies();
   }, []);
+
+  useEffect(() => {
+    const loadLogs = async () => {
+      try {
+        setLogsLoading(true);
+        const rawLogs = await maintenanceService.getLogs({
+          scope: selectedCompanyId && selectedCompanyId !== "all" ? "company" : "all",
+          companyId: selectedCompanyId && selectedCompanyId !== "all" ? selectedCompanyId : undefined,
+        });
+
+        const arr = Array.isArray(rawLogs) ? rawLogs : (rawLogs as any)?.data || [];
+        const mapped: ServiceLog[] = arr.map((item: any, idx: number) => {
+          const statusRaw = String(item.status || "Completed").toLowerCase();
+          let status: ServiceLogStatus = "Completed";
+          if (statusRaw.includes("pending") || statusRaw.includes("open")) status = "Pending";
+          else if (statusRaw.includes("progress")) status = "In Progress";
+
+          const priorityRaw = String(item.priority || item.severity || "Medium").toLowerCase();
+          let priority: ServiceLogPriority = "Medium";
+          if (priorityRaw.includes("low")) priority = "Low";
+          else if (priorityRaw.includes("high")) priority = "High";
+          else if (priorityRaw.includes("crit")) priority = "Critical";
+
+          return {
+            id: String(item.id || idx + 1),
+            companyId: String(item.companyId || item.machine?.companyId || ""),
+            machineId: String(item.machine?.serialNumber || item.machineId || "N/A"),
+            machineName: String(item.machine?.name || item.machineName || "Equipment"),
+            site: String(item.machine?.site || item.site || "N/A"),
+            component: String(item.component?.category || item.component?.description || item.component || "General"),
+            serviceType: String(item.work || item.serviceType || "Maintenance"),
+            engineerId: String(item.technician || item.engineerId || "N/A"),
+            serviceDate: item.date ? new Date(item.date).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
+            nextServiceDate: item.nextServiceDate ? new Date(item.nextServiceDate).toISOString().slice(0, 10) : "N/A",
+            runtimeHours: Number(item.cost || item.runtimeHours || 0),
+            status,
+            priority,
+            issueFound: String(item.work || item.issueFound || "Service & Inspection"),
+            actionTaken: String(item.work || item.actionTaken || "Serviced by technician"),
+            remarks: String(item.downtime ? `Downtime: ${item.downtime}` : item.remarks || "Completed successfully"),
+            createdAt: item.createdAt || new Date().toISOString(),
+          };
+        });
+
+        setLogs(mapped);
+      } catch (e) {
+        console.error("Failed to fetch service logs:", e);
+      } finally {
+        setLogsLoading(false);
+      }
+    };
+
+    loadLogs();
+  }, [selectedCompanyId]);
 
   // Reset page on company change
   useEffect(() => { setCurrentPage(1); }, [selectedCompanyId, searchTerm, statusFilter, priorityFilter]);

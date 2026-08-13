@@ -1,14 +1,7 @@
 import offlineQueueService from "./offlineQueue.service";
 
-import { showErrorToast, showSuccessToast } from "../utils/toastUtils";
-
 export const getApiBaseUrl = () => {
-  const envUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000/api/v1";
-  if (typeof window !== "undefined" && window.location && window.location.hostname) {
-    const currentHost = window.location.hostname;
-    return envUrl.replace(/localhost|127\.0\.0\.1/g, currentHost);
-  }
-  return envUrl;
+  return import.meta.env.VITE_API_BASE_URL || "";
 };
 
 import StorageService, { STORAGE_KEYS } from "./storage.service";
@@ -151,33 +144,21 @@ export async function apiRequest<T>(
       }
 
       return data as T;
-    } catch (error) {
-      console.log("FETCH FAILED");
-      console.log("ONLINE STATUS:", navigator.onLine);
-      console.log("ERROR:", error);
+    } catch (error: any) {
+      const isNetworkFailure = !navigator.onLine || !error?.status;
 
-      if (isMutationMethod && !shouldSkipOfflineQueue) {
-        console.warn(`[Offline Queue] Queued: ${endpoint}`);
+      if (isMutationMethod && !shouldSkipOfflineQueue && isNetworkFailure) {
+        console.warn(`[Offline Queue] Network offline. Queued for sync: ${endpoint}`);
 
         await offlineQueueService.saveRequest({
           endpoint: finalUrl,
-
           method,
-
           body: parseRequestBody(options.body),
-
           headers: {
             "Content-Type": "application/json",
-
-            ...(token
-              ? {
-                  Authorization: `Bearer ${token}`,
-                }
-              : {}),
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
         });
-        ///////////////////////////////////////////////////////////////////////////////////////////////////
-        throw error;
       }
 
       throw error;

@@ -1,4 +1,4 @@
-import { apiCall } from "./apiHandler";
+import { apiCall } from "../apiHandler";
 
 export type SubscriptionPlanApi = {
   id: number | string;
@@ -27,18 +27,14 @@ export type UpdateSubscriptionPlanPayload = {
   validity_days: number;
 };
 
-
-
 export const getSubscriptionPlans = async () => {
   return apiCall<SubscriptionPlanApi[]>("/auth/plans", {
     method: "GET",
   });
 };
 
-
-
 export const createSubscriptionPlan = async (
-  payload: CreateSubscriptionPlanPayload,
+  payload: CreateSubscriptionPlanPayload
 ) => {
   return apiCall<SubscriptionPlanApi>(
     "/auth/plans",
@@ -48,16 +44,14 @@ export const createSubscriptionPlan = async (
     },
     {
       showSuccess: true,
-      successMessage: "Plan created successfully",
-    },
+      successMessage: "Subscription plan created successfully",
+    }
   );
 };
 
-
-
 export const updateSubscriptionPlan = async (
   id: number | string,
-  payload: UpdateSubscriptionPlanPayload,
+  payload: UpdateSubscriptionPlanPayload
 ) => {
   return apiCall<SubscriptionPlanApi>(
     `/auth/plans/${id}`,
@@ -67,12 +61,10 @@ export const updateSubscriptionPlan = async (
     },
     {
       showSuccess: true,
-      successMessage: "Plan updated successfully",
-    },
+      successMessage: "Subscription plan updated successfully",
+    }
   );
 };
-
-
 
 export const deleteSubscriptionPlan = async (id: number | string) => {
   return apiCall<{ message?: string }>(
@@ -82,7 +74,14 @@ export const deleteSubscriptionPlan = async (id: number | string) => {
     },
     {
       showSuccess: true,
-      successMessage: "Plan deleted successfully",
-    },
+      successMessage: "Subscription plan deleted successfully",
+    }
   );
+};
+
+export const subscriptionService = {
+  getSubscriptionPlans,
+  createSubscriptionPlan,
+  updateSubscriptionPlan,
+  deleteSubscriptionPlan,
 };

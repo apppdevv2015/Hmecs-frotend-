@@ -1,5 +1,4 @@
-// import { apiRequest } from "./api";
-import { apiCall } from "./apiHandler";
+import { apiCall } from "../apiHandler";
 
 export type ApiRole = {
   id: number | string;

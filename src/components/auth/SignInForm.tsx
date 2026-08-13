@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -9,8 +9,8 @@ import Label from "../form/Label";
 import Input from "../form/input/InputField";
 import Checkbox from "../form/input/Checkbox";
 import Button from "../ui/button/Button";
-import { authService } from "../../services/authService";
-import { userService } from "../../services/userService";
+import { authService } from "../../services/Auth/authService";
+import { userService } from "../../services/Auth/userService";
 import StorageService, { STORAGE_KEYS } from "../../services/storage.service";
 
 import loginBg  from "../../assets/images/loginbg.jpg"
@@ -313,30 +313,22 @@ export default function SignInForm() {
   }, [setValue]);
 
 
- useEffect(() => {
-  const navigationEntries = performance.getEntriesByType(
-    "navigation"
-  ) as PerformanceNavigationTiming[];
+  useEffect(() => {
+    const token = StorageService.get<string>(STORAGE_KEYS.TOKEN);
+    if (!token) return;
 
-  const isRefresh =
-    navigationEntries.length > 0 &&
-    navigationEntries[0].type === "reload";
+    const storedUser = StorageService.get<any>(STORAGE_KEYS.USER) || {};
+    const role =
+      storedUser?.role ||
+      storedUser?.role_name ||
+      StorageService.get<string>(STORAGE_KEYS.ROLE);
 
-  if (!isRefresh) return;
+    const redirect = getRedirectPathByRole(role);
 
-  const token = StorageService.get<string>(STORAGE_KEYS.TOKEN);
-
-  if (!token) return;
-
-  const role = StorageService.get<string>(STORAGE_KEYS.ROLE);
-
-  const redirect = getRedirectPathByRole(role);
-
-  if (redirect) {
-    // navigate(redirect, { replace: true });
-  
-  }
-}, [navigate]);
+    if (redirect) {
+      navigate(redirect, { replace: true });
+    }
+  }, [navigate]);
 
 
   const onSubmit = async (formData: SignInFormData) => {
@@ -505,6 +497,10 @@ export default function SignInForm() {
       clearAuthStorage();
 
       const message = getApiErrorMessage(error);
+
+      showErrorToast(message, {
+        duration: 4000,
+      });
 
       setError("password", {
         type: "server",

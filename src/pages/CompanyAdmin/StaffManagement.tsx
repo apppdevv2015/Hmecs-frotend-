@@ -35,7 +35,7 @@ import {
   userService,
   type ApiRole,
   type ApiUser,
-} from "../../services/userService";
+} from "../../services/Auth/userService";
 import StorageService, { STORAGE_KEYS } from "../../services/storage.service";
 
 type Staff = {
@@ -414,10 +414,10 @@ export default function StaffManagement() {
   }, [isAnyModalOpen]);
 
   const filteredRoles = useMemo(() => {
-    const allowedRoles = ["admin", "supervisor", "artisans", "operator"];
+    const excludedRoles = ["admin", "super_admin", "sub_super_admin"];
 
-    return getUniqueRoles(roles).filter((role) =>
-      allowedRoles.includes(normalizeRoleName(role.name)),
+    return getUniqueRoles(roles).filter(
+      (role) => !excludedRoles.includes(normalizeRoleName(role.name)),
     );
   }, [roles]);
 
@@ -449,9 +449,13 @@ export default function StaffManagement() {
 
       setRoles(rolesArray);
 
+      const validStaffRoles = rolesArray.filter(
+        (r) => !["admin", "super_admin", "sub_super_admin"].includes(normalizeRoleName(r.name))
+      );
+
       setFormData((prev) => ({
         ...prev,
-        roleName: prev.roleName || rolesArray[0]?.name || "",
+        roleName: prev.roleName || validStaffRoles[0]?.name || "",
       }));
     } catch (err) {
       setRoles([]);
@@ -471,7 +475,7 @@ export default function StaffManagement() {
 
       const usersArray = extractUsers(response);
 
-      const allowedRoles = ["admin", "supervisor", "artisans", "operator"];
+      const excludedRoles = ["admin", "super_admin", "sub_super_admin"];
 
       const mappedStaff = usersArray
         .filter((user) => {
@@ -480,7 +484,7 @@ export default function StaffManagement() {
               ? user.role?.name
               : user.role_name || user.role;
 
-          return allowedRoles.includes(normalizeRoleName(roleName));
+          return !excludedRoles.includes(normalizeRoleName(roleName));
         })
         .map(mapApiUserToStaff);
 

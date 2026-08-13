@@ -1629,7 +1629,7 @@ export default function OperatorMachineDashboard() {
                         placeholder="Select Machine"
                         options={assignedMachines.map((machine) => ({
                           value: machine.id,
-                          label: `${machine.machine} (${machine.id})`,
+                          label: `${machine.machine} (${machine.fleet})`,
                         }))}
                         triggerClassName="h-11 w-full rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-800 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-white"
                       />

@@ -38,6 +38,16 @@ type Machine = {
 type MachineComponent = {
   id: string;
   machineId: string;
+  companyId?: string;
+  companyCode?: string;
+  companyName?: string;
+  company?: {
+    id?: string;
+    name?: string;
+    companyCode?: string;
+    subscriptionStatus?: string;
+  };
+  machine?: any;
   category: string;
   description: string;
   serialNumber: string;
@@ -108,6 +118,32 @@ const normalizeComponent = (item: any): MachineComponent => ({
   machineId: String(
     item?.machineId || item?.machine_id || item?.machine?.id || "",
   ),
+  companyId: String(
+    item?.companyId ||
+      item?.company_id ||
+      item?.machine?.companyId ||
+      item?.machine?.company_id ||
+      "",
+  ),
+  companyCode: String(
+    item?.companyCode ||
+      item?.company_code ||
+      item?.machine?.companyCode ||
+      item?.machine?.company_code ||
+      item?.company?.companyCode ||
+      item?.company?.company_code ||
+      "",
+  ),
+  companyName: String(
+    item?.companyName ||
+      item?.company_name ||
+      item?.machine?.companyName ||
+      item?.machine?.company_name ||
+      item?.company?.name ||
+      "",
+  ),
+  company: item?.company || item?.machine?.company,
+  machine: item?.machine,
   category: String(
     item?.category ||
       item?.categoryName ||
@@ -866,6 +902,12 @@ function ComponentDetailsModal({
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
+            {component.companyCode && (
+              <DetailItem label="Company Code" value={component.companyCode} />
+            )}
+            {component.companyName && (
+              <DetailItem label="Company Name" value={component.companyName} />
+            )}
             <DetailItem label="Category" value={component.category} />
             <DetailItem
               label="Description"

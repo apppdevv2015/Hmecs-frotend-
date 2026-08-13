@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { maintenanceService } from "../../services/companyadmin/maintenanceService";
-import { userService } from "../../services/userService";
+import { userService } from "../../services/Auth/userService";
 import StorageService, { STORAGE_KEYS } from "../../services/storage.service";
 
 type TaskStatus = "Pending" | "In Progress" | "Completed";

@@ -230,17 +230,33 @@ class StorageService {
   }
 
   /**
-   * Session Storage - Clear All
+   * Helper: Get User Object
    */
-  static sessionClear(): void {
-    try {
-      sessionStorage.clear();
-    } catch (error) {
-      console.error(
-        "[StorageService] Session Clear Error",
-        error
-      );
-    }
+  static getUser(): any {
+    return StorageService.get<any>(STORAGE_KEYS.USER) || null;
+  }
+
+  /**
+   * Helper: Get Company ID
+   */
+  static getCompanyId(): string | null {
+    const user = StorageService.getUser();
+    return user?.companyId || user?.company_id || StorageService.get<string>(STORAGE_KEYS.COMPANY_ID) || null;
+  }
+
+  /**
+   * Helper: Get Token
+   */
+  static getToken(): string | null {
+    return StorageService.get<string>(STORAGE_KEYS.TOKEN) || StorageService.get<string>(STORAGE_KEYS.AUTH_TOKEN) || null;
+  }
+
+  /**
+   * Helper: Get Role
+   */
+  static getRole(): string | null {
+    const user = StorageService.getUser();
+    return user?.role || StorageService.get<string>(STORAGE_KEYS.ROLE) || null;
   }
 }
 

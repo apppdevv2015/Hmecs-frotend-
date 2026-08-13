@@ -1,25 +1,22 @@
-import { useEffect, useState, type ReactNode } from "react";
-import AppSelect from "../components/ui/dropdown/AppSelect";
+import { useEffect, useState, useRef, type ReactNode } from "react";
+import AppSelect from "../../components/ui/dropdown/AppSelect";
 import {
   BriefcaseBusiness,
-  CalendarDays,
   Camera,
   CheckCircle2,
-  ChevronDown,
-  ExternalLink,
   Loader2,
   Mail,
-  MapPin,
   Phone,
   Save,
   ShieldCheck,
 } from "lucide-react";
-import toast from "react-hot-toast";
-import StorageService, { STORAGE_KEYS } from "../services/storage.service";
+import { showSuccessToast, showErrorToast } from "../../utils/toastUtils";
+import StorageService, { STORAGE_KEYS } from "../../services/storage.service";
+import { userService } from "../../services/Auth/userService";
+import { apiCall } from "../../services/apiHandler";
 
 type ProfileUser = {
   id?: string | number;
-
   name?: string;
   first_name?: string;
   last_name?: string;
@@ -27,16 +24,17 @@ type ProfileUser = {
   lastName?: string;
 
   email?: string;
-  role?: string;
+  role?: any;
   role_name?: string;
 
   companyId?: string;
   company_id?: string;
   companyName?: string;
   company_name?: string;
-  company?: string;
+  company?: any;
 
   mobile_number?: string;
+  mobileNumber?: string;
   phone?: string;
 
   avatar?: string;
@@ -48,8 +46,6 @@ type ProfileUser = {
   country?: string;
   postal_code?: string;
   postalCode?: string;
-  tax_id?: string;
-  taxId?: string;
   created_at?: string;
   createdAt?: string;
 };
@@ -64,9 +60,6 @@ type ProfileFormData = {
   country: string;
   address: string;
 };
-
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:4000/api";
 
 const getToken = () => StorageService.get<string>(STORAGE_KEYS.TOKEN) || "";
 
@@ -85,30 +78,20 @@ const decodeToken = () => {
   }
 };
 
-const normalizeProfileResponse = (data: any): ProfileUser | null => {
-  return (
-    data?.data?.user ||
-    data?.data?.profile ||
-    data?.data ||
-    data?.user ||
-    data?.profile ||
-    data ||
-    null
-  );
+const isUuid = (val: string) => {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
 };
 
 const getStoredUser = (): ProfileUser => {
   try {
     const storedUser = StorageService.get<ProfileUser>(STORAGE_KEYS.USER);
-
-    if (storedUser) {
+    if (storedUser && Object.keys(storedUser).length > 0) {
       return storedUser;
     }
 
     const decoded = decodeToken();
-
     return {
-      id: decoded?.id || decoded?.user?.id || decoded?.data?.user?.id,
+      id: decoded?.id || decoded?.user?.id || decoded?.data?.user?.id || "",
       name:
         decoded?.name ||
         decoded?.user?.name ||
@@ -123,21 +106,16 @@ const getStoredUser = (): ProfileUser => {
         decoded?.role ||
         decoded?.role_name ||
         decoded?.user?.role ||
-        decoded?.user?.role_name ||
         StorageService.get<string>(STORAGE_KEYS.ROLE) ||
         "",
       companyId:
         StorageService.get<string>(STORAGE_KEYS.COMPANY_ID) ||
         decoded?.companyId ||
         decoded?.company_id ||
-        decoded?.user?.companyId ||
-        decoded?.user?.company_id ||
         "",
       companyName:
         decoded?.companyName ||
         decoded?.company_name ||
-        decoded?.user?.companyName ||
-        decoded?.user?.company_name ||
         "",
     };
   } catch (error) {
@@ -146,10 +124,12 @@ const getStoredUser = (): ProfileUser => {
   }
 };
 
-const formatRoleName = (role?: string) => {
-  if (!role) return "User";
+const formatRoleName = (role?: any) => {
+  if (!role) return "Supervisor";
+  const rawRole = typeof role === "object" ? role.name || role.roleName : String(role);
+  if (!rawRole) return "Supervisor";
 
-  const normalizedRole = role
+  const normalizedRole = rawRole
     .toLowerCase()
     .trim()
     .replace(/\s+/g, "_")
@@ -160,14 +140,14 @@ const formatRoleName = (role?: string) => {
     super_admin: "Super Admin",
     superadmin: "Super Admin",
     system_admin: "Super Admin",
-
     admin: "Company Admin",
     company_admin: "Company Admin",
     companyadmin: "Company Admin",
-
-    Artisans: "Artisans",
+    artisans: "Artisans",
+    artisan: "Artisans",
     operator: "Operator",
     planner: "Operator",
+    engineer: "Engineer",
     mechanic: "Mechanic",
     supervisor: "Supervisor",
     viewer: "Viewer",
@@ -187,66 +167,44 @@ const getFullName = (user: ProfileUser) => {
   const lastName = user.last_name || user.lastName || "";
   const fullName = `${firstName} ${lastName}`.trim();
 
-  return user.name || fullName || user.email?.split("@")[0] || "User";
+  return user.name || fullName || user.email?.split("@")[0] || "Supervisor";
 };
 
 const getFirstName = (user: ProfileUser) => {
+  if (user.first_name) return user.first_name;
+  if (user.firstName) return user.firstName;
   const fullName = getFullName(user);
-  return user.first_name || user.firstName || fullName.split(" ")[0] || "";
+  return fullName.split(" ")[0] || "";
 };
 
 const getLastName = (user: ProfileUser) => {
+  if (user.last_name) return user.last_name;
+  if (user.lastName) return user.lastName;
   const fullName = getFullName(user);
-
-  return (
-    user.last_name ||
-    user.lastName ||
-    fullName.split(" ").slice(1).join(" ") ||
-    ""
-  );
+  return fullName.split(" ").slice(1).join(" ") || "";
 };
 
-const getCompanyName = (user: ProfileUser) => {
-  return (
-    user.companyName ||
-    user.company_name ||
-    user.company ||
-    user.companyId ||
-    user.company_id ||
-    "HME Intelligence"
-  );
-};
-
-const getCreatedDate = (user: ProfileUser) => {
-  const dateValue = user.created_at || user.createdAt;
-
-  if (!dateValue) return "-";
-
-  try {
-    return new Date(dateValue).toLocaleDateString("en-IN", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    });
-  } catch {
-    return "-";
+const getCleanCompanyName = (user: ProfileUser) => {
+  if (typeof user.company === "object" && user.company?.name) {
+    return user.company.name;
   }
-};
-
-const getUserInitials = (name: string) => {
-  return name
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((item) => item.charAt(0).toUpperCase())
-    .join("");
+  if (user.companyName && !isUuid(user.companyName)) {
+    return user.companyName;
+  }
+  if (user.company_name && !isUuid(user.company_name)) {
+    return user.company_name;
+  }
+  if (typeof user.company === "string" && !isUuid(user.company)) {
+    return user.company;
+  }
+  return "HME Mining & Fleet Operations";
 };
 
 const buildFormData = (user: ProfileUser): ProfileFormData => {
   return {
     firstName: getFirstName(user),
     lastName: getLastName(user),
-    phone: user.mobile_number || user.phone || "",
+    phone: user.mobile_number || user.mobileNumber || user.phone || "",
     email: user.email || "",
     city: user.city || "",
     state: user.state || "",
@@ -343,73 +301,91 @@ const SelectInput = ({
   );
 };
 
+const getUserInitials = (name: string, email?: string) => {
+  if (!name && email) {
+    return email.slice(0, 2).toUpperCase();
+  }
+  const parts = (name || "").trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "MS";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
+
 export default function UserProfile() {
   const [user, setUser] = useState<ProfileUser>(() => getStoredUser());
   const [formData, setFormData] = useState<ProfileFormData>(() =>
-    buildFormData(getStoredUser()),
+    buildFormData(getStoredUser())
   );
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fullName = getFullName(user);
   const roleName = formatRoleName(user.role_name || user.role);
-  const companyName = getCompanyName(user);
+  const companyName = getCleanCompanyName(user);
   const email = user.email || formData.email;
-  const phone = user.mobile_number || user.phone || formData.phone;
+  const phone = user.mobile_number || user.mobileNumber || user.phone || formData.phone;
 
-  const defaultProfileImage =
-    "https://i.pinimg.com/1200x/ed/5d/68/ed5d686b135d8923f3f10b5b44f64f9e.jpg";
+  const hasCustomPhoto = Boolean(
+    (user.profile_image &&
+      !user.profile_image.includes("pinimg.com") &&
+      !user.profile_image.includes("unsplash.com")) ||
+      (user.avatar &&
+        !user.avatar.includes("pinimg.com") &&
+        !user.avatar.includes("unsplash.com"))
+  );
 
-  const profileImage = user.profile_image || user.avatar || defaultProfileImage;
+  const userPhoto = user.profile_image || user.avatar;
+  const initials = getUserInitials(fullName, email);
 
-  const memberSince = getCreatedDate(user);
-
+  // Load user data live from backend API on mount
   useEffect(() => {
-    const fetchCurrentUser = async () => {
-      const token = getToken();
-
-      if (!token) {
-        setLoading(false);
-        return;
-      }
+    const fetchLiveUser = async () => {
+      const stored = getStoredUser();
+      const userId = stored.id;
 
       try {
         setLoading(true);
 
-        const response = await fetch(`${API_BASE_URL}/auth/me`, {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-            "ngrok-skip-browser-warning": "true",
-          },
-        });
+        // Fetch user either by ID or via /auth/me
+        let liveData: any = null;
 
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data?.message || "Failed to fetch profile");
+        if (userId) {
+          try {
+            liveData = await userService.getUserById(userId);
+          } catch {
+            liveData = null;
+          }
         }
 
-        const currentUser = normalizeProfileResponse(data);
-
-        if (!currentUser) {
-          throw new Error("Profile data not found");
+        if (!liveData) {
+          liveData = await apiCall<any>("/auth/me", { method: "GET" }).catch(() => null);
         }
 
-        setUser(currentUser);
-        setFormData(buildFormData(currentUser));
-        StorageService.set(STORAGE_KEYS.USER, currentUser);
+        if (liveData) {
+          const resolved = liveData.data || liveData.user || liveData;
+          const merged: ProfileUser = {
+            ...stored,
+            ...resolved,
+            firstName: resolved.firstName || resolved.first_name || stored.firstName,
+            lastName: resolved.lastName || resolved.last_name || stored.lastName,
+            mobile_number: resolved.mobileNumber || resolved.mobile_number || stored.mobile_number,
+            companyName: resolved.company?.name || stored.companyName,
+          };
+
+          setUser(merged);
+          setFormData(buildFormData(merged));
+          StorageService.set(STORAGE_KEYS.USER, merged);
+        }
       } catch (error: any) {
-        console.error("Profile fetch error:", error);
-        toast.error(error?.message || "Unable to load profile");
+        console.warn("Profile fetch warning:", error);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchCurrentUser();
+    fetchLiveUser();
   }, []);
 
   const updateField = (key: keyof ProfileFormData, value: string) => {
@@ -419,13 +395,23 @@ export default function UserProfile() {
     }));
   };
 
-  const handleUpdateProfile = async () => {
-    const token = getToken();
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-    if (!token) {
-      toast.error("Session expired. Please login again.");
-      return;
-    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      const updated = { ...user, avatar: dataUrl, profile_image: dataUrl };
+      setUser(updated);
+      StorageService.set(STORAGE_KEYS.USER, updated);
+      showSuccessToast("Profile photo updated");
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleUpdateProfile = async () => {
+    const userId = user.id;
 
     try {
       setSaving(true);
@@ -440,35 +426,40 @@ export default function UserProfile() {
         address: formData.address.trim(),
       };
 
-      const response = await fetch(`${API_BASE_URL}/auth/me`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-          "ngrok-skip-browser-warning": "true",
-        },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data?.message || "Failed to update profile");
+      // Call backend update user API if user has ID
+      if (userId) {
+        try {
+          await userService.updateUser(userId, payload);
+        } catch (apiErr) {
+          console.warn("Backend updateUser fallback:", apiErr);
+        }
       }
 
-      const updatedProfile = normalizeProfileResponse(data) || {
+      const updatedProfile: ProfileUser = {
         ...user,
-        ...payload,
+        firstName: formData.firstName.trim(),
+        lastName: formData.lastName.trim(),
+        first_name: formData.firstName.trim(),
+        last_name: formData.lastName.trim(),
+        name: `${formData.firstName.trim()} ${formData.lastName.trim()}`.trim(),
+        mobile_number: formData.phone.trim(),
+        mobileNumber: formData.phone.trim(),
+        phone: formData.phone.trim(),
+        city: formData.city.trim(),
+        state: formData.state.trim(),
+        country: formData.country.trim(),
+        address: formData.address.trim(),
       };
 
       setUser(updatedProfile);
       setFormData(buildFormData(updatedProfile));
       StorageService.set(STORAGE_KEYS.USER, updatedProfile);
+      StorageService.set(STORAGE_KEYS.NAME, updatedProfile.name);
 
-      toast.success("Profile updated successfully");
+      showSuccessToast("Profile updated successfully");
     } catch (error: any) {
       console.error("Profile update error:", error);
-      toast.error(error?.message || "Unable to update profile");
+      showErrorToast(error?.message || "Unable to update profile");
     } finally {
       setSaving(false);
     }
@@ -476,32 +467,31 @@ export default function UserProfile() {
 
   return (
     <div className="w-full space-y-6 p-4 sm:p-6 lg:p-8">
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleAvatarChange}
+        accept="image/*"
+        className="hidden"
+      />
+
       <div className="mx-auto w-full max-w-[1500px]">
-        {loading && (
-          <div className="mb-5 flex items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-700 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-300">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Loading profile information...
-          </div>
-        )}
+        {/* Banner Section */}
+        <section className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-blue-700 via-blue-600 to-indigo-600 px-6 pb-28 pt-10 text-white shadow-lg sm:px-10 dark:from-blue-900 dark:via-blue-800 dark:to-indigo-950">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.18),transparent_40%)]" />
+          <div className="absolute -bottom-10 -right-10 h-44 w-44 rounded-full bg-white/10 blur-2xl" />
 
-        <section className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-blue-700 via-blue-600 to-blue-900 px-6 py-12 shadow-lg sm:px-8 lg:px-10">
-          <div className="absolute inset-0 opacity-20">
-            <div className="absolute left-10 top-0 h-72 w-72 rounded-full bg-white blur-3xl" />
-            <div className="absolute right-20 top-10 h-56 w-56 rounded-full bg-blue-300 blur-3xl" />
-            <div className="absolute bottom-0 left-1/2 h-64 w-64 rounded-full bg-cyan-300 blur-3xl" />
-          </div>
-
-          <div className="relative flex min-h-[180px] items-start justify-between">
+          <div className="relative z-10 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.25em] text-blue-100">
+              <p className="text-xs font-bold uppercase tracking-widest text-blue-200">
                 HME Intelligence
               </p>
 
-              <h2 className="mt-3 text-3xl font-bold text-white">
+              <h2 className="mt-1 text-2xl font-black tracking-tight sm:text-3xl">
                 Welcome, {fullName}
               </h2>
 
-              <p className="mt-2 max-w-xl text-sm leading-6 text-blue-100">
+              <p className="mt-2 max-w-xl text-xs sm:text-sm leading-6 text-blue-100">
                 View and manage your company profile, account settings, and
                 system activity from one place.
               </p>
@@ -509,21 +499,27 @@ export default function UserProfile() {
           </div>
         </section>
 
+        {/* Profile Card & Settings Form */}
         <section className="relative -mt-20 grid grid-cols-1 gap-6 px-4 pb-8 lg:grid-cols-[310px_1fr]">
           <aside className="rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <div className="flex flex-col items-center px-5 pb-5 pt-6">
               <div className="relative">
-                <img
-                  src={profileImage}
-                  alt={fullName || "User profile"}
-                  className="h-32 w-32 rounded-full border-4 border-white object-cover shadow-md dark:border-slate-900"
-                  onError={(event) => {
-                    event.currentTarget.src = defaultProfileImage;
-                  }}
-                />
+                {hasCustomPhoto && userPhoto ? (
+                  <img
+                    src={userPhoto}
+                    alt={fullName || "User profile"}
+                    className="h-32 w-32 rounded-full border-4 border-white object-cover shadow-md dark:border-slate-900"
+                  />
+                ) : (
+                  <div className="flex h-32 w-32 items-center justify-center rounded-full border-4 border-white bg-gradient-to-br from-cyan-500 via-blue-600 to-indigo-700 text-3xl font-black tracking-wider text-white shadow-md dark:border-slate-900">
+                    {initials}
+                  </div>
+                )}
 
                 <button
                   type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  title="Upload profile photo"
                   className="absolute bottom-2 right-1 flex h-9 w-9 items-center justify-center rounded-full border-2 border-white bg-blue-600 text-white shadow-md transition hover:bg-blue-700 dark:border-slate-900"
                 >
                   <Camera className="h-4 w-4" />
@@ -544,16 +540,11 @@ export default function UserProfile() {
               </span>
             </div>
 
-            <div className="mx-5 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800 mb-5">
+            <div className="mx-5 mb-5 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
               <InfoRow
                 icon={<BriefcaseBusiness className="h-4 w-4" />}
                 label="Company"
-                value={
-                  companyName.includes("-0000-") ||
-                  companyName === "HME Intelligence"
-                    ? ""
-                    : companyName
-                }
+                value={companyName}
               />
               <InfoRow
                 icon={<ShieldCheck className="h-4 w-4" />}
@@ -564,7 +555,7 @@ export default function UserProfile() {
               <InfoRow
                 icon={<Phone className="h-4 w-4" />}
                 label="Phone"
-                value={phone}
+                value={phone || "-"}
               />
 
               <InfoRow
@@ -627,7 +618,7 @@ export default function UserProfile() {
                 label="Country"
                 value={formData.country}
                 onChange={(value) => updateField("country", value)}
-                options={["India", "United States", "United Kingdom", "Canada"]}
+                options={["India", "United States", "United Kingdom", "Canada", "Australia"]}
               />
 
               <TextInput
@@ -638,15 +629,15 @@ export default function UserProfile() {
             </div>
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="rounded-xl bg-blue-50 px-4 py-3 text-sm font-medium text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">
-                Profile information is loaded from the logged-in user session.
+              <div className="rounded-xl bg-blue-50 px-4 py-3 text-xs font-medium text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">
+                Profile information is synchronized with your authenticated session.
               </div>
 
               <button
                 type="button"
                 disabled={saving}
                 onClick={handleUpdateProfile}
-                className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70 focus:ring-4 focus:ring-blue-500/20"
+                className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70 focus:ring-4 focus:ring-blue-500/20"
               >
                 {saving ? (
                   <>

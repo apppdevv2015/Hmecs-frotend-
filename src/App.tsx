@@ -14,8 +14,10 @@ import { Suspense, lazy } from "react";
 import AppLayout from "./layout/AppLayout";
 import { ScrollToTop } from "./components/common/ScrollToTop";
 
-import AccessDenied from "./pages/AccessDenied";
+import AccessDenied from "./pages/Common/AccessDenied";
 import RoleProtectedRoute from "./routes/RoleProtectedRoute";
+import GuestRoute from "./routes/GuestRoute";
+import ErrorBoundary from "./components/common/ErrorBoundary";
 
 import { useEffect } from "react";
 import socketService from "./services/socketService";
@@ -26,10 +28,11 @@ import StorageService, { STORAGE_KEYS } from "./services/storage.service";
 
 const LandingPage = lazy(() => import("./pages/Landing/LandingPage"));
 const PricingPage = lazy(() => import("./pages/pricing/PricingPage"));
-const CartPage = lazy(() => import("./pages/Cart/CartPage"));
+const CartPage = lazy(() => import("./pages/pricing/CartPage"));
 
 const SignIn = lazy(() => import("./pages/AuthPages/SignIn"));
 const SignUp = lazy(() => import("./pages/AuthPages/SignUp"));
+const ResetPassword = lazy(() => import("./pages/AuthPages/ResetPassword"));
 const SuperAdminLogin = lazy(() => import("./pages/AuthPages/SuperAdminLogin"));
 
 const FeaturesPage = lazy(() => import("./pages/Landing/FeaturesPage"));
@@ -70,9 +73,9 @@ const TechnicalSupportManagement = lazy(
 
 // ---------------- Common ----------------
 
-const NotFound = lazy(() => import("./pages/OtherPage/NotFound"));
-const UserProfiles = lazy(() => import("./pages/UserProfiles"));
-const ComingSoon = lazy(() => import("./pages/ComingSoon"));
+const NotFound = lazy(() => import("./pages/Common/NotFound"));
+const UserProfiles = lazy(() => import("./pages/Common/UserProfiles"));
+const ComingSoon = lazy(() => import("./pages/Common/ComingSoon"));
 
 // ---------------- UI Pages ----------------
 
@@ -88,7 +91,7 @@ const BarChart = lazy(() => import("./pages/Charts/BarChart"));
 
 const BasicTables = lazy(() => import("./pages/Tables/BasicTables"));
 const FormElements = lazy(() => import("./pages/Forms/FormElements"));
-const Blank = lazy(() => import("./pages/Blank"));
+const Blank = lazy(() => import("./pages/Common/Blank"));
 
 // ---------------- Super Admin ----------------
 
@@ -185,6 +188,9 @@ const ReportingManagement = lazy(
 );
 
 const ServiceLog = lazy(() => import("./pages/CompanyAdmin/ServiceLog"));
+const JobCardManagement = lazy(
+  () => import("./pages/CompanyAdmin/JobCardManagement"),
+);
 
 // ---------------- Artisans ----------------
 
@@ -222,6 +228,22 @@ const ArtisansServiceLogs = lazy(
 
 const OperatorDashboard = lazy(
   () => import("./pages/OperatorDashboard/OperatorDashboard"),
+);
+
+const PreStartInspection = lazy(
+  () => import("./pages/OperatorDashboard/PreStartInspection"),
+);
+
+const WorkOrderCapture = lazy(
+  () => import("./pages/OperatorDashboard/WorkOrderCapture"),
+);
+
+const ActiveTaskPage = lazy(
+  () => import("./pages/OperatorDashboard/ActiveTask"),
+);
+
+const ShiftSummaryPage = lazy(
+  () => import("./pages/OperatorDashboard/ShiftSummary"),
 );
 
 const OperatorMachines = lazy(
@@ -322,8 +344,9 @@ export default function App() {
       <ScrollToTop />
       <AuthInitializer />
 
-      <Suspense fallback={<PageSkeleton />}>
-        <Routes>
+      <ErrorBoundary>
+        <Suspense fallback={<PageSkeleton />}>
+          <Routes>
           {/* Public Routes */}
           <Route
             path="/"
@@ -394,30 +417,49 @@ export default function App() {
               </Suspense>
             }
           />
-          <Route
-            path="/signup"
-            element={
-              <Suspense fallback={<PageSkeleton />}>
-                <SignUp />
-              </Suspense>
-            }
-          />
-          <Route
-            path="/signin"
-            element={
-              <Suspense fallback={<PageSkeleton />}>
-                <SignIn />
-              </Suspense>
-            }
-          />
-          <Route
-            path="/super-admin/login"
-            element={
-              <Suspense fallback={<PageSkeleton />}>
-                <SuperAdminLogin />
-              </Suspense>
-            }
-          />
+          {/* Guest Only Auth Routes */}
+          <Route element={<GuestRoute />}>
+            <Route
+              path="/signup"
+              element={
+                <Suspense fallback={<PageSkeleton />}>
+                  <SignUp />
+                </Suspense>
+              }
+            />
+            <Route
+              path="/signin"
+              element={
+                <Suspense fallback={<PageSkeleton />}>
+                  <SignIn />
+                </Suspense>
+              }
+            />
+            <Route
+              path="/reset-password"
+              element={
+                <Suspense fallback={<PageSkeleton />}>
+                  <ResetPassword />
+                </Suspense>
+              }
+            />
+            <Route
+              path="/forgot-password"
+              element={
+                <Suspense fallback={<PageSkeleton />}>
+                  <ResetPassword />
+                </Suspense>
+              }
+            />
+            <Route
+              path="/super-admin/login"
+              element={
+                <Suspense fallback={<PageSkeleton />}>
+                  <SuperAdminLogin />
+                </Suspense>
+              }
+            />
+          </Route>
           <Route path="/access-denied" element={<AccessDenied />} />
 
           {/* Super Admin Routes */}
@@ -553,7 +595,13 @@ export default function App() {
           <Route
             element={
               <RoleProtectedRoute
-                allowedRoles={["company_admin", "admin", "companyadmin"]}
+                allowedRoles={[
+                  "company_admin",
+                  "admin",
+                  "companyadmin",
+                  "super_admin",
+                  "superadmin",
+                ]}
               />
             }
           >
@@ -575,11 +623,43 @@ export default function App() {
               <Route path="/company-admin/profile" element={<UserProfiles />} />
 
               <Route
+                path="/company-admin/job-cards"
+                element={
+                  <Suspense fallback={<PageSkeleton />}>
+                    <JobCardManagement />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="/company_admin/job-cards"
+                element={
+                  <Suspense fallback={<PageSkeleton />}>
+                    <JobCardManagement />
+                  </Suspense>
+                }
+              />
+
+              <Route
                 path="/company-admin/register"
                 element={<ComponentRegister />}
               />
 
-              <Route path="/company-admin/heatmap" element={<FleetHeatMap />} />
+              <Route
+                path="/company-admin/heatmap"
+                element={
+                  <Suspense fallback={<PageSkeleton />}>
+                    <FleetHeatMap />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="/company_admin/heatmap"
+                element={
+                  <Suspense fallback={<PageSkeleton />}>
+                    <FleetHeatMap />
+                  </Suspense>
+                }
+              />
 
               <Route
                 path="/company-admin/add-component"
@@ -598,15 +678,39 @@ export default function App() {
                 element={<StaffManagement />}
               />
               <Route
+                path="/company_admin/staff"
+                element={<StaffManagement />}
+              />
+              <Route
                 path="/company-admin/machines"
                 element={<MachineManagement />}
               />
               <Route
+                path="/company_admin/machines"
+                element={<MachineManagement />}
+              />
+              <Route
                 path="/company-admin/subscriptions"
-                element={<SubscriptionHistory />}
+                element={
+                  <Suspense fallback={<PageSkeleton />}>
+                    <SubscriptionHistory />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="/company_admin/subscriptions"
+                element={
+                  <Suspense fallback={<PageSkeleton />}>
+                    <SubscriptionHistory />
+                  </Suspense>
+                }
               />
               <Route
                 path="/company-admin/reporting"
+                element={<ReportingManagement />}
+              />
+              <Route
+                path="/company_admin/reporting"
                 element={<ReportingManagement />}
               />
 
@@ -778,7 +882,9 @@ export default function App() {
           {/* Operator Routes */}
           <Route
             element={
-              <RoleProtectedRoute allowedRoles={["operator", "planner"]} />
+              <RoleProtectedRoute
+                allowedRoles={["operator", "planner", "super_admin", "company_admin", "supervisor", "admin"]}
+              />
             }
           >
             <Route element={<AppLayout role="operator" />}>
@@ -801,6 +907,42 @@ export default function App() {
                 element={
                   <Suspense fallback={<PageSkeleton />}>
                     <OperatorDashboard />
+                  </Suspense>
+                }
+              />
+
+              <Route
+                path="/operator/pre-start-inspection"
+                element={
+                  <Suspense fallback={<PageSkeleton />}>
+                    <PreStartInspection />
+                  </Suspense>
+                }
+              />
+
+              <Route
+                path="/operator/work-order-capture"
+                element={
+                  <Suspense fallback={<PageSkeleton />}>
+                    <WorkOrderCapture />
+                  </Suspense>
+                }
+              />
+
+              <Route
+                path="/operator/active-task"
+                element={
+                  <Suspense fallback={<PageSkeleton />}>
+                    <ActiveTaskPage />
+                  </Suspense>
+                }
+              />
+
+              <Route
+                path="/operator/shift-summary"
+                element={
+                  <Suspense fallback={<PageSkeleton />}>
+                    <ShiftSummaryPage />
                   </Suspense>
                 }
               />
@@ -848,6 +990,23 @@ export default function App() {
               <Route
                 path="/operator/report-issue"
                 element={<OperatorReportIssue />}
+              />
+
+              <Route
+                path="/operator/issue-reports"
+                element={
+                  <Suspense fallback={<PageSkeleton />}>
+                    <ComingSoon />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="/operator/coming-soon/*"
+                element={
+                  <Suspense fallback={<PageSkeleton />}>
+                    <ComingSoon />
+                  </Suspense>
+                }
               />
             </Route>
           </Route>
@@ -937,6 +1096,7 @@ export default function App() {
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Suspense>
-    </Router>
+    </ErrorBoundary>
+  </Router>
   );
 }

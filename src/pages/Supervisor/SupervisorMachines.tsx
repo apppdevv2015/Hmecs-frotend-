@@ -14,6 +14,7 @@ import {
 
 import type { MachinePayload } from "../../services/companyadmin/machineService";
 import AppSelect from "../../components/ui/dropdown/AppSelect";
+import Pagination from "../../components/common/Pagination";
 
 import { useDispatch, useSelector } from "react-redux";
 
@@ -141,6 +142,7 @@ export default function SupervisorMachines() {
   const [search, setSearch] = useState("");
 
   const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState<number | "all">(5);
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
@@ -266,21 +268,28 @@ export default function SupervisorMachines() {
     );
   }, [machines, search]);
 
-  const totalPages = Math.max(
-    1,
-    Math.ceil(filteredMachines.length / PAGE_SIZE),
-  );
+  const isShowAll = itemsPerPage === "all";
 
-  const startIndex = (currentPage - 1) * PAGE_SIZE;
+  const effectivePageSize = isShowAll
+    ? Math.max(1, filteredMachines.length)
+    : itemsPerPage;
 
-  const paginatedMachines = filteredMachines.slice(
-    startIndex,
-    startIndex + PAGE_SIZE,
-  );
+  const totalPages = isShowAll
+    ? 1
+    : Math.max(1, Math.ceil(filteredMachines.length / effectivePageSize));
 
-  const startItem = filteredMachines.length === 0 ? 0 : startIndex + 1;
+  const startIndex = (currentPage - 1) * effectivePageSize;
 
-  const endItem = Math.min(startIndex + PAGE_SIZE, filteredMachines.length);
+  const paginatedMachines = isShowAll
+    ? filteredMachines
+    : filteredMachines.slice(startIndex, startIndex + effectivePageSize);
+
+  const startItem =
+    filteredMachines.length === 0 ? 0 : isShowAll ? 1 : startIndex + 1;
+
+  const endItem = isShowAll
+    ? filteredMachines.length
+    : Math.min(startIndex + effectivePageSize, filteredMachines.length);
 
   const getMachineHealth = (machine: Machine) => {
     const components = machine.components || [];
@@ -647,38 +656,24 @@ export default function SupervisorMachines() {
             </div>
 
             {/* Pagination */}
-            <div className="flex items-center justify-between border-t border-slate-200 p-5 dark:border-slate-800">
-              <p className="text-sm text-slate-500 dark:text-slate-400">
-                Showing {startItem} - {endItem} of {filteredMachines.length}{" "}
-                machines
-              </p>
-
-              <div className="flex items-center gap-3">
-                <button
-                  disabled={currentPage === 1}
-                  onClick={() =>
-                    setCurrentPage((prev) => Math.max(prev - 1, 1))
-                  }
-                  className="rounded-xl border border-slate-300 px-5 py-2 font-semibold disabled:opacity-50 dark:border-slate-700"
-                >
-                  Previous
-                </button>
-
-                <div className="rounded-xl bg-blue-600 px-5 py-2 font-bold text-white">
-                  {currentPage} / {totalPages}
-                </div>
-
-                <button
-                  disabled={currentPage === totalPages}
-                  onClick={() =>
-                    setCurrentPage((prev) => Math.min(prev + 1, totalPages))
-                  }
-                  className="rounded-xl bg-blue-600 px-5 py-2 font-semibold text-white disabled:opacity-50"
-                >
-                  Next
-                </button>
-              </div>
-            </div>
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              startItem={startItem}
+              endItem={endItem}
+              totalItems={filteredMachines.length}
+              itemsPerPage={itemsPerPage}
+              itemLabel="machines"
+              pageSizeOptions={[5, 10, 20, 50]}
+              onPrev={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+              onNext={() =>
+                setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+              }
+              onItemsPerPageChange={(val) => {
+                setItemsPerPage(val);
+                setCurrentPage(1);
+              }}
+            />
           </section>
         </div>
       </div>

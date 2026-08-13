@@ -1,4 +1,4 @@
-import type { ServiceLog } from "../types/serviceLog";
+import type { ServiceLog } from "../../types/serviceLog";
 
 const dummyServiceLogs: ServiceLog[] = [
   {

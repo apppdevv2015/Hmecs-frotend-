@@ -1,5 +1,5 @@
-import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
-import { CheckCircle2, Pencil, Trash2, X, XCircle } from "lucide-react";
+import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import { CheckCircle2, Pencil, Plus, Search, Trash2, X, XCircle } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -12,7 +12,7 @@ import {
   getSubscriptionPlans,
   updateSubscriptionPlan,
   type SubscriptionPlanApi,
-} from "../../../services/subscriptionService";
+} from "../../../services/SuperAdmin/subscriptionService";
 
 type Plan = {
   id: string;
@@ -96,6 +96,14 @@ const getNumericPrice = (price: string) => {
   return Number(String(price).replace("$", "").trim());
 };
 
+const formatPlanName = (name: string) =>
+  name
+    .replace(/_/g, " ")
+    .split(" ")
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+
 const mapApiPlanToPlan = (plan: SubscriptionPlanApi): Plan => {
   const apiPlan = plan as any;
 
@@ -115,6 +123,7 @@ const mapApiPlanToPlan = (plan: SubscriptionPlanApi): Plan => {
 
 export default function Plans() {
   const [plans, setPlans] = useState<Plan[]>([]);
+  const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [updating, setUpdating] = useState(false);
@@ -125,6 +134,21 @@ export default function Plans() {
   const [createPlan, setCreatePlan] = useState<Plan | null>(null);
   const [editPlan, setEditPlan] = useState<Plan | null>(null);
   const [deletePlan, setDeletePlan] = useState<Plan | null>(null);
+
+  const filteredPlans = useMemo(() => {
+    const value = search.trim().toLowerCase();
+
+    if (!value) return plans;
+
+    return plans.filter(
+      (plan) =>
+        plan.name.toLowerCase().includes(value) ||
+        plan.price.toLowerCase().includes(value),
+    );
+  }, [plans, search]);
+
+  const activePlansCount = plans.filter((p) => p.isActive).length;
+  const publicPlansCount = plans.filter((p) => p.isPublic).length;
 
   const fetchPlans = async () => {
     try {
@@ -327,45 +351,96 @@ export default function Plans() {
     "mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300";
 
   return (
-    <div className="relative min-h-screen bg-gray-50 p-4 dark:bg-slate-950 md:p-6">
-      <div className="rounded-[28px] border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-[#081028]">
-        <div className="overflow-hidden rounded-t-2xl border border-blue-700/30 bg-gradient-to-r from-blue-800 via-blue-700 to-blue-800 px-6 py-6 shadow-lg">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-            {/* Left Section */}
-            <div>
-              <div className="mb-3 inline-flex items-center rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.15em] text-white backdrop-blur-sm">
-                Subscription Management
-              </div>
-
-              <h1 className="text-3xl font-black tracking-tight text-white">
-                Plans
-              </h1>
-
-              <p className="mt-2 text-sm font-medium text-blue-100">
-                Manage subscription plans, pricing, features, and plan
-                availability across the platform.
-              </p>
+    <div className="space-y-6 p-4 md:p-6">
+      {/* Banner */}
+      <div className="overflow-hidden rounded-2xl border border-blue-700/30 bg-gradient-to-r from-blue-800 via-blue-700 to-blue-800 px-6 py-6 shadow-lg">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <div className="mb-3 inline-flex items-center rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.15em] text-white backdrop-blur-sm">
+              Subscription Management
             </div>
 
-            {/* Right Section */}
-            <button
-              type="button"
-              onClick={() => {
-                setError("");
-                setCreatePlan(emptyPlan);
-              }}
-              className="flex h-12 items-center justify-center rounded-2xl bg-white px-5 text-sm font-semibold text-blue-700 shadow-md transition-all duration-200 hover:bg-blue-50 hover:shadow-lg"
-            >
-              + Create Plan
-            </button>
+            <h1 className="text-3xl font-black tracking-tight text-white">
+              Plans
+            </h1>
+
+            <p className="mt-2 text-sm font-medium text-blue-100">
+              Manage subscription plans, pricing, features, and plan
+              availability across the platform.
+            </p>
           </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              setError("");
+              setCreatePlan(emptyPlan);
+            }}
+            className="flex h-12 items-center justify-center rounded-2xl bg-white px-5 text-sm font-semibold text-blue-700 shadow-md transition-all duration-200 hover:bg-blue-50 hover:shadow-lg"
+          >
+            + Create Plan
+          </button>
+        </div>
+      </div>
+
+      {/* Summary Stat Cards */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-[#0f172a]">
+          <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
+            Total Plans
+          </p>
+          <p className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
+            {plans.length}
+          </p>
         </div>
 
-        {loading && (
-          <p className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">
-            Loading plans...
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-[#0f172a]">
+          <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
+            Active Plans
           </p>
-        )}
+          <p className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
+            {activePlansCount}
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-[#0f172a]">
+          <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
+            Public Plans
+          </p>
+          <p className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
+            {publicPlansCount}
+          </p>
+        </div>
+      </div>
+
+      {/* Plans Table Card */}
+      <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-[#0f172a]">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+              Plans List
+            </h2>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Showing {filteredPlans.length} plans
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <Search
+                size={16}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+              />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search plans..."
+                className="h-10 rounded-xl border border-gray-200 bg-gray-50 pl-9 pr-4 text-sm text-gray-900 outline-none transition focus:border-blue-500 dark:border-gray-700 dark:bg-slate-800 dark:text-white"
+              />
+            </div>
+          </div>
+        </div>
 
         {error && (
           <div className="mb-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-400">
@@ -373,103 +448,123 @@ export default function Plans() {
           </div>
         )}
 
-        {!loading && !error && plans.length === 0 && (
-          <p className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">
-            No plans found.
-          </p>
-        )}
+        <div className="overflow-x-auto scrollbar-hide">
+          <table className="w-full min-w-[850px] text-left text-sm">
+            <thead className="border-b border-gray-200 text-gray-500 dark:border-gray-700 dark:text-gray-400">
+              <tr>
+                <th className="py-3 px-3">Plan Name</th>
+                <th className="py-3 px-3">Price</th>
+                <th className="py-3 px-3">Machines</th>
+                <th className="py-3 px-3">Staff Limit</th>
+                <th className="py-3 px-3">Validity</th>
+                <th className="py-3 px-3">Visibility</th>
+                <th className="py-3 px-3">Status</th>
+                <th className="py-3 px-3 text-center">Actions</th>
+              </tr>
+            </thead>
 
-        {!loading && plans.length > 0 && (
-          <div
-            className="overflow-x-auto [&::-webkit-scrollbar]:hidden"
-            style={{
-              scrollbarWidth: "none",
-              msOverflowStyle: "none",
-            }}
-          >
-            <div
-              className="min-w-[1000px] divide-y divide-slate-100 dark:divide-slate-800"
-              style={{
-                scrollbarWidth: "none",
-              }}
-            >
-              {plans.map((plan) => (
-                <div
-                  key={plan.id}
-                  className="grid grid-cols-[180px_120px_140px_140px_140px_120px_120px_100px] items-center gap-4 rounded-2xl px-4 py-5 text-sm transition hover:bg-slate-50 dark:hover:bg-slate-800/60"
-                >
-                  <div className="font-bold text-slate-800 dark:text-white">
-                    {plan.name}
-                  </div>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td
+                    colSpan={8}
+                    className="py-10 text-center text-gray-500 dark:text-gray-400"
+                  >
+                    Loading plans...
+                  </td>
+                </tr>
+              ) : filteredPlans.length > 0 ? (
+                filteredPlans.map((plan) => (
+                  <tr
+                    key={plan.id}
+                    className="border-b border-gray-100 transition hover:bg-gray-50 dark:border-gray-800 dark:hover:bg-white/5"
+                  >
+                    <td className="py-3.5 px-3 font-semibold text-gray-900 dark:text-white">
+                      {formatPlanName(plan.name)}
+                    </td>
 
-                  <div className="font-semibold text-green-600">
-                    {plan.price}
-                  </div>
+                    <td className="py-3.5 px-3 font-bold text-emerald-600 dark:text-emerald-400">
+                      {plan.price}
+                    </td>
 
-                  <div className="text-slate-700 dark:text-slate-300">
-                    {plan.machines} Machines
-                  </div>
+                    <td className="py-3.5 px-3 text-gray-700 dark:text-gray-300">
+                      {plan.machines} Machines
+                    </td>
 
-                  <div className="text-slate-700 dark:text-slate-300">
-                    {plan.staffLimit} Staff
-                  </div>
+                    <td className="py-3.5 px-3 text-gray-700 dark:text-gray-300">
+                      {plan.staffLimit} Staff
+                    </td>
 
-                  <div className="text-slate-700 dark:text-slate-300">
-                    {plan.validityDays} Days
-                  </div>
+                    <td className="py-3.5 px-3 text-gray-700 dark:text-gray-300">
+                      {plan.validityDays} Days
+                    </td>
 
-                  <div>
-                    <span
-                      className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                        plan.isPublic
-                          ? "bg-green-100 text-green-700 dark:bg-green-500/10 dark:text-green-300"
-                          : "bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-300"
-                      }`}
-                    >
-                      {plan.isPublic ? "Public" : "Private"}
-                    </span>
-                  </div>
+                    <td className="py-3.5 px-3">
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs font-medium ${
+                          plan.isPublic
+                            ? "bg-blue-500/10 text-blue-500"
+                            : "bg-gray-500/10 text-gray-500"
+                        }`}
+                      >
+                        {plan.isPublic ? "Public" : "Private"}
+                      </span>
+                    </td>
 
-                  <div>
-                    <span
-                      className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                        plan.isActive
-                          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"
-                          : "bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-300"
-                      }`}
-                    >
-                      {plan.isActive ? "Active" : "Inactive"}
-                    </span>
-                  </div>
+                    <td className="py-3.5 px-3">
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs font-medium ${
+                          plan.isActive
+                            ? "bg-green-500/10 text-green-500"
+                            : "bg-red-500/10 text-red-500"
+                        }`}
+                      >
+                        {plan.isActive ? "Active" : "Inactive"}
+                      </span>
+                    </td>
 
-                  <div className="flex items-center justify-end gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setError("");
-                        setEditPlan({ ...plan });
-                      }}
-                      className="rounded-xl bg-blue-50 p-2 text-blue-600 transition hover:bg-blue-100 dark:bg-blue-500/10"
-                    >
-                      <Pencil size={16} />
-                    </button>
+                    <td className="py-3.5 px-3">
+                      <div className="flex justify-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setError("");
+                            setEditPlan({ ...plan });
+                          }}
+                          className="rounded-lg p-2 text-blue-500 transition hover:bg-blue-500/10"
+                          title="Edit Plan"
+                        >
+                          <Pencil size={16} />
+                        </button>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setError("");
-                        setDeletePlan(plan);
-                      }}
-                      className="rounded-xl bg-red-50 p-2 text-red-600 transition hover:bg-red-100 dark:bg-red-500/10"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setError("");
+                            setDeletePlan(plan);
+                          }}
+                          className="rounded-lg p-2 text-red-500 transition hover:bg-red-500/10"
+                          title="Delete Plan"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td
+                    colSpan={8}
+                    className="py-10 text-center text-gray-500 dark:text-gray-400"
+                  >
+                    No plans found
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {createPlan && (

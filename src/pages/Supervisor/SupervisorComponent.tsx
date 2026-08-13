@@ -38,6 +38,16 @@ type Machine = {
 type MachineComponent = {
   id: string;
   machineId: string;
+  companyId?: string;
+  companyCode?: string;
+  companyName?: string;
+  company?: {
+    id?: string;
+    name?: string;
+    companyCode?: string;
+    subscriptionStatus?: string;
+  };
+  machine?: any;
   category: string;
   description: string;
   serialNumber: string;
@@ -113,6 +123,36 @@ const normalizeComponent = (item: any): MachineComponent => ({
   machineId: String(
     item?.machineId || item?.machine_id || item?.machine?.id || "",
   ),
+
+  companyId: String(
+    item?.companyId ||
+      item?.company_id ||
+      item?.machine?.companyId ||
+      item?.machine?.company_id ||
+      "",
+  ),
+
+  companyCode: String(
+    item?.companyCode ||
+      item?.company_code ||
+      item?.machine?.companyCode ||
+      item?.machine?.company_code ||
+      item?.company?.companyCode ||
+      item?.company?.company_code ||
+      "",
+  ),
+
+  companyName: String(
+    item?.companyName ||
+      item?.company_name ||
+      item?.machine?.companyName ||
+      item?.machine?.company_name ||
+      item?.company?.name ||
+      "",
+  ),
+
+  company: item?.company || item?.machine?.company,
+  machine: item?.machine,
 
   category: String(
     item?.category ||
@@ -974,6 +1014,28 @@ export default function SupervisorComponentsPage() {
                           </div>
 
                           <div className="grid grid-cols-1 gap-4 p-5 sm:grid-cols-2">
+                            {selectedComponent.companyCode && (
+                              <div>
+                                <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                                  Company Code
+                                </p>
+                                <p className="mt-1 text-sm font-bold dark:text-white">
+                                  {selectedComponent.companyCode}
+                                </p>
+                              </div>
+                            )}
+
+                            {selectedComponent.companyName && (
+                              <div>
+                                <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                                  Company Name
+                                </p>
+                                <p className="mt-1 text-sm font-bold dark:text-white">
+                                  {selectedComponent.companyName}
+                                </p>
+                              </div>
+                            )}
+
                             <div>
                               <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
                                 Description

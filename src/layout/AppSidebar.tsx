@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useSidebar } from "../context/SidebarContext";
 import { sidebarConfig } from "../config/sidebar.config";
 import type { UserRole, NavLinkItem } from "../config/sidebar.config";
@@ -14,12 +14,34 @@ type AppSidebarProps = {
 
 const COMING_SOON_ROUTE = "/coming-soon";
 
-const getStoredUserEmail = () => {
+const getStoredUserInfo = () => {
   try {
     const user = StorageService.get<any>(STORAGE_KEYS.USER) || {};
-    return user?.email || "";
+    const name =
+      user?.name ||
+      `${user?.firstName || user?.first_name || ""} ${user?.lastName || user?.last_name || ""}`.trim() ||
+      StorageService.get<string>(STORAGE_KEYS.NAME) ||
+      StorageService.get<string>(STORAGE_KEYS.USER_NAME) ||
+      "";
+
+    const email =
+      user?.email ||
+      StorageService.get<string>(STORAGE_KEYS.EMAIL) ||
+      "";
+
+    const initials = name
+      ? name
+          .split(" ")
+          .filter(Boolean)
+          .map((part: string) => part[0])
+          .join("")
+          .toUpperCase()
+          .slice(0, 2)
+      : "";
+
+    return { name, email, initials };
   } catch {
-    return "";
+    return { name: "", email: "", initials: "" };
   }
 };
 
@@ -34,11 +56,15 @@ export default function AppSidebar({ role = "super_admin" }: AppSidebarProps) {
 
   const isSuperAdmin = role === "super_admin";
 
+  const storedUserInfo = getStoredUserInfo();
+  const displayTitle = storedUserInfo.name || profile?.title || "User";
   const profileEmail =
-    getStoredUserEmail() ||
+    storedUserInfo.email ||
     profile?.email ||
     profile?.subtitle ||
     "admin@gmail.com";
+  const displayShortName =
+    storedUserInfo.initials || profile?.shortName || "US";
 
   const mainGroups = isSuperAdmin
     ? navGroups
@@ -393,14 +419,14 @@ export default function AppSidebar({ role = "super_admin" }: AppSidebarProps) {
                 className="flex min-w-0 flex-1 items-center gap-3 rounded-xl p-2 text-left transition hover:bg-white/10"
               >
                 <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-cyan-400 to-blue-500 text-xs font-semibold text-white shadow-sm">
-                  {profile.shortName}
+                  {displayShortName}
 
                   <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#3437e8] bg-emerald-500 dark:border-[#0f1724]" />
                 </div>
 
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[14px] font-semibold text-white">
-                    {profile.title}
+                    {displayTitle}
                   </p>
 
                   <p className="truncate text-[12px] font-normal text-white/65">
@@ -419,7 +445,7 @@ export default function AppSidebar({ role = "super_admin" }: AppSidebarProps) {
             </div>
           ) : (
             <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-cyan-400 to-blue-500 text-xs font-semibold text-white shadow-sm">
-              {profile.shortName}
+              {displayShortName}
             </div>
           )}
         </div>

@@ -1,11 +1,11 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { SidebarProvider, useSidebar } from "../context/SidebarContext";
-import { Outlet, Link } from "react-router";
+import { Outlet, Link } from "react-router-dom";
 import AppHeader from "./AppHeader";
 import Backdrop from "./Backdrop";
 import AppSidebar from "./AppSidebar";
 import type { UserRole } from "../config/sidebar.config";
-import { userService } from "../services/userService";
+import { userService } from "../services/Auth/userService";
 import { AlertCircle, Rocket } from "lucide-react";
 import AppToaster from "../components/common/AppToaster";
 import offlineQueueService from "../services/offlineQueue.service";

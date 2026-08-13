@@ -43,6 +43,16 @@ type Machine = {
 type MachineComponent = {
   id: string;
   machineId: string;
+  companyId?: string;
+  companyCode?: string;
+  companyName?: string;
+  company?: {
+    id?: string;
+    name?: string;
+    companyCode?: string;
+    subscriptionStatus?: string;
+  };
+  machine?: any;
   category: string;
   description: string;
   serialNumber: string;
@@ -52,6 +62,7 @@ type MachineComponent = {
   plannedLife: number;
   replacementCost: number;
   condition: number;
+  imageUrl?: string;
   createdAt?: string;
   updatedAt?: string;
   intelligence?: {
@@ -77,6 +88,7 @@ type ComponentForm = {
   replacementCost: string;
   condition: string;
   machineId: string;
+  imageUrl?: string;
 };
 
 type FormErrors = Partial<Record<keyof ComponentForm, string>>;
@@ -93,6 +105,7 @@ const emptyForm: ComponentForm = {
   replacementCost: "",
   condition: "3",
   machineId: "",
+  imageUrl: "",
 };
 
 // Fields that stay locked when editing an existing component. Editing a
@@ -260,30 +273,74 @@ const normalizeMachine = (item: any): Machine => ({
   status: item?.status || "active",
 });
 
-const normalizeComponent = (item: any): MachineComponent => ({
-  id: String(item?.id || item?.componentId || item?.component_id || ""),
-  machineId: String(
-    item?.machineId || item?.machine_id || item?.machine?.id || "",
-  ),
-  category: String(
-    item?.category ||
-      item?.categoryName ||
-      item?.category_name ||
-      item?.type ||
-      "",
-  ),
-  description: String(item?.description || ""),
-  serialNumber: String(item?.serialNumber || item?.serial_number || ""),
-  supplier: String(item?.supplier || ""),
-  installHours: Number(item?.installHours ?? item?.install_hours ?? 0),
-  currentHours: Number(item?.currentHours ?? item?.current_hours ?? 0),
-  plannedLife: Number(item?.plannedLife ?? item?.planned_life ?? 0),
-  replacementCost: Number(item?.replacementCost ?? item?.replacement_cost ?? 0),
-  condition: Number(item?.condition ?? 3),
-  createdAt: item?.createdAt || item?.created_at,
-  updatedAt: item?.updatedAt || item?.updated_at,
-  intelligence: item?.intelligence,
-});
+const normalizeComponent = (item: any): MachineComponent => {
+  const currentHrs = Number(
+    item?.currentHours ??
+      item?.current_hours ??
+      item?.usedHours ??
+      item?.hoursRun ??
+      item?.subMetrics?.usedHours ??
+      0,
+  );
+  const planned = Number(
+    item?.plannedLife ??
+      item?.planned_life ??
+      item?.expectedLife ??
+      (currentHrs > 0 ? 18000 : 0),
+  );
+
+  return {
+    id: String(item?.id || item?.componentId || item?.component_id || ""),
+    machineId: String(
+      item?.machineId || item?.machine_id || item?.machine?.id || "",
+    ),
+    companyId: String(
+      item?.companyId ||
+        item?.company_id ||
+        item?.machine?.companyId ||
+        item?.machine?.company_id ||
+        "",
+    ),
+    companyCode: String(
+      item?.companyCode ||
+        item?.company_code ||
+        item?.machine?.companyCode ||
+        item?.machine?.company_code ||
+        item?.company?.companyCode ||
+        item?.company?.company_code ||
+        "",
+    ),
+    companyName: String(
+      item?.companyName ||
+        item?.company_name ||
+        item?.machine?.companyName ||
+        item?.machine?.company_name ||
+        item?.company?.name ||
+        "",
+    ),
+    company: item?.company || item?.machine?.company,
+    machine: item?.machine,
+    category: String(
+      item?.category ||
+        item?.categoryName ||
+        item?.category_name ||
+        item?.type ||
+        "",
+    ),
+    description: String(item?.description || ""),
+    serialNumber: String(item?.serialNumber || item?.serial_number || ""),
+    supplier: String(item?.supplier || ""),
+    installHours: Number(item?.installHours ?? item?.install_hours ?? 0),
+    currentHours: currentHrs,
+    plannedLife: planned,
+    replacementCost: Number(item?.replacementCost ?? item?.replacement_cost ?? 0),
+    condition: Number(item?.condition ?? 3),
+    imageUrl: item?.imageUrl || item?.image || item?.photo || "",
+    createdAt: item?.createdAt || item?.created_at,
+    updatedAt: item?.updatedAt || item?.updated_at,
+    intelligence: item?.intelligence,
+  };
+};
 
 const getConditionStatus = (condition: number): ComponentStatus => {
   if (condition >= 4) return "critical";
@@ -297,11 +354,12 @@ const getHealthPercent = (condition: number) => {
 };
 
 const getLifeUsedPercent = (component: MachineComponent) => {
-  if (!component.plannedLife) return 0;
+  const planned = component.plannedLife || 18000;
+  if (!planned || !component.currentHours) return 0;
 
   return Math.min(
     100,
-    Math.round((component.currentHours / component.plannedLife) * 100),
+    Math.round((component.currentHours / planned) * 100),
   );
 };
 
@@ -956,14 +1014,10 @@ const ComponentManagement: React.FC = () => {
                     : "N/A";
 
                   const lifeUsed = getLifeUsedPercent(component);
-                  const remainingHours = Math.max(
-                    0,
-                    component.plannedLife -
-                      Math.max(
-                        0,
-                        component.currentHours - component.installHours,
-                      ),
-                  );
+                  const effectivePlanned = component.plannedLife || (component.currentHours > 0 ? 18000 : 0);
+                  const remainingHours = component.currentHours > 0 && effectivePlanned > 0
+                    ? Math.max(0, effectivePlanned - Math.max(0, component.currentHours - component.installHours))
+                    : 0;
                   const conditionInfo = getConditionLabel(component.condition);
 
                   const riskStatus =
@@ -1014,25 +1068,7 @@ const ComponentManagement: React.FC = () => {
                         </p>
                       </div>
 
-                      <div className="mt-3 grid grid-cols-2 gap-3 text-xs font-bold text-slate-600 dark:text-slate-300 sm:grid-cols-4">
-                        <div>
-                          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
-                            Current Hrs
-                          </p>
-                          <p>{component.currentHours.toLocaleString()} h</p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
-                            Remaining
-                          </p>
-                          <p>{remainingHours.toLocaleString()} h</p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
-                            Life Used
-                          </p>
-                          <p>{lifeUsed}%</p>
-                        </div>
+                      <div className="mt-3 text-xs font-bold text-slate-600 dark:text-slate-300">
                         <div>
                           <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
                             Condition
@@ -1098,9 +1134,6 @@ const ComponentManagement: React.FC = () => {
                       <th className="px-6 py-4 font-bold">
                         Description / Serial
                       </th>
-                      <th className="px-6 py-4 font-bold">Current Hrs</th>
-                      <th className="px-6 py-4 font-bold">Life Used</th>
-                      <th className="px-6 py-4 font-bold">Remaining</th>
                       <th className="px-6 py-4 font-bold">Condition</th>
                       <th className="px-6 py-4 font-bold">Risk</th>
                       <th className="px-6 py-4 text-center font-bold">
@@ -1123,15 +1156,6 @@ const ComponentManagement: React.FC = () => {
                         : "N/A";
 
                       const lifeUsed = getLifeUsedPercent(component);
-                      const remainingHours = Math.max(
-                        0,
-                        component.plannedLife -
-                          Math.max(
-                            0,
-                            component.currentHours - component.installHours,
-                          ),
-                      );
-
                       const conditionInfo = getConditionLabel(
                         component.condition,
                       );
@@ -1183,41 +1207,6 @@ const ComponentManagement: React.FC = () => {
                               <span className="mt-0.5 text-xs font-semibold text-slate-500 dark:text-slate-400">
                                 {component.serialNumber || "No Serial"}
                               </span>
-                            </div>
-                          </td>
-
-                          <td className="px-6 py-4 text-sm font-bold text-slate-700 dark:text-slate-200">
-                            {component.currentHours.toLocaleString()} h
-                          </td>
-
-                          <td className="px-6 py-4 text-sm font-bold text-slate-700 dark:text-slate-200">
-                            {Math.max(
-                              0,
-                              component.currentHours - component.installHours,
-                            ).toLocaleString()}{" "}
-                            h
-                          </td>
-
-                          <td className="px-6 py-4">
-                            <div className="flex w-40 flex-col gap-1.5">
-                              <div className="flex items-center justify-between text-xs font-bold text-slate-500 dark:text-slate-400">
-                                <span>{lifeUsed}% Used</span>
-                                <span>
-                                  {remainingHours.toLocaleString()} h left
-                                </span>
-                              </div>
-                              <div className="h-2.5 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
-                                <div
-                                  className={`h-full rounded-full transition-all duration-500 ${
-                                    lifeUsed >= 90
-                                      ? "bg-red-500"
-                                      : lifeUsed >= 75
-                                        ? "bg-orange-500"
-                                        : "bg-emerald-500"
-                                  }`}
-                                  style={{ width: `${lifeUsed}%` }}
-                                />
-                              </div>
                             </div>
                           </td>
 
@@ -1370,9 +1359,17 @@ function ComponentDetailsModal({
 
         <div className="max-h-[calc(92vh-86px)] overflow-y-auto p-5">
           <div className="mb-5 flex flex-col gap-4 rounded-xl border border-slate-200 bg-slate-50 p-5 dark:border-slate-800 dark:bg-[#101f33] sm:flex-row sm:items-center">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300">
-              <Gauge size={24} strokeWidth={2.4} />
-            </div>
+            {component.imageUrl ? (
+              <img
+                src={component.imageUrl}
+                alt={component.category}
+                className="h-16 w-24 shrink-0 rounded-lg border border-slate-200 object-cover shadow-sm dark:border-slate-700"
+              />
+            ) : (
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300">
+                <Gauge size={24} strokeWidth={2.4} />
+              </div>
+            )}
 
             <div className="min-w-0 flex-1">
               <h3 className="truncate text-lg font-extrabold tracking-tight text-slate-950 dark:text-white">
@@ -1423,6 +1420,12 @@ function ComponentDetailsModal({
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
+            {component.companyCode && (
+              <DetailItem label="Company Code" value={component.companyCode} />
+            )}
+            {component.companyName && (
+              <DetailItem label="Company Name" value={component.companyName} />
+            )}
             <DetailItem label="Category" value={component.category} />
             <DetailItem
               label="Description"
@@ -1734,6 +1737,53 @@ function ComponentFormModal({
               options={["1", "2", "3", "4", "5"]}
               error={formErrors.condition}
             />
+
+            <div className="sm:col-span-2">
+              <label className="block mb-1.5 text-xs font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
+                Component Image (Photo)
+              </label>
+              <div className="flex items-center gap-4">
+                {form.imageUrl ? (
+                  <div className="relative h-24 w-32 shrink-0 overflow-hidden rounded-xl border border-slate-200 shadow-sm">
+                    <img
+                      src={form.imageUrl}
+                      alt="Component Preview"
+                      className="h-full w-full object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => onChange("imageUrl", "")}
+                      className="absolute right-1 top-1 rounded-full bg-red-600 p-1 text-white shadow hover:bg-red-700"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ) : (
+                  <label className="flex h-24 w-full cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800/50">
+                    <div className="flex items-center gap-2 text-xs font-semibold text-slate-600 dark:text-slate-300">
+                      <Plus size={16} />
+                      <span>Upload Custom Component Photo</span>
+                    </div>
+                    <span className="mt-0.5 text-[11px] text-slate-400">Select PNG, JPG, or WebP photo</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            onChange("imageUrl", reader.result as string);
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                    />
+                  </label>
+                )}
+              </div>
+            </div>
           </div>
         </div>
 

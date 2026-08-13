@@ -6,8 +6,8 @@ import Navbar from "../../components/landing/Navbar";
 import Footer from "../../components/landing/Footer";
 
 import toast from "react-hot-toast";
-import { initiatePayFastCheckout } from "../../services/payfastService";
-import { userService } from "../../services/userService";
+import { initiatePayFastCheckout } from "../../services/Payment/payfastService";
+import { userService } from "../../services/Auth/userService";
 import StorageService, { STORAGE_KEYS } from "../../services/storage.service";
 
 export default function CartPage() {

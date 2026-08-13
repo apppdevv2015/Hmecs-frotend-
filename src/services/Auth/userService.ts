@@ -1,5 +1,5 @@
-import { apiCall } from "./apiHandler";
-import StorageService, { STORAGE_KEYS } from "./storage.service";
+import { apiCall } from "../apiHandler";
+import StorageService, { STORAGE_KEYS } from "../storage.service";
 
 export type ApiRole = {
   id: number;
@@ -302,7 +302,6 @@ export const userService = {
       },
       {
         showSuccess: true,
-       
       },
     );
   },

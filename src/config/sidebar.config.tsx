@@ -30,6 +30,7 @@ import {
   TruckIcon,
   RefreshCcw,
   UserCheck,
+  AlertCircle,
 } from "lucide-react";
 
 export type UserRole =
@@ -346,12 +347,42 @@ export const sidebarConfig: Record<
 
     navGroups: [
       {
-        title: "",
+        title: "Operations",
         items: [
           {
-            name: " Issue Report",
-            path: "/operator/tasks",
+            name: "My Assigned Machines",
+            path: "/operator/machines",
+            icon: <Truck className={operatorIconClass} />,
+          },
+          {
+            name: "Pre-Start Inspection",
+            path: "/operator/pre-start-inspection",
             icon: <ClipboardCheck className={operatorIconClass} />,
+          },
+          {
+            name: "Work Order Capture",
+            path: "/operator/work-order-capture",
+            icon: <ClipboardList className={operatorIconClass} />,
+          },
+          {
+            name: "Active Task",
+            path: "/operator/active-task",
+            icon: <Activity className={operatorIconClass} />,
+          },
+          {
+            name: "Shift Summary",
+            path: "/operator/shift-summary",
+            icon: <FileText className={operatorIconClass} />,
+          },
+        ],
+      },
+      {
+        title: "Monitoring & Logs",
+        items: [
+          {
+            name: "Issue Reports",
+            path: "/operator/issue-reports",
+            icon: <AlertCircle className={operatorIconClass} />,
           },
           {
             name: "Fleet",
@@ -362,12 +393,6 @@ export const sidebarConfig: Record<
             name: "Update Data",
             path: "/operator/data-update",
             icon: <RefreshCcw className={operatorIconClass} />,
-          },
-
-          {
-            name: "Machine",
-            path: "/operator/machines",
-            icon: <Truck className={operatorIconClass} />,
           },
           {
             name: "Components",

@@ -28,6 +28,8 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import toast from "react-hot-toast";
 
+import { superAdminMachineService } from "../../../services/SuperAdmin/machineService";
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 type InvoiceStatus = "paid" | "pending" | "failed" | "overdue";
@@ -44,6 +46,8 @@ type BillingHistory = {
   billingCycle: BillingCycle;
   planLimit: string;
   userLimit: string;
+  addedMachines?: number;
+  addedStaff?: number;
   subscriptionStart: string;
   subscriptionEnd: string;
   amount: number;
@@ -528,12 +532,6 @@ function RecentSubscriptions({
             Latest {recent.length} subscription purchases.
           </p>
         </div>
-        <button
-          onClick={onViewAll}
-          className="text-xs font-semibold text-blue-600 hover:text-blue-700"
-        >
-          View All
-        </button>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[520px] text-left">
@@ -541,12 +539,12 @@ function RecentSubscriptions({
             <tr className="bg-slate-50">
               {[
                 "Company",
-                "Plan",
+                "Plan Taken",
+                "Machines Added",
+                "Staff Added",
                 "Amount",
                 "Start Date",
-                "Next Renewal",
                 "Status",
-                "Action",
               ].map((h) => (
                 <th
                   key={h}
@@ -563,8 +561,16 @@ function RecentSubscriptions({
                 <td className="px-4 py-3 text-sm font-medium text-slate-800">
                   {inv.companyName}
                 </td>
-                <td className="px-4 py-3 text-sm text-slate-600">
+                <td className="px-4 py-3 text-sm font-medium text-blue-600">
                   {inv.planName}
+                </td>
+                <td className="px-4 py-3 text-sm text-slate-600">
+                  <span className="font-bold text-slate-900">{inv.addedMachines ?? 0}</span>
+                  <span className="text-slate-400"> / {inv.planLimit === "0" || !inv.planLimit ? "Unlimited" : inv.planLimit}</span>
+                </td>
+                <td className="px-4 py-3 text-sm text-slate-600">
+                  <span className="font-bold text-slate-900">{inv.addedStaff ?? 0}</span>
+                  <span className="text-slate-400"> / {inv.userLimit === "0" || !inv.userLimit ? "Unlimited" : inv.userLimit}</span>
                 </td>
                 <td className="px-4 py-3 text-sm font-semibold text-slate-800">
                   {formatCurrency(inv.amount, inv.currency)}
@@ -572,19 +578,8 @@ function RecentSubscriptions({
                 <td className="px-4 py-3 text-sm text-slate-600">
                   {formatDate(inv.subscriptionStart)}
                 </td>
-                <td className="px-4 py-3 text-sm text-slate-600">
-                  {formatDate(inv.subscriptionEnd)}
-                </td>
                 <td className="px-4 py-3">
                   <StatusBadge status={inv.status} />
-                </td>
-                <td className="px-4 py-3">
-                  <button
-                    onClick={() => onView(inv)}
-                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-50"
-                  >
-                    <Eye size={14} />
-                  </button>
                 </td>
               </tr>
             ))}
@@ -636,12 +631,6 @@ function RecentInvoices({
             Latest {recent.length} invoices generated.
           </p>
         </div>
-        <button
-          onClick={onViewAll}
-          className="text-xs font-semibold text-blue-600 hover:text-blue-700"
-        >
-          View All Invoices
-        </button>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[520px] text-left">
@@ -689,14 +678,9 @@ function RecentInvoices({
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-1.5">
                     <button
-                      onClick={() => onView(inv)}
-                      className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-50"
-                    >
-                      <Eye size={14} />
-                    </button>
-                    <button
                       onClick={() => onDownload(inv)}
                       className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-50"
+                      title="Download PDF"
                     >
                       <Download size={14} />
                     </button>
@@ -848,14 +832,9 @@ function AllInvoicesTable({
                 <td className="relative px-4 py-3">
                   <div className="flex items-center gap-1.5">
                     <button
-                      onClick={() => onView(inv)}
-                      className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-50"
-                    >
-                      <Eye size={14} />
-                    </button>
-                    <button
                       onClick={() => onDownload(inv)}
                       className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-50"
+                      title="Download PDF"
                     >
                       <Download size={14} />
                     </button>
@@ -872,15 +851,6 @@ function AllInvoicesTable({
                         className="absolute right-4 top-9 z-10 w-40 rounded-xl border border-slate-200 bg-white py-1.5 shadow-lg"
                         onMouseLeave={() => setOpenMenuId(null)}
                       >
-                        <button
-                          onClick={() => {
-                            onView(inv);
-                            setOpenMenuId(null);
-                          }}
-                          className="block w-full px-3.5 py-2 text-left text-xs font-medium text-slate-600 hover:bg-slate-50"
-                        >
-                          View details
-                        </button>
                         <button
                           onClick={() => {
                             onDownload(inv);
@@ -1166,11 +1136,39 @@ const PlanAndBilling = () => {
   const fetchSubscriptions = async () => {
     try {
       setLoading(true);
-      const response: any = await billingService.getSubscriptions();
-      const mapped: BillingHistory[] = (response?.data || []).map(
-        mapApiInvoice,
-      );
+      const [response, companiesList] = await Promise.all([
+        billingService.getSubscriptions(),
+        superAdminMachineService.getCompanies().catch(() => []),
+      ]);
+
+      let actualUserCount = 0;
+      const companyMap = new Map<string, { machineCount: number; staffCount: number; name: string }>();
+      const rawCompArray = Array.isArray(companiesList) ? companiesList : (companiesList as any)?.data || [];
+      rawCompArray.forEach((c: any) => {
+        const staff = Number(c.staffCount ?? 0);
+        actualUserCount += (1 + staff); // Admin + Staff users
+        companyMap.set(String(c.id), {
+          machineCount: Number(c.machineCount ?? c.machinesCount ?? 0),
+          staffCount: staff,
+          name: c.companyName || c.company_name || c.name || "Company",
+        });
+      });
+
+      const rawItems = response?.data || [];
+      const mapped: BillingHistory[] = rawItems.map((item: any) => {
+        const inv = mapApiInvoice(item);
+        const comp = companyMap.get(inv.companyId) || Array.from(companyMap.values()).find((x) => x.name.toLowerCase() === inv.companyName.toLowerCase());
+        return {
+          ...inv,
+          companyName: comp?.name || inv.companyName,
+          addedMachines: comp?.machineCount ?? 0,
+          addedStaff: comp?.staffCount ?? 0,
+        };
+      });
+
       setInvoices(mapped);
+      setTotalCompaniesOverride(companyMap.size || null);
+      setTotalUsersOverride(actualUserCount || null);
     } catch (error) {
       console.error(error);
       toast.error("Failed to load billing data");

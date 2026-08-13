@@ -1,4 +1,4 @@
-import { machineService } from "./companyadmin/machineService";
+import { machineService } from "../companyadmin/machineService";
 
 export type ComponentStatus = "Good" | "Warning" | "Critical";
 
@@ -181,20 +181,19 @@ const mockMachines: EngineerMachine[] = [
   },
 ];
 
-const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
 export const engineerComponentService = {
   getMachines: async (): Promise<EngineerMachine[]> => {
     try {
       const dbMachinesRes = await machineService.getMachines();
-      const dbMachines = Array.isArray(dbMachinesRes) ? dbMachinesRes : ((dbMachinesRes as any).data || (dbMachinesRes as any).machines || []);
-      
+      const dbMachines = Array.isArray(dbMachinesRes)
+        ? dbMachinesRes
+        : (dbMachinesRes as any).data || (dbMachinesRes as any).machines || [];
+
       if (!dbMachines || dbMachines.length === 0) {
         return [];
       }
 
       return dbMachines.map((m: any) => {
-        // Map database machine components to EngineerComponent
         const components: EngineerComponent[] = (m.components || []).map((c: any) => {
           let name: "Engine" | "Tyre" | "Suspension" | "Hydraulics" = "Engine";
           const cat = (c.category || "").toLowerCase();
@@ -202,7 +201,6 @@ export const engineerComponentService = {
           else if (cat.includes("hydraulics")) name = "Hydraulics";
           else if (cat.includes("suspension")) name = "Suspension";
 
-          // condition: 1-New, 2-Good, 3-Monitor, 4-Warning, 5-Critical
           let status: ComponentStatus = "Good";
           let health = 100;
           if (c.condition === 5) {
@@ -219,7 +217,6 @@ export const engineerComponentService = {
             health = 92;
           }
 
-          // Dynamic reading labels & values
           let readingLabel = "Operating Temp";
           let readingValue = "82°C";
           let issue = "Normal temperature";
@@ -300,15 +297,14 @@ export const engineerComponentService = {
           };
         });
 
-        // Determine machine status based on worst component status
         let machineStatus: ComponentStatus = "Good";
-        if (components.some(c => c.status === "Critical")) machineStatus = "Critical";
-        else if (components.some(c => c.status === "Warning")) machineStatus = "Warning";
+        if (components.some((c) => c.status === "Critical")) machineStatus = "Critical";
+        else if (components.some((c) => c.status === "Warning")) machineStatus = "Warning";
 
-        // Determine overall health as average of component healths
-        const overallHealth = components.length > 0
-          ? Math.round(components.reduce((sum, c) => sum + c.health, 0) / components.length)
-          : 90;
+        const overallHealth =
+          components.length > 0
+            ? Math.round(components.reduce((sum, c) => sum + c.health, 0) / components.length)
+            : 90;
 
         return {
           id: m.id,
@@ -321,14 +317,10 @@ export const engineerComponentService = {
           components,
         };
       });
-    } 
-    catch (err) {
-  console.error(
-    "Failed to load engineer machines",
-    err
-  );
-  return mockMachines;
-}
+    } catch (err) {
+      console.error("Failed to load engineer machines", err);
+      return mockMachines;
+    }
   },
 
   getMachineComponents: async (
@@ -336,7 +328,9 @@ export const engineerComponentService = {
   ): Promise<EngineerComponent[]> => {
     try {
       const machines = await engineerComponentService.getMachines();
-      const machine = machines.find((item) => item.id === machineId || item.machineId === machineId);
+      const machine = machines.find(
+        (item) => item.id === machineId || item.machineId === machineId
+      );
       return machine?.components || [];
     } catch {
       return [];

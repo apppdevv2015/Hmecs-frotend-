@@ -1592,7 +1592,7 @@ function ComponentDetailsModal({
                   </p>
 
                   <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                    Company: {getCompanyName(company)}
+                    Company: {getCompanyName(company)} ({getCompanyCode(company)})
                   </p>
 
                   <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">

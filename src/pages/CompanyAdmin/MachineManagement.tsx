@@ -28,7 +28,10 @@ type Machine = {
   model: string;
   serialNumber: string;
   equipmentType: string;
+  imageUrl?: string;
   companyId?: string;
+  site?: string;
+  status?: string;
 };
 
 type MachineFormData = {
@@ -36,6 +39,7 @@ type MachineFormData = {
   model: string;
   serialNumber: string;
   equipmentType: string;
+  imageUrl?: string;
 };
 
 type FormErrors = Partial<Record<keyof MachineFormData, string>>;
@@ -50,13 +54,14 @@ type PaginationProps = {
   onNext: () => void;
 };
 
-const ROWS_PER_PAGE = 5;
+const ROWS_PER_PAGE = 100;
 
 const emptyForm: MachineFormData = {
   name: "",
   model: "",
   serialNumber: "",
   equipmentType: "",
+  imageUrl: "",
 };
 
 const equipmentTypeOptions = ["Excavator", "Truck", "Dozer", "Grader"];
@@ -85,6 +90,8 @@ const machineSchema = z.object({
     .trim()
     .min(1, "Equipment type is required")
     .max(30, "Equipment type cannot exceed 30 characters"),
+
+  imageUrl: z.string().optional(),
 });
 
 const normalizeMachine = (item: any, index: number): Machine => {
@@ -106,7 +113,10 @@ const normalizeMachine = (item: any, index: number): Machine => {
         item?.category ??
         "N/A",
     ),
+    imageUrl: item?.imageUrl || item?.image || item?.photo || "",
     companyId: item?.companyId ?? item?.company_id,
+    site: item?.site || item?.location,
+    status: item?.status,
   };
 };
 
@@ -122,6 +132,9 @@ const getMachineArrayFromResponse = (response: any): any[] => {
 };
 
 import dumpTruckImg from "../../assets/images/dump_truck_icon.png";
+import excavatorImg from "../../assets/images/excavator_icon.png";
+import dozerImg from "../../assets/images/dozer_icon.png";
+import loaderImg from "../../assets/images/wheel_loader_icon.png";
 
 const MachineTypeIcon = ({ equipmentType }: { equipmentType: string }) => {
   const type = equipmentType?.toLowerCase() || "";
@@ -138,7 +151,7 @@ const MachineTypesOverviewSection: React.FC<{ machines?: Machine[] }> = ({
 }) => {
   const safeList = Array.isArray(machines) ? machines : [];
 
-  const truckCount = safeList.filter((m) => {
+  const truckList = safeList.filter((m) => {
     const eqType = String(m?.equipmentType ?? "").toLowerCase();
     const model = String(m?.model ?? "").toLowerCase();
     const name = String(m?.name ?? "").toLowerCase();
@@ -148,9 +161,9 @@ const MachineTypesOverviewSection: React.FC<{ machines?: Machine[] }> = ({
       name.includes("dt") ||
       name.includes("cat-777")
     );
-  }).length;
+  });
 
-  const excavatorCount = safeList.filter((m) => {
+  const excavatorList = safeList.filter((m) => {
     const eqType = String(m?.equipmentType ?? "").toLowerCase();
     const name = String(m?.name ?? "").toLowerCase();
     return (
@@ -158,25 +171,42 @@ const MachineTypesOverviewSection: React.FC<{ machines?: Machine[] }> = ({
       eqType.includes("jcb") ||
       name.includes("ex")
     );
-  }).length;
+  });
 
-  const dozerCount = safeList.filter((m) => {
+  const dozerList = safeList.filter((m) => {
     const eqType = String(m?.equipmentType ?? "").toLowerCase();
     const name = String(m?.name ?? "").toLowerCase();
     return eqType.includes("dozer") || name.includes("dz");
-  }).length;
+  });
 
-  const loaderCount = Math.max(
-    1,
-    safeList.length - (truckCount + excavatorCount + dozerCount),
+  const loaderList = safeList.filter(
+    (m) =>
+      !truckList.includes(m) &&
+      !excavatorList.includes(m) &&
+      !dozerList.includes(m),
   );
+
+  const getModelsText = (list: any[], fallback: string) => {
+    if (!list || list.length === 0) return fallback;
+    const models = Array.from(
+      new Set(
+        list.map((m) => m.model || m.name || m.machineId).filter(Boolean),
+      ),
+    );
+    return models.length > 0 ? models.slice(0, 3).join(", ") : fallback;
+  };
+
+  const truckCount = truckList.length;
+  const excavatorCount = excavatorList.length;
+  const dozerCount = dozerList.length;
+  const loaderCount = loaderList.length || Math.max(1, safeList.length - (truckCount + excavatorCount + dozerCount));
 
   const categories = [
     {
       title: "Dump Truck",
       category: "Heavy Haulage Fleet",
       count: truckCount || 3,
-      models: "CAT 777G, CAT 797F, Hitachi EH5000",
+      models: getModelsText(truckList, "CAT 777G, CAT 797F, Hitachi EH5000"),
       badge: "Dump Truck",
       badgeColor:
         "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300",
@@ -188,33 +218,36 @@ const MachineTypesOverviewSection: React.FC<{ machines?: Machine[] }> = ({
       title: "Excavator (JCB)",
       category: "Mining & Digging Fleet",
       count: excavatorCount || 2,
-      models: "CAT 6060, Liebherr R9800",
+      models: getModelsText(excavatorList, "CAT 6060, Liebherr R9800"),
       badge: "Excavator / JCB",
       badgeColor:
         "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
       borderColor: "border-amber-200 dark:border-amber-900/50",
+      image: excavatorImg,
       icon: Wrench,
     },
     {
       title: "Dozer (Bulldozer)",
       category: "Earthmoving & Leveling",
       count: dozerCount || 1,
-      models: "Komatsu D475A",
+      models: getModelsText(dozerList, "Komatsu D475A"),
       badge: "Bulldozer",
       badgeColor:
         "bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300",
       borderColor: "border-purple-200 dark:border-purple-900/50",
+      image: dozerImg,
       icon: ShieldCheck,
     },
     {
       title: "Wheel Loader / Grader",
       category: "Material Loading Fleet",
       count: loaderCount,
-      models: "CAT 994K Wheel Loader",
+      models: getModelsText(loaderList, "CAT 994K Wheel Loader"),
       badge: "Loader / Grader",
       badgeColor:
         "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300",
       borderColor: "border-emerald-200 dark:border-emerald-900/50",
+      image: loaderImg,
       icon: Activity,
     },
   ];
@@ -249,49 +282,57 @@ const MachineTypesOverviewSection: React.FC<{ machines?: Machine[] }> = ({
               key={cat.title}
               className={`group relative flex flex-col justify-between overflow-hidden rounded-2xl border bg-white p-5 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl dark:bg-slate-900 ${cat.borderColor}`}
             >
-              {/* Header */}
+              {/* Top Header Badge & Action Icon */}
               <div>
-                <div className="flex items-center justify-between">
+                <div className="mb-3 flex items-center justify-between">
                   <span
                     className={`rounded-full px-3 py-1 text-[10px] font-extrabold uppercase tracking-wider ${cat.badgeColor}`}
                   >
                     {cat.badge}
                   </span>
 
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-700 shadow-inner transition-transform group-hover:scale-110 dark:bg-slate-800 dark:text-slate-200">
-                    <IconComp size={20} strokeWidth={2.2} />
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-700 shadow-inner transition-transform group-hover:scale-110 dark:bg-slate-800 dark:text-slate-200">
+                    <IconComp size={18} strokeWidth={2.2} />
                   </div>
                 </div>
 
+                {/* 50% Image / Preview Area */}
                 {cat.image ? (
-                  <div className="mt-3 flex justify-center py-2">
+                  <div className="relative flex h-48 w-full items-center justify-center overflow-hidden rounded-2xl border border-slate-100 bg-gradient-to-b from-slate-50/80 to-slate-100/90 p-3 shadow-inner dark:border-slate-800/80 dark:from-slate-800/40 dark:to-slate-800/80">
                     <img
                       src={cat.image}
                       alt={cat.title}
-                      className="h-28 w-36 object-contain transition-transform duration-300 group-hover:scale-105"
+                      className="h-full w-full object-contain filter drop-shadow-md transition-transform duration-300 group-hover:scale-105"
                     />
                   </div>
                 ) : (
-                  <div className="mt-3 flex h-28 items-center justify-center rounded-xl bg-slate-50 dark:bg-slate-800/40">
-                    <div className="flex flex-col items-center gap-1.5 text-slate-400">
-                      <IconComp size={36} strokeWidth={1.8} />
-                      <span className="text-[11px] font-semibold">
-                        {cat.title}
-                      </span>
+                  <div className="relative flex h-48 w-full flex-col items-center justify-center gap-3 rounded-2xl border border-slate-100 bg-gradient-to-b from-slate-50/80 to-slate-100/90 p-4 shadow-inner dark:border-slate-800/80 dark:from-slate-800/40 dark:to-slate-800/80">
+                    <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white shadow-md dark:bg-slate-800">
+                      <IconComp
+                        size={36}
+                        className="text-slate-700 dark:text-slate-200"
+                        strokeWidth={2}
+                      />
                     </div>
+                    <span className="text-xs font-bold tracking-wide text-slate-500 dark:text-slate-400">
+                      {cat.title}
+                    </span>
                   </div>
                 )}
 
-                <h4 className="mt-2 text-base font-black tracking-tight text-slate-900 dark:text-white">
-                  {cat.title}
-                </h4>
-                <p className="text-xs font-medium text-slate-400">
-                  {cat.category}
-                </p>
+                {/* 50% Data Details */}
+                <div className="mt-4">
+                  <h4 className="text-lg font-black tracking-tight text-slate-900 dark:text-white">
+                    {cat.title}
+                  </h4>
+                  <p className="mt-0.5 text-xs font-medium text-slate-400">
+                    {cat.category}
+                  </p>
+                </div>
               </div>
 
-              {/* Footer */}
-              <div className="mt-5 border-t border-slate-100 pt-3 dark:border-slate-800">
+              {/* Footer Data Metrics */}
+              <div className="mt-4 border-t border-slate-100 pt-3 dark:border-slate-800">
                 <div className="flex items-baseline justify-between">
                   <span className="text-2xl font-black text-slate-900 dark:text-white">
                     {cat.count}
@@ -441,6 +482,7 @@ const MachineManagement: React.FC = () => {
       serialNumber: machine.serialNumber === "N/A" ? "" : machine.serialNumber,
       equipmentType:
         machine.equipmentType === "N/A" ? "" : machine.equipmentType,
+      imageUrl: machine.imageUrl || "",
     });
     setIsAddModalOpen(true);
   };
@@ -479,12 +521,13 @@ const MachineManagement: React.FC = () => {
     }));
   };
 
-  const buildPayload = (): MachinePayload => {
+  const buildPayload = (): any => {
     return {
       name: formData.name.trim(),
       model: formData.model.trim(),
       serialNumber: formData.serialNumber.trim(),
       equipmentType: formData.equipmentType.trim(),
+      imageUrl: formData.imageUrl || undefined,
     };
   };
 
@@ -762,9 +805,17 @@ const MachineManagement: React.FC = () => {
 
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 text-blue-600 dark:border-blue-900/40 dark:bg-blue-900/20 dark:text-blue-300">
-                            <MachineTypeIcon equipmentType={machine.equipmentType} />
-                          </div>
+                          {machine.imageUrl ? (
+                            <img
+                              src={machine.imageUrl}
+                              alt={machine.name}
+                              className="h-10 w-10 shrink-0 rounded-xl border border-slate-200 object-cover dark:border-slate-700"
+                            />
+                          ) : (
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 text-blue-600 dark:border-blue-900/40 dark:bg-blue-900/20 dark:text-blue-300">
+                              <MachineTypeIcon equipmentType={machine.equipmentType} />
+                            </div>
+                          )}
 
                           <div className="flex min-w-0 flex-col">
                             <span className="truncate text-sm font-extrabold tracking-tight text-slate-950 dark:text-white">
@@ -945,6 +996,53 @@ const MachineManagement: React.FC = () => {
                     )}
                   </div>
                 </div>
+
+                <div className="sm:col-span-2">
+                  <label className="mb-1.5 block text-xs font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
+                    Machine Image (Photo)
+                  </label>
+                  <div className="flex items-center gap-4">
+                    {formData.imageUrl ? (
+                      <div className="relative h-24 w-32 shrink-0 overflow-hidden rounded-xl border border-slate-200 shadow-sm">
+                        <img
+                          src={formData.imageUrl}
+                          alt="Machine Preview"
+                          className="h-full w-full object-cover"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setFormData((prev) => ({ ...prev, imageUrl: "" }))}
+                          className="absolute right-1 top-1 rounded-full bg-red-600 p-1 text-white shadow hover:bg-red-700"
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="flex h-24 w-full cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800/50">
+                        <div className="flex items-center gap-2 text-xs font-semibold text-slate-600 dark:text-slate-300">
+                          <Plus size={16} />
+                          <span>Upload Custom Machine Image</span>
+                        </div>
+                        <span className="mt-0.5 text-[11px] text-slate-400">Select PNG, JPG, or WebP photo</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              const reader = new FileReader();
+                              reader.onloadend = () => {
+                                setFormData((prev) => ({ ...prev, imageUrl: reader.result as string }));
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                          }}
+                        />
+                      </label>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -1035,11 +1133,19 @@ function MachineDetailsModal({
 
         <div className="max-h-[calc(92vh-86px)] overflow-y-auto p-5">
           <div className="mb-5 flex flex-col gap-4 rounded-xl border border-slate-200 bg-slate-50 p-5 dark:border-slate-800 dark:bg-[#101f33] sm:flex-row sm:items-center">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300">
-              <span className="text-lg font-extrabold">
-                {machine.name.charAt(0).toUpperCase()}
-              </span>
-            </div>
+            {machine.imageUrl ? (
+              <img
+                src={machine.imageUrl}
+                alt={machine.name}
+                className="h-16 w-24 shrink-0 rounded-lg border border-slate-200 object-cover shadow-sm dark:border-slate-700"
+              />
+            ) : (
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300">
+                <span className="text-lg font-extrabold">
+                  {machine.name.charAt(0).toUpperCase()}
+                </span>
+              </div>
+            )}
 
             <div className="min-w-0 flex-1">
               <h3 className="truncate text-lg font-extrabold tracking-tight text-slate-950 dark:text-white">
@@ -1061,10 +1167,12 @@ function MachineDetailsModal({
             <DetailItem label="Model" value={machine.model} />
             <DetailItem label="Serial Number" value={machine.serialNumber} />
             <DetailItem label="Equipment Type" value={machine.equipmentType} />
-            {machine.companyId && (
-              <DetailItem label="Company ID" value={machine.companyId} />
+            {machine.site && (
+              <DetailItem label="Site / Location" value={machine.site} />
             )}
-            <DetailItem label="Machine ID" value={machine.id} />
+            {machine.status && (
+              <DetailItem label="Status" value={machine.status.toUpperCase()} />
+            )}
           </div>
 
           <div className="mt-6 flex justify-end">

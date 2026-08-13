@@ -47,6 +47,7 @@ type CompanyAdmin = {
 
 type Company = {
   id: string;
+  adminId?: string;
   name: string;
   code: string;
   admin: CompanyAdmin;
@@ -58,7 +59,6 @@ type Company = {
 };
 
 
-const pageSize = 5;
 
 type EditCompanyFormValues = z.infer<typeof editCompanySchema>; // output (staffCount: number)
 type EditCompanyFormInput = z.input<typeof editCompanySchema>; // input (staffCount: unknown/string)
@@ -131,6 +131,12 @@ const getPlanType = (plan?: string): PlanType => {
 };
 
 const getCompanyStatus = (company: SuperAdminCompany): CompanyStatus => {
+  if (typeof company.isActive === "boolean") {
+    return company.isActive ? "Active" : "Inactive";
+  }
+  if (company.status === "Active" || company.status === "Inactive") {
+    return company.status as CompanyStatus;
+  }
   const activePlan = String(company.activePlan || "")
     .toLowerCase()
     .trim();
@@ -170,6 +176,7 @@ const mapCompanyToAdminRow = (company: SuperAdminCompany): Company => {
 
   return {
     id: String(company.id),
+    adminId: company.adminId || company.admin_id || undefined,
     name: companyName,
     code: companyCode,
     admin: { name: adminName, email: adminEmail },
@@ -177,7 +184,7 @@ const mapCompanyToAdminRow = (company: SuperAdminCompany): Company => {
     active_plan: getPlanType(company.activePlan),
     status: getCompanyStatus(company),
     joined_date: formatJoinedDate(company.createdAt || company.created_at),
-    role: "company_admin",
+    role: (company as any).adminRole || (company as any).role || "admin",
   };
 };
 
@@ -197,6 +204,7 @@ export default function CompanyAdminsPage() {
 
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number | "all">(10);
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editCompany, setEditCompany] = useState<Company | null>(null);
@@ -275,23 +283,32 @@ export default function CompanyAdminsPage() {
     });
   }, [companies, searchTerm, selectedPlan, selectedCompany]);
 
+  const effectivePageSize =
+    pageSize === "all" ? filteredCompanies.length || 1 : pageSize;
+
   const totalPages = Math.max(
     1,
-    Math.ceil(filteredCompanies.length / pageSize),
+    Math.ceil(filteredCompanies.length / effectivePageSize),
   );
   const safeCurrentPage = Math.min(currentPage, totalPages);
 
   const paginatedCompanies = useMemo(() => {
+    if (pageSize === "all") return filteredCompanies;
     const startIndex = (safeCurrentPage - 1) * pageSize;
     return filteredCompanies.slice(startIndex, startIndex + pageSize);
-  }, [filteredCompanies, safeCurrentPage]);
+  }, [filteredCompanies, safeCurrentPage, pageSize]);
 
   const startItem =
-    filteredCompanies.length === 0 ? 0 : (safeCurrentPage - 1) * pageSize + 1;
-  const endItem = Math.min(
-    safeCurrentPage * pageSize,
-    filteredCompanies.length,
-  );
+    filteredCompanies.length === 0
+      ? 0
+      : pageSize === "all"
+        ? 1
+        : (safeCurrentPage - 1) * pageSize + 1;
+
+  const endItem =
+    pageSize === "all"
+      ? filteredCompanies.length
+      : Math.min(safeCurrentPage * pageSize, filteredCompanies.length);
 
   const handlePrevPage = () => setCurrentPage((prev) => Math.max(1, prev - 1));
   const handleNextPage = () =>
@@ -351,21 +368,30 @@ export default function CompanyAdminsPage() {
   const onSubmitEditCompany = async (values: EditCompanyFormValues) => {
     if (!editCompany) return;
 
+    const targetUserId = editCompany.adminId;
+
+    if (!targetUserId) {
+      showErrorToast(
+        `No administrator user account found for ${editCompany.name}.`,
+      );
+      return;
+    }
+
     try {
       setIsSavingEdit(true);
 
-  await superAdminMachineService.updateCompany(
-  editCompany.id,
-  {
-    companyName: values.name,
-    companyCode: values.code,
-    adminName: values.adminName,
-    adminEmail: values.adminEmail,
-    staffCount: values.staffCount,
-    activePlan: values.activePlan,
-    status: values.status,
-  },
-);
+      await superAdminMachineService.updateCompany(
+        targetUserId,
+        {
+          companyName: values.name,
+          companyCode: values.code,
+          adminName: values.adminName,
+          adminEmail: values.adminEmail,
+          staffCount: values.staffCount,
+          activePlan: values.activePlan,
+          status: values.status,
+        },
+      );
 
 setIsEditModalOpen(false);
 setEditCompany(null);
@@ -413,7 +439,16 @@ await fetchCompanyAdmins();
   // expiry) and is treated as "not active" for the purpose of this toggle.
   // Toggling always switches between Active <-> Inactive and hits the API.
   const handleToggleStatus = async (company: Company) => {
-    if (togglingStatusId) return; // prevent double-fire while a request is in flight
+    if (togglingStatusId) return;
+
+    const targetUserId = company.adminId;
+
+    if (!targetUserId) {
+      showErrorToast(
+        `No administrator user account found for ${company.name}. Please assign an admin user first.`,
+      );
+      return;
+    }
 
     const nextStatus: CompanyStatus =
       company.status === "Active" ? "Inactive" : "Active";
@@ -427,12 +462,8 @@ await fetchCompanyAdmins();
     setTogglingStatusId(company.id);
 
     try {
-      // BACKEND TODO: replace with a dedicated status-toggle endpoint once
-      // available (ideally a lightweight PATCH that only needs { status }).
-      // Until then, updateCompany expects the full payload, so we resend the
-      // company's existing fields unchanged and only flip `status`.
       const response: any = await superAdminMachineService.updateCompany(
-        company.id,
+        targetUserId,
         {
           companyName: company.name,
           companyCode: company.code,
@@ -450,6 +481,7 @@ await fetchCompanyAdmins();
     } catch (error: any) {
       console.error("Status toggle failed:", error);
       // Revert optimistic update on failure
+      setCompanies(previousCompanies);
       showErrorToast(error?.message || "Failed to update company status");
     } finally {
       setTogglingStatusId(null);
@@ -615,7 +647,7 @@ await fetchCompanyAdmins();
       icon: BriefcaseBusiness,
       iconClass:
         "bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-300",
-      helper: "Total assigned users",
+      helper: "Total added company staff",
     },
     {
       label: "Inactive Companies",
@@ -824,6 +856,9 @@ await fetchCompanyAdmins();
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-950/60">
                   <th className="px-6 py-4 align-middle text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                    S.No
+                  </th>
+                  <th className="px-6 py-4 align-middle text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                     Company
                   </th>
                   <th className="px-6 py-4 align-middle text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
@@ -846,12 +881,21 @@ await fetchCompanyAdmins();
 
               <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
                 {paginatedCompanies.length > 0 ? (
-                  paginatedCompanies.map((company) => (
-                    <tr
-                      key={company.id}
-                      className="transition hover:bg-slate-50 dark:hover:bg-slate-800/50"
-                    >
-                      <td className="px-6 py-4 align-middle">
+                  paginatedCompanies.map((company, index) => {
+                    const serialNumber =
+                      pageSize === "all"
+                        ? index + 1
+                        : (safeCurrentPage - 1) * pageSize + index + 1;
+
+                    return (
+                      <tr
+                        key={company.id}
+                        className="transition hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                      >
+                        <td className="px-6 py-4 align-middle text-xs font-semibold text-slate-500 dark:text-slate-400">
+                          {serialNumber}
+                        </td>
+                        <td className="px-6 py-4 align-middle">
                         <div className="flex items-center gap-3">
                           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-slate-100 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
                             {getInitials(company.name)}
@@ -965,14 +1009,6 @@ await fetchCompanyAdmins();
                           onClick={(event) => event.stopPropagation()}
                         >
                           <button
-                            onClick={() => handleViewCompany(company)}
-                            title="View details"
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-400 dark:hover:bg-blue-500/10 dark:hover:text-blue-300"
-                          >
-                            <Eye className="h-4 w-4" />
-                          </button>
-
-                          <button
                             onClick={() => handleEditCompany(company)}
                             title="Edit company"
                             className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-amber-200 bg-amber-50 text-amber-600 transition hover:bg-amber-100 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300 dark:hover:bg-amber-500/20"
@@ -990,33 +1026,34 @@ await fetchCompanyAdmins();
                         </div>
                       </td>
                     </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={6} className="px-6 py-16 text-center">
-                      <div className="mx-auto flex max-w-sm flex-col items-center">
-                        <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-slate-100 text-slate-400 dark:bg-slate-800">
-                          <Search className="h-5 w-5" />
-                        </div>
-
-                        <h3 className="text-base font-semibold text-slate-950 dark:text-white">
-                          No records found
-                        </h3>
-                        <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
-                          No company administrator records match your current
-                          search or filter selection.
-                        </p>
-
-                        <button
-                          onClick={resetFilters}
-                          className="mt-4 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-800"
-                        >
-                          Clear Filters
-                        </button>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td colSpan={7} className="px-6 py-16 text-center">
+                    <div className="mx-auto flex max-w-sm flex-col items-center">
+                      <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-slate-100 text-slate-400 dark:bg-slate-800">
+                        <Search className="h-5 w-5" />
                       </div>
-                    </td>
-                  </tr>
-                )}
+
+                      <h3 className="text-base font-semibold text-slate-950 dark:text-white">
+                        No records found
+                      </h3>
+                      <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
+                        No company administrator records match your current
+                        search or filter selection.
+                      </p>
+
+                      <button
+                        onClick={resetFilters}
+                        className="mt-4 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-800"
+                      >
+                        Clear Filters
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              )}
               </tbody>
             </table>
           )}
@@ -1029,8 +1066,13 @@ await fetchCompanyAdmins();
             startItem={startItem}
             endItem={endItem}
             totalItems={filteredCompanies.length}
+            itemsPerPage={pageSize}
             onPrev={handlePrevPage}
             onNext={handleNextPage}
+            onItemsPerPageChange={(newSize) => {
+              setPageSize(newSize);
+              setCurrentPage(1);
+            }}
           />
         )}
       </div>

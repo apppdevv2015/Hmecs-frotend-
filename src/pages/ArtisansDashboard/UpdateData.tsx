@@ -1631,7 +1631,7 @@ export default function OperatorMachineDashboard() {
                         placeholder="Select Machine"
                         options={assignedMachines.map((machine) => ({
                           value: machine.id,
-                          label: `${machine.machine} (${machine.id})`,
+                          label: `${machine.machine} (${machine.fleet})`,
                         }))}
                       />
                     </div>

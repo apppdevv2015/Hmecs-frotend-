@@ -6,8 +6,8 @@ import Footer from "../../components/landing/Footer";
 import {
   getSubscriptionPlans,
   type SubscriptionPlanApi,
-} from "../../services/subscriptionService";
-import { userService } from "../../services/userService";
+} from "../../services/SuperAdmin/subscriptionService";
+import { userService } from "../../services/Auth/userService";
 import StorageService, { STORAGE_KEYS } from "../../services/storage.service";
 
 type FlexibleSubscriptionPlanApi = SubscriptionPlanApi & {

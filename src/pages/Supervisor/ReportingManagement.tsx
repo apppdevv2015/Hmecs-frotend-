@@ -1,40 +1,22 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import AppSelect from "../../components/ui/dropdown/AppSelect";
+import {
+  reportApprovalService,
+  getCurrentSupervisor,
+  type Report,
+  type HistoryEntry,
+  type Role,
+  type ToastType,
+  type ReportStatus,
+  type ReportPriority,
+  type ReportType,
+  type SupervisorProfile,
+} from "../../services/Task/reportApprovalService";
 
 // ════════════════════════════════════════════════════════════════════════════
 // TYPES
 // ════════════════════════════════════════════════════════════════════════════
-type Role = "supervisor" | "artisan" | "operator";
 type Page = "reports" | "history";
-type ToastType = "success" | "error" | "warning" | "info";
-
-interface Report {
-  id: string;
-  title: string;
-  type: "daily" | "weekly" | "incident" | "maintenance";
-  status: "pending" | "reviewed" | "approved" | "rejected";
-  priority: "low" | "medium" | "high" | "critical";
-  submittedBy: string;
-  role: Role;
-  date: string;
-  shift: "morning" | "evening" | "night";
-  description: string;
-  tags: string[];
-}
-
-interface HistoryEntry {
-  id: string;
-  reportId: string;
-  reportTitle: string;
-  action: "submitted" | "reviewed" | "approved" | "rejected" | "updated";
-  performedBy: string;
-  performedByRole: Role;
-  fromStatus?: Report["status"];
-  toStatus?: Report["status"];
-  timestamp: string;
-  date: string;
-  note?: string;
-}
 
 interface ToastItem {
   id: string;
@@ -51,262 +33,6 @@ interface ConfirmConfig {
   onConfirm: () => void;
 }
 
-const CURRENT_SUPERVISOR: { name: string; role: Role } = {
-  name: "Rohit Mehta",
-  role: "supervisor",
-};
-
-const DB: { reports: Report[]; history: HistoryEntry[] } = {
-  reports: [
-    {
-      id: "RPT-2401",
-      title: "Morning Shift Production Summary",
-      type: "daily",
-      status: "pending",
-      priority: "high",
-      submittedBy: "Rajesh Kumar",
-      role: "operator",
-      date: "2025-06-10",
-      shift: "morning",
-      description:
-        "Production line A operated at 94% efficiency. Minor belt misalignment detected in conveyor unit C-3 at 09:45. Operator manually corrected. Output: 1,240 units. Downtime: 18 minutes.",
-      tags: ["Line-A", "Conveyor", "Output"],
-    },
-    {
-      id: "RPT-2402",
-      title: "Pump Station Maintenance Log",
-      type: "maintenance",
-      status: "reviewed",
-      priority: "medium",
-      submittedBy: "Amit Singh",
-      role: "artisan",
-      date: "2025-06-10",
-      shift: "morning",
-      description:
-        "Scheduled maintenance on Pump P-07 completed. Seal replaced, bearing lubricated. Vibration levels back within tolerance. Next service due: 2025-07-10.",
-      tags: ["Pump-P07", "Maintenance", "Seal"],
-    },
-    {
-      id: "RPT-2403",
-      title: "Pressure Valve Incident Report",
-      type: "incident",
-      status: "pending",
-      priority: "critical",
-      submittedBy: "Suresh Patel",
-      role: "operator",
-      date: "2025-06-10",
-      shift: "evening",
-      description:
-        "Pressure relief valve V-12 triggered at 14:32. System pressure reached 8.4 bar (limit: 8.0 bar). Immediate shutdown initiated. Root cause under investigation.",
-      tags: ["Valve-V12", "Incident", "Pressure", "Shutdown"],
-    },
-    {
-      id: "RPT-2404",
-      title: "Weekly Equipment Health Report",
-      type: "weekly",
-      status: "approved",
-      priority: "medium",
-      submittedBy: "Priya Sharma",
-      role: "artisan",
-      date: "2025-06-09",
-      shift: "morning",
-      description:
-        "All 14 critical equipment units passed weekly inspection. Temperature sensors on units T-03 and T-07 showing drift — calibration scheduled for Monday. Overall health score: 87/100.",
-      tags: ["Inspection", "Sensors", "Calibration"],
-    },
-    {
-      id: "RPT-2405",
-      title: "Night Shift Handover Report",
-      type: "daily",
-      status: "reviewed",
-      priority: "low",
-      submittedBy: "Vikram Rao",
-      role: "operator",
-      date: "2025-06-09",
-      shift: "night",
-      description:
-        "Uneventful night shift. Production maintained at 88% capacity. Line B paused for 35 minutes due to material supply delay. All safety checks completed. No incidents to report.",
-      tags: ["Night-Shift", "Line-B", "Handover"],
-    },
-    {
-      id: "RPT-2406",
-      title: "Electrical System Inspection",
-      type: "maintenance",
-      status: "rejected",
-      priority: "high",
-      submittedBy: "Deepak Verma",
-      role: "artisan",
-      date: "2025-06-08",
-      shift: "morning",
-      description:
-        "Inspection report returned for revision. Panel board E-05 thermal readings incomplete. Requires additional data points from IR scan before approval can be granted.",
-      tags: ["Electrical", "Panel-E05", "IR-Scan"],
-    },
-  ],
-  history: [
-    {
-      id: "H-001",
-      reportId: "RPT-2404",
-      reportTitle: "Weekly Equipment Health Report",
-      action: "approved",
-      performedBy: CURRENT_SUPERVISOR.name,
-      performedByRole: "supervisor",
-      fromStatus: "reviewed",
-      toStatus: "approved",
-      timestamp: "11:42 AM",
-      date: "2025-06-09",
-      note: "All checks passed. Approved for record.",
-    },
-    {
-      id: "H-002",
-      reportId: "RPT-2404",
-      reportTitle: "Weekly Equipment Health Report",
-      action: "reviewed",
-      performedBy: CURRENT_SUPERVISOR.name,
-      performedByRole: "supervisor",
-      fromStatus: "pending",
-      toStatus: "reviewed",
-      timestamp: "10:15 AM",
-      date: "2025-06-09",
-    },
-    {
-      id: "H-003",
-      reportId: "RPT-2404",
-      reportTitle: "Weekly Equipment Health Report",
-      action: "submitted",
-      performedBy: "Priya Sharma",
-      performedByRole: "artisan",
-      toStatus: "pending",
-      timestamp: "09:00 AM",
-      date: "2025-06-09",
-    },
-    {
-      id: "H-004",
-      reportId: "RPT-2406",
-      reportTitle: "Electrical System Inspection",
-      action: "rejected",
-      performedBy: CURRENT_SUPERVISOR.name,
-      performedByRole: "supervisor",
-      fromStatus: "reviewed",
-      toStatus: "rejected",
-      timestamp: "03:30 PM",
-      date: "2025-06-08",
-      note: "Incomplete IR scan data. Return for revision.",
-    },
-    {
-      id: "H-005",
-      reportId: "RPT-2406",
-      reportTitle: "Electrical System Inspection",
-      action: "reviewed",
-      performedBy: CURRENT_SUPERVISOR.name,
-      performedByRole: "supervisor",
-      fromStatus: "pending",
-      toStatus: "reviewed",
-      timestamp: "01:00 PM",
-      date: "2025-06-08",
-    },
-    {
-      id: "H-006",
-      reportId: "RPT-2406",
-      reportTitle: "Electrical System Inspection",
-      action: "submitted",
-      performedBy: "Deepak Verma",
-      performedByRole: "artisan",
-      toStatus: "pending",
-      timestamp: "08:30 AM",
-      date: "2025-06-08",
-    },
-    {
-      id: "H-007",
-      reportId: "RPT-2402",
-      reportTitle: "Pump Station Maintenance Log",
-      action: "reviewed",
-      performedBy: CURRENT_SUPERVISOR.name,
-      performedByRole: "supervisor",
-      fromStatus: "pending",
-      toStatus: "reviewed",
-      timestamp: "02:15 PM",
-      date: "2025-06-10",
-    },
-    {
-      id: "H-008",
-      reportId: "RPT-2402",
-      reportTitle: "Pump Station Maintenance Log",
-      action: "submitted",
-      performedBy: "Amit Singh",
-      performedByRole: "artisan",
-      toStatus: "pending",
-      timestamp: "10:50 AM",
-      date: "2025-06-10",
-    },
-    {
-      id: "H-009",
-      reportId: "RPT-2401",
-      reportTitle: "Morning Shift Production Summary",
-      action: "submitted",
-      performedBy: "Rajesh Kumar",
-      performedByRole: "operator",
-      toStatus: "pending",
-      timestamp: "08:05 AM",
-      date: "2025-06-10",
-    },
-    {
-      id: "H-010",
-      reportId: "RPT-2403",
-      reportTitle: "Pressure Valve Incident Report",
-      action: "submitted",
-      performedBy: "Suresh Patel",
-      performedByRole: "operator",
-      toStatus: "pending",
-      timestamp: "02:40 PM",
-      date: "2025-06-10",
-    },
-  ],
-};
-
-// Simulated API calls with artificial network delay (mimic real API)
-const api = {
-  getReports: (): Promise<Report[]> =>
-    new Promise((res) => setTimeout(() => res([...DB.reports]), 700)),
-
-  getHistory: (): Promise<HistoryEntry[]> =>
-    new Promise((res) => setTimeout(() => res([...DB.history]), 600)),
-
-  updateReportStatus: (
-    id: string,
-    status: Report["status"],
-    actor: { name: string; role: Role },
-    note?: string,
-  ): Promise<{ report: Report; historyEntry: HistoryEntry }> =>
-    new Promise((res, rej) => {
-      setTimeout(() => {
-        const idx = DB.reports.findIndex((r) => r.id === id);
-        if (idx === -1) return rej(new Error("Report not found"));
-        const old = DB.reports[idx];
-        const updated: Report = { ...old, status };
-        DB.reports[idx] = updated;
-        const now = new Date();
-        const entry: HistoryEntry = {
-          id: `H-${Date.now()}`,
-          reportId: id,
-          reportTitle: old.title,
-          action: status as HistoryEntry["action"],
-          performedBy: actor.name,
-          performedByRole: actor.role,
-          fromStatus: old.status,
-          toStatus: status,
-          timestamp: now.toLocaleTimeString("en-IN", {
-            hour: "2-digit",
-            minute: "2-digit",
-          }),
-          date: now.toISOString().split("T")[0],
-          note: note || undefined,
-        };
-        DB.history.unshift(entry);
-        res({ report: updated, historyEntry: entry });
-      }, 800); // simulated latency
-    }),
-};
 
 // ════════════════════════════════════════════════════════════════════════════
 // CONFIG MAPS
@@ -1287,6 +1013,7 @@ function ReportsPage({
     "all",
   );
 
+  const currentSupervisor = useMemo(() => getCurrentSupervisor(), []);
   const pendingCount = reports.filter((r) => r.status === "pending").length;
   const approvedCount = reports.filter((r) => r.status === "approved").length;
   const criticalCount = reports.filter((r) => r.priority === "critical").length;
@@ -1356,7 +1083,7 @@ function ReportsPage({
               </span>
 
               <span className="rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-xs font-medium text-blue-100 backdrop-blur-sm">
-                {CURRENT_SUPERVISOR.name}
+                {currentSupervisor.name}
               </span>
             </div>
           </div>
@@ -1973,33 +1700,49 @@ export default function SupervisorReportApprovals() {
   const [loadingHistory, setLoadingHistory] = useState(true);
   const { toasts, dismiss, push } = useToast();
 
-  // Fetch reports on mount (simulated API)
-  useEffect(() => {
-    setLoadingReports(true);
-    api.getReports().then((data) => {
+  const currentSupervisor = useMemo(() => getCurrentSupervisor(), []);
+
+  // Fetch reports on mount via live API service
+  const fetchReports = useCallback(async () => {
+    try {
+      setLoadingReports(true);
+      const data = await reportApprovalService.getReports();
       setReports(data);
+    } catch (err: any) {
+      console.error("Failed to fetch reports:", err);
+    } finally {
       setLoadingReports(false);
-    });
+    }
   }, []);
 
-  // Fetch history on mount
-  useEffect(() => {
-    setLoadingHistory(true);
-    api.getHistory().then((data) => {
+  // Fetch history on mount via live API service
+  const fetchHistory = useCallback(async () => {
+    try {
+      setLoadingHistory(true);
+      const data = await reportApprovalService.getHistory();
       setHistory(data);
+    } catch (err: any) {
+      console.error("Failed to fetch report history:", err);
+    } finally {
       setLoadingHistory(false);
-    });
+    }
   }, []);
+
+  useEffect(() => {
+    fetchReports();
+    fetchHistory();
+  }, [fetchReports, fetchHistory]);
 
   const handleAction = useCallback(
     async (id: string, status: Report["status"], note?: string) => {
       try {
-        const { report: updated, historyEntry } = await api.updateReportStatus(
-          id,
-          status,
-          CURRENT_SUPERVISOR,
-          note,
-        );
+        const { report: updated, historyEntry } =
+          await reportApprovalService.updateReportStatus(
+            id,
+            status,
+            currentSupervisor,
+            note,
+          );
         setReports((prev) => prev.map((r) => (r.id === id ? updated : r)));
         setHistory((prev) => [historyEntry, ...prev]);
 
@@ -2028,7 +1771,7 @@ export default function SupervisorReportApprovals() {
         );
       }
     },
-    [push],
+    [push, currentSupervisor],
   );
 
   const pendingCount = reports.filter((r) => r.status === "pending").length;

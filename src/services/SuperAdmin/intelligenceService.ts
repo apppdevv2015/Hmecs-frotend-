@@ -1,5 +1,5 @@
-import StorageService, { STORAGE_KEYS } from "./storage.service";
-import { getApiBaseUrl } from "./api";
+import StorageService, { STORAGE_KEYS } from "../storage.service";
+import { getApiBaseUrl } from "../api";
 
 type ApiResponse<T> = {
   success?: boolean;

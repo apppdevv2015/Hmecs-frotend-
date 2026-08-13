@@ -73,6 +73,10 @@ export const machineService = {
     });
   },
 
+  async getCompanyMachines() {
+    return this.getMachines();
+  },
+
   async createMachine(payload: MachinePayload) {
     const companyId = getCompanyId();
 

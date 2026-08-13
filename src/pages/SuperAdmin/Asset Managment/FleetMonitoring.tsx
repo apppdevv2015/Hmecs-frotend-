@@ -7,6 +7,7 @@ import hydraulicImg from "../../../assets/images/landingpageimages/FleetLogo/hyd
 import suspensionImg from "../../../assets/images/landingpageimages/FleetLogo/suspension.png";
 
 import { fleetService } from "../../../services/Fleet/fleetService";
+import StorageService from "../../../services/storage.service";
 import ReactECharts from "echarts-for-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -254,68 +255,72 @@ const buildSubMetrics = (
       return [
         {
           label: "Air Pressure",
-          value: intelligence?.airPressure
-            ? `${intelligence.airPressure} PSI`
-            : "32 PSI",
+          value: intelligence?.airPressure || intelligence?.pressure || intelligence?.sensorData?.pressure
+            ? `${intelligence?.airPressure || intelligence?.pressure || intelligence?.sensorData?.pressure} PSI`
+            : "N/A",
         },
         {
           label: "Tyre Temperature",
-          value: intelligence?.tyreTemperature
-            ? `${intelligence.tyreTemperature}°C`
-            : "45°C",
+          value: intelligence?.tyreTemperature || intelligence?.temperature || intelligence?.sensorData?.temperature
+            ? `${intelligence?.tyreTemperature || intelligence?.temperature || intelligence?.sensorData?.temperature}°C`
+            : "N/A",
         },
       ];
     case "engine":
       return [
         {
           label: "Engine Temperature",
-          value: intelligence?.engineTemperature
-            ? `${intelligence.engineTemperature}°C`
-            : "90°C",
+          value: intelligence?.engineTemperature || intelligence?.temperature || intelligence?.sensorData?.temperature
+            ? `${intelligence?.engineTemperature || intelligence?.temperature || intelligence?.sensorData?.temperature}°C`
+            : "N/A",
         },
         {
           label: "Engine Oil Level",
-          value: intelligence?.oilLevel ? `${intelligence.oilLevel}%` : "100%",
+          value: intelligence?.oilLevel || intelligence?.fluidLevel
+            ? `${intelligence?.oilLevel || intelligence?.fluidLevel}%`
+            : "N/A",
         },
         {
           label: "Coolant Level",
           value: intelligence?.coolantLevel
-            ? `${intelligence.coolantLevel}%`
-            : "100%",
+            ? `${intelligence?.coolantLevel}%`
+            : "N/A",
         },
       ];
     case "hydraulic":
       return [
         {
           label: "Oil Level",
-          value: intelligence?.oilLevel ? `${intelligence.oilLevel}%` : "100%",
+          value: intelligence?.oilLevel || intelligence?.fluidLevel
+            ? `${intelligence?.oilLevel || intelligence?.fluidLevel}%`
+            : "N/A",
         },
         {
           label: "Hydraulic Pressure",
-          value: intelligence?.pressure
-            ? `${intelligence.pressure} Bar`
-            : "210 Bar",
+          value: intelligence?.pressure || intelligence?.sensorData?.pressure
+            ? `${intelligence?.pressure || intelligence?.sensorData?.pressure} Bar`
+            : "N/A",
         },
         {
           label: "Oil Temperature",
-          value: intelligence?.oilTemperature
-            ? `${intelligence.oilTemperature}°C`
-            : "55°C",
+          value: intelligence?.oilTemperature || intelligence?.temperature || intelligence?.sensorData?.temperature
+            ? `${intelligence?.oilTemperature || intelligence?.temperature || intelligence?.sensorData?.temperature}°C`
+            : "N/A",
         },
       ];
     case "transmission":
       return [
         {
           label: "Fluid Level",
-          value: intelligence?.fluidLevel
-            ? `${intelligence.fluidLevel}%`
-            : "0%",
+          value: intelligence?.fluidLevel || intelligence?.oilLevel
+            ? `${intelligence?.fluidLevel || intelligence?.oilLevel}%`
+            : "N/A",
         },
         {
           label: "Gear Temperature",
-          value: intelligence?.gearTemperature
-            ? `${intelligence.gearTemperature}°C`
-            : "0°C",
+          value: intelligence?.gearTemperature || intelligence?.temperature || intelligence?.sensorData?.temperature
+            ? `${intelligence?.gearTemperature || intelligence?.temperature || intelligence?.sensorData?.temperature}°C`
+            : "N/A",
         },
       ];
     default:
@@ -1323,8 +1328,6 @@ export default function SuperAdminFleet() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [activeTab, setActiveTab] = useState<CategoryTab>("All Equipment");
-  const [statusFilter, setStatusFilter] = useState<FleetStatus | "All">("All");
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>("all");
   const [companies, setCompanies] = useState<Company[]>([]);
   const [stats, setStats] = useState<FleetStats | null>(null);
@@ -1382,29 +1385,26 @@ export default function SuperAdminFleet() {
 
   /* ── Fetch companies once on mount ── */
   useEffect(() => {
-    setCompanies([
-      {
-        id: "CMP-01",
-        companyName: "Tata Mining",
-        companyCode: "TM001",
-        adminEmail: "tata@test.com",
-        adminName: "Admin",
-        staffCount: 10,
-        activePlan: "Premium",
-        createdAt: "2026-06-11",
-      },
-
-      {
-        id: "CMP-02",
-        companyName: "L&T Construction",
-        companyCode: "LT001",
-        adminEmail: "lt@test.com",
-        adminName: "Admin",
-        staffCount: 15,
-        activePlan: "Premium",
-        createdAt: "2026-06-11",
-      },
-    ]);
+    const loadCompanies = async () => {
+      try {
+        const list = await superAdminMachineService.getCompanies();
+        const arr = Array.isArray(list) ? list : (list as any)?.data || [];
+        const formatted: Company[] = arr.map((c: any) => ({
+          id: String(c.id),
+          companyName: c.companyName || c.company_name || c.name || "Unnamed Company",
+          companyCode: c.companyCode || c.company_code || "N/A",
+          adminEmail: c.adminEmail || c.email || "",
+          adminName: c.adminName || "Admin",
+          staffCount: Number(c.staffCount || 0),
+          activePlan: c.activePlan || "Enterprise",
+          createdAt: c.createdAt || new Date().toISOString(),
+        }));
+        setCompanies(formatted);
+      } catch (err) {
+        console.error("Failed to load fleet companies:", err);
+      }
+    };
+    loadCompanies();
   }, []);
 
   /* ── Fetch fleet dashboard (re-runs when company filter changes) ── */
@@ -1421,82 +1421,85 @@ export default function SuperAdminFleet() {
           cid === "all" ? undefined : cid,
         );
 
-        const machines: FleetMachine[] = rawMachines.map((machine) => ({
-          id: machine.machineId,
+        const machines: FleetMachine[] = (rawMachines || []).map((machine: any) => ({
+          id: String(machine?.machineId || machine?.id || ""),
 
-          machine: machine.machineName,
+          machine: String(machine?.machineName || machine?.name || machine?.model || "Machine"),
 
-          company: machine.company.companyName,
+          company:
+            machine?.company?.companyName && machine.company.companyName !== "N/A"
+              ? machine.company.companyName
+              : companies.find((c) => c.id === machine?.companyId)?.companyName || "Company",
 
-          companyId: machine.company.companyId,
+          companyId: machine?.company?.companyId || machine?.companyId || "",
 
-          fleet: machine.fleetId,
+          fleet: String(machine?.fleetId || machine?.serialNumber || "SN-101"),
 
-          operator: machine.operator.name,
+          operator: typeof machine?.operator === "object" ? (machine.operator?.name || "Assigned Operator") : String(machine?.operator || "Assigned Operator"),
 
-          location: machine.location,
+          location: String(machine?.location || machine?.site || "Site"),
 
-          type: machine.machineType,
+          type: String(machine?.machineType || machine?.equipmentType || "Equipment"),
 
-          health: `${machine.healthPercent}%`,
+          health: `${machine?.healthPercent ?? 85}%`,
 
-          healthPercent: machine.healthPercent,
+          healthPercent: Number(machine?.healthPercent ?? 85),
 
-          status: machine.status,
+          status: machine?.status || "Healthy",
 
-          lastSeen: machine.lastSeen,
+          lastSeen: machine?.lastSeen || "Just now",
 
-          hoursRun: machine.hoursRun,
+          hoursRun: Number(machine?.hoursRun || 0),
 
-          fuelLevel: machine.fuelLevel,
+          fuelLevel: Number(machine?.fuelLevel || 80),
 
           tyre: {
-            status: mapApiStatusToComponent(machine.components.tyre.status),
+            status: mapApiStatusToComponent(machine?.components?.tyre?.status),
             label: "TYRE",
-            life: `${machine.components.tyre.health}% life left`,
-            lifePercent: machine.components.tyre.health,
-            overallHealthPercent: machine.components.tyre.health,
-            subMetrics: buildSubMetrics("tyre", machine.components.tyre),
+            life: `${machine?.components?.tyre?.health ?? 85}% life left`,
+            lifePercent: Number(machine?.components?.tyre?.health ?? 85),
+            overallHealthPercent: Number(machine?.components?.tyre?.health ?? 85),
+            subMetrics: buildSubMetrics("tyre", machine?.components?.tyre),
           },
 
           engine: {
-            status: mapApiStatusToComponent(machine.components.engine.status),
+            status: mapApiStatusToComponent(machine?.components?.engine?.status),
             label: "ENGINE",
-            life: `${machine.components.engine.health}% life left`,
-            lifePercent: machine.components.engine.health,
-            overallHealthPercent: machine.components.engine.health,
-            subMetrics: buildSubMetrics("engine", machine.components.engine),
+            life: `${machine?.components?.engine?.health ?? 88}% life left`,
+            lifePercent: Number(machine?.components?.engine?.health ?? 88),
+            overallHealthPercent: Number(machine?.components?.engine?.health ?? 88),
+            subMetrics: buildSubMetrics("engine", machine?.components?.engine),
           },
 
           hydraulic: {
             status: mapApiStatusToComponent(
-              machine.components.hydraulic.status,
+              machine?.components?.hydraulic?.status,
             ),
             label: "HYDRAULIC",
-            life: `${machine.components.hydraulic.health}% life left`,
-            lifePercent: machine.components.hydraulic.health,
-            overallHealthPercent: machine.components.hydraulic.health,
+            life: `${machine?.components?.hydraulic?.health ?? 75}% life left`,
+            lifePercent: Number(machine?.components?.hydraulic?.health ?? 75),
+            overallHealthPercent: Number(machine?.components?.hydraulic?.health ?? 75),
             subMetrics: buildSubMetrics(
               "hydraulic",
-              machine.components.hydraulic,
+              machine?.components?.hydraulic,
             ),
           },
 
           transmission: {
             status: mapApiStatusToComponent(
-              machine.components.transmission.status,
+              machine?.components?.transmission?.status,
             ),
             label: "SUSPENSION",
-            life: `${machine.components.transmission.health}% life left`,
-            lifePercent: machine.components.transmission.health,
-            overallHealthPercent: machine.components.transmission.health,
+            life: `${machine?.components?.transmission?.health ?? 80}% life left`,
+            lifePercent: Number(machine?.components?.transmission?.health ?? 80),
+            overallHealthPercent: Number(machine?.components?.transmission?.health ?? 80),
             subMetrics: buildSubMetrics(
               "transmission",
-              machine.components.transmission,
+              machine?.components?.transmission,
             ),
           },
 
-          maintenanceHistory: machine.maintenanceHistory ?? [],
+          maintenanceHistory: Array.isArray(machine?.maintenanceHistory) ? machine.maintenanceHistory : [],
         }));
 
         const stats = await fleetService.getFleetStats();
@@ -1514,7 +1517,7 @@ export default function SuperAdminFleet() {
         setLoading(false);
       }
     },
-    [selectedCompanyId],
+    [selectedCompanyId, companies],
   );
 
   useEffect(() => {
@@ -1948,7 +1951,11 @@ export default function SuperAdminFleet() {
               </h3>
               <p className="mt-1 text-sm text-slate-500">
                 {overviewMachine
-                  ? `Showing live component health for ${overviewMachine.machine} (${overviewMachine.company})`
+                  ? `Showing live component health for ${overviewMachine.machine} (${
+                      overviewMachine.company && overviewMachine.company !== "Company" && overviewMachine.company !== "N/A"
+                        ? overviewMachine.company
+                        : companies.find((c) => c.id === overviewMachine.companyId)?.companyName || "HME Systems"
+                    })`
                   : "Select a machine from the table below to see its component health."}
               </p>
             </div>
@@ -2095,9 +2102,6 @@ export default function SuperAdminFleet() {
                                 <h4 className="text-[14px] font-semibold text-slate-900 dark:text-white">
                                   {machine.machine}
                                 </h4>
-                                <span className="text-[11px] text-slate-400 dark:text-slate-500">
-                                  {machine.id}
-                                </span>
                                 <p className="text-[11px] text-slate-400 dark:text-slate-500">
                                   {machine.type}
                                 </p>
@@ -2112,7 +2116,9 @@ export default function SuperAdminFleet() {
                                 <Building2 size={14} />
                               </div>
                               <span className="text-[13px] font-medium text-slate-700 dark:text-slate-300">
-                                {machine.company}
+                                {machine.company && machine.company !== "Company" && machine.company !== "N/A"
+                                  ? machine.company
+                                  : companies.find((c) => c.id === machine.companyId)?.companyName || "HME Systems"}
                               </span>
                             </div>
                           </td>

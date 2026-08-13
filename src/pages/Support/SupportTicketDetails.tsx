@@ -20,7 +20,7 @@ import {
   type Ticket,
   type TicketStatus,
   type TicketPriority,
-} from "../../services/ticketService";
+} from "../../services/Support/ticketService";
 import StorageService, { STORAGE_KEYS } from "../../services/storage.service";
 
 const STATUS_STAGES: TicketStatus[] = [

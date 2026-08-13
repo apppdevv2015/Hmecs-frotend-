@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Controller, useForm } from "react-hook-form";
 import PhoneField from "../common/PhoneField";
 import { z } from "zod";
@@ -8,7 +8,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { EyeCloseIcon, EyeIcon } from "../../icons";
 import Label from "../form/Label";
 import Input from "../form/input/InputField";
-import { authService } from "../../services/authService";
+import { authService } from "../../services/Auth/authService";
 import StorageService, { STORAGE_KEYS } from "../../services/storage.service";
 import {
   showSuccessToast,

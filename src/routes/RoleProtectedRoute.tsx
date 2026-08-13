@@ -12,8 +12,14 @@ type AuthState = {
   role: string;
 };
 
-function normalizeRole(role?: string | null) {
-  return String(role || "")
+export function normalizeRole(role?: any): string {
+  if (!role) return "";
+  const rawRole =
+    typeof role === "object"
+      ? role?.name || role?.roleName || role?.title || role?.role_name || ""
+      : String(role);
+
+  return String(rawRole)
     .toLowerCase()
     .trim()
     .replace(/\s+/g, "_")
@@ -21,17 +27,15 @@ function normalizeRole(role?: string | null) {
     .replace(/_+$/g, "");
 }
 
-function getRoleFromToken(token: string) {
+function getRoleFromToken(token: string): string {
   try {
     const payload = token.split(".")[1];
-
     if (!payload) return "";
 
     const base64 = payload.replace(/-/g, "+").replace(/_/g, "/");
-
     const decoded = JSON.parse(window.atob(base64));
 
-    return (
+    return normalizeRole(
       decoded?.role ||
       decoded?.role_name ||
       decoded?.user?.role ||
@@ -42,7 +46,6 @@ function getRoleFromToken(token: string) {
     );
   } catch (error) {
     console.error("Error decoding token:", error);
-
     return "";
   }
 }
@@ -50,11 +53,9 @@ function getRoleFromToken(token: string) {
 function isTokenExpired(token: string): boolean {
   try {
     const payload = token.split(".")[1];
-
     if (!payload) return true;
 
     const base64 = payload.replace(/-/g, "+").replace(/_/g, "/");
-
     const decoded = JSON.parse(window.atob(base64));
 
     if (!decoded.exp) {
@@ -62,7 +63,6 @@ function isTokenExpired(token: string): boolean {
     }
 
     const currentTime = Math.floor(Date.now() / 1000);
-
     return decoded.exp <= currentTime;
   } catch (error) {
     console.error("Token expiry check failed:", error);
@@ -70,22 +70,21 @@ function isTokenExpired(token: string): boolean {
   }
 }
 
-function getStoredRole() {
+function getStoredRole(): string {
   try {
     const token = StorageService.get<string>(STORAGE_KEYS.TOKEN) || "";
-
     const storedUser = StorageService.get<any>(STORAGE_KEYS.USER) || {};
 
-    return (
+    const raw =
       storedUser?.role ||
       storedUser?.role_name ||
-      StorageService.get<string>(STORAGE_KEYS.ROLE) ||
+      StorageService.get<any>(STORAGE_KEYS.ROLE) ||
       getRoleFromToken(token) ||
-      ""
-    );
+      "";
+
+    return normalizeRole(raw);
   } catch (error) {
     console.error("Error getting stored role:", error);
-
     return "";
   }
 }
@@ -94,9 +93,7 @@ export default function RoleProtectedRoute({
   allowedRoles,
 }: RoleProtectedRouteProps) {
   const location = useLocation();
-
   const [isLoading, setIsLoading] = useState(true);
-
   const [authState, setAuthState] = useState<AuthState>({
     token: "",
     role: "",
@@ -128,20 +125,17 @@ export default function RoleProtectedRoute({
           token: "",
           role: "",
         });
-
         return;
       }
 
       // Token valid
       const role = getStoredRole();
-
       setAuthState({
         token,
         role,
       });
     } catch (error) {
       console.error("Auth initialization error:", error);
-
       setAuthState({
         token: "",
         role: "",
@@ -156,12 +150,21 @@ export default function RoleProtectedRoute({
   }
 
   const normalizedUserRole = normalizeRole(authState.role);
-
   const normalizedAllowedRoles = allowedRoles.map((role) =>
-    normalizeRole(role),
+    normalizeRole(role)
   );
 
-  const hasAccess = normalizedAllowedRoles.includes(normalizedUserRole);
+  // Role matching with aliases
+  const hasAccess =
+    normalizedAllowedRoles.includes(normalizedUserRole) ||
+    (normalizedAllowedRoles.includes("super_admin") &&
+      ["superadmin", "system_admin"].includes(normalizedUserRole)) ||
+    (normalizedAllowedRoles.includes("company_admin") &&
+      ["admin", "companyadmin"].includes(normalizedUserRole)) ||
+    (normalizedAllowedRoles.includes("artisans") &&
+      ["artisan", "engineer", "mechanic"].includes(normalizedUserRole)) ||
+    (normalizedAllowedRoles.includes("operator") &&
+      ["planner"].includes(normalizedUserRole));
 
   // No token → redirect login
   if (!authState.token) {

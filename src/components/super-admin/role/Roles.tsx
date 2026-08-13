@@ -3,13 +3,11 @@ import { useEffect, useMemo, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
-  Eye,
   Pencil,
   Plus,
   RefreshCw,
   Search,
   Trash2,
-  UserCheck,
   X,
 } from "lucide-react";
 import { showErrorToast } from "../../../utils/toastUtils";
@@ -20,9 +18,9 @@ import {
   deleteRole as deleteRoleApi,
   getRoles,
   updateRole as updateRoleApi,
-} from "../../../services/roleService";
+} from "../../../services/Auth/roleService";
 
-import { userService } from "../../../services/userService";
+import { userService } from "../../../services/Auth/userService";
 
 type RoleStatus = "active" | "inactive";
 
@@ -37,30 +35,18 @@ type Role = {
 
 type ApiUser = {
   id: number | string;
-
   firstName?: string;
   lastName?: string;
-
   first_name?: string;
   last_name?: string;
-
-  fname?: string;
-  lname?: string;
-
   name?: string;
   email?: string;
-
   mobileNumber?: string;
-  mobile?: string;
   mobile_number?: string;
-  phone?: string;
-
   role_name?: string;
-  role?: string | { name?: string };
-
+  role?: string | { id?: string; name?: string };
   roleId?: string;
   role_id?: string | number;
-
   company_name?: string;
   company?: string | { name?: string };
 };
@@ -118,70 +104,22 @@ const formatDate = (date?: string) => {
 
 const normalizeRolesResponse = (response: any): ApiRole[] => {
   if (Array.isArray(response)) return response;
-
-  if (Array.isArray(response?.roles)) {
-    return response.roles;
-  }
-
-  if (Array.isArray(response?.data)) {
-    return response.data;
-  }
-
-  if (Array.isArray(response?.data?.roles)) {
-    return response.data.roles;
-  }
-
+  if (Array.isArray(response?.roles)) return response.roles;
+  if (Array.isArray(response?.data)) return response.data;
   return [];
 };
 
 const normalizeUsersResponse = (response: any): ApiUser[] => {
   if (Array.isArray(response)) return response;
-
-  if (Array.isArray(response?.users)) {
-    return response.users;
-  }
-
-  if (Array.isArray(response?.data)) {
-    return response.data;
-  }
-
-  if (Array.isArray(response?.data?.users)) {
-    return response.data.users;
-  }
-
+  if (Array.isArray(response?.users)) return response.users;
+  if (Array.isArray(response?.data)) return response.data;
   return [];
 };
 
-const getUserName = (user: ApiUser) => {
-  const firstName = user.first_name || user.fname || "";
-  const lastName = user.last_name || user.lname || "";
-
-  return user.name || `${firstName} ${lastName}`.trim() || "Unknown User";
-};
-
-const getUserRole = (user: ApiUser) => {
-  const roleValue =
-    user.role_name ||
-    (typeof user.role === "object" ? user.role?.name : user.role) ||
-    "viewer";
-  return formatRoleName(roleValue);
-};
-
-const getCompanyName = (user: ApiUser) => {
-  if (typeof user.company === "object") {
-    return user.company?.name || "—";
-  }
-
-  return user.company_name || user.company || "—";
-};
-
 const mapApiUserToRow = (user: ApiUser, roles: Role[]): UserRow => {
-  const firstName = user.firstName || user.first_name || user.fname || "";
-
-  const lastName = user.lastName || user.last_name || user.lname || "";
-
-  const fullName =
-    user.name || `${firstName} ${lastName}`.trim() || "Unknown User";
+  const firstName = user.firstName || user.first_name || "";
+  const lastName = user.lastName || user.last_name || "";
+  const fullName = user.name || `${firstName} ${lastName}`.trim() || "Unknown User";
 
   const matchedRole = roles.find(
     (role) =>
@@ -192,24 +130,14 @@ const mapApiUserToRow = (user: ApiUser, roles: Role[]): UserRow => {
     matchedRole?.name ||
     (typeof user.role === "object" ? user.role?.name : user.role) ||
     user.role_name ||
-    "No Role";
+    "—";
 
   return {
     id: user.id,
-
     name: fullName,
-
     email: user.email || "—",
-
-    phone:
-      user.mobileNumber ||
-      user.mobile_number ||
-      user.mobile ||
-      user.phone ||
-      "—",
-
+    phone: user.mobileNumber || user.mobile_number || "—",
     role: formatRoleName(String(roleValue)),
-
     company:
       typeof user.company === "object"
         ? (user.company?.name ?? "—")
@@ -241,11 +169,6 @@ export default function Roles() {
     fetchRoles();
   }, []);
 
-  // NOTE: roleService (createRoleApi/updateRoleApi/deleteRoleApi/getRoles)
-  // doesn't go through apiCall yet, so its toasts stay manual below.
-  // userService calls (getUsers/updateUser) in this file already auto-toast
-  // via apiCall — don't add manual toasts back for those.
-
   const fetchRoles = async () => {
     try {
       setLoading(true);
@@ -254,16 +177,20 @@ export default function Roles() {
 
       const data = normalizeRolesResponse(response);
 
-      const mappedRoles: Role[] = data.map((role) => {
+      const mappedRoles: Role[] = data.map((role: any) => {
         const rawName = String(role.name || "");
+        const status: RoleStatus =
+          role.status === "inactive" || role.isActive === false
+            ? "inactive"
+            : "active";
 
         return {
           id: role.id,
           rawName,
           name: formatRoleName(rawName),
-          status: role.status === "inactive" ? "inactive" : "active",
-          createdAt: formatDate((role as any).created_at),
-          updatedAt: formatDate((role as any).updated_at),
+          status,
+          createdAt: formatDate(role.created_at || role.createdAt),
+          updatedAt: formatDate(role.updated_at || role.updatedAt),
         };
       });
 
@@ -590,14 +517,6 @@ export default function Roles() {
                     <td onClick={(e) => e.stopPropagation()}>
                       <div className="flex justify-center gap-2 py-3">
                         <button
-                          onClick={() => setViewRole(role)}
-                          className="rounded-lg p-2 text-gray-400 transition hover:bg-gray-100 hover:text-gray-900 dark:hover:bg-white/10 dark:hover:text-white"
-                          type="button"
-                        >
-                          <Eye size={16} />
-                        </button>
-
-                        <button
                           onClick={() => openEditModal(role)}
                           className="rounded-lg p-2 text-blue-500 transition hover:bg-blue-500/10"
                           type="button"
@@ -611,14 +530,6 @@ export default function Roles() {
                           type="button"
                         >
                           <Trash2 size={16} />
-                        </button>
-
-                        <button
-                          onClick={() => openRoleUsersModal(role)}
-                          className="rounded-lg p-2 text-green-500 transition hover:bg-green-500/10"
-                          type="button"
-                        >
-                          <UserCheck size={16} />
                         </button>
                       </div>
                     </td>

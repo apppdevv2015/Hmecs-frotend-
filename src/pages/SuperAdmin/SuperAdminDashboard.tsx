@@ -2,17 +2,13 @@ import SuperAdminMetrics from "../../components/super-admin/dashboard/SuperAdmin
 import AdminManagementTable from "../../components/super-admin/dashboard/AdminManagementTable.tsx";
 import PlanDistribution from "../../components/super-admin/dashboard/PlanDistribution.tsx";
 import RecentActivity from "../../components/super-admin/dashboard/RecentActivity.tsx";
-import OperatorsMechanicsChart from "../../components/super-admin/dashboard/OperatorsMechanicsChart.tsx";
-import MachineStatusOverview from "../../components/super-admin/dashboard/MachineStatusOverview.tsx";
-import AlertSummaryChart from "../../components/super-admin/dashboard/AlertSummaryChart.tsx";
-import RoleDetailsPage from "../../components/super-admin/dashboard/RoleDetails.tsx";
 import AnalyticsChart from "../../components/super-admin/dashboard/AnalyticsChart";
 
 export default function Home() {
   return (
     <main className="min-h-screen bg-slate-50 px-4 py-5 dark:bg-slate-950 sm:px-6 lg:px-8">
       <div className="mx-auto w-full max-w-[1600px] space-y-5">
-        <header className=" rounded-2xl border-b border-blue-100 bg-gradient-to-r from-blue-800 via-blue-700 to-blue-800 px-6 py-6">
+        <header className="rounded-2xl border-b border-blue-100 bg-gradient-to-r from-blue-800 via-blue-700 to-blue-800 px-6 py-6">
           <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
             <div>
               <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -30,8 +26,8 @@ export default function Home() {
               </h1>
 
               <p className="mt-2 max-w-3xl text-sm font-medium text-blue-100">
-                Monitor platform activity, admins, subscription plans, machines,
-                operators, mechanics, and alerts from one central dashboard.
+                Monitor platform activity, admins, subscription plans, companies,
+                revenue, and platform usage from one central dashboard.
               </p>
             </div>
 
@@ -66,16 +62,6 @@ export default function Home() {
             <PlanDistribution />
             <RecentActivity />
           </div>
-        </section>
-
-        <section className="grid grid-cols-1 items-stretch gap-5 lg:grid-cols-3">
-          <OperatorsMechanicsChart />
-          <MachineStatusOverview />
-          <AlertSummaryChart />
-        </section>
-
-        <section className="min-w-0">
-          <RoleDetailsPage />
         </section>
       </div>
     </main>

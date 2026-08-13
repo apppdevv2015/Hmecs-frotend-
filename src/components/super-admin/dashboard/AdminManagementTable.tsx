@@ -15,9 +15,11 @@ import {
   Phone,
   Building2,
   TrendingUp,
+  Lock,
 } from "lucide-react";
 import Pagination from "../../common/Pagination";
-import { userService } from "../../../services/userService";
+import { userService } from "../../../services/Auth/userService";
+import { superAdminMachineService } from "../../../services/SuperAdmin/machineService";
 import { useNavigate } from "react-router";
 
 type ApiUser = {
@@ -182,6 +184,21 @@ const getAvatar = (name: string) => {
 };
 
 const getCompanyName = (user: ApiUser) => {
+  const roleVal = (
+    typeof user.role === "string"
+      ? user.role
+      : user.role?.name || user.role_name || ""
+  ).toLowerCase();
+
+  if (
+    roleVal.includes("sub_super") ||
+    roleVal.includes("sub super") ||
+    roleVal.includes("super_admin") ||
+    roleVal.includes("super admin")
+  ) {
+    return "-";
+  }
+
   if (typeof user.company === "object") {
     return user.company?.name || user.company_name || "-";
   }
@@ -190,6 +207,21 @@ const getCompanyName = (user: ApiUser) => {
 };
 
 const getCompanyCode = (user: ApiUser) => {
+  const roleVal = (
+    typeof user.role === "string"
+      ? user.role
+      : user.role?.name || user.role_name || ""
+  ).toLowerCase();
+
+  if (
+    roleVal.includes("sub_super") ||
+    roleVal.includes("sub super") ||
+    roleVal.includes("super_admin") ||
+    roleVal.includes("super admin")
+  ) {
+    return "-";
+  }
+
   if (typeof user.company === "object") {
     return (
       user.company?.companyCode || user.companyCode || user.company_code || "-"
@@ -274,10 +306,37 @@ const mapApiUserToAdmin = (user: ApiUser): Admin => {
 export default function AdminManagementTable() {
   const navigate = useNavigate();
   const [admins, setAdmins] = useState<Admin[]>([]);
+  const [companies, setCompanies] = useState<{ id: string | number; name: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [viewLoading, setViewLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    const loadCompaniesList = async () => {
+      try {
+        const res = await superAdminMachineService.getCompanies();
+        const val: any = res;
+        const rawList = Array.isArray(val)
+          ? val
+          : Array.isArray(val?.data)
+            ? val.data
+            : Array.isArray(val?.companies)
+              ? val.companies
+              : [];
+
+        const compList = rawList.map((c: any) => ({
+          id: c.id,
+          name: c.name || c.company_name || c.companyName || "Company",
+        }));
+        setCompanies(compList);
+      } catch (err) {
+        console.error("Failed to load companies dropdown list:", err);
+      }
+    };
+
+    loadCompaniesList();
+  }, []);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedRole, setSelectedRole] = useState("All");
@@ -481,9 +540,6 @@ export default function AdminManagementTable() {
               <h2 className="text-lg font-semibold text-slate-950 dark:text-white">
                 Admin Management
               </h2>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                View and manage all users from the API.
-              </p>
             </div>
 
             <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -617,7 +673,7 @@ export default function AdminManagementTable() {
                 <th className="px-4 py-3 font-medium">Role</th>
                 <th className="px-4 py-3 font-medium">Company Code</th>
                 <th className="px-4 py-3 font-medium">Company Name</th>
-                <th className="px-4 py-3 font-medium">Status</th>
+                <th className="px-4 py-3 font-medium">Subscription</th>
                 <th className="px-4 py-3 font-medium">Actions</th>
               </tr>
             </thead>
@@ -687,15 +743,23 @@ export default function AdminManagementTable() {
                     </td>
 
                     <td className="px-4 py-4">
-                      <span
-                        className={`rounded-lg px-3 py-1 text-xs font-medium ${
-                          admin.status === "Active"
-                            ? "bg-green-50 text-green-700 dark:bg-green-500/15 dark:text-green-400"
-                            : "bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-400"
-                        }`}
-                      >
-                        {admin.status}
-                      </span>
+                      {(admin.roleName || "").toLowerCase().includes("sub_super") ||
+                      (admin.roleName || "").toLowerCase().includes("sub super") ||
+                      (admin.roleName || "").toLowerCase().includes("super_admin") ? (
+                        <span className="rounded-lg bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                          Platform Admin (No Plan)
+                        </span>
+                      ) : (
+                        <span
+                          className={`rounded-lg px-3 py-1 text-xs font-semibold ${
+                            admin.status === "Active"
+                              ? "bg-green-50 text-green-700 dark:bg-green-500/15 dark:text-green-400"
+                              : "bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-400"
+                          }`}
+                        >
+                          ● {admin.status}
+                        </span>
+                      )}
                     </td>
 
                     <td className="relative px-4 py-4">
@@ -717,32 +781,18 @@ export default function AdminManagementTable() {
                         <div className="absolute right-6 top-12 z-50 w-36 rounded-xl border border-slate-200 bg-white py-2 shadow-lg dark:border-slate-800 dark:bg-slate-950">
                           <button
                             type="button"
-                            onClick={() => handleView(admin)}
-                            disabled={viewLoading}
-                            className="flex w-full items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:text-slate-300 dark:hover:bg-white/10"
-                          >
-                            <Eye size={15} />
-                            {viewLoading ? "Loading..." : "View"}
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() =>
-                              navigate("/super-admin/intelligence")
-                            }
+                            onClick={() => {
+                              const compId = (admin as any).companyId || (admin as any).company_id;
+                              if (compId) {
+                                navigate(`/super-admin/intelligence?companyId=${encodeURIComponent(compId)}`);
+                              } else {
+                                navigate("/super-admin/intelligence");
+                              }
+                            }}
                             className="flex w-full items-center gap-2 px-4 py-2 text-sm text-orange-600 hover:bg-orange-50 dark:text-orange-400 dark:hover:bg-white/10"
                           >
                             <TrendingUp size={15} />
                             Intelligence
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => handleEdit(admin)}
-                            className="flex w-full items-center gap-2 px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-white/10"
-                          >
-                            <Edit size={15} />
-                            Edit
                           </button>
 
                           <button
@@ -841,9 +891,8 @@ export default function AdminManagementTable() {
                   label="Email"
                   icon={<Mail size={16} />}
                   value={editForm.email}
-                  onChange={(value) =>
-                    setEditForm({ ...editForm, email: value })
-                  }
+                  disabled={true}
+                  readOnly={true}
                 />
 
                 <InputBox
@@ -863,7 +912,7 @@ export default function AdminManagementTable() {
                   <div className="relative">
                     <Shield
                       size={16}
-                      className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                      className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 z-10"
                     />
 
                     <select
@@ -882,14 +931,53 @@ export default function AdminManagementTable() {
                   </div>
                 </div>
 
-                <InputBox
-                  label="Company Name"
-                  icon={<Building2 size={16} />}
-                  value={editForm.companyName}
-                  onChange={(value) =>
-                    setEditForm({ ...editForm, companyName: value })
-                  }
-                />
+                <div>
+                  <div className="mb-1.5 flex items-center justify-between">
+                    <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
+                      Company Name
+                    </label>
+                    {((editForm.roleName || "").toLowerCase().includes("sub_super") ||
+                      (editForm.roleName || "").toLowerCase().includes("sub super") ||
+                      (editForm.roleName || "").toLowerCase().includes("super_admin")) && (
+                      <span className="flex items-center gap-1 text-[10px] font-bold text-slate-400 dark:text-slate-500">
+                        <Lock size={11} /> Locked
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="relative">
+                    <Building2
+                      size={16}
+                      className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 z-10"
+                    />
+
+                    {(editForm.roleName || "").toLowerCase().includes("sub_super") ||
+                    (editForm.roleName || "").toLowerCase().includes("sub super") ||
+                    (editForm.roleName || "").toLowerCase().includes("super_admin") ? (
+                      <input
+                        disabled
+                        readOnly
+                        value="No Company Required (Platform Admin)"
+                        className="h-11 w-full cursor-not-allowed rounded-xl border border-slate-200 bg-slate-100/90 pl-10 pr-3 text-sm text-slate-500 opacity-75 dark:border-slate-800 dark:bg-slate-800/80 dark:text-slate-400"
+                      />
+                    ) : (
+                      <select
+                        value={editForm.companyName || ""}
+                        onChange={(e) =>
+                          setEditForm({ ...editForm, companyName: e.target.value })
+                        }
+                        className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-3 text-sm text-slate-700 outline-none focus:border-blue-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
+                      >
+                        <option value="">Select Company</option>
+                        {companies.map((c) => (
+                          <option key={c.id} value={c.name}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                </div>
 
                 <div className="grid grid-cols-2 gap-3 pt-3">
                   <button
@@ -1015,26 +1103,43 @@ function InputBox({
   label,
   value,
   icon,
+  disabled = false,
+  readOnly = false,
   onChange,
 }: {
   label: string;
   value: string;
   icon: ReactNode;
-  onChange: (value: string) => void;
+  disabled?: boolean;
+  readOnly?: boolean;
+  onChange?: (value: string) => void;
 }) {
   return (
     <div>
-      <label className="mb-1.5 block text-xs font-medium text-slate-600 dark:text-slate-400">
-        {label}
-      </label>
+      <div className="mb-1.5 flex items-center justify-between">
+        <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
+          {label}
+        </label>
+        {disabled && (
+          <span className="flex items-center gap-1 text-[10px] font-bold text-slate-400 dark:text-slate-500">
+            <Lock size={11} /> Locked
+          </span>
+        )}
+      </div>
       <div className="relative">
         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
           {icon}
         </span>
         <input
           value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-3 text-sm text-slate-700 outline-none focus:border-blue-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
+          disabled={disabled}
+          readOnly={readOnly}
+          onChange={(e) => onChange?.(e.target.value)}
+          className={`h-11 w-full rounded-xl border border-slate-200 pl-10 pr-3 text-sm text-slate-700 outline-none transition-all dark:border-slate-800 dark:text-slate-300 ${
+            disabled
+              ? "cursor-not-allowed bg-slate-100/90 text-slate-500 opacity-75 dark:bg-slate-800/80 dark:text-slate-400"
+              : "bg-slate-50 focus:border-blue-500 dark:bg-slate-900"
+          }`}
         />
       </div>
     </div>

@@ -3,6 +3,8 @@ import StorageService, { STORAGE_KEYS } from "../storage.service";
 
 export type SuperAdminCompany = {
   id: string;
+  adminId?: string;
+  admin_id?: string;
   name?: string;
   company_name?: string;
   companyName?: string;
@@ -13,6 +15,8 @@ export type SuperAdminCompany = {
   adminName?: string;
   staffCount?: number;
   activePlan?: string;
+  isActive?: boolean;
+  status?: string;
   createdAt?: string;
   created_at?: string;
 };
@@ -49,6 +53,17 @@ export type SuperAdminComponent = {
 
   companyId?: string;
   company_id?: string;
+  companyCode?: string;
+  company_code?: string;
+  companyName?: string;
+  company_name?: string;
+  company?: {
+    id?: string;
+    name?: string;
+    companyCode?: string;
+    company_code?: string;
+    subscriptionStatus?: string;
+  };
 
   machineId?: string;
   machine_id?: string;
@@ -130,6 +145,19 @@ export type SuperAdminComponent = {
     machine_name?: string;
     machineName?: string;
     machineCode?: string;
+    companyId?: string;
+    company_id?: string;
+    companyCode?: string;
+    company_code?: string;
+    companyName?: string;
+    company_name?: string;
+    company?: {
+      id?: string;
+      name?: string;
+      companyCode?: string;
+      company_code?: string;
+      subscriptionStatus?: string;
+    };
   };
 
   createdAt?: string;
@@ -438,6 +466,9 @@ export const superAdminMachineService = {
           last_name: lastName,
           email: payload.adminEmail,
           mobile_number: (payload as any).mobileNumber || "",
+          is_active: payload.status ? payload.status === "Active" : undefined,
+          companyName: payload.companyName,
+          companyCode: payload.companyCode,
         }),
       },
       {

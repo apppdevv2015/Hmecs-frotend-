@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { machineService } from "../../services/companyadmin/machineService";
-import { intelligenceService } from "../../services/intelligenceService";
+import { intelligenceService } from "../../services/SuperAdmin/intelligenceService";
 
 import tyreImg from "../../../src/assets/images/landingpageimages/FleetLogo/TyreLogo.png";
 import engineImg from "../../../src/assets/images/landingpageimages/FleetLogo/Engine.png";
