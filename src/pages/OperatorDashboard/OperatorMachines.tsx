@@ -17,6 +17,13 @@ type Machine = {
   model: string;
   serialNumber: string;
   equipmentType: string;
+  assignedOperatorId?: string;
+  assignedOperatorName?: string;
+  assignedArtisanId?: string;
+  assignedArtisanName?: string;
+  assignedSupervisorId?: string;
+  assignedSupervisorName?: string;
+  assignedAt?: string;
   companyId?: string;
   status?: string;
   runningHours?: string | number;
@@ -64,6 +71,13 @@ const normalizeMachine = (item: any, index: number): Machine => {
         item?.category ??
         "N/A",
     ),
+    assignedOperatorId: item?.assignedOperatorId || item?.assigned_operator_id || "",
+    assignedOperatorName: item?.assignedOperatorName || item?.assigned_operator_name || item?.operatorName || item?.operator_name || "",
+    assignedArtisanId: item?.assignedArtisanId || item?.assigned_artisan_id || "",
+    assignedArtisanName: item?.assignedArtisanName || item?.assigned_artisan_name || item?.artisanName || item?.artisan_name || "",
+    assignedSupervisorId: item?.assignedSupervisorId || item?.assigned_supervisor_id || "",
+    assignedSupervisorName: item?.assignedSupervisorName || item?.assigned_supervisor_name || item?.supervisorName || item?.supervisor_name || "",
+    assignedAt: item?.assignedAt || item?.assigned_at || item?.createdAt || item?.created_at || "",
     companyId: item?.companyId ?? item?.company_id,
     status: String(item?.status ?? item?.machineStatus ?? "Active"),
     runningHours:
@@ -357,8 +371,10 @@ const OperatorMachines: React.FC = () => {
                   <th className="px-6 py-4 font-bold">Machine</th>
                   <th className="px-6 py-4 font-bold">Model</th>
                   <th className="px-6 py-4 font-bold">Serial Number</th>
-                  <th className="px-6 py-4 font-bold">Equipment Type</th>
-                  <th className="px-6 py-4 font-bold">Status</th>
+                  <th className="px-6 py-4 font-bold">Assigned Operator</th>
+                  <th className="px-6 py-4 font-bold">Assigned Artisan</th>
+                  <th className="px-6 py-4 font-bold">Assigned By (Supervisor)</th>
+                  <th className="px-6 py-4 font-bold">Assigned Date & Time</th>
                   <th className="px-6 py-4 font-bold">Health</th>
                   <th className="px-6 py-4 text-center font-bold">View</th>
                 </tr>
@@ -367,7 +383,7 @@ const OperatorMachines: React.FC = () => {
               <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
                 {loading ? (
                   <tr>
-                    <td colSpan={8} className="px-6 py-16 text-center">
+                    <td colSpan={10} className="px-6 py-16 text-center">
                       <div className="flex flex-col items-center justify-center gap-3">
                         <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 text-blue-600 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300">
                           <Loader2 className="animate-spin" size={24} />
@@ -401,7 +417,7 @@ const OperatorMachines: React.FC = () => {
                             </span>
 
                             <span className="mt-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">
-                              Operator View Only
+                              {machine.equipmentType}
                             </span>
                           </div>
                         </div>
@@ -420,19 +436,43 @@ const OperatorMachines: React.FC = () => {
                       </td>
 
                       <td className="px-6 py-4">
-                        <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300">
-                          {machine.equipmentType}
-                        </span>
+                        {machine.assignedOperatorName ? (
+                          <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300">
+                            {machine.assignedOperatorName}
+                          </span>
+                        ) : (
+                          <span className="text-xs italic text-slate-400">Unassigned</span>
+                        )}
                       </td>
 
                       <td className="px-6 py-4">
-                        <span
-                          className={`inline-flex items-center rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-wide ${getStatusBadgeClass(
-                            machine.status,
-                          )}`}
-                        >
-                          {machine.status}
-                        </span>
+                        {machine.assignedArtisanName ? (
+                          <span className="inline-flex items-center rounded-full border border-purple-200 bg-purple-50 px-3 py-1 text-xs font-bold text-purple-700 dark:border-purple-500/30 dark:bg-purple-500/10 dark:text-purple-300">
+                            {machine.assignedArtisanName}
+                          </span>
+                        ) : (
+                          <span className="text-xs italic text-slate-400">Unassigned</span>
+                        )}
+                      </td>
+
+                      <td className="px-6 py-4">
+                        {machine.assignedSupervisorName ? (
+                          <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
+                            {machine.assignedSupervisorName}
+                          </span>
+                        ) : (
+                          <span className="text-xs italic text-slate-400">Unassigned</span>
+                        )}
+                      </td>
+
+                      <td className="px-6 py-4">
+                        {machine.assignedAt || (machine as any).createdAt ? (
+                          <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                            {new Date(machine.assignedAt || (machine as any).createdAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        ) : (
+                          <span className="text-xs italic text-slate-400">Unassigned</span>
+                        )}
                       </td>
 
                       <td className="px-6 py-4">
@@ -598,6 +638,9 @@ function MachineDetailsModal({
             <DetailItem label="Model" value={machine.model} />
             <DetailItem label="Serial Number" value={machine.serialNumber} />
             <DetailItem label="Equipment Type" value={machine.equipmentType} />
+            <DetailItem label="Assigned Operator" value={machine.assignedOperatorName || "Unassigned"} />
+            <DetailItem label="Assigned Artisan" value={machine.assignedArtisanName || "Unassigned"} />
+            <DetailItem label="Assigned By Supervisor" value={machine.assignedSupervisorName || "Unassigned"} />
             <DetailItem label="Status" value={machine.status || "N/A"} />
             <DetailItem
               label="Running Hours"

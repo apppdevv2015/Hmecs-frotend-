@@ -1340,6 +1340,8 @@ export default function SuperAdminFleet() {
   const [sortField, setSortField] = useState<keyof FleetMachine | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+  const [activeTab, setActiveTab] = useState<string>("All Equipment");
+  const [statusFilter, setStatusFilter] = useState<string>("All");
 
   // Machine currently shown in the "Component Health Overview" cards above the table.
   // Updates live whenever a row in the Company Fleet table is clicked.

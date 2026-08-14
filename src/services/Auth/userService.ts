@@ -38,6 +38,7 @@ export type ApiUser = {
   company?: string | { id?: string | number; name?: string };
   status?: string;
   is_active?: boolean;
+  isActive?: boolean;
   last_login?: string;
   lastLogin?: string;
 };

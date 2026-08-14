@@ -2,6 +2,7 @@ import StorageService, { STORAGE_KEYS } from "../storage.service";
 import { userService, type ApiUser, normalizeUsersResponse } from "../Auth/userService";
 import { machineService } from "../companyadmin/machineService";
 import { machineAssignmentService } from "./machineAssignmentService";
+import { apiCall } from "../apiHandler";
 
 export type ShiftType = "Morning" | "Evening" | "Night";
 export type OperatorStatus = "Active" | "Inactive" | "On Leave";
@@ -40,6 +41,7 @@ export type DynamicMachine = {
 
 export type StoredSupervisorTask = {
   operatorId: string; // operator user UUID or ID
+  operatorName?: string;
   machineId: string;
   machineName: string;
   engineerId: string;
@@ -73,9 +75,10 @@ const getCurrentSupervisor = () => {
     const user = StorageService.get<any>(STORAGE_KEYS.USER) || {};
     const name = `${user.firstName || user.first_name || ""} ${user.lastName || user.last_name || ""}`.trim() || user.name || "Supervisor";
     const id = user.id || user._id || "";
-    return { id, name };
+    const email = user.email || StorageService.get<string>(STORAGE_KEYS.EMAIL) || "supervisor@hme.com";
+    return { id, name, email };
   } catch {
-    return { id: "", name: "Supervisor" };
+    return { id: "", name: "Supervisor", email: "supervisor@hme.com" };
   }
 };
 
@@ -240,6 +243,8 @@ export const supervisorTaskService = {
    */
   async assignTask(payload: {
     operatorId: string; // operator userId or code
+    operatorName?: string;
+    operatorEmail?: string;
     machineId: string;
     machineName: string;
     engineerId?: string;
@@ -249,17 +254,11 @@ export const supervisorTaskService = {
     try {
       const stored = getStoredTasks();
       const supervisor = getCurrentSupervisor();
-      const assignedAt = new Date().toLocaleString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-        hour: "numeric",
-        minute: "numeric",
-        hour12: true,
-      });
+      const assignedAt = new Date().toISOString();
 
       const newAssignment: StoredSupervisorTask = {
         operatorId: payload.operatorId,
+        operatorName: payload.operatorName || "",
         machineId: payload.machineId,
         machineName: payload.machineName,
         engineerId: payload.engineerId || "",
@@ -282,6 +281,22 @@ export const supervisorTaskService = {
 
       saveStoredTasks(stored);
 
+      // Persist assignment to backend DB so it shows on all pages
+      if (payload.machineId) {
+        try {
+          await machineService.assignOperatorToMachine(payload.machineId, {
+            assignedOperatorId: payload.operatorId || undefined,
+            assignedOperatorName: payload.operatorName || undefined,
+            assignedArtisanId: payload.engineerId || undefined,
+            assignedArtisanName: payload.engineerName || undefined,
+            assignedSupervisorId: supervisor.id || undefined,
+            assignedSupervisorName: supervisor.name || undefined,
+          });
+        } catch (dbErr) {
+          console.warn("Failed to persist assignment to backend DB:", dbErr);
+        }
+      }
+
       // Also sync machineAssignmentService so operator & engineer dashboards reflect this immediately
       if (payload.machineId) {
         await machineAssignmentService.assignMachines(
@@ -296,6 +311,24 @@ export const supervisorTaskService = {
             "engineer"
           );
         }
+      }
+
+      // Trigger Machine Assignment Emails to Supervisor and Operator
+      try {
+        await apiCall("/users/send-assignment-email", {
+          method: "POST",
+          body: JSON.stringify({
+            supervisorName: supervisor.name,
+            supervisorEmail: supervisor.email,
+            operatorName: payload.operatorName || "Operator",
+            operatorEmail: payload.operatorEmail || `${payload.operatorId.toLowerCase()}@yopmail.com`,
+            machineName: payload.machineName,
+            shift: payload.shift || "Morning",
+            assignedAt,
+          }),
+        });
+      } catch (emailErr) {
+        console.warn("Failed to dispatch machine assignment emails:", emailErr);
       }
 
       return true;
@@ -321,5 +354,12 @@ export const supervisorTaskService = {
       console.error("Failed to unassign task:", err);
       return false;
     }
+  },
+
+  /**
+   * Alias for getSupervisorTaskData
+   */
+  async getSupervisorTasksData() {
+    return this.getSupervisorTaskData();
   },
 };

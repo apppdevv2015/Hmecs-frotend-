@@ -123,5 +123,28 @@ export const machineService = {
       },
     );
   },
+
+  async assignOperatorToMachine(
+    machineId: string,
+    assignment: {
+      assignedOperatorId?: string;
+      assignedOperatorName?: string;
+      assignedArtisanId?: string;
+      assignedArtisanName?: string;
+      assignedSupervisorId?: string;
+      assignedSupervisorName?: string;
+    },
+  ) {
+    return apiCall(
+      `/machines/${machineId}`,
+      {
+        method: "PUT",
+        body: JSON.stringify(assignment),
+      },
+      {
+        showSuccess: false,
+      },
+    );
+  },
 };
 

@@ -160,6 +160,7 @@ export default function SupervisorAlerts() {
   const [refreshing, setRefreshing] = useState(false);
 
   const [search, setSearch] = useState("");
+  const [machineFilter, setMachineFilter] = useState<string>("All");
   const [severityFilter, setSeverityFilter] = useState<AlertSeverity | "All">(
     "All"
   );
@@ -203,6 +204,14 @@ export default function SupervisorAlerts() {
     };
   }, [alerts]);
 
+  const machineOptions = useMemo(() => {
+    const list = Array.from(new Set(alerts.map((a) => a.machine))).filter(Boolean);
+    return [
+      { label: "All Machines", value: "All" },
+      ...list.map((m) => ({ label: m, value: m })),
+    ];
+  }, [alerts]);
+
   const filteredAlerts = useMemo(() => {
     const value = search.toLowerCase().trim();
 
@@ -215,6 +224,8 @@ export default function SupervisorAlerts() {
         alert.id.toLowerCase().includes(value) ||
         alert.location.toLowerCase().includes(value);
 
+      const matchesMachine =
+        machineFilter === "All" || alert.machine === machineFilter;
       const matchesSeverity =
         severityFilter === "All" || alert.severity === severityFilter;
       const matchesStatus =
@@ -223,10 +234,14 @@ export default function SupervisorAlerts() {
         componentFilter === "All" || alert.component === componentFilter;
 
       return (
-        matchesSearch && matchesSeverity && matchesStatus && matchesComponent
+        matchesSearch &&
+        matchesMachine &&
+        matchesSeverity &&
+        matchesStatus &&
+        matchesComponent
       );
     });
-  }, [alerts, search, severityFilter, statusFilter, componentFilter]);
+  }, [alerts, search, machineFilter, severityFilter, statusFilter, componentFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredAlerts.length / PAGE_SIZE));
   const safePage = Math.min(currentPage, totalPages);
@@ -239,6 +254,7 @@ export default function SupervisorAlerts() {
   const endItem = Math.min(startIndex + PAGE_SIZE, filteredAlerts.length);
 
   const hasActiveFilters =
+    machineFilter !== "All" ||
     severityFilter !== "All" ||
     statusFilter !== "All" ||
     componentFilter !== "All" ||
@@ -246,6 +262,7 @@ export default function SupervisorAlerts() {
 
   const resetFilters = () => {
     setSearch("");
+    setMachineFilter("All");
     setSeverityFilter("All");
     setStatusFilter("All");
     setComponentFilter("All");
@@ -378,6 +395,15 @@ export default function SupervisorAlerts() {
               <SlidersHorizontal className="h-4 w-4" />
             </div>
 
+            <AppSelect
+              className="w-full sm:w-[180px]"
+              value={machineFilter}
+              onChange={(value) => {
+                setMachineFilter(value);
+                setCurrentPage(1);
+              }}
+              options={machineOptions}
+            />
             <AppSelect
               className="w-full sm:w-[180px]"
               value={componentFilter}

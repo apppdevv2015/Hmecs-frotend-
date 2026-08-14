@@ -6,6 +6,7 @@ export type Role = "supervisor" | "artisan" | "operator";
 export type ReportType = "daily" | "weekly" | "incident" | "maintenance";
 export type ReportStatus = "pending" | "reviewed" | "approved" | "rejected";
 export type ReportPriority = "low" | "medium" | "high" | "critical";
+export type ToastType = "success" | "error" | "info" | "warning";
 
 export interface Report {
   id: string;
