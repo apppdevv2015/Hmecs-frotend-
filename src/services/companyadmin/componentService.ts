@@ -116,4 +116,10 @@ export const componentService = {
       },
     );
   },
+
+  getComponentTelemetry: (componentId: string) => {
+    return apiCall<any>(`/components/${componentId}/telemetry`, {
+      method: "GET",
+    });
+  },
 };

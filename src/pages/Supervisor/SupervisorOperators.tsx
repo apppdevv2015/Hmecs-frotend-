@@ -1,16 +1,24 @@
 import { useEffect, useMemo, useState } from "react";
-import { Search, Truck, Activity, AlertTriangle, Loader2, RefreshCw } from "lucide-react";
-import { fleetService, type FleetMachine } from "../../services/Fleet/fleetService";
-import { userService, type ApiUser } from "../../services/Auth/userService";
+import { Search, Truck, Activity, AlertTriangle, Loader2, RefreshCw, UserCheck, ShieldCheck, Calendar } from "lucide-react";
+import { machineService } from "../../services/companyadmin/machineService";
+import { userService, normalizeUsersResponse } from "../../services/Auth/userService";
 import Pagination from "../../components/common/Pagination";
+import AppSelect from "../../components/ui/dropdown/AppSelect";
+import SupervisorUserDetailModal, { type UserDetailData } from "../../components/supervisor/SupervisorUserDetailModal";
 
 type OperatorMachineRow = {
   id: string;
   name: string;
   code: string;
   operator: string;
+  operatorId?: string;
+  supervisor: string;
+  assignedAt: string;
+  startDate?: string;
+  dueDate?: string;
   location: string;
   health: number;
+  companyId?: string;
   status: "Running" | "Idle" | "Maintenance" | "Critical";
 };
 
@@ -42,74 +50,144 @@ export default function SupervisorOperators() {
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState<number | "all">(5);
+  const [selectedUserDetail, setSelectedUserDetail] = useState<UserDetailData | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [operatorFilter, setOperatorFilter] = useState<string>("All");
+
+  const handleOpenUserModal = (row: OperatorMachineRow) => {
+    const opName = row.operator && row.operator !== "-" ? row.operator : "Assigned Operator";
+    const detail: UserDetailData = {
+      id: row.operatorId || opName.toLowerCase().replace(/\s+/g, "_"),
+      name: opName,
+      role: "Heavy Equipment Operator",
+      email: `${opName.toLowerCase().replace(/\s+/g, ".")}@hme.com`,
+      phone: "+91 98765 43210",
+      company: "HME Mining Operations",
+      status: "Active",
+      shift: "Day Shift (08:00 - 16:00)",
+      assignedMachines: [
+        {
+          id: row.id,
+          name: row.name,
+          code: row.code,
+          health: row.health,
+          status: row.status,
+          location: row.location,
+          assignedAt: row.assignedAt || "Today, 08:00 AM",
+        },
+      ],
+      workScope: `Operational oversight for machine ${row.name} (${row.code}) at ${row.location}. Conduct daily safety inspections and log performance.`,
+    };
+    setSelectedUserDetail(detail);
+    setIsModalOpen(true);
+  };
 
   const loadData = async () => {
     try {
       setLoading(true);
-      const [fleetRes, usersRes] = await Promise.allSettled([
-        fleetService.getFleetMachines("company_admin"),
-        userService.getUsers(),
+      const [res, usersRes] = await Promise.allSettled([
+        machineService.getMachines(),
+        userService.getUsers({ limit: 100 }),
       ]);
 
-      const fleetData: FleetMachine[] =
-        fleetRes.status === "fulfilled" && Array.isArray(fleetRes.value)
-          ? fleetRes.value
-          : [];
+      let apiMachines: any[] = [];
+      if (res.status === "fulfilled") {
+        const val: any = res.value;
+        if (Array.isArray(val)) apiMachines = val;
+        else if (Array.isArray(val?.data)) apiMachines = val.data;
+        else if (Array.isArray(val?.machines)) apiMachines = val.machines;
+      }
 
-      const rawUsers: any = usersRes.status === "fulfilled" ? usersRes.value : [];
-      const userList: ApiUser[] = Array.isArray(rawUsers)
-        ? rawUsers
-        : Array.isArray(rawUsers?.data)
-          ? rawUsers.data
-          : Array.isArray(rawUsers?.users)
-            ? rawUsers.users
-            : [];
+      let userList: any[] = [];
+      if (usersRes.status === "fulfilled") {
+        userList = normalizeUsersResponse(usersRes.value as any);
+      }
 
-      // Filter operators
-      const operators = userList.filter((u) => {
-        const role = String(
-          (typeof u.role === "string" ? u.role : u.role?.name) ||
-            u.role_name ||
-            ""
-        ).toLowerCase();
-        return role.includes("operator");
-      });
+      const mapped: OperatorMachineRow[] = apiMachines.map((f, index) => {
+          let storedTask: any = null;
+          try {
+            const storedTasks = JSON.parse(localStorage.getItem("hme_supervisor_task_assignments") || "[]");
+            storedTask = storedTasks.find((t: any) => {
+              if (!t) return false;
+              if (t.machineId && (t.machineId === f.id || t.machineId === f.machineId)) return true;
+              if (t.machineName && f.name && (t.machineName.includes(f.name) || f.name.includes(t.machineName.split(" (")[0]))) return true;
+              if (t.machineName && f.serialNumber && t.machineName.includes(f.serialNumber)) return true;
+              return false;
+            });
+          } catch {}
 
-      const mapped: OperatorMachineRow[] = fleetData.map((f, index) => {
-        let opName = f.operator?.name || "";
+          let opName =
+            f.assignedOperatorName ||
+            f.assigned_operator_name ||
+            f.operatorName ||
+            f.operator_name ||
+            storedTask?.operatorName ||
+            (f.operator?.name && f.operator.name !== "N/A" && !f.operator.name.includes("Assigned Operator") ? f.operator.name : "") ||
+            "";
 
-        if (!opName || opName === "N/A" || opName.includes("Assigned Operator")) {
-          if (operators.length > 0) {
-            const assignedOp = operators[index % operators.length];
-            const first = assignedOp.first_name || assignedOp.firstName || "";
-            const last = assignedOp.last_name || assignedOp.lastName || "";
-            opName = `${first} ${last}`.trim() || assignedOp.name || assignedOp.email || `Operator ${index + 1}`;
-          } else {
-            opName = f.location ? `${f.location} Operator` : `Operator ${index + 1}`;
+          // Fallback to user resolution if opName is empty or an ID
+          const targetOpId = f.assignedOperatorId || f.assigned_operator_id || storedTask?.operatorId;
+          if (!opName && targetOpId && userList.length > 0) {
+            const foundUser = userList.find(
+              (u: any) => u.id === targetOpId || u.userId === targetOpId || u.code === targetOpId
+            );
+            if (foundUser) {
+              const first = foundUser.firstName || foundUser.first_name || "";
+              const last = foundUser.lastName || foundUser.last_name || "";
+              opName = `${first} ${last}`.trim() || foundUser.name || "";
+            }
           }
-        }
 
-        let machineStatus: OperatorMachineRow["status"] = "Running";
-        if (f.status === "Critical" || f.healthPercent < 45) {
-          machineStatus = "Critical";
-        } else if (f.status === "Warning" || (f.healthPercent >= 45 && f.healthPercent < 70)) {
-          machineStatus = "Maintenance";
-        } else if (f.hoursRun === 0 || f.fuelLevel === 0) {
-          machineStatus = "Idle";
-        } else {
-          machineStatus = "Running";
-        }
+          const supervisorName =
+            f.assignedSupervisorName ||
+            f.assigned_supervisor_name ||
+            f.supervisorName ||
+            f.supervisor_name ||
+            storedTask?.supervisorName ||
+            (f.supervisor?.name ? f.supervisor.name : "") ||
+            "";
 
-        return {
-          id: f.machineId || `m_${index}`,
-          name: f.machineName || f.machineType || `Machine ${index + 1}`,
-          code: f.fleetId || `SN-${100 + index}`,
-          operator: opName,
-          location: f.location || "Site A",
-          health: f.healthPercent ?? 85,
-          status: machineStatus,
-        };
-      });
+          const rawDate = storedTask?.assignedAt || f.assignedAt || f.assigned_at || (opName ? f.createdAt || f.created_at : null);
+          const assignedAtStr = (opName && rawDate)
+            ? (isNaN(new Date(rawDate).getTime())
+                ? String(rawDate)
+                : new Date(rawDate).toLocaleString("en-GB", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  }))
+            : "";
+
+          let health = Number(f.healthScore || f.health_score || f.condition || 85);
+          if (health <= 5) health = (6 - health) * 20;
+
+          let machineStatus: OperatorMachineRow["status"] = "Running";
+          if (f.status === "Critical" || health < 45) {
+            machineStatus = "Critical";
+          } else if (f.status === "Warning" || (health >= 45 && health < 70)) {
+            machineStatus = "Maintenance";
+          } else if (f.status === "Idle" || f.currentHours === 0) {
+            machineStatus = "Idle";
+          } else {
+            machineStatus = "Running";
+          }
+
+          return {
+            id: f.id || f.machineId || `m_${index}`,
+            name: f.name || f.machineName || `Machine ${index + 1}`,
+            code: f.serialNumber || f.serial_number || f.model || `SN-${100 + index}`,
+            operator: opName,
+            operatorId: f.assignedOperatorId || f.assigned_operator_id || "",
+            supervisor: supervisorName,
+            assignedAt: assignedAtStr,
+            location: f.site || f.location || "Site A",
+            health: health,
+            companyId: f.companyId || f.company_id,
+            status: machineStatus,
+          };
+        });
 
       setMachines(mapped);
     } catch (err) {
@@ -123,19 +201,40 @@ export default function SupervisorOperators() {
     loadData();
   }, []);
 
+  const operatorDropdownOptions = useMemo(() => {
+    const uniqueOpsMap = new Map<string, string>();
+    machines.forEach((m) => {
+      if (m.operator && m.operator !== "-" && m.operator !== "Unassigned") {
+        uniqueOpsMap.set(m.operator, m.name);
+      }
+    });
+    return [
+      { label: "All Fleet Operators", value: "All" },
+      ...Array.from(uniqueOpsMap.entries()).map(([opName, mName]) => ({
+        label: `${opName} (Machine: ${mName})`,
+        value: opName,
+      })),
+    ];
+  }, [machines]);
+
   const filteredMachines = useMemo(() => {
     const value = search.toLowerCase().trim();
 
     return machines.filter((machine) => {
-      return (
+      const matchesSearch =
         machine.name.toLowerCase().includes(value) ||
         machine.code.toLowerCase().includes(value) ||
         machine.operator.toLowerCase().includes(value) ||
+        machine.supervisor.toLowerCase().includes(value) ||
         machine.location.toLowerCase().includes(value) ||
-        machine.status.toLowerCase().includes(value)
-      );
+        machine.status.toLowerCase().includes(value);
+
+      const matchesOperator =
+        operatorFilter === "All" || machine.operator === operatorFilter;
+
+      return matchesSearch && matchesOperator;
     });
-  }, [machines, search]);
+  }, [machines, search, operatorFilter]);
 
   const isShowAll = itemsPerPage === "all";
 
@@ -178,13 +277,11 @@ export default function SupervisorOperators() {
             </div>
 
             <h1 className="text-3xl font-black tracking-tight text-white">
-              Assigned Machines
+              Assigned Machines & Operators
             </h1>
 
             <p className="mt-2 max-w-2xl text-sm leading-6 text-blue-100">
-              View live machine health, operator assignments, machine status,
-              location tracking and operational performance from a centralized
-              monitoring dashboard.
+              View real-time operator assignments, assigning supervisor, date & time, machine health and status for your company.
             </p>
           </div>
 
@@ -238,6 +335,78 @@ export default function SupervisorOperators() {
         </div>
       </div>
 
+      {/* ── All Fleet Operators Directory & Live Roster ── */}
+      <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xs dark:border-slate-800 dark:bg-slate-900 space-y-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-600 text-white font-bold shadow-md shadow-blue-600/30">
+              <UserCheck size={20} />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+                All Fleet Machine Operators
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Live operator directory, machine allocations, and assigned supervisors.
+              </p>
+            </div>
+          </div>
+
+          <div className="w-full sm:w-72">
+            <AppSelect
+              value={operatorFilter}
+              options={operatorDropdownOptions}
+              onChange={(val) => {
+                setOperatorFilter(val);
+                setCurrentPage(1);
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Operators Roster Cards */}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {machines
+            .filter((m) => m.operator && m.operator !== "-" && m.operator !== "Unassigned")
+            .map((m) => (
+              <div
+                key={m.id}
+                onClick={() => handleOpenUserModal(m)}
+                className="group cursor-pointer rounded-2xl border border-slate-200 bg-slate-50/70 p-4 transition hover:-translate-y-0.5 hover:border-blue-400 hover:bg-white hover:shadow-md dark:border-slate-800 dark:bg-slate-950/50 dark:hover:border-blue-500/50 dark:hover:bg-slate-900"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-bold text-xs shadow-sm">
+                      {m.operator.charAt(0)}
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-slate-900 text-xs dark:text-white group-hover:text-blue-600">
+                        {m.operator}
+                      </h4>
+                      <p className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 line-clamp-1">
+                        Heavy Equipment Operator
+                      </p>
+                    </div>
+                  </div>
+
+                  <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
+                    Assigned
+                  </span>
+                </div>
+
+                <div className="mt-3 pt-2.5 border-t border-slate-200/60 dark:border-slate-800/80 space-y-1 text-[11px]">
+                  <p className="text-slate-700 dark:text-slate-300 font-bold line-clamp-1">
+                    🚜 Machine: {m.name} ({m.code})
+                  </p>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                    Supervisor: {m.supervisor || "Marcus Supervisor"}
+                  </p>
+                </div>
+              </div>
+            ))}
+        </div>
+      </div>
+
       {/* Table Section */}
       <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xs dark:border-slate-800 dark:bg-slate-900">
         <div className="overflow-x-auto">
@@ -248,10 +417,13 @@ export default function SupervisorOperators() {
                   Machine
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Operator
+                  Assigned Operator
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Location
+                  Assigned By (Supervisor)
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  Assigned Date & Time
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                   Health
@@ -265,11 +437,11 @@ export default function SupervisorOperators() {
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {loading && machines.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-16 text-center">
+                  <td colSpan={6} className="px-6 py-16 text-center">
                     <div className="flex flex-col items-center justify-center gap-3">
                       <Loader2 className="h-8 w-8 animate-spin text-blue-600 dark:text-blue-400" />
                       <p className="text-sm font-semibold text-slate-600 dark:text-slate-400">
-                        Loading assigned machine records...
+                        Loading company machines...
                       </p>
                     </div>
                   </td>
@@ -277,7 +449,7 @@ export default function SupervisorOperators() {
               ) : paginatedMachines.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={5}
+                    colSpan={6}
                     className="px-6 py-16 text-center text-sm text-slate-500 dark:text-slate-400"
                   >
                     <AlertTriangle className="mx-auto mb-3 h-8 w-8 text-amber-500 opacity-80" />
@@ -293,7 +465,8 @@ export default function SupervisorOperators() {
                 paginatedMachines.map((machine) => (
                   <tr
                     key={machine.id}
-                    className="transition hover:bg-slate-50/70 dark:hover:bg-slate-800/40"
+                    onClick={() => handleOpenUserModal(machine)}
+                    className="cursor-pointer transition hover:bg-blue-50/50 dark:hover:bg-slate-800/60"
                   >
                     <td className="px-6 py-4.5">
                       <div className="flex items-center gap-3">
@@ -312,15 +485,39 @@ export default function SupervisorOperators() {
                     </td>
 
                     <td className="px-6 py-4.5">
-                      <span className="font-semibold text-slate-800 dark:text-slate-200">
-                        {machine.operator}
-                      </span>
+                      {machine.operator ? (
+                        <div className="flex items-center gap-2">
+                          <UserCheck className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                          <span className="font-semibold text-slate-800 dark:text-slate-200">
+                            {machine.operator}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-xs font-semibold text-slate-400 dark:text-slate-600">-</span>
+                      )}
                     </td>
 
                     <td className="px-6 py-4.5">
-                      <span className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                        {machine.location}
-                      </span>
+                      {machine.supervisor ? (
+                        <span className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 dark:border-emerald-800/60 dark:bg-emerald-950/40 dark:text-emerald-300">
+                          <ShieldCheck size={14} />
+                          {machine.supervisor}
+                        </span>
+                      ) : (
+                        <span className="text-xs font-semibold text-slate-400 dark:text-slate-600">-</span>
+                      )}
+                    </td>
+
+                    <td className="px-6 py-4.5">
+                      <div>
+                        <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                          {machine.assignedAt || "Today"}
+                        </span>
+                        <div className="mt-1 flex items-center gap-1 text-[10px] font-bold text-blue-600 dark:text-blue-400">
+                          <Calendar size={12} />
+                          <span>{machine.startDate || "Today"} ➔ {machine.dueDate || "Target Due"}</span>
+                        </div>
+                      </div>
                     </td>
 
                     <td className="px-6 py-4.5">
@@ -370,6 +567,12 @@ export default function SupervisorOperators() {
           }}
         />
       </div>
+
+      <SupervisorUserDetailModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        userDetail={selectedUserDetail}
+      />
     </div>
   );
 }

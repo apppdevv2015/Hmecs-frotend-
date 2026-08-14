@@ -48,8 +48,8 @@ type FormErrors = Partial<Record<keyof TaskForm, string>>;
 const taskSchema = z.object({
   operatorId: z.string().min(1, "Please select an operator."),
   machine: z.string().min(1, "Please select a machine."),
-  engineer: z.string().min(1, "Please select an engineer."),
-  shift: z.string().min(1, "Please select a shift."),
+  engineer: z.string().optional(),
+  shift: z.string().optional(),
 });
 
 const shiftOptions = [
@@ -130,12 +130,24 @@ export default function SupervisorTaskPage() {
   }, [loadData]);
 
   // Filtered operators based on search
-  const filteredOperators = useMemo(() => {
-    const value = search.trim().toLowerCase();
-    if (!value) return operators;
+  const [operatorFilter, setOperatorFilter] = useState<string>("All");
 
-    return operators.filter(
-      (operator) =>
+  const operatorFilterOptions = useMemo(() => {
+    return [
+      { label: "All Fleet Operators", value: "All" },
+      ...operators.map((op) => ({
+        label: `${op.name} (${op.assignedMachine ? `Machine: ${op.assignedMachine}` : "Unassigned"})`,
+        value: op.userId || op.id,
+      })),
+    ];
+  }, [operators]);
+
+  const filteredOperators = useMemo(() => {
+    const value = search.toLowerCase().trim();
+
+    return operators.filter((operator) => {
+      const matchesSearch =
+        value.length === 0 ||
         operator.name.toLowerCase().includes(value) ||
         operator.id.toLowerCase().includes(value) ||
         operator.userId.toLowerCase().includes(value) ||
@@ -143,9 +155,16 @@ export default function SupervisorTaskPage() {
         operator.phone.toLowerCase().includes(value) ||
         operator.assignedMachine.toLowerCase().includes(value) ||
         operator.assignedEngineer.toLowerCase().includes(value) ||
-        operator.shift.toLowerCase().includes(value)
-    );
-  }, [operators, search]);
+        operator.shift.toLowerCase().includes(value);
+
+      const matchesOperatorFilter =
+        operatorFilter === "All" ||
+        operator.userId === operatorFilter ||
+        operator.id === operatorFilter;
+
+      return matchesSearch && matchesOperatorFilter;
+    });
+  }, [operators, search, operatorFilter]);
 
   const assignedOperators = useMemo(
     () => operators.filter((op) => Boolean(op.assignedMachine)).length,
@@ -331,19 +350,31 @@ export default function SupervisorTaskPage() {
     try {
       setSaving(true);
       const targetOpId = editingOperatorId ?? selectedOperatorId;
+      // Find Operator Object
+      const opObj = operators.find((o) => o.userId === targetOpId || o.id === targetOpId || (o as any).code === targetOpId);
+      let opName = opObj?.name || "";
+      if (!opName && targetOpId) {
+        const foundOpt = operatorOptions.find((opt) => opt.value === targetOpId);
+        if (foundOpt) {
+          opName = foundOpt.label.split(" (")[0].trim();
+        }
+      }
 
       // Find Machine Object
       const machineObj = machines.find((m) => m.id === selectedMachine || m.machineName === selectedMachine);
-      const machineName = machineObj?.machineName || selectedMachine;
+      const rawMachineName = machineObj?.machineName || selectedMachine;
+      const machineName = rawMachineName.split(" (")[0].trim();
       const machineId = machineObj?.id || selectedMachine;
 
       // Find Engineer Object
       const engineerObj = engineers.find((e) => e.id === selectedEngineer || e.name === selectedEngineer);
-      const engineerName = engineerObj?.name || selectedEngineer;
+      const engineerName = engineerObj?.name || "";
       const engineerId = engineerObj?.id || selectedEngineer;
 
       const success = await supervisorTaskService.assignTask({
         operatorId: targetOpId,
+        operatorName: opName,
+        operatorEmail: opObj?.email || "",
         machineId,
         machineName,
         engineerId,
@@ -445,7 +476,7 @@ export default function SupervisorTaskPage() {
           {/* Right Actions */}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             {/* Search Bar */}
-            <div className="relative w-full sm:w-[320px] md:w-[350px]">
+            <div className="relative w-full sm:w-[280px]">
               <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-white/60" />
               <input
                 value={search}
@@ -455,6 +486,18 @@ export default function SupervisorTaskPage() {
                 }}
                 placeholder="Search operator, ID, machine..."
                 className="h-12 w-full rounded-xl border border-white/15 bg-white/10 pl-12 pr-4 text-sm font-medium text-white backdrop-blur-md outline-none transition-all duration-300 placeholder:text-white/50 focus:border-white/30 focus:bg-white/15 focus:ring-4 focus:ring-white/10"
+              />
+            </div>
+
+            {/* Operator Filter Dropdown */}
+            <div className="w-full sm:w-[220px]">
+              <AppSelect
+                value={operatorFilter}
+                options={operatorFilterOptions}
+                onChange={(val) => {
+                  setOperatorFilter(val);
+                  setCurrentPage(1);
+                }}
               />
             </div>
 
@@ -483,7 +526,7 @@ export default function SupervisorTaskPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         {/* Total Operators */}
         <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm transition-all hover:shadow-md dark:border-slate-800 dark:bg-slate-900">
           <div className="flex items-center justify-between">
@@ -505,12 +548,12 @@ export default function SupervisorTaskPage() {
           </div>
         </div>
 
-        {/* Assigned */}
+        {/* Assigned Operators */}
         <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm transition-all hover:shadow-md dark:border-slate-800 dark:bg-slate-900">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
-                Assigned
+                Assigned Operators
               </p>
               <h2 className="mt-2 text-3xl font-black text-emerald-600 dark:text-emerald-400">
                 {loading ? (
@@ -526,44 +569,65 @@ export default function SupervisorTaskPage() {
           </div>
         </div>
 
-        {/* Unassigned */}
+        {/* Unassigned Operators */}
         <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm transition-all hover:shadow-md dark:border-slate-800 dark:bg-slate-900">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
-                Unassigned
+                Unassigned Operators
               </p>
-              <h2 className="mt-2 text-3xl font-black text-orange-500 dark:text-orange-400">
+              <h2 className="mt-2 text-3xl font-black text-amber-500 dark:text-amber-400">
                 {loading ? (
-                  <Loader2 className="h-7 w-7 animate-spin text-orange-400" />
+                  <Loader2 className="h-7 w-7 animate-spin text-amber-400" />
                 ) : (
                   unassignedOperators
                 )}
               </h2>
             </div>
-            <div className="rounded-2xl bg-orange-100 p-4 text-orange-500 dark:bg-orange-950/50 dark:text-orange-400">
+            <div className="rounded-2xl bg-amber-100 p-4 text-amber-500 dark:bg-amber-950/50 dark:text-amber-400">
               <AlertTriangle className="h-6 w-6" />
             </div>
           </div>
         </div>
 
-        {/* Engineers / Artisans */}
+        {/* Assigned Machines */}
         <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm transition-all hover:shadow-md dark:border-slate-800 dark:bg-slate-900">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
-                Engineers
+                Assigned Machines
               </p>
-              <h2 className="mt-2 text-3xl font-black text-violet-600 dark:text-violet-400">
+              <h2 className="mt-2 text-3xl font-black text-indigo-600 dark:text-indigo-400">
                 {loading ? (
-                  <Loader2 className="h-7 w-7 animate-spin text-violet-400" />
+                  <Loader2 className="h-7 w-7 animate-spin text-indigo-400" />
                 ) : (
-                  engineers.length
+                  assignedOperators
                 )}
               </h2>
             </div>
-            <div className="rounded-2xl bg-violet-100 p-4 text-violet-600 dark:bg-violet-950/50 dark:text-violet-400">
-              <ShieldCheck className="h-6 w-6" />
+            <div className="rounded-2xl bg-indigo-100 p-4 text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-400">
+              <Cpu className="h-6 w-6" />
+            </div>
+          </div>
+        </div>
+
+        {/* Dedicated Unassigned Machines Card */}
+        <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm transition-all hover:shadow-md dark:border-slate-800 dark:bg-slate-900">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
+                Unassigned Machines
+              </p>
+              <h2 className="mt-2 text-3xl font-black text-orange-500 dark:text-orange-400">
+                {loading ? (
+                  <Loader2 className="h-7 w-7 animate-spin text-orange-400" />
+                ) : (
+                  Math.max(0, machines.length - assignedOperators)
+                )}
+              </h2>
+            </div>
+            <div className="rounded-2xl bg-orange-100 p-4 text-orange-500 dark:bg-orange-950/50 dark:text-orange-400">
+              <Cpu className="h-6 w-6" />
             </div>
           </div>
         </div>
@@ -583,9 +647,6 @@ export default function SupervisorTaskPage() {
                 </th>
                 <th className="px-6 py-3.5 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                   Machine
-                </th>
-                <th className="px-6 py-3.5 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Engineer
                 </th>
                 <th className="px-6 py-3.5 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                   Shift
@@ -698,20 +759,6 @@ export default function SupervisorTaskPage() {
                         )}
                       </td>
 
-                      {/* Assigned Engineer */}
-                      <td className="px-6 py-4">
-                        {operator.assignedEngineer ? (
-                          <div className="inline-flex items-center gap-2 rounded-xl border border-violet-200 bg-violet-50/80 px-3 py-1.5 text-xs font-semibold text-violet-700 dark:border-violet-800/60 dark:bg-violet-950/40 dark:text-violet-300">
-                            <UserCog className="h-3.5 w-3.5 text-violet-500" />
-                            {operator.assignedEngineer}
-                          </div>
-                        ) : (
-                          <span className="text-xs font-medium text-slate-400 dark:text-slate-500">
-                            Not Assigned
-                          </span>
-                        )}
-                      </td>
-
                       {/* Shift */}
                       <td className="px-6 py-4">
                         <span
@@ -740,19 +787,19 @@ export default function SupervisorTaskPage() {
                         <div className="flex items-center justify-center gap-2">
                           <button
                             onClick={() => openEditModal(operator)}
-                            className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-sm transition hover:border-blue-500 hover:text-blue-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-blue-500 dark:hover:text-blue-400"
+                            title={isAssigned ? "Reassign Operator" : "Assign Operator"}
+                            className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:border-blue-500 hover:bg-blue-50 hover:text-blue-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-blue-500 dark:hover:bg-blue-950/40 dark:hover:text-blue-400"
                           >
-                            <Pencil className="h-3.5 w-3.5" />
-                            {isAssigned ? "Reassign" : "Assign"}
+                            <Pencil className="h-4 w-4" />
                           </button>
 
                           {isAssigned && (
                             <button
                               onClick={() => openEngineerView(operator.userId || operator.id)}
-                              className="flex items-center gap-1.5 rounded-xl bg-slate-900 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700"
+                              title="View Details"
+                              className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-900 text-white shadow-sm transition hover:bg-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700"
                             >
-                              <Eye className="h-3.5 w-3.5" />
-                              View
+                              <Eye className="h-4 w-4" />
                             </button>
                           )}
                         </div>
@@ -849,10 +896,10 @@ export default function SupervisorTaskPage() {
                     </div>
                   </div>
 
-                  {/* Assigned Engineer */}
+                  {/* Assigned Artisan */}
                   <div className="rounded-[22px] border border-slate-200 p-5 dark:border-slate-800">
                     <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                      Assigned Engineer
+                      Assigned Artisan
                     </p>
                     <div className="mt-3 flex items-center gap-3">
                       <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-100 text-violet-600 dark:bg-violet-950/50 dark:text-violet-400">
@@ -999,50 +1046,6 @@ export default function SupervisorTaskPage() {
                 </div>
               </div>
 
-              {/* Engineer Dropdown */}
-              <div>
-                <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                  Assign Engineer / Artisan <span className="text-red-500">*</span>
-                </label>
-                <AppSelect
-                  value={selectedEngineer}
-                  options={engineerOptions}
-                  placeholder={
-                    engineerOptions.length > 0
-                      ? "Choose Engineer"
-                      : "No engineers available"
-                  }
-                  searchable
-                  onChange={(value) => updateField("engineer", value)}
-                />
-                <div className="mt-1 min-h-[18px]">
-                  {formErrors.engineer && (
-                    <p className="text-xs font-medium text-red-500">
-                      {formErrors.engineer}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* Shift Selector */}
-              <div>
-                <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                  Work Shift <span className="text-red-500">*</span>
-                </label>
-                <AppSelect
-                  value={selectedShift}
-                  options={shiftOptions}
-                  placeholder="Select Shift"
-                  onChange={(value) => updateField("shift", value)}
-                />
-                <div className="mt-1 min-h-[18px]">
-                  {formErrors.shift && (
-                    <p className="text-xs font-medium text-red-500">
-                      {formErrors.shift}
-                    </p>
-                  )}
-                </div>
-              </div>
             </div>
 
             {/* Modal Actions */}
@@ -1084,8 +1087,7 @@ export default function SupervisorTaskPage() {
                   disabled={
                     saving ||
                     !selectedOperatorId ||
-                    !selectedMachine ||
-                    !selectedEngineer
+                    !selectedMachine
                   }
                   className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-6 py-3 text-xs font-bold text-white shadow-lg shadow-blue-600/30 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >

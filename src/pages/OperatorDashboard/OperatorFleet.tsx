@@ -1132,7 +1132,7 @@ export default function EngineerFleet() {
 
         fleet: machine.fleetId,
 
-        operator: machine.operator.name,
+        operator: (machine.operator?.name && machine.operator.name !== "N/A" && !machine.operator.name.includes("Assigned Operator")) ? machine.operator.name : "Unassigned",
 
         location: machine.location,
 

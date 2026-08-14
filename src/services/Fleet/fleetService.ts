@@ -79,7 +79,7 @@ export const fleetService = {
             item.company?.companyName || item.company?.name || item.companyName || "N/A";
           const fId = item.serialNumber || `FL-${220 + idx}`;
           const opName =
-            item.operatorName || item.assignedOperator || (item.site ? `${item.site} Operator` : "Assigned Operator");
+            item.assignedOperatorName || item.assigned_operator_name || item.operatorName || item.assignedOperator || (item.operator?.name && item.operator.name !== "N/A" ? item.operator.name : "");
           const loc = item.site || item.location || "N/A";
 
           let tyreHealth: number | null = null;
@@ -107,9 +107,10 @@ export const fleetService = {
             });
           }
 
-          const healthVals = [tyreHealth, engineHealth, hydraulicHealth, suspensionHealth].filter((v): v is number => v !== null);
+          const rawHealthVals: (number | null)[] = [tyreHealth, engineHealth, hydraulicHealth, suspensionHealth];
+          const healthVals: number[] = rawHealthVals.filter((v): v is number => v !== null && !isNaN(v));
           const avgHealth = healthVals.length > 0
-            ? Math.round(healthVals.reduce((a, b) => a + b, 0) / healthVals.length)
+            ? Math.round(healthVals.reduce((a: number, b: number) => a + b, 0) / healthVals.length)
             : 85;
 
           const status =
@@ -202,5 +203,9 @@ export const fleetService = {
 
       critical: machines.filter((m) => m.status === "Critical").length,
     };
+  },
+
+  async getAllMachines() {
+    return this.getFleetMachines("super_admin");
   },
 };

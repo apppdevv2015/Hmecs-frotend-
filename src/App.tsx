@@ -183,6 +183,10 @@ const SubscriptionHistory = lazy(
   () => import("./pages/CompanyAdmin/SubscriptionHistory"),
 );
 
+const CategoryManagement = lazy(
+  () => import("./pages/CompanyAdmin/CategoryManagement"),
+);
+
 const ReportingManagement = lazy(
   () => import("./pages/CompanyAdmin/ReportingManagement"),
 );
@@ -318,6 +322,18 @@ const SupervisorUpdateData = lazy(
 );
 
 const SupervisorLog = lazy(() => import("./pages/Supervisor/ServiceLog"));
+const ArtisanFixHistory = lazy(
+  () => import("./pages/Supervisor/ArtisanFixHistory"),
+);
+const SupervisorAssignedArtisans = lazy(
+  () => import("./pages/Supervisor/SupervisorAssignedArtisans"),
+);
+const SupervisorServices = lazy(
+  () => import("./pages/Supervisor/SupervisorServices"),
+);
+const SupervisorTaskReview = lazy(
+  () => import("./pages/Supervisor/SupervisorTaskReview"),
+);
 
 import AuthInitializer from "./routes/AuthInitializer";
 
@@ -616,6 +632,15 @@ export default function App() {
                 element={
                   <Suspense fallback={<PageSkeleton />}>
                     <CompanyAdminDashboard />
+                  </Suspense>
+                }
+              />
+
+              <Route
+                path="/company-admin/categories"
+                element={
+                  <Suspense fallback={<PageSkeleton />}>
+                    <CategoryManagement />
                   </Suspense>
                 }
               />
@@ -1060,17 +1085,19 @@ export default function App() {
                 }
               />
               <Route path="/supervisor/fleet" element={<SupervisorFleet />} />
+              <Route path="/supervisor/fleet-health" element={<SupervisorFleet />} />
 
               <Route
                 path="/supervisor/data-update"
-                element={<SupervisorUpdateData />}
+                element={<SupervisorFleet />}
               />
               <Route
                 path="/supervisor/updatedata"
-                element={<SupervisorUpdateData />}
+                element={<SupervisorFleet />}
               />
 
               <Route path="/supervisor/tasks" element={<SupervisorTasks />} />
+              <Route path="/supervisor/task-review" element={<SupervisorTasks />} />
               <Route
                 path="/supervisor/reports"
                 element={
@@ -1080,6 +1107,34 @@ export default function App() {
                 }
               />
               <Route path="/supervisor/alerts" element={<SupervisorAlerts />} />
+              <Route
+                path="/supervisor/artisan-history"
+                element={<ArtisanFixHistory />}
+              />
+              <Route
+                path="/supervisor/assigned-artisans"
+                element={
+                  <Suspense fallback={<PageSkeleton />}>
+                    <SupervisorAssignedArtisans />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="/supervisor/services"
+                element={
+                  <Suspense fallback={<PageSkeleton />}>
+                    <SupervisorServices />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="/supervisor/task-review"
+                element={
+                  <Suspense fallback={<PageSkeleton />}>
+                    <SupervisorTaskReview />
+                  </Suspense>
+                }
+              />
               <Route path="/supervisor/profile" element={<UserProfiles />} />
             </Route>
           </Route>

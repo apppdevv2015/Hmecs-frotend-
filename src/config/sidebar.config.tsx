@@ -31,6 +31,7 @@ import {
   RefreshCcw,
   UserCheck,
   AlertCircle,
+  CheckSquare,
 } from "lucide-react";
 
 export type UserRole =
@@ -207,10 +208,10 @@ export const sidebarConfig: Record<
             path: "/company-admin/heatmap",
             icon: <Map className={sidebarIconClass} />,
           },
-         {
-            name: "Update Data",
-            path: "/company-admin/data-update",
-            icon: <RefreshCcw className={sidebarIconClass} />,
+          {
+            name: "Category Master",
+            path: "/company-admin/categories",
+            icon: <ListChecks className={sidebarIconClass} />,
           },
         ],
       },
@@ -435,18 +436,8 @@ export const sidebarConfig: Record<
 
     navGroups: [
       {
-        title: "Supervisor",
+        title: "Overview",
         items: [
-          {
-            name: "Fleet",
-            path: "/supervisor/fleet",
-            icon: <TruckIcon className={supervisorIconClass} />,
-          },
-          {
-            name: "Update Data",
-            path: "/supervisor/data-update",
-            icon: <RefreshCcw className={supervisorIconClass} />,
-          },
           {
             name: "Machines",
             path: "/supervisor/machines",
@@ -463,19 +454,29 @@ export const sidebarConfig: Record<
             icon: <UsersRound className={supervisorIconClass} />,
           },
           {
-            name: "Tasks",
+            name: "Task Review",
+            path: "/supervisor/task-review",
+            icon: <CheckSquare className={supervisorIconClass} />,
+          },
+          {
+            name: "Supervisor Services",
+            path: "/supervisor/services",
+            icon: <ClipboardList className={supervisorIconClass} />,
+          },
+          {
+            name: "Assigned Artisans",
+            path: "/supervisor/assigned-artisans",
+            icon: <UserCheck className={supervisorIconClass} />,
+          },
+          {
+            name: "Assigned Operators",
             path: "/supervisor/tasks",
             icon: <ClipboardCheck className={supervisorIconClass} />,
           },
           {
-            name: "Reports",
-            path: "/supervisor/reports",
-            icon: <FileBarChart className={supervisorIconClass} />,
-          },
-          {
-            name: "Alerts",
-            path: "/supervisor/alerts",
-            icon: <AlertTriangle className={supervisorIconClass} />,
+            name: "Fleet Health",
+            path: "/supervisor/fleet",
+            icon: <Activity className={supervisorIconClass} />,
           },
           {
             name: "Service Logs",
