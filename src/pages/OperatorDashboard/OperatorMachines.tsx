@@ -588,7 +588,7 @@ function MachineDetailsModal({
   return (
     <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-950/85 p-4 backdrop-blur-sm">
       <div className="max-h-[92vh] w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-700 bg-white shadow-2xl dark:bg-[#0b1728]">
-        <div className="flex items-center justify-between border-b border-slate-200 bg-slate-950 p-5 dark:border-slate-800">
+        <div className="relative flex items-center justify-between overflow-hidden border-b border-blue-600 bg-gradient-to-r from-[#3B37E6] via-[#3730D9] to-[#2563EB] p-5">
           <div>
             <h2 className="text-xl font-extrabold tracking-tight text-white">
               Machine Details
@@ -634,31 +634,47 @@ function MachineDetailsModal({
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <DetailItem label="Machine Name" value={machine.name} />
-            <DetailItem label="Model" value={machine.model} />
-            <DetailItem label="Serial Number" value={machine.serialNumber} />
-            <DetailItem label="Equipment Type" value={machine.equipmentType} />
-            <DetailItem label="Assigned Operator" value={machine.assignedOperatorName || "Unassigned"} />
-            <DetailItem label="Assigned Artisan" value={machine.assignedArtisanName || "Unassigned"} />
-            <DetailItem label="Assigned By Supervisor" value={machine.assignedSupervisorName || "Unassigned"} />
-            <DetailItem label="Status" value={machine.status || "N/A"} />
-            <DetailItem
-              label="Running Hours"
-              value={String(machine.runningHours ?? "N/A")}
-            />
-            <DetailItem
-              label="Health Score"
-              value={machine.healthScore ? `${machine.healthScore}%` : "N/A"}
-            />
-            <DetailItem
-              label="Last Updated"
-              value={machine.lastUpdated || "N/A"}
-            />
-            {machine.companyId && (
-              <DetailItem label="Company ID" value={machine.companyId} />
-            )}
-            <DetailItem label="Machine ID" value={machine.id} />
-          </div>
+  <DetailItem label="Machine Name" value={machine.name} />
+  <DetailItem label="Model" value={machine.model} />
+  <DetailItem label="Serial Number" value={machine.serialNumber} />
+  <DetailItem label="Equipment Type" value={machine.equipmentType} />
+
+  <DetailItem
+    label="Assigned Operator"
+    value={machine.assignedOperatorName || "Unassigned"}
+  />
+
+  <DetailItem
+    label="Assigned Artisan"
+    value={machine.assignedArtisanName || "Unassigned"}
+  />
+
+  <DetailItem
+    label="Assigned By Supervisor"
+    value={machine.assignedSupervisorName || "Unassigned"}
+  />
+
+  <DetailItem
+    label="Status"
+    value={machine.status || "N/A"}
+  />
+
+  <DetailItem
+    label="Running Hours"
+    value={String(machine.runningHours ?? "N/A")}
+  />
+
+  <DetailItem
+    label="Health Score"
+    value={machine.healthScore ? `${machine.healthScore}%` : "N/A"}
+  />
+
+  <DetailItem
+    label="Last Updated"
+    value={machine.lastUpdated || "N/A"}
+  />
+</div>
+
 
           <div className="mt-6 rounded-xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-500/30 dark:bg-blue-500/10">
             <p className="text-sm font-bold text-blue-800 dark:text-blue-300">

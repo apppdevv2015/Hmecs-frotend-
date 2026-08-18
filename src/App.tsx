@@ -1,7 +1,6 @@
 import { useNotifications } from "./context/NotificationContext";
 import { PageSkeleton } from "./components/common/Skeleton";
 
-
 import {
   BrowserRouter as Router,
   Routes,
@@ -253,6 +252,9 @@ const ShiftSummaryPage = lazy(
 const OperatorMachines = lazy(
   () => import("./pages/OperatorDashboard/OperatorMachines"),
 );
+const OperatorAssignedMachines = lazy(
+  () => import("./pages/OperatorDashboard/OperatorAssignedMachines"),
+);
 
 const OperatorChecklist = lazy(
   () => import("./pages/OperatorDashboard/OperatorComponents"),
@@ -363,795 +365,830 @@ export default function App() {
       <ErrorBoundary>
         <Suspense fallback={<PageSkeleton />}>
           <Routes>
-          {/* Public Routes */}
-          <Route
-            path="/"
-            element={
-              <Suspense fallback={<PageSkeleton />}>
-                <LandingPage />
-              </Suspense>
-            }
-          />
-          <Route
-            path="/features"
-            element={
-              <Suspense fallback={<PageSkeleton />}>
-                <FeaturesPage />
-              </Suspense>
-            }
-          />
-
-          <Route
-            path="/maintenance"
-            element={
-              <Suspense fallback={<PageSkeleton />}>
-                <MaintenancePage />
-              </Suspense>
-            }
-          />
-
-          <Route
-            path="/reports"
-            element={
-              <Suspense fallback={<PageSkeleton />}>
-                <ReportsPage />
-              </Suspense>
-            }
-          />
-
-          <Route
-            path="/about"
-            element={
-              <Suspense fallback={<PageSkeleton />}>
-                <AboutPage />
-              </Suspense>
-            }
-          />
-
-          <Route
-            path="/contact"
-            element={
-              <Suspense fallback={<PageSkeleton />}>
-                <ContactPage />
-              </Suspense>
-            }
-          />
-
-          <Route
-            path="/plans"
-            element={
-              <Suspense fallback={<PageSkeleton />}>
-                <PricingPage />
-              </Suspense>
-            }
-          />
-          <Route
-            path="/cart"
-            element={
-              <Suspense fallback={<PageSkeleton />}>
-                <CartPage />
-              </Suspense>
-            }
-          />
-          {/* Guest Only Auth Routes */}
-          <Route element={<GuestRoute />}>
+            {/* Public Routes */}
             <Route
-              path="/signup"
+              path="/"
               element={
                 <Suspense fallback={<PageSkeleton />}>
-                  <SignUp />
+                  <LandingPage />
                 </Suspense>
               }
             />
             <Route
-              path="/signin"
+              path="/features"
               element={
                 <Suspense fallback={<PageSkeleton />}>
-                  <SignIn />
+                  <FeaturesPage />
+                </Suspense>
+              }
+            />
+
+            <Route
+              path="/maintenance"
+              element={
+                <Suspense fallback={<PageSkeleton />}>
+                  <MaintenancePage />
+                </Suspense>
+              }
+            />
+
+            <Route
+              path="/reports"
+              element={
+                <Suspense fallback={<PageSkeleton />}>
+                  <ReportsPage />
+                </Suspense>
+              }
+            />
+
+            <Route
+              path="/about"
+              element={
+                <Suspense fallback={<PageSkeleton />}>
+                  <AboutPage />
+                </Suspense>
+              }
+            />
+
+            <Route
+              path="/contact"
+              element={
+                <Suspense fallback={<PageSkeleton />}>
+                  <ContactPage />
+                </Suspense>
+              }
+            />
+
+            <Route
+              path="/plans"
+              element={
+                <Suspense fallback={<PageSkeleton />}>
+                  <PricingPage />
                 </Suspense>
               }
             />
             <Route
-              path="/reset-password"
+              path="/cart"
               element={
                 <Suspense fallback={<PageSkeleton />}>
-                  <ResetPassword />
+                  <CartPage />
                 </Suspense>
               }
             />
+            {/* Guest Only Auth Routes */}
+            <Route element={<GuestRoute />}>
+              <Route
+                path="/signup"
+                element={
+                  <Suspense fallback={<PageSkeleton />}>
+                    <SignUp />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="/signin"
+                element={
+                  <Suspense fallback={<PageSkeleton />}>
+                    <SignIn />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="/reset-password"
+                element={
+                  <Suspense fallback={<PageSkeleton />}>
+                    <ResetPassword />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="/forgot-password"
+                element={
+                  <Suspense fallback={<PageSkeleton />}>
+                    <ResetPassword />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="/super-admin/login"
+                element={
+                  <Suspense fallback={<PageSkeleton />}>
+                    <SuperAdminLogin />
+                  </Suspense>
+                }
+              />
+            </Route>
+            <Route path="/access-denied" element={<AccessDenied />} />
+
+            {/* Super Admin Routes */}
             <Route
-              path="/forgot-password"
               element={
-                <Suspense fallback={<PageSkeleton />}>
-                  <ResetPassword />
-                </Suspense>
+                <RoleProtectedRoute
+                  allowedRoles={["super_admin", "superadmin", "system_admin"]}
+                />
               }
-            />
+            >
+              <Route element={<AppLayout role="super_admin" />}>
+                <Route
+                  path="/super-admin"
+                  element={<Navigate to="/super-admin/dashboard" replace />}
+                />
+
+                <Route
+                  path="/super-admin/dashboard"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <Home />
+                    </Suspense>
+                  }
+                />
+
+                <Route
+                  path="/super-admin/technical-support"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <TechnicalSupportManagement />
+                    </Suspense>
+                  }
+                />
+
+                <Route path="/super-admin/profile" element={<UserProfiles />} />
+
+                <Route
+                  path="/super-admin/intelligence"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <FleetIntelligence />
+                    </Suspense>
+                  }
+                />
+
+                <Route path="/admin-management/users" element={<UsersPage />} />
+                <Route path="/admin-management/roles" element={<RolesPage />} />
+
+                <Route
+                  path="/admin-management/roles/:roleId"
+                  element={<RoleDetailsPage />}
+                />
+
+                <Route
+                  path="/admin-management/plans"
+                  element={<PlanManagement />}
+                />
+
+                <Route
+                  path="/super-admin/company-admins"
+                  element={<CompanyAdminsPage />}
+                />
+
+                <Route
+                  path="/company-admins"
+                  element={
+                    <Navigate to="/super-admin/company-admins" replace />
+                  }
+                />
+
+                <Route path="/super-admin/operators" element={<Operators />} />
+                <Route path="/super-admin/mechanics" element={<Mechanics />} />
+
+                <Route
+                  path="/super-admin/plans-billing"
+                  element={<PlanAndBilling />}
+                />
+                <Route
+                  path="/super-admin/invoice/:id"
+                  element={<InvoicePreviewPage />}
+                />
+
+                <Route
+                  path="/super-admin/machines"
+                  element={<SuperAdminMachinesPage />}
+                />
+
+                <Route
+                  path="/super-admin/fleet"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <FleetMonitoring />
+                    </Suspense>
+                  }
+                />
+
+                <Route
+                  path="/super-admin/components"
+                  element={<SuperAdminComponents />}
+                />
+
+                <Route
+                  path="/super-admin/notifications"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <NotificationsPage />
+                    </Suspense>
+                  }
+                />
+
+                <Route
+                  path="/super-admin/service-logs"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <ServiceLog1 />
+                    </Suspense>
+                  }
+                />
+
+                <Route path="/blank" element={<Blank />} />
+                <Route path="/form-elements" element={<FormElements />} />
+                <Route path="/basic-tables" element={<BasicTables />} />
+                <Route path="/alerts" element={<Alerts />} />
+                <Route path="/avatars" element={<Avatars />} />
+                <Route path="/badge" element={<Badges />} />
+                <Route path="/buttons" element={<Buttons />} />
+                <Route path="/images" element={<Images />} />
+                <Route path="/videos" element={<Videos />} />
+                <Route path="/line-chart" element={<LineChart />} />
+                <Route path="/bar-chart" element={<BarChart />} />
+              </Route>
+            </Route>
+
+            {/* Company Admin Routes */}
             <Route
-              path="/super-admin/login"
               element={
-                <Suspense fallback={<PageSkeleton />}>
-                  <SuperAdminLogin />
-                </Suspense>
+                <RoleProtectedRoute
+                  allowedRoles={[
+                    "company_admin",
+                    "admin",
+                    "companyadmin",
+                    "super_admin",
+                    "superadmin",
+                  ]}
+                />
               }
+            >
+              <Route element={<AppLayout role="company_admin" />}>
+                <Route
+                  path="/company-admin"
+                  element={<Navigate to="/company-admin/dashboard" replace />}
+                />
+
+                <Route
+                  path="/company-admin/dashboard"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <CompanyAdminDashboard />
+                    </Suspense>
+                  }
+                />
+
+                <Route
+                  path="/company-admin/categories"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <CategoryManagement />
+                    </Suspense>
+                  }
+                />
+
+                <Route
+                  path="/company-admin/profile"
+                  element={<UserProfiles />}
+                />
+
+                <Route
+                  path="/company-admin/job-cards"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <JobCardManagement />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/company_admin/job-cards"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <JobCardManagement />
+                    </Suspense>
+                  }
+                />
+
+                <Route
+                  path="/company-admin/register"
+                  element={<ComponentRegister />}
+                />
+
+                <Route
+                  path="/company-admin/heatmap"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <FleetHeatMap />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/company_admin/heatmap"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <FleetHeatMap />
+                    </Suspense>
+                  }
+                />
+
+                <Route
+                  path="/company-admin/add-component"
+                  element={<AddComponent />}
+                />
+
+                <Route path="/company-admin/alerts" element={<AlertsPage />} />
+
+                <Route
+                  path="/company-admin/data-update"
+                  element={<UpdatePage />}
+                />
+
+                <Route
+                  path="/company-admin/staff"
+                  element={<StaffManagement />}
+                />
+                <Route
+                  path="/company_admin/staff"
+                  element={<StaffManagement />}
+                />
+                <Route
+                  path="/company-admin/machines"
+                  element={<MachineManagement />}
+                />
+                <Route
+                  path="/company_admin/machines"
+                  element={<MachineManagement />}
+                />
+                <Route
+                  path="/company-admin/subscriptions"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <SubscriptionHistory />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/company_admin/subscriptions"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <SubscriptionHistory />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/company-admin/reporting"
+                  element={<ReportingManagement />}
+                />
+                <Route
+                  path="/company_admin/reporting"
+                  element={<ReportingManagement />}
+                />
+
+                <Route
+                  path="/company-admin/notifications"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <NotificationsPage />
+                    </Suspense>
+                  }
+                />
+
+                <Route
+                  path="/company-admin/service-log"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <ServiceLog />
+                    </Suspense>
+                  }
+                />
+
+                <Route
+                  path="/company-admin/support-tickets"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <TicketManagementPage />
+                    </Suspense>
+                  }
+                />
+              </Route>
+            </Route>
+
+            {/* TECHNICAL SUPPORT ROUTES */}
+            <Route
+              element={
+                <RoleProtectedRoute
+                  allowedRoles={[
+                    "technical_support",
+                    "technicalsupport",
+                    "support",
+                    "super_admin",
+                    "superadmin",
+                  ]}
+                />
+              }
+            >
+              <Route element={<AppLayout role="technical_support" />}>
+                <Route
+                  path="/support"
+                  element={<Navigate to="/support/dashboard" replace />}
+                />
+                <Route
+                  path="/support/dashboard"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <SupportOverviewDashboard />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/support/tickets"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <SupportTicketCenter />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/support/tickets/:id"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <SupportTicketDetails />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/support/reports"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <SupportReportsPage />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/support/activity"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <SupportActivityLogsPage />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/support/notifications"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <NotificationsPage />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/support/profile"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <UserProfiles />
+                    </Suspense>
+                  }
+                />
+              </Route>
+            </Route>
+            <Route
+              element={
+                <RoleProtectedRoute
+                  allowedRoles={["artisans", "artisan", "engineer", "mechanic"]}
+                />
+              }
+            >
+              <Route element={<AppLayout role="artisans" />}>
+                <Route
+                  path="/artisans"
+                  element={<Navigate to="/artisans/dashboard" replace />}
+                />
+                <Route
+                  path="/artisans/dashboard"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <ArtisansDashboard />
+                    </Suspense>
+                  }
+                />
+                <Route path="/artisans/profile" element={<UserProfiles />} />
+
+                <Route path="/artisans/tasks" element={<ArtisansTasks />} />
+
+                <Route path="/artisans/machines" element={<ArtisansReport />} />
+
+                <Route path="/artisans/alerts" element={<ArtisansAlerts />} />
+
+                <Route
+                  path="/artisans/maintenance"
+                  element={<ArtisansMaintenance />}
+                />
+
+                <Route
+                  path="/artisans/fleet-heat"
+                  element={<ArtisansFleetHeat />}
+                />
+
+                <Route
+                  path="/artisans/data-update"
+                  element={<ArtisansUpdateData />}
+                />
+
+                <Route
+                  path="/artisans/notifications"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <NotificationsPage />
+                    </Suspense>
+                  }
+                />
+
+                <Route
+                  path="/artisans/service-logs"
+                  element={<ArtisansServiceLogs />}
+                />
+              </Route>
+            </Route>
+
+            {/* Operator Routes */}
+            <Route
+              element={
+                <RoleProtectedRoute
+                  allowedRoles={[
+                    "operator",
+                    "planner",
+                    "super_admin",
+                    "company_admin",
+                    "supervisor",
+                    "admin",
+                  ]}
+                />
+              }
+            >
+              <Route element={<AppLayout role="operator" />}>
+                <Route
+                  path="/operator"
+                  element={<Navigate to="/operator/dashboard" replace />}
+                />
+
+                <Route
+                  path="/operator/notifications"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <NotificationsPage />
+                    </Suspense>
+                  }
+                />
+
+                <Route
+                  path="/operator/dashboard"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <OperatorDashboard />
+                    </Suspense>
+                  }
+                />
+
+                <Route
+                  path="/operator/pre-start-inspection"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <PreStartInspection />
+                    </Suspense>
+                  }
+                />
+
+                <Route
+                  path="/operator/work-order-capture"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <WorkOrderCapture />
+                    </Suspense>
+                  }
+                />
+
+                <Route
+                  path="/operator/active-task"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <ActiveTaskPage />
+                    </Suspense>
+                  }
+                />
+
+                <Route
+                  path="/operator/shift-summary"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <ShiftSummaryPage />
+                    </Suspense>
+                  }
+                />
+
+                <Route path="/operator/profile" element={<UserProfiles />} />
+
+                <Route
+                  path="/operator/machines"
+                  element={<OperatorMachines />}
+                />
+
+                <Route
+                  path="/operator/assigned-machines"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <OperatorAssignedMachines />
+                    </Suspense>
+                  }
+                />
+
+                <Route
+                  path="/operator/running-logs"
+                  element={<OperatorRunningLogs />}
+                />
+
+                <Route path="/operator/alerts" element={<OperatorAlerts />} />
+                <Route
+                  path="/operator/checklist"
+                  element={<OperatorChecklist />}
+                />
+                <Route path="/operator/tasks" element={<OperatorTasks />} />
+                <Route
+                  path="/operator/fleet"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <OperatorFleet />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/operator/data-update"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <OperatorDataUpdate />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/operator/service-logs"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <OperatorServiceLog />
+                    </Suspense>
+                  }
+                />
+
+                <Route
+                  path="/operator/report-issue"
+                  element={<OperatorReportIssue />}
+                />
+
+                <Route
+                  path="/operator/issue-reports"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <ComingSoon />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/operator/coming-soon/*"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <ComingSoon />
+                    </Suspense>
+                  }
+                />
+              </Route>
+            </Route>
+
+            {/* Supervisor Routes */}
+            <Route
+              element={<RoleProtectedRoute allowedRoles={["supervisor"]} />}
+            >
+              <Route element={<AppLayout role="supervisor" />}>
+                <Route
+                  path="/supervisor"
+                  element={<Navigate to="/supervisor/dashboard" replace />}
+                />
+
+                <Route
+                  path="/supervisor/dashboard"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <SupervisorDashboard />
+                    </Suspense>
+                  }
+                />
+
+                <Route
+                  path="/supervisor/machines"
+                  element={<SupervisorMachines />}
+                />
+                <Route
+                  path="/supervisor/operators"
+                  element={<SupervisorOperators />}
+                />
+
+                <Route
+                  path="/supervisor/components"
+                  element={<SupervisorComponent />}
+                />
+
+                <Route
+                  path="/supervisor/notifications"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <NotificationsPage />
+                    </Suspense>
+                  }
+                />
+
+                <Route
+                  path="/supervisor/service-log"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <SupervisorLog />
+                    </Suspense>
+                  }
+                />
+                <Route path="/supervisor/fleet" element={<SupervisorFleet />} />
+                <Route
+                  path="/supervisor/fleet-health"
+                  element={<SupervisorFleet />}
+                />
+
+                <Route
+                  path="/supervisor/data-update"
+                  element={<SupervisorFleet />}
+                />
+                <Route
+                  path="/supervisor/updatedata"
+                  element={<SupervisorFleet />}
+                />
+
+                <Route path="/supervisor/tasks" element={<SupervisorTasks />} />
+                <Route
+                  path="/supervisor/task-review"
+                  element={<SupervisorTasks />}
+                />
+                <Route
+                  path="/supervisor/reports"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <SupervisorReports />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/supervisor/alerts"
+                  element={<SupervisorAlerts />}
+                />
+                <Route
+                  path="/supervisor/artisan-history"
+                  element={<ArtisanFixHistory />}
+                />
+                <Route
+                  path="/supervisor/assigned-artisans"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <SupervisorAssignedArtisans />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/supervisor/services"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <SupervisorServices />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/supervisor/task-review"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <SupervisorTaskReview />
+                    </Suspense>
+                  }
+                />
+                <Route path="/supervisor/profile" element={<UserProfiles />} />
+              </Route>
+            </Route>
+
+            {/* Coming Soon Routes */}
+            <Route
+              path="/company-admin/coming-soon/:module"
+              element={<ComingSoon />}
             />
-          </Route>
-          <Route path="/access-denied" element={<AccessDenied />} />
 
-          {/* Super Admin Routes */}
-          <Route
-            element={
-              <RoleProtectedRoute
-                allowedRoles={["super_admin", "superadmin", "system_admin"]}
-              />
-            }
-          >
-            <Route element={<AppLayout role="super_admin" />}>
-              <Route
-                path="/super-admin"
-                element={<Navigate to="/super-admin/dashboard" replace />}
-              />
-
-              <Route
-                path="/super-admin/dashboard"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <Home />
-                  </Suspense>
-                }
-              />
-
-              <Route
-                path="/super-admin/technical-support"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <TechnicalSupportManagement />
-                  </Suspense>
-                }
-              />
-
-              <Route path="/super-admin/profile" element={<UserProfiles />} />
-
-              <Route
-                path="/super-admin/intelligence"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <FleetIntelligence />
-                  </Suspense>
-                }
-              />
-
-              <Route path="/admin-management/users" element={<UsersPage />} />
-              <Route path="/admin-management/roles" element={<RolesPage />} />
-
-              <Route
-                path="/admin-management/roles/:roleId"
-                element={<RoleDetailsPage />}
-              />
-
-              <Route
-                path="/admin-management/plans"
-                element={<PlanManagement />}
-              />
-
-              <Route
-                path="/super-admin/company-admins"
-                element={<CompanyAdminsPage />}
-              />
-
-              <Route
-                path="/company-admins"
-                element={<Navigate to="/super-admin/company-admins" replace />}
-              />
-
-              <Route path="/super-admin/operators" element={<Operators />} />
-              <Route path="/super-admin/mechanics" element={<Mechanics />} />
-
-              <Route
-                path="/super-admin/plans-billing"
-                element={<PlanAndBilling />}
-              />
-              <Route
-                path="/super-admin/invoice/:id"
-                element={<InvoicePreviewPage />}
-              />
-
-              <Route
-                path="/super-admin/machines"
-                element={<SuperAdminMachinesPage />}
-              />
-
-              <Route
-                path="/super-admin/fleet"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <FleetMonitoring />
-                  </Suspense>
-                }
-              />
-
-              <Route
-                path="/super-admin/components"
-                element={<SuperAdminComponents />}
-              />
-
-              <Route
-                path="/super-admin/notifications"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <NotificationsPage />
-                  </Suspense>
-                }
-              />
-
-              <Route
-                path="/super-admin/service-logs"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <ServiceLog1 />
-                  </Suspense>
-                }
-              />
-
-              <Route path="/blank" element={<Blank />} />
-              <Route path="/form-elements" element={<FormElements />} />
-              <Route path="/basic-tables" element={<BasicTables />} />
-              <Route path="/alerts" element={<Alerts />} />
-              <Route path="/avatars" element={<Avatars />} />
-              <Route path="/badge" element={<Badges />} />
-              <Route path="/buttons" element={<Buttons />} />
-              <Route path="/images" element={<Images />} />
-              <Route path="/videos" element={<Videos />} />
-              <Route path="/line-chart" element={<LineChart />} />
-              <Route path="/bar-chart" element={<BarChart />} />
-            </Route>
-          </Route>
-
-          {/* Company Admin Routes */}
-          <Route
-            element={
-              <RoleProtectedRoute
-                allowedRoles={[
-                  "company_admin",
-                  "admin",
-                  "companyadmin",
-                  "super_admin",
-                  "superadmin",
-                ]}
-              />
-            }
-          >
-            <Route element={<AppLayout role="company_admin" />}>
-              <Route
-                path="/company-admin"
-                element={<Navigate to="/company-admin/dashboard" replace />}
-              />
-
-              <Route
-                path="/company-admin/dashboard"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <CompanyAdminDashboard />
-                  </Suspense>
-                }
-              />
-
-              <Route
-                path="/company-admin/categories"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <CategoryManagement />
-                  </Suspense>
-                }
-              />
-
-              <Route path="/company-admin/profile" element={<UserProfiles />} />
-
-              <Route
-                path="/company-admin/job-cards"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <JobCardManagement />
-                  </Suspense>
-                }
-              />
-              <Route
-                path="/company_admin/job-cards"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <JobCardManagement />
-                  </Suspense>
-                }
-              />
-
-              <Route
-                path="/company-admin/register"
-                element={<ComponentRegister />}
-              />
-
-              <Route
-                path="/company-admin/heatmap"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <FleetHeatMap />
-                  </Suspense>
-                }
-              />
-              <Route
-                path="/company_admin/heatmap"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <FleetHeatMap />
-                  </Suspense>
-                }
-              />
-
-              <Route
-                path="/company-admin/add-component"
-                element={<AddComponent />}
-              />
-
-              <Route path="/company-admin/alerts" element={<AlertsPage />} />
-
-              <Route
-                path="/company-admin/data-update"
-                element={<UpdatePage />}
-              />
-
-              <Route
-                path="/company-admin/staff"
-                element={<StaffManagement />}
-              />
-              <Route
-                path="/company_admin/staff"
-                element={<StaffManagement />}
-              />
-              <Route
-                path="/company-admin/machines"
-                element={<MachineManagement />}
-              />
-              <Route
-                path="/company_admin/machines"
-                element={<MachineManagement />}
-              />
-              <Route
-                path="/company-admin/subscriptions"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <SubscriptionHistory />
-                  </Suspense>
-                }
-              />
-              <Route
-                path="/company_admin/subscriptions"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <SubscriptionHistory />
-                  </Suspense>
-                }
-              />
-              <Route
-                path="/company-admin/reporting"
-                element={<ReportingManagement />}
-              />
-              <Route
-                path="/company_admin/reporting"
-                element={<ReportingManagement />}
-              />
-
-              <Route
-                path="/company-admin/notifications"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <NotificationsPage />
-                  </Suspense>
-                }
-              />
-
-              <Route
-                path="/company-admin/service-log"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <ServiceLog />
-                  </Suspense>
-                }
-              />
-
-              <Route
-                path="/company-admin/support-tickets"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <TicketManagementPage />
-                  </Suspense>
-                }
-              />
-            </Route>
-          </Route>
-
-          {/* TECHNICAL SUPPORT ROUTES */}
-          <Route
-            element={
-              <RoleProtectedRoute
-                allowedRoles={[
-                  "technical_support",
-                  "technicalsupport",
-                  "support",
-                  "super_admin",
-                  "superadmin",
-                ]}
-              />
-            }
-          >
-            <Route element={<AppLayout role="technical_support" />}>
-              <Route
-                path="/support"
-                element={<Navigate to="/support/dashboard" replace />}
-              />
-              <Route
-                path="/support/dashboard"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <SupportOverviewDashboard />
-                  </Suspense>
-                }
-              />
-              <Route
-                path="/support/tickets"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <SupportTicketCenter />
-                  </Suspense>
-                }
-              />
-              <Route
-                path="/support/tickets/:id"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <SupportTicketDetails />
-                  </Suspense>
-                }
-              />
-              <Route
-                path="/support/reports"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <SupportReportsPage />
-                  </Suspense>
-                }
-              />
-              <Route
-                path="/support/activity"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <SupportActivityLogsPage />
-                  </Suspense>
-                }
-              />
-              <Route
-                path="/support/notifications"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <NotificationsPage />
-                  </Suspense>
-                }
-              />
-              <Route
-                path="/support/profile"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <UserProfiles />
-                  </Suspense>
-                }
-              />
-            </Route>
-          </Route>
-          <Route
-            element={
-              <RoleProtectedRoute
-                allowedRoles={["artisans", "artisan", "engineer", "mechanic"]}
-              />
-            }
-          >
-            <Route element={<AppLayout role="artisans" />}>
-              <Route
-                path="/artisans"
-                element={<Navigate to="/artisans/dashboard" replace />}
-              />
-              <Route
-                path="/artisans/dashboard"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <ArtisansDashboard />
-                  </Suspense>
-                }
-              />
-              <Route path="/artisans/profile" element={<UserProfiles />} />
-
-              <Route path="/artisans/tasks" element={<ArtisansTasks />} />
-
-              <Route path="/artisans/machines" element={<ArtisansReport />} />
-
-              <Route path="/artisans/alerts" element={<ArtisansAlerts />} />
-
-              <Route
-                path="/artisans/maintenance"
-                element={<ArtisansMaintenance />}
-              />
-
-              <Route
-                path="/artisans/fleet-heat"
-                element={<ArtisansFleetHeat />}
-              />
-              
-              <Route
-                path="/artisans/data-update"
-                element={<ArtisansUpdateData />}
-              />
-
-              <Route
-                path="/artisans/notifications"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <NotificationsPage />
-                  </Suspense>
-                }
-              />
-
-              <Route
-                path="/artisans/service-logs"
-                element={<ArtisansServiceLogs />}
-              />
-            </Route>
-          </Route>
-
-          {/* Operator Routes */}
-          <Route
-            element={
-              <RoleProtectedRoute
-                allowedRoles={["operator", "planner", "super_admin", "company_admin", "supervisor", "admin"]}
-              />
-            }
-          >
-            <Route element={<AppLayout role="operator" />}>
-              <Route
-                path="/operator"
-                element={<Navigate to="/operator/dashboard" replace />}
-              />
-
-              <Route
-                path="/operator/notifications"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <NotificationsPage />
-                  </Suspense>
-                }
-              />
-
-              <Route
-                path="/operator/dashboard"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <OperatorDashboard />
-                  </Suspense>
-                }
-              />
-
-              <Route
-                path="/operator/pre-start-inspection"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <PreStartInspection />
-                  </Suspense>
-                }
-              />
-
-              <Route
-                path="/operator/work-order-capture"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <WorkOrderCapture />
-                  </Suspense>
-                }
-              />
-
-              <Route
-                path="/operator/active-task"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <ActiveTaskPage />
-                  </Suspense>
-                }
-              />
-
-              <Route
-                path="/operator/shift-summary"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <ShiftSummaryPage />
-                  </Suspense>
-                }
-              />
-
-              <Route path="/operator/profile" element={<UserProfiles />} />
-
-              <Route path="/operator/machines" element={<OperatorMachines />} />
-
-              <Route
-                path="/operator/running-logs"
-                element={<OperatorRunningLogs />}
-              />
-
-              <Route path="/operator/alerts" element={<OperatorAlerts />} />
-              <Route
-                path="/operator/checklist"
-                element={<OperatorChecklist />}
-              />
-              <Route path="/operator/tasks" element={<OperatorTasks />} />
-              <Route
-                path="/operator/fleet"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <OperatorFleet />
-                  </Suspense>
-                }
-              />
-              <Route
-                path="/operator/data-update"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <OperatorDataUpdate />
-                  </Suspense>
-                }
-              />
-              <Route
-                path="/operator/service-logs"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <OperatorServiceLog />
-                  </Suspense>
-                }
-              />
-
-              <Route
-                path="/operator/report-issue"
-                element={<OperatorReportIssue />}
-              />
-
-              <Route
-                path="/operator/issue-reports"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <ComingSoon />
-                  </Suspense>
-                }
-              />
-              <Route
-                path="/operator/coming-soon/*"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <ComingSoon />
-                  </Suspense>
-                }
-              />
-            </Route>
-          </Route>
-
-          {/* Supervisor Routes */}
-          <Route element={<RoleProtectedRoute allowedRoles={["supervisor"]} />}>
-            <Route element={<AppLayout role="supervisor" />}>
-              <Route
-                path="/supervisor"
-                element={<Navigate to="/supervisor/dashboard" replace />}
-              />
-
-              <Route
-                path="/supervisor/dashboard"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <SupervisorDashboard />
-                  </Suspense>
-                }
-              />
-
-              <Route
-                path="/supervisor/machines"
-                element={<SupervisorMachines />}
-              />
-              <Route
-                path="/supervisor/operators"
-                element={<SupervisorOperators />}
-              />
-
-              <Route
-                path="/supervisor/components"
-                element={<SupervisorComponent />}
-              />
-
-              <Route
-                path="/supervisor/notifications"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <NotificationsPage />
-                  </Suspense>
-                }
-              />
-
-              <Route
-                path="/supervisor/service-log"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <SupervisorLog />
-                  </Suspense>
-                }
-              />
-              <Route path="/supervisor/fleet" element={<SupervisorFleet />} />
-              <Route path="/supervisor/fleet-health" element={<SupervisorFleet />} />
-
-              <Route
-                path="/supervisor/data-update"
-                element={<SupervisorFleet />}
-              />
-              <Route
-                path="/supervisor/updatedata"
-                element={<SupervisorFleet />}
-              />
-
-              <Route path="/supervisor/tasks" element={<SupervisorTasks />} />
-              <Route path="/supervisor/task-review" element={<SupervisorTasks />} />
-              <Route
-                path="/supervisor/reports"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <SupervisorReports />
-                  </Suspense>
-                }
-              />
-              <Route path="/supervisor/alerts" element={<SupervisorAlerts />} />
-              <Route
-                path="/supervisor/artisan-history"
-                element={<ArtisanFixHistory />}
-              />
-              <Route
-                path="/supervisor/assigned-artisans"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <SupervisorAssignedArtisans />
-                  </Suspense>
-                }
-              />
-              <Route
-                path="/supervisor/services"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <SupervisorServices />
-                  </Suspense>
-                }
-              />
-              <Route
-                path="/supervisor/task-review"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <SupervisorTaskReview />
-                  </Suspense>
-                }
-              />
-              <Route path="/supervisor/profile" element={<UserProfiles />} />
-            </Route>
-          </Route>
-
-          {/* Coming Soon Routes */}
-          <Route
-            path="/company-admin/coming-soon/:module"
-            element={<ComingSoon />}
-          />
-
-          <Route path="/coming-soon" element={<ComingSoon />} />
-
-          {/* 404 Route */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </Suspense>
-    </ErrorBoundary>
-  </Router>
+            <Route path="/coming-soon" element={<ComingSoon />} />
+
+            {/* 404 Route */}
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </Suspense>
+      </ErrorBoundary>
+    </Router>
   );
 }
