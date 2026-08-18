@@ -1,6 +1,8 @@
 import { useMemo, useState, useEffect, useCallback } from "react";
 import { z } from "zod";
 
+import { machineService } from "../../services/Operator/machineService";
+
 import AppSelect from "../../components/ui/dropdown/AppSelect";
 import Pagination from "../../components/common/Pagination";
 import { showSuccessToast, showErrorToast } from "../../utils/toastUtils";
@@ -407,25 +409,54 @@ export default function SupervisorTaskPage() {
     }
   };
 
-  const handleUnassignTask = async (targetOpId: string) => {
-    try {
-      setSaving(true);
-      const success = await supervisorTaskService.unassignTask(targetOpId);
-      if (success) {
-        showSuccessToast("Task unassigned successfully");
-        setIsModalOpen(false);
-        setEditingOperatorId(null);
-        await loadData(true);
-      } else {
-        showErrorToast("Failed to unassign task");
-      }
-    } catch (err: any) {
-      console.error("Unassign error:", err);
-      showErrorToast(err?.message || "Failed to unassign task");
-    } finally {
-      setSaving(false);
+const handleUnassignTask = async (targetOpId: string) => {
+  try {
+    setSaving(true);
+
+    // Find the operator whose task is being unassigned
+    const operator = operators.find(
+      (op) =>
+        op.userId === targetOpId ||
+        op.id === targetOpId,
+    );
+
+    if (!operator) {
+      throw new Error("Operator not found");
     }
-  };
+
+    // Machine ID is required for the backend DELETE API
+    const machineId = operator.assignedMachineId;
+
+    if (!machineId?.trim()) {
+      throw new Error("No machine is currently assigned to this operator");
+    }
+
+    const success = await supervisorTaskService.unassignTask(
+      targetOpId,
+      machineId,
+    );
+
+    if (success) {
+      showSuccessToast("Task unassigned successfully");
+
+      setIsModalOpen(false);
+      setEditingOperatorId(null);
+      setSelectedOperatorId("");
+      setSelectedMachine("");
+      setSelectedEngineer("");
+      setSelectedShift("Morning");
+
+      await loadData(true);
+    } else {
+      showErrorToast("Failed to unassign task");
+    }
+  } catch (err: any) {
+    console.error("Unassign error:", err);
+    showErrorToast(err?.message || "Failed to unassign task");
+  } finally {
+    setSaving(false);
+  }
+};
 
   useEffect(() => {
     const isAnyModalOpen = isModalOpen || engineerViewOpen;

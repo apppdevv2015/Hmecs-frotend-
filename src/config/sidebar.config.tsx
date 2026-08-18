@@ -351,14 +351,33 @@ export const sidebarConfig: Record<
         title: "Operations",
         items: [
           {
-            name: "My Assigned Machines",
+            name: "Machines",
             path: "/operator/machines",
             icon: <Truck className={operatorIconClass} />,
           },
+          
+
+          {
+            name: "Assigned Machines",
+            path: "/operator/assigned-machines",
+            icon: <Truck className={operatorIconClass} />,
+          },
+
+
           {
             name: "Pre-Start Inspection",
             path: "/operator/pre-start-inspection",
             icon: <ClipboardCheck className={operatorIconClass} />,
+          },
+          {
+            name: "Fleet",
+            path: "/operator/fleet",
+            icon: <Map className={operatorIconClass} />,
+          },
+          {
+            name: "Components",
+            path: "/operator/checklist",
+            icon: <ListChecks className={operatorIconClass} />,
           },
           {
             name: "Work Order Capture",
@@ -385,21 +404,13 @@ export const sidebarConfig: Record<
             path: "/operator/issue-reports",
             icon: <AlertCircle className={operatorIconClass} />,
           },
-          {
-            name: "Fleet",
-            path: "/operator/fleet",
-            icon: <Map className={operatorIconClass} />,
-          },
+
           {
             name: "Update Data",
             path: "/operator/data-update",
             icon: <RefreshCcw className={operatorIconClass} />,
           },
-          {
-            name: "Components",
-            path: "/operator/checklist",
-            icon: <ListChecks className={operatorIconClass} />,
-          },
+
           {
             name: "Alerts",
             path: "/operator/alerts",
