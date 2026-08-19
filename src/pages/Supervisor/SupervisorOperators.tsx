@@ -4,6 +4,7 @@ import { machineService } from "../../services/companyadmin/machineService";
 import { userService, normalizeUsersResponse } from "../../services/Auth/userService";
 import Pagination from "../../components/common/Pagination";
 import AppSelect from "../../components/ui/dropdown/AppSelect";
+import StorageService, { STORAGE_KEYS } from "../../services/storage.service";
 import SupervisorUserDetailModal, { type UserDetailData } from "../../components/supervisor/SupervisorUserDetailModal";
 
 type OperatorMachineRow = {
@@ -138,6 +139,14 @@ export default function SupervisorOperators() {
             }
           }
 
+          const storedUser = StorageService.getUser();
+          const currentSupervisorName =
+            storedUser?.name ||
+            storedUser?.fullName ||
+            (storedUser?.firstName ? `${storedUser.firstName} ${storedUser.lastName || ""}`.trim() : "") ||
+            StorageService.get<string>(STORAGE_KEYS.USER_NAME) ||
+            "Supervisor";
+
           const supervisorName =
             f.assignedSupervisorName ||
             f.assigned_supervisor_name ||
@@ -145,7 +154,7 @@ export default function SupervisorOperators() {
             f.supervisor_name ||
             storedTask?.supervisorName ||
             (f.supervisor?.name ? f.supervisor.name : "") ||
-            "";
+            (opName ? currentSupervisorName : "");
 
           const rawDate = storedTask?.assignedAt || f.assignedAt || f.assigned_at || (opName ? f.createdAt || f.created_at : null);
           const assignedAtStr = (opName && rawDate)
@@ -399,7 +408,7 @@ export default function SupervisorOperators() {
                     🚜 Machine: {m.name} ({m.code})
                   </p>
                   <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                    Supervisor: {m.supervisor || "Marcus Supervisor"}
+                    Supervisor: {m.supervisor || currentSupervisorName}
                   </p>
                 </div>
               </div>
@@ -504,7 +513,7 @@ export default function SupervisorOperators() {
                           {machine.supervisor}
                         </span>
                       ) : (
-                        <span className="text-xs font-semibold text-slate-400 dark:text-slate-600">-</span>
+                        <span className="text-xs font-semibold text-slate-400 dark:text-slate-600">Unassigned</span>
                       )}
                     </td>
 

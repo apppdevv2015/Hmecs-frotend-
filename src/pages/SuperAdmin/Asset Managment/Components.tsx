@@ -1202,8 +1202,7 @@ export default function SuperAdminComponents() {
                                 </p>
 
                                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                                  {item.id || "No ID"} •{" "}
-                                  {getComponentCategory(item)}
+                                  {item.id || "No ID"}
                                 </p>
                               </div>
                             </div>

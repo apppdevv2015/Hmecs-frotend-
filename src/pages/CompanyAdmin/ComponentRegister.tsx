@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 import {
+  Activity,
   Edit,
   Eye,
   Gauge,
@@ -18,6 +19,7 @@ import { machineService } from "../../services/companyadmin/machineService";
 import { componentService } from "../../services/companyadmin/componentService";
 
 import AppSelect from "../../components/ui/dropdown/AppSelect";
+import Pagination from "../../components/common/Pagination";
 
 type MachineStatus = "good" | "warning" | "critical";
 type ComponentStatus = "good" | "warning" | "critical";
@@ -63,6 +65,9 @@ type MachineComponent = {
   replacementCost: number;
   condition: number;
   imageUrl?: string;
+  parentComponentId?: string;
+  parentComponent?: any;
+  subComponents?: any[];
   createdAt?: string;
   updatedAt?: string;
   intelligence?: {
@@ -77,6 +82,7 @@ type MachineComponent = {
 };
 
 type ComponentForm = {
+  name: string;
   category: string;
   customCategory: string;
   description: string;
@@ -88,12 +94,14 @@ type ComponentForm = {
   replacementCost: string;
   condition: string;
   machineId: string;
+  parentComponentId: string;
   imageUrl?: string;
 };
 
 type FormErrors = Partial<Record<keyof ComponentForm, string>>;
 
 const emptyForm: ComponentForm = {
+  name: "",
   category: "",
   customCategory: "",
   description: "",
@@ -105,6 +113,7 @@ const emptyForm: ComponentForm = {
   replacementCost: "",
   condition: "3",
   machineId: "",
+  parentComponentId: "",
   imageUrl: "",
 };
 
@@ -128,22 +137,23 @@ const componentSchema = z
   .object({
     machineId: z.string().trim().min(1, "Machine is required"),
 
-    category: z
-      .string()
-      .trim()
-      .min(1, "Category is required")
-      .max(50, "Category cannot exceed 50 characters"),
+    category: z.string().trim().optional(),
 
     customCategory: z
       .string()
       .trim()
       .max(50, "Custom category cannot exceed 50 characters"),
 
+    name: z
+      .string()
+      .trim()
+      .min(1, "Component name is required")
+      .max(100, "Component name cannot exceed 100 characters"),
+
     description: z
       .string()
       .trim()
-      .min(1, "Description is required")
-      .max(200, "Description cannot exceed 200 characters"),
+      .max(500, "Description cannot exceed 500 characters"),
 
     serialNumber: z
       .string()
@@ -175,11 +185,7 @@ const componentSchema = z
       .min(1, "Planned life is required")
       .regex(/^\d+$/, "Planned life must contain only numbers"),
 
-    replacementCost: z
-      .string()
-      .trim()
-      .min(1, "Replacement cost is required")
-      .regex(/^\d+$/, "Replacement cost must contain only numbers"),
+    replacementCost: z.string().optional(),
 
     condition: z.string().trim().min(1, "Condition is required"),
   })
@@ -214,13 +220,7 @@ const componentSchema = z
       });
     }
 
-    if (replacement <= 0) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["replacementCost"],
-        message: "Replacement cost must be greater than 0",
-      });
-    }
+
 
     if (condition < 1 || condition > 5) {
       ctx.addIssue({
@@ -272,6 +272,24 @@ const normalizeMachine = (item: any): Machine => ({
   location: item?.location || item?.site || "",
   status: item?.status || "active",
 });
+
+const deriveComponentName = (item: any): string => {
+  const directName = item?.name || item?.componentName || item?.component_name;
+  if (directName && directName !== "General") {
+    return String(directName);
+  }
+
+  const desc = String(item?.description || "").trim();
+  if (desc) {
+    const cleaned = desc.replace(/^Spec Notes:\s*/i, "").trim();
+    const parts = cleaned.split(" - ");
+    if (parts[0]) return parts[0].trim();
+  }
+
+  if (directName) return String(directName);
+
+  return "Component";
+};
 
 const normalizeComponent = (item: any): MachineComponent => {
   const currentHrs = Number(
@@ -327,14 +345,18 @@ const normalizeComponent = (item: any): MachineComponent => {
         item?.type ||
         "",
     ),
+    name: deriveComponentName(item),
     description: String(item?.description || ""),
-    serialNumber: String(item?.serialNumber || item?.serial_number || ""),
+    serialNumber: String(item?.serialNumber || item?.serial_number || "").replace(/^DEMO-/i, ""),
     supplier: String(item?.supplier || ""),
     installHours: Number(item?.installHours ?? item?.install_hours ?? 0),
     currentHours: currentHrs,
     plannedLife: planned,
     replacementCost: Number(item?.replacementCost ?? item?.replacement_cost ?? 0),
     condition: Number(item?.condition ?? 3),
+    parentComponentId: item?.parentComponentId || item?.parent_component_id || "",
+    parentComponent: item?.parentComponent,
+    subComponents: item?.subComponents || [],
     imageUrl: item?.imageUrl || item?.image || item?.photo || "",
     createdAt: item?.createdAt || item?.created_at,
     updatedAt: item?.updatedAt || item?.updated_at,
@@ -381,8 +403,9 @@ const getStatusText = (status: ComponentStatus | MachineStatus) => {
   return "Critical";
 };
 
-const getConditionLabel = (condition: number) => {
-  switch (condition) {
+const getConditionLabel = (condition: any) => {
+  const num = Number(condition);
+  switch (num) {
     case 1:
       return {
         text: "New",
@@ -415,9 +438,9 @@ const getConditionLabel = (condition: number) => {
       };
     default:
       return {
-        text: "Unknown",
+        text: "New",
         class:
-          "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300",
+          "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300",
       };
   }
 };
@@ -433,6 +456,8 @@ const ComponentManagement: React.FC = () => {
 
   const [componentSearchQuery, setComponentSearchQuery] = useState("");
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState("all");
+  const [selectedComponentFilter, setSelectedComponentFilter] = useState("all");
+  const [showHealthView, setShowHealthView] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [componentLoading, setComponentLoading] = useState(false);
@@ -459,19 +484,34 @@ const ComponentManagement: React.FC = () => {
   const selectedMachineComponents = useMemo(() => {
     if (!selectedMachine) return components;
 
+    const machIds = new Set([selectedMachine.machineId, selectedMachine.id].filter(Boolean));
     return components.filter(
-      (component) => component.machineId === selectedMachine.machineId,
+      (component) =>
+        machIds.has(component.machineId) ||
+        (component.machineId &&
+          selectedMachine.name &&
+          component.machineId.toLowerCase() === selectedMachine.name.toLowerCase()),
     );
   }, [components, selectedMachine]);
+
+  const componentDropdownOptions = useMemo(() => {
+    return [
+      {
+        label: `All Components (${selectedMachineComponents.length})`,
+        value: "all",
+      },
+      ...selectedMachineComponents.map((c) => ({
+        label: `${c.name} (${c.serialNumber || "No S/N"})`,
+        value: c.id,
+      })),
+    ];
+  }, [selectedMachineComponents]);
 
   const filteredComponents = useMemo(() => {
     let result = selectedMachineComponents;
 
-    if (selectedCategoryFilter !== "all") {
-      result = result.filter(
-        (comp) =>
-          comp.category.toLowerCase() === selectedCategoryFilter.toLowerCase(),
-      );
+    if (selectedComponentFilter !== "all") {
+      result = result.filter((comp) => comp.id === selectedComponentFilter);
     }
 
     const query = componentSearchQuery.trim().toLowerCase();
@@ -483,7 +523,7 @@ const ComponentManagement: React.FC = () => {
         const machineModel = machine ? (machine.model || "").toLowerCase() : "";
 
         return (
-          comp.category.toLowerCase().includes(query) ||
+          comp.name.toLowerCase().includes(query) ||
           (comp.description || "").toLowerCase().includes(query) ||
           (comp.serialNumber || "").toLowerCase().includes(query) ||
           (comp.supplier || "").toLowerCase().includes(query) ||
@@ -496,10 +536,41 @@ const ComponentManagement: React.FC = () => {
     return result;
   }, [
     selectedMachineComponents,
-    selectedCategoryFilter,
+    selectedComponentFilter,
     componentSearchQuery,
     machines,
   ]);
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState<number | "all">("all");
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedMachine, selectedComponentFilter, componentSearchQuery]);
+
+  const isShowAll = itemsPerPage === "all";
+  const numericItemsPerPage = isShowAll
+    ? filteredComponents.length
+    : Number(itemsPerPage);
+  const totalPages = isShowAll
+    ? 1
+    : Math.ceil(filteredComponents.length / (numericItemsPerPage || 1));
+
+  const paginatedComponents = useMemo(() => {
+    if (isShowAll) return filteredComponents;
+    const start = (currentPage - 1) * numericItemsPerPage;
+    return filteredComponents.slice(start, start + numericItemsPerPage);
+  }, [filteredComponents, currentPage, numericItemsPerPage, isShowAll]);
+
+  const startItem =
+    filteredComponents.length === 0
+      ? 0
+      : isShowAll
+        ? 1
+        : (currentPage - 1) * numericItemsPerPage + 1;
+  const endItem = isShowAll
+    ? filteredComponents.length
+    : Math.min(currentPage * numericItemsPerPage, filteredComponents.length);
 
   const averageHealth =
     selectedMachineComponents.length > 0
@@ -515,7 +586,9 @@ const ComponentManagement: React.FC = () => {
     try {
       setComponentLoading(true);
 
-      const response = await componentService.getComponents(machineId);
+      const response = machineId
+        ? await componentService.getComponentsByMachineId(machineId)
+        : await componentService.getComponents();
       const mappedComponents =
         getArrayData<any>(response).map(normalizeComponent);
 
@@ -560,7 +633,11 @@ const ComponentManagement: React.FC = () => {
       setCategories(
         activeCategories.length > 0 ? activeCategories : defaultCategories,
       );
-      setSelectedMachine(null);
+      if (mappedMachines.length > 0) {
+        setSelectedMachine(mappedMachines[0]);
+      } else {
+        setSelectedMachine(null);
+      }
       setSelectedCategoryFilter("all");
       setComponents(mappedComponents);
     } catch (error) {
@@ -619,6 +696,7 @@ const ComponentManagement: React.FC = () => {
     // deliberately opt into replacing the full component spec.
     setIsFullReplace(false);
     setForm({
+      name: component.name || component.description,
       category: categoryExists ? component.category : "Custom",
       customCategory: categoryExists ? "" : component.category,
       description: component.description,
@@ -630,6 +708,7 @@ const ComponentManagement: React.FC = () => {
       replacementCost: String(component.replacementCost),
       condition: String(component.condition),
       machineId: component.machineId || selectedMachine?.machineId || "",
+      parentComponentId: component.parentComponentId || "",
     });
     setIsFormOpen(true);
   };
@@ -649,6 +728,10 @@ const ComponentManagement: React.FC = () => {
     };
 
     setForm(updatedForm);
+
+    if (field === "machineId" && value) {
+      fetchComponents(value);
+    }
 
     const result = componentSchema.safeParse(updatedForm);
 
@@ -670,13 +753,12 @@ const ComponentManagement: React.FC = () => {
 
   const validateForm = () => {
     if (!form.machineId.trim()) return "Please select a machine";
-    if (!form.category.trim()) return "Please select component category";
 
     if (form.category === "Custom" && !form.customCategory.trim()) {
       return "Please enter custom category name";
     }
 
-    if (!form.description.trim()) return "Description is required";
+    if (!form.name.trim()) return "Component name is required";
     if (!form.serialNumber.trim()) return "Serial number is required";
     if (!form.supplier.trim()) return "Supplier is required";
 
@@ -684,7 +766,6 @@ const ComponentManagement: React.FC = () => {
       ["Install hours", form.installHours],
       ["Current hours", form.currentHours],
       ["Planned life", form.plannedLife],
-      ["Replacement cost", form.replacementCost],
       ["Condition", form.condition],
     ];
 
@@ -714,18 +795,20 @@ const ComponentManagement: React.FC = () => {
     }
 
     const finalCategory =
-      form.category === "Custom" ? form.customCategory.trim() : form.category;
+      form.category === "Custom" ? form.customCategory.trim() : (form.category.trim() || "General");
 
     const payload = {
+      name: form.name.trim(),
       category: finalCategory,
-      description: form.description.trim(),
+      description: form.description.trim() || form.name.trim(),
       serialNumber: form.serialNumber.trim(),
       supplier: form.supplier.trim(),
       installHours: Number(form.installHours),
       currentHours: Number(form.currentHours),
       plannedLife: Number(form.plannedLife),
-      replacementCost: Number(form.replacementCost),
+      replacementCost: Number(form.replacementCost || 0),
       condition: Number(form.condition),
+      parentComponentId: form.parentComponentId.trim() || null,
     };
 
     try {
@@ -778,13 +861,13 @@ const ComponentManagement: React.FC = () => {
       closeFormModal();
 
       if (selectedMachine) {
-        await fetchComponents(selectedMachine.machineId);
+        await fetchComponents(selectedMachine.id || selectedMachine.machineId);
 
         if (
           targetMachine &&
-          targetMachine.machineId !== selectedMachine.machineId
+          (targetMachine.id || targetMachine.machineId) !== (selectedMachine.id || selectedMachine.machineId)
         ) {
-          await fetchComponents(targetMachine.machineId);
+          await fetchComponents(targetMachine.id || targetMachine.machineId);
         }
       } else {
         await fetchComponents();
@@ -842,7 +925,7 @@ const ComponentManagement: React.FC = () => {
     { label: "All Machines", value: "all" },
     ...machines.map((mach) => ({
       label: mach.name,
-      value: mach.machineId,
+      value: mach.id || mach.machineId,
     })),
   ];
 
@@ -904,76 +987,96 @@ const ComponentManagement: React.FC = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 p-5 sm:grid-cols-2 xl:grid-cols-3">
+          <div className={`p-5 ${showHealthView ? "grid grid-cols-1 gap-4 sm:grid-cols-2" : ""}`}>
             <MetricCard
               title="Total Components"
               value={`${selectedMachineComponents.length}`}
             />
-            <MetricCard title="Avg Health" value={`${averageHealth}%`} />
-            <MetricCard title="Categories" value={`${categories.length}`} />
+            {showHealthView && (
+              <MetricCard title="Avg Health" value={`${averageHealth}%`} />
+            )}
           </div>
         </div>
 
         <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-[#0b1728]">
-          <div className="flex flex-col gap-4 border-b border-slate-200 p-5 dark:border-slate-800 lg:flex-row lg:items-center lg:justify-between">
-            <div>
+          <div className="flex flex-col gap-4 border-b border-slate-200 p-5 dark:border-slate-800 xl:flex-row xl:items-center xl:justify-between">
+            <div className="min-w-0 flex-1">
               <h2 className="text-xl font-extrabold tracking-tight text-slate-950 dark:text-white">
                 {selectedMachine?.name || "All"} Components
               </h2>
 
-              <p className="mt-1 text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">
+              <p className="mt-1 truncate text-xs font-medium text-slate-500 dark:text-slate-400 sm:text-sm">
                 {selectedMachine
-                  ? `${selectedMachine.model || "No Model"} • ${
-                      selectedMachine.site ||
-                      selectedMachine.location ||
-                      "No Site"
-                    } • ${selectedMachine.machineId}`
+                  ? `${selectedMachine.model || "No Model"}${
+                      selectedMachine.site || selectedMachine.location
+                        ? ` • ${selectedMachine.site || selectedMachine.location}`
+                        : ""
+                    }`
                   : "Overview of all components across the entire fleet"}
               </p>
             </div>
 
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center lg:justify-end">
-              <div className="relative w-full sm:w-64">
+            <div className="flex flex-wrap items-center gap-3 shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowHealthView((prev) => !prev)}
+                className={`flex h-11 shrink-0 items-center gap-2 rounded-xl border px-3.5 text-xs font-bold transition-all ${
+                  showHealthView
+                    ? "border-emerald-500 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300"
+                    : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-[#101f33] dark:text-slate-300"
+                }`}
+                title="Toggle Health Score View"
+              >
+                <Activity size={15} />
+                {showHealthView ? "Health View: ON" : "Health View: OFF"}
+              </button>
+
+              <div className="relative h-11 w-52 shrink-0">
                 <Search
-                  className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+                  className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
                   strokeWidth={2.4}
                 />
                 <input
                   type="text"
-                  placeholder="Search machine, serial..."
+                  placeholder="Search..."
                   value={componentSearchQuery}
                   onChange={(e) => setComponentSearchQuery(e.target.value)}
-                  className="h-11 w-full rounded-lg border border-slate-300 bg-white pl-11 pr-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-700 dark:bg-[#101f33] dark:text-white dark:focus:border-blue-500"
+                  className="h-11 w-full rounded-xl border border-slate-300 bg-white pl-10 pr-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-700 dark:bg-[#101f33] dark:text-white dark:focus:border-blue-500"
                 />
               </div>
 
-              <AppSelect
-                value={selectedMachine?.machineId || "all"}
-                options={machineFilterOptions}
-                onChange={(value) => {
-                  if (value === "all") {
-                    setSelectedMachine(null);
-                    fetchComponents();
-                  } else {
-                    const mach = machines.find((m) => m.machineId === value);
+              <div className="w-52 shrink-0">
+                <AppSelect
+                  value={selectedMachine?.id || selectedMachine?.machineId || "all"}
+                  options={machineFilterOptions}
+                  onChange={(value) => {
+                    setSelectedComponentFilter("all");
+                    if (value === "all") {
+                      setSelectedMachine(null);
+                      fetchComponents();
+                    } else {
+                      const mach = machines.find((m) => m.id === value || m.machineId === value);
 
-                    if (mach) {
-                      setSelectedMachine(mach);
-                      fetchComponents(mach.machineId);
+                      if (mach) {
+                        setSelectedMachine(mach);
+                        fetchComponents(mach.id || mach.machineId);
+                      }
                     }
-                  }
-                }}
-                placeholder="All Machines"
-                triggerClassName="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:bg-[#101f33] dark:text-white sm:w-48"
-              />
+                  }}
+                  placeholder="Select Machine"
+                  triggerClassName="h-11 w-full rounded-xl border border-slate-300 bg-white px-3.5 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:bg-[#101f33] dark:text-white"
+                />
+              </div>
 
-              <AppSelect
-                value={selectedCategoryFilter}
-                options={categoryFilterOptions}
-                onChange={setSelectedCategoryFilter}
-                placeholder="All Categories"
-                triggerClassName="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:bg-[#101f33] dark:text-white sm:w-48"
-              />
+              <div className="w-52 shrink-0">
+                <AppSelect
+                  value={selectedComponentFilter}
+                  options={componentDropdownOptions}
+                  onChange={setSelectedComponentFilter}
+                  placeholder="Select Component"
+                  triggerClassName="h-11 w-full rounded-xl border border-slate-300 bg-white px-3.5 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:bg-[#101f33] dark:text-white"
+                />
+              </div>
             </div>
           </div>
 
@@ -1001,7 +1104,7 @@ const ComponentManagement: React.FC = () => {
             <>
               {/* Mobile / tablet card list — avoids horizontal scrolling on small screens */}
               <div className="divide-y divide-slate-200 dark:divide-slate-800 lg:hidden">
-                {filteredComponents.map((component) => {
+                {paginatedComponents.map((component) => {
                   const machine = machines.find(
                     (m) => m.machineId === component.machineId,
                   );
@@ -1060,7 +1163,7 @@ const ComponentManagement: React.FC = () => {
 
                       <div className="mt-3">
                         <p className="text-sm font-extrabold tracking-tight text-slate-950 dark:text-white">
-                          {component.category} — {component.description || "-"}
+                          {component.description || "-"}
                         </p>
                         <p className="mt-0.5 text-xs font-semibold text-slate-500 dark:text-slate-400">
                           {component.serialNumber || "No Serial"} •{" "}
@@ -1129,13 +1232,15 @@ const ComponentManagement: React.FC = () => {
                 <table className="w-full min-w-[1000px] border-collapse text-left">
                   <thead>
                     <tr className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-[0.14em] text-slate-500 dark:border-slate-800 dark:bg-slate-950/60">
+                      <th className="px-4 py-4 text-center font-bold w-14">S.No.</th>
                       <th className="px-6 py-4 font-bold">Machine / Type</th>
-                      <th className="px-6 py-4 font-bold">Category</th>
                       <th className="px-6 py-4 font-bold">
-                        Description / Serial
+                        Component Name / Serial
                       </th>
                       <th className="px-6 py-4 font-bold">Condition</th>
-                      <th className="px-6 py-4 font-bold">Risk</th>
+                      {showHealthView && (
+                        <th className="px-6 py-4 font-bold">Health Status</th>
+                      )}
                       <th className="px-6 py-4 text-center font-bold">
                         Actions
                       </th>
@@ -1143,7 +1248,11 @@ const ComponentManagement: React.FC = () => {
                   </thead>
 
                   <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-                    {filteredComponents.map((component) => {
+                    {paginatedComponents.map((component, index) => {
+                      const itemIndex = isShowAll
+                        ? index + 1
+                        : (currentPage - 1) * numericItemsPerPage + index + 1;
+
                       const machine = machines.find(
                         (m) => m.machineId === component.machineId,
                       );
@@ -1184,6 +1293,9 @@ const ComponentManagement: React.FC = () => {
                           key={component.id}
                           className="transition hover:bg-slate-50 dark:hover:bg-white/[0.03]"
                         >
+                          <td className="px-4 py-4 text-center text-xs font-extrabold text-slate-400 dark:text-slate-500">
+                            {itemIndex}
+                          </td>
                           <td className="px-6 py-4">
                             <div className="flex flex-col">
                               <span className="text-sm font-extrabold tracking-tight text-slate-950 dark:text-white">
@@ -1195,17 +1307,16 @@ const ComponentManagement: React.FC = () => {
                             </div>
                           </td>
 
-                          <td className="px-6 py-4 text-sm font-bold text-slate-700 dark:text-slate-200">
-                            {component.category}
-                          </td>
-
                           <td className="px-6 py-4">
-                            <div className="flex flex-col">
-                              <span className="text-sm font-extrabold tracking-tight text-slate-950 dark:text-white">
-                                {component.description || "-"}
+                            <div className="flex flex-col max-w-[220px]">
+                              <span
+                                className="truncate text-sm font-extrabold tracking-tight text-slate-950 dark:text-white"
+                                title={component.name || component.description || "-"}
+                              >
+                                {component.name || "-"}
                               </span>
-                              <span className="mt-0.5 text-xs font-semibold text-slate-500 dark:text-slate-400">
-                                {component.serialNumber || "No Serial"}
+                              <span className="mt-0.5 text-[11px] font-semibold text-slate-400 dark:text-slate-500">
+                                S/N: {component.serialNumber || "No Serial"}
                               </span>
                             </div>
                           </td>
@@ -1218,13 +1329,15 @@ const ComponentManagement: React.FC = () => {
                             </span>
                           </td>
 
-                          <td className="px-6 py-4">
-                            <span
-                              className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${riskColorClass}`}
-                            >
-                              {riskStatus}
-                            </span>
-                          </td>
+                          {showHealthView && (
+                            <td className="px-6 py-4">
+                              <span
+                                className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${riskColorClass}`}
+                              >
+                                {riskStatus}
+                              </span>
+                            </td>
+                          )}
 
                           <td className="px-6 py-4 text-center">
                             <div className="flex items-center justify-center gap-2">
@@ -1262,6 +1375,24 @@ const ComponentManagement: React.FC = () => {
                   </tbody>
                 </table>
               </div>
+
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                startItem={startItem}
+                endItem={endItem}
+                totalItems={filteredComponents.length}
+                itemsPerPage={itemsPerPage}
+                itemLabel="components"
+                pageSizeOptions={[5, 10, 25, 50]}
+                onPrev={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                onNext={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                onPageChange={setCurrentPage}
+                onItemsPerPageChange={(val) => {
+                  setItemsPerPage(val);
+                  setCurrentPage(1);
+                }}
+              />
             </>
           )}
         </section>
@@ -1285,6 +1416,7 @@ const ComponentManagement: React.FC = () => {
           formErrors={formErrors}
           categories={categories}
           machines={machines}
+          components={components}
           submitting={submitting}
           isEditMode={Boolean(editingComponent)}
           isFullReplace={isFullReplace}
@@ -1373,11 +1505,11 @@ function ComponentDetailsModal({
 
             <div className="min-w-0 flex-1">
               <h3 className="truncate text-lg font-extrabold tracking-tight text-slate-950 dark:text-white">
-                {component.category}
+                {component.name || component.description || "Component"}
               </h3>
 
               <p className="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-400">
-                {component.serialNumber || "-"} • {component.description || "-"}
+                S/N: {component.serialNumber || "-"}
               </p>
             </div>
 
@@ -1426,9 +1558,9 @@ function ComponentDetailsModal({
             {component.companyName && (
               <DetailItem label="Company Name" value={component.companyName} />
             )}
-            <DetailItem label="Category" value={component.category} />
+            <DetailItem label="Component Name" value={component.name || component.description || "-"} />
             <DetailItem
-              label="Description"
+              label="Full Description / Spec Notes"
               value={component.description || "-"}
             />
             <DetailItem
@@ -1476,6 +1608,7 @@ function ComponentFormModal({
   formErrors,
   categories,
   machines,
+  components = [],
   submitting,
   isEditMode,
   isFullReplace,
@@ -1489,6 +1622,7 @@ function ComponentFormModal({
   formErrors: FormErrors;
   categories: Category[];
   machines: Machine[];
+  components?: MachineComponent[];
   submitting: boolean;
   isEditMode: boolean;
   isFullReplace: boolean;
@@ -1507,6 +1641,34 @@ function ComponentFormModal({
     value: mach.machineId,
   }));
 
+  const selectedMach = machines.find(
+    (m) => m.machineId === form.machineId || m.id === form.machineId,
+  );
+  const matchMachineIds = new Set(
+    [form.machineId, selectedMach?.machineId, selectedMach?.id].filter(Boolean),
+  );
+
+  const parentComponentOptions = [
+    { label: "None (Main Component)", value: "" },
+    ...components
+      .filter((c) => {
+        if (c.parentComponentId) return false;
+        if (matchMachineIds.has(c.machineId)) return true;
+        if (
+          selectedMach &&
+          (c.machineId?.toLowerCase() === selectedMach.name?.toLowerCase() ||
+            c.machineId?.toLowerCase() === selectedMach.model?.toLowerCase())
+        ) {
+          return true;
+        }
+        return false;
+      })
+      .map((c) => ({
+        label: `${c.name || c.description || "Component"} (${c.serialNumber || "No S/N"})`,
+        value: c.id,
+      })),
+  ];
+
   return (
     <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-950/85 p-3 backdrop-blur-sm sm:p-4">
       <form
@@ -1520,7 +1682,7 @@ function ComponentFormModal({
             </h2>
 
             <p className="mt-1 text-xs font-medium text-blue-100 sm:text-sm">
-              Category API dropdown and component API form.
+              Fill component spec details and register.
             </p>
           </div>
 
@@ -1604,49 +1766,21 @@ function ComponentFormModal({
                 disabled={isFieldLocked("machineId")}
                 onChange={(value) => onChange("machineId", value)}
                 placeholder="Select Machine"
-                triggerClassName="
-    h-11
-    w-full
-    rounded-lg
-    border
-    border-slate-300
-    bg-white
-    px-4
-    text-sm
-    font-semibold
-    text-slate-700
-    dark:border-slate-700
-    dark:bg-[#101f33]
-    dark:text-white
-  "
+                triggerClassName="h-11 w-full rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:bg-[#101f33] dark:text-white"
               />
             </label>
 
-            <FormSelect
-              label="Category"
-              value={form.category}
-              disabled={isFieldLocked("category")}
-              onChange={(value) => onChange("category", value)}
-              options={[
-                ...categories.map((category) => category.name),
-                "Custom",
-              ]}
+            <FormInput
+              label="Component Name *"
+              value={form.name}
+              error={formErrors.name}
+              disabled={isFieldLocked("name")}
+              onChange={(value) => onChange("name", value)}
+              placeholder="e.g. Front Left Tyre"
             />
 
-            {form.category === "Custom" && (
-              <div className="sm:col-span-2">
-                <FormInput
-                  label="Custom Category Name"
-                  value={form.customCategory || ""}
-                  disabled={isFieldLocked("customCategory")}
-                  onChange={(value) => onChange("customCategory", value)}
-                  placeholder="Enter custom category name"
-                />
-              </div>
-            )}
-
             <FormInput
-              label="Serial Number"
+              label="Serial Number *"
               value={form.serialNumber}
               error={formErrors.serialNumber}
               disabled={isFieldLocked("serialNumber")}
@@ -1657,14 +1791,14 @@ function ComponentFormModal({
             <div className="sm:col-span-2">
               <label className="block">
                 <span className="mb-1.5 block text-xs font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
-                  Description
+                  Description / Spec Notes (Optional)
                 </span>
 
                 <textarea
-                  rows={3}
+                  rows={2}
                   value={form.description}
                   onChange={(e) => onChange("description", e.target.value)}
-                  placeholder="Front Left Tyre"
+                  placeholder="e.g. Heavy duty radial tyre fitted on front left axle"
                   className={`w-full rounded-lg border bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition resize-none placeholder:text-slate-400 dark:bg-[#101f33] dark:text-white ${
                     formErrors.description
                       ? "border-red-500 focus:border-red-500 focus:ring-4 focus:ring-red-500/20"
@@ -1720,15 +1854,7 @@ function ComponentFormModal({
               error={formErrors.plannedLife}
             />
 
-            <FormInput
-              label="Replacement Cost"
-              type="number"
-              value={form.replacementCost}
-              disabled={isFieldLocked("replacementCost")}
-              onChange={(value) => onChange("replacementCost", value)}
-              placeholder="14200"
-              error={formErrors.replacementCost}
-            />
+
 
             <FormSelect
               label="Condition"

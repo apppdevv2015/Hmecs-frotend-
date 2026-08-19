@@ -12,8 +12,7 @@ import {
 } from "lucide-react";
 import AppSelect from "../../components/ui/dropdown/AppSelect";
 import Pagination from "../../components/common/Pagination";
-import { reportApprovalService, type Report } from "../../services/Task/reportApprovalService";
-import { supervisorTaskService } from "../../services/Task/supervisorTaskService";
+import { reportApprovalService } from "../../services/Task/reportApprovalService";
 
 export type ArtisanFixItem = {
   id: string;
@@ -29,6 +28,7 @@ export type ArtisanFixItem = {
   duration: string;
   severity: "Critical" | "High" | "Medium" | "Low";
   status: "Verified" | "In Progress" | "Pending Verification";
+  supervisorRemarks?: string;
 };
 
 export default function ArtisanFixHistory() {
@@ -41,81 +41,78 @@ export default function ArtisanFixHistory() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState<number | "all">(5);
 
+  const formatDuration = (rpt: any) => {
+    if (rpt?.duration) return String(rpt.duration);
+    if (rpt?.hoursSpent) return `${rpt.hoursSpent}h`;
+    if (rpt?.timeTaken) return String(rpt.timeTaken);
+    if (rpt?.startTime && rpt?.endTime) {
+      const diffMs = new Date(rpt.endTime).getTime() - new Date(rpt.startTime).getTime();
+      if (!isNaN(diffMs) && diffMs > 0) {
+        const hours = Math.floor(diffMs / (1000 * 60 * 60));
+        const mins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+        return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+      }
+    }
+    return "N/A";
+  };
+
   const loadData = async () => {
     try {
       setLoading(true);
-      const [reports, historyData, taskData] = await Promise.all([
+      const [reports, historyData] = await Promise.all([
         reportApprovalService.getReports(),
         reportApprovalService.getHistory(),
-        supervisorTaskService.getSupervisorTaskData(),
       ]);
 
+      const allReports = [...(reports || []), ...(historyData || [])];
+
       // Filter strictly for Artisans only (exclude operators like 'Alex Operator')
-      const artisanReportsOnly = [...reports, ...historyData].filter((rpt: any) => {
-        const role = String(rpt.role || "").toLowerCase();
-        const name = String(rpt.submittedBy || rpt.artisanName || "").toLowerCase();
+      const artisanReportsOnly = allReports.filter((rpt: any) => {
+        const role = String(rpt?.role || "").toLowerCase();
+        const name = String(rpt?.submittedBy || rpt?.artisanName || "").toLowerCase();
         if (role.includes("operator") || name.includes("operator")) return false;
         return true;
       });
 
       const mappedReports: ArtisanFixItem[] = artisanReportsOnly.map((rpt: any, idx: number) => {
         let statusVal: ArtisanFixItem["status"] = "Verified";
-        if (rpt.status === "pending") statusVal = "Pending Verification";
-        else if (rpt.status === "reviewed" || rpt.status === "in_progress") statusVal = "In Progress";
+        if (rpt?.status === "pending") statusVal = "Pending Verification";
+        else if (rpt?.status === "reviewed" || rpt?.status === "in_progress") statusVal = "In Progress";
         else statusVal = "Verified";
 
-        const artisanName = rpt.submittedBy || rpt.artisanName || "Assigned Artisan";
-        const machineName = rpt.machineName || rpt.tags?.[0] || "Equipment Unit";
-        const comp = rpt.tags?.[1] || rpt.title || "General Mechanical System";
-        const issue = rpt.description || "Reported operational issue during pre-start inspection.";
-        const fix = rpt.workPerformed || rpt.correctiveAction || rpt.description || "Inspected component and performed corrective maintenance.";
-        const dateStr = rpt.date ? `${rpt.date} 10:30 AM` : new Date().toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        const artisanName = rpt?.submittedBy || rpt?.artisanName || "Assigned Artisan";
+        const machineName = rpt?.machineName || rpt?.tags?.[0] || "Equipment Unit";
+        const comp = rpt?.tags?.[1] || rpt?.title || "General Mechanical System";
+        const issue = rpt?.description || "Reported issue";
+        const fix = rpt?.workPerformed || rpt?.correctiveAction || rpt?.description || "Corrective maintenance performed";
+        const dateStr = rpt?.date
+          ? `${rpt.date}`
+          : rpt?.createdAt
+          ? new Date(rpt.createdAt).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
+          : new Date().toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 
         return {
-          id: rpt.id || `FIX-${1000 + idx}`,
+          id: String(rpt?.id || `FIX-${1000 + idx}`),
           artisanName,
-          artisanRole: rpt.role === "artisan" ? "Artisan Specialist" : "Senior Equipment Artisan",
+          artisanRole: rpt?.specialization || rpt?.artisanRole || rpt?.role_name || (typeof rpt?.role === "string" ? rpt.role.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase()) : "Artisan"),
           machineName,
-          machineId: rpt.machineId || `m_${idx}`,
+          machineId: String(rpt?.machineId || `m_${idx}`),
           component: comp,
           reportedIssue: issue,
-          operatorName: rpt.operatorName || "Assigned Operator",
+          operatorName: rpt?.operatorName || "Operator",
           workPerformed: fix,
           fixDate: dateStr,
-          duration: rpt.duration || "1h 45m",
-          severity: (rpt.priority === "critical" ? "Critical" : rpt.priority === "high" ? "High" : "Medium") as any,
+          duration: formatDuration(rpt),
+          severity: (rpt?.priority === "critical" ? "Critical" : rpt?.priority === "high" ? "High" : rpt?.priority === "low" ? "Low" : "Medium"),
           status: statusVal,
+          supervisorRemarks: rpt?.supervisorRemarks || rpt?.remarks || "",
         };
       });
 
-      // If no artisan reports found, build entries strictly from assigned artisans
-      if (mappedReports.length === 0 && taskData.operators.length > 0) {
-        const assignedArtisans = taskData.operators.filter(
-          (op) => Boolean(op.assignedMachine) && Boolean(op.assignedEngineer) && op.assignedEngineer !== "Not Assigned"
-        );
-
-        const fallbackEntries: ArtisanFixItem[] = assignedArtisans.map((op, idx) => ({
-          id: `FIX-${1000 + idx}`,
-          artisanName: op.assignedEngineer,
-          artisanRole: "Senior Equipment Artisan",
-          machineName: op.assignedMachine || `Machine #${idx + 1}`,
-          machineId: op.assignedMachineId || `m_${idx}`,
-          component: "Hydraulic & Engine Assembly",
-          reportedIssue: `Routine maintenance check & system diagnostic for operator ${op.name}.`,
-          operatorName: op.name,
-          workPerformed: "Inspected fluid levels, replaced worn seals, calibrated pressure valves, and cleared diagnostic faults.",
-          fixDate: op.assignedAt || new Date().toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-          duration: "1h 30m",
-          severity: "Medium",
-          status: "Verified",
-        }));
-
-        setHistoryList(fallbackEntries);
-      } else {
-        setHistoryList(mappedReports);
-      }
+      setHistoryList(mappedReports);
     } catch (err) {
       console.error("Failed to load artisan fix history:", err);
+      setHistoryList([]);
     } finally {
       setLoading(false);
     }
@@ -176,11 +173,14 @@ export default function ArtisanFixHistory() {
   const endItem = isShowAll ? filteredHistory.length : Math.min(startIndex + effectivePageSize, filteredHistory.length);
 
   const stats = useMemo(() => {
-    const topArtisanName = historyList[0]?.artisanName ? `${historyList[0].artisanName}` : "Active Artisan Team";
+    const topArtisanName = historyList[0]?.artisanName ? historyList[0].artisanName : "N/A";
+    const validDurations = historyList.map(h => h.duration).filter(d => d && d !== "N/A");
+    const avgDurationText = validDurations.length > 0 ? validDurations[0] : "N/A";
+
     return {
       total: historyList.length,
       verified: historyList.filter((h) => h.status === "Verified").length,
-      avgTime: "1h 45m",
+      avgTime: avgDurationText,
       topArtisan: topArtisanName,
     };
   }, [historyList]);
@@ -206,7 +206,6 @@ export default function ArtisanFixHistory() {
       let rptStatus: "approved" | "reviewed" | "pending" | "rejected" = "approved";
       if (verifyStatus === "Pending Verification") rptStatus = "pending";
       else if (verifyStatus === "In Progress") rptStatus = "reviewed";
-      else if (verifyStatus === "Rejected") rptStatus = "rejected";
 
       await reportApprovalService.updateReportStatus(selectedItem.id, rptStatus, remarks);
 

@@ -2,9 +2,11 @@ import { apiCall } from "../apiHandler";
 
 export type MachinePayload = {
   name: string;
+  manufacturer?: string;
   model: string;
   serialNumber: string;
   equipmentType?: string;
+  imageUrl?: string;
   site?: string;
   companyId?: string;
 };
@@ -51,6 +53,9 @@ const getCompanyId = () => {
 
 const buildMachineBody = (payload: Partial<MachinePayload>) => ({
   ...(payload.name !== undefined ? { name: payload.name } : {}),
+  ...(payload.manufacturer !== undefined
+    ? { manufacturer: payload.manufacturer }
+    : {}),
   ...(payload.model !== undefined ? { model: payload.model } : {}),
   ...(payload.serialNumber !== undefined
     ? { serialNumber: payload.serialNumber }
@@ -58,6 +63,7 @@ const buildMachineBody = (payload: Partial<MachinePayload>) => ({
   ...(payload.equipmentType !== undefined
     ? { equipmentType: payload.equipmentType }
     : {}),
+  ...(payload.imageUrl !== undefined ? { imageUrl: payload.imageUrl } : {}),
   ...(payload.site !== undefined ? { site: payload.site } : {}),
 });
 export const machineService = {
@@ -127,24 +133,63 @@ export const machineService = {
   async assignOperatorToMachine(
     machineId: string,
     assignment: {
-      assignedOperatorId?: string;
-      assignedOperatorName?: string;
-      assignedArtisanId?: string;
-      assignedArtisanName?: string;
-      assignedSupervisorId?: string;
-      assignedSupervisorName?: string;
+      userId: string;
     },
   ) {
     return apiCall(
-      `/machines/${machineId}`,
+      `/machines/${machineId}/assign`,
       {
-        method: "PUT",
+        method: "POST",
         body: JSON.stringify(assignment),
       },
       {
-        showSuccess: false,
+        showSuccess: true,
       },
     );
+  },
+  async getMachineAssignment(machineId: string) {
+    return apiCall(`/machines/${machineId}/assign`, {
+      method: "GET",
+    });
+  },
+  async getAllAssignedMachines(params?: { companyId?: string; operatorId?: string }) {
+    const queryParts: string[] = [];
+    if (params?.companyId) queryParts.push(`companyId=${encodeURIComponent(params.companyId)}`);
+    if (params?.operatorId) queryParts.push(`operatorId=${encodeURIComponent(params.operatorId)}`);
+    const queryString = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
+
+    return apiCall(`/machines/assignments${queryString}`, {
+      method: "GET",
+    });
+  },
+
+  async getOperatorAssignments(operatorId?: string) {
+    const endpoint = operatorId
+      ? `/machines/operator/${encodeURIComponent(operatorId)}/assignments`
+      : `/machines/operator-assignments`;
+
+    return apiCall(endpoint, {
+      method: "GET",
+    });
+  },
+
+  async getEquipmentCategories() {
+    return apiCall(`/machines/categories?includeInactive=true`, {
+      method: "GET",
+    });
+  },
+
+  async saveManualInspectionData(machineId: string, payload: any) {
+    return apiCall(`/machines/${machineId}/manual-data`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async getManualInspectionData(machineId: string) {
+    return apiCall(`/machines/${machineId}/manual-data`, {
+      method: "GET",
+    });
   },
 };
 

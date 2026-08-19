@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { showSuccessToast, showErrorToast } from "../../utils/toastUtils";
 import AppSelect from "../../components/ui/dropdown/AppSelect";
+import StorageService, { STORAGE_KEYS } from "../../services/storage.service";
 import Pagination from "../../components/common/Pagination";
 import { type ComponentArtisanAssignment } from "./SupervisorAssignedArtisans";
 import { Loader2 } from "lucide-react";
@@ -112,15 +113,16 @@ export default function SupervisorServices() {
     setLoading(true);
 
     // Get current logged-in supervisor name
-    let currentSupName = "Marcus Supervisor";
-    try {
-      const raw = localStorage.getItem("hme_user");
-      if (raw) {
-        const p = JSON.parse(raw);
-        const n = `${p.firstName || p.first_name || ""} ${p.lastName || p.last_name || ""}`.trim() || p.name;
-        if (n) currentSupName = n;
-      }
-    } catch {}
+    let currentSupName = (() => {
+      try {
+        const u = StorageService.getUser();
+        if (u) {
+          const n = u.name || u.fullName || `${u.firstName || u.first_name || ""} ${u.lastName || u.last_name || ""}`.trim();
+          if (n) return n;
+        }
+      } catch {}
+      return StorageService.get<string>(STORAGE_KEYS.USER_NAME) || "Supervisor";
+    })();
 
     // Load Artisan Component Assignments
     try {
@@ -658,7 +660,7 @@ export default function SupervisorServices() {
                       <td className="whitespace-nowrap px-6 py-4">
                         <span className="inline-flex items-center gap-1 rounded-xl bg-blue-50 border border-blue-200 px-2.5 py-1 font-bold text-blue-700 dark:bg-blue-950/40 dark:border-blue-800/60 dark:text-blue-300">
                           <ShieldCheck size={13} />
-                          {item.supervisorName || "Marcus Supervisor"}
+                          {item.supervisorName && item.supervisorName !== "Marcus Supervisor" ? item.supervisorName : currentSupName}
                         </span>
                       </td>
 
