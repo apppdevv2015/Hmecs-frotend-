@@ -21,6 +21,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 
 import AppSelect from "../../components/ui/dropdown/AppSelect";
+import StorageService, { STORAGE_KEYS } from "../../services/storage.service";
 import { machineService } from "../../services/companyadmin/machineService";
 import { componentService } from "../../services/companyadmin/componentService";
 import {
@@ -206,15 +207,7 @@ const componentFormSchema = z
   .object({
     machineId: z.string().trim().min(1, "Machine is required."),
 
-    category: z
-      .string()
-      .trim()
-      .min(1, "Category is required.")
-      .max(50, "Category cannot exceed 50 characters.")
-      .regex(
-        /^[A-Za-z0-9\s-]+$/,
-        "Category can only contain letters, numbers, spaces and hyphens.",
-      ),
+    category: z.string().optional(),
 
     description: z
       .string()
@@ -300,6 +293,17 @@ const emptyComponentForm: ComponentFormInput = {
 };
 
 export default function SupervisorComponentsPage() {
+  const storedUser = StorageService.getUser();
+  const currentSupervisorName = useMemo(() => {
+    return (
+      storedUser?.name ||
+      storedUser?.fullName ||
+      (storedUser?.firstName ? `${storedUser.firstName} ${storedUser.lastName || ""}`.trim() : "") ||
+      StorageService.get<string>(STORAGE_KEYS.USER_NAME) ||
+      "Marcus Supervisor"
+    );
+  }, [storedUser]);
+
   const [machines, setMachines] = useState<Machine[]>([]);
   const [components, setComponents] = useState<MachineComponent[]>([]);
   const [selectedMachine, setSelectedMachine] = useState<Machine | null>(null);
@@ -418,7 +422,7 @@ export default function SupervisorComponentsPage() {
             replacementCost: 35000,
             condition: assign.priority === "High" ? 4 : 2,
             assignedArtisanName: assign.artisanName,
-            assignedSupervisorName: assign.supervisorName || "Marcus Supervisor",
+            assignedSupervisorName: (assign.supervisorName && assign.supervisorName !== "Marcus Supervisor") ? assign.supervisorName : currentSupervisorName,
             taskId: assign.taskId,
             intelligence: {
               hoursRun: 1900,
@@ -659,6 +663,13 @@ export default function SupervisorComponentsPage() {
     { label: "4 - Poor", value: "4" },
     { label: "5 - Critical", value: "5" },
   ];
+
+  const getSupervisorName = (comp: MachineComponent, activeAssign: any) => {
+    if (activeAssign?.supervisorName) return activeAssign.supervisorName;
+    if ((comp as any).assignedSupervisorName) return (comp as any).assignedSupervisorName;
+    if ((comp as any).supervisorName) return (comp as any).supervisorName;
+    return activeAssign ? currentSupervisorName : "Unassigned";
+  };
 
   return (
     <div className="min-h-screen bg-slate-100 p-4 font-sans text-slate-900 dark:bg-[#07111f] dark:text-white sm:p-6 lg:p-8">
@@ -923,10 +934,6 @@ export default function SupervisorComponentsPage() {
                     {/* Header */}
                     <div className="flex items-start justify-between">
                       <div className="min-w-0 flex-1">
-                        <div className="mb-2 inline-flex rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300">
-                          {component.category}
-                        </div>
-
                         <h3 className="truncate text-lg font-extrabold tracking-tight text-slate-950 dark:text-white">
                           {component.description || "No Description"}
                         </h3>
@@ -987,9 +994,7 @@ export default function SupervisorComponentsPage() {
                           Assigned By Supervisor
                         </span>
                         <span className="font-bold text-emerald-600 dark:text-emerald-400">
-                          {activeAssignment
-                            ? activeAssignment.supervisorName || "Marcus Supervisor"
-                            : (component as any).assignedSupervisorName || (component as any).supervisorName || "Unassigned"}
+                          {getSupervisorName(component, activeAssignment)}
                         </span>
                       </div>
 
@@ -1258,10 +1263,10 @@ export default function SupervisorComponentsPage() {
 
                             <div>
                               <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                                Assigned By Supervisor (User ID)
+                                Assigned By Supervisor
                               </p>
                               <p className="mt-1 text-sm font-bold text-emerald-600 dark:text-emerald-400">
-                                Supervisor Alex (ID: SUP-101)
+                                {getSupervisorName(selectedComponent, null)}
                               </p>
                             </div>
 

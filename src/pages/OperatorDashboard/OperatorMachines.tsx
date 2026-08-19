@@ -9,6 +9,7 @@ import {
   X,
 } from "lucide-react";
 import toast from "react-hot-toast";
+import StorageService, { STORAGE_KEYS } from "../../services/storage.service";
 import { machineService } from "../../services/companyadmin/machineService";
 
 type Machine = {
@@ -75,8 +76,7 @@ const normalizeMachine = (item: any, index: number): Machine => {
     assignedOperatorName: item?.assignedOperatorName || item?.assigned_operator_name || item?.operatorName || item?.operator_name || "",
     assignedArtisanId: item?.assignedArtisanId || item?.assigned_artisan_id || "",
     assignedArtisanName: item?.assignedArtisanName || item?.assigned_artisan_name || item?.artisanName || item?.artisan_name || "",
-    assignedSupervisorId: item?.assignedSupervisorId || item?.assigned_supervisor_id || "",
-    assignedSupervisorName: item?.assignedSupervisorName || item?.assigned_supervisor_name || item?.supervisorName || item?.supervisor_name || "",
+    assignedSupervisorName: item?.assignedSupervisorName || item?.assigned_supervisor_name || item?.supervisorName || item?.supervisor_name || (item?.assignedOperatorName || item?.assigned_operator_name ? (StorageService.getUser()?.name || StorageService.getUser()?.fullName || "Supervisor") : "Unassigned"),
     assignedAt: item?.assignedAt || item?.assigned_at || item?.createdAt || item?.created_at || "",
     companyId: item?.companyId ?? item?.company_id,
     status: String(item?.status ?? item?.machineStatus ?? "Active"),

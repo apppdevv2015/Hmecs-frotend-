@@ -28,7 +28,7 @@ export const CompanyAdminNav: React.FC = () => {
     },
     {
       name: "Component Register",
-      path: "/company-admin/register",
+      path: "/company-admin/components",
       icon: <Register size={18} />,
     },
     {

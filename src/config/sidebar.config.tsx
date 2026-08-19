@@ -200,7 +200,7 @@ export const sidebarConfig: Record<
           },
           {
             name: "Components",
-            path: "/company-admin/register",
+            path: "/company-admin/components",
             icon: <PackageSearch className={sidebarIconClass} />,
           },
           {
@@ -212,6 +212,11 @@ export const sidebarConfig: Record<
             name: "Category Master",
             path: "/company-admin/categories",
             icon: <ListChecks className={sidebarIconClass} />,
+          },
+          {
+            name: "Machine Health",
+            path: "/company-admin/inspection-entry",
+            icon: <ClipboardCheck className={sidebarIconClass} />,
           },
         ],
       },

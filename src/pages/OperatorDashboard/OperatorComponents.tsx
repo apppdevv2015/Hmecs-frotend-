@@ -616,7 +616,6 @@ const OperatorComponents: React.FC = () => {
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-[0.14em] text-slate-500 dark:border-slate-800 dark:bg-slate-950/60">
                     <th className="px-6 py-4 font-bold">Machine / Type</th>
-                    <th className="px-6 py-4 font-bold">Category</th>
                     <th className="px-6 py-4 font-bold">
                       Description / Serial
                     </th>
@@ -692,10 +691,6 @@ const OperatorComponents: React.FC = () => {
                               {machineModel}
                             </span>
                           </div>
-                        </td>
-
-                        <td className="px-6 py-4 text-sm font-bold text-slate-700 dark:text-slate-200">
-                          {component.category}
                         </td>
 
                         <td className="px-6 py-4">

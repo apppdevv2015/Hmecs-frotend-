@@ -186,6 +186,10 @@ const CategoryManagement = lazy(
   () => import("./pages/CompanyAdmin/CategoryManagement"),
 );
 
+const InspectionDataEntry = lazy(
+  () => import("./pages/CompanyAdmin/InspectionDataEntry"),
+);
+
 const ReportingManagement = lazy(
   () => import("./pages/CompanyAdmin/ReportingManagement"),
 );
@@ -648,14 +652,14 @@ export default function App() {
                   }
                 />
 
-                <Route
-                  path="/company-admin/categories"
-                  element={
-                    <Suspense fallback={<PageSkeleton />}>
-                      <CategoryManagement />
-                    </Suspense>
-                  }
-                />
+              <Route
+                path="/company-admin/categories"
+                element={
+                  <Suspense fallback={<PageSkeleton />}>
+                    <CategoryManagement />
+                  </Suspense>
+                }
+              />
 
                 <Route
                   path="/company-admin/profile"
@@ -679,13 +683,37 @@ export default function App() {
                   }
                 />
 
-                <Route
-                  path="/company-admin/register"
-                  element={<ComponentRegister />}
-                />
+              <Route
+                path="/company-admin/register"
+                element={<ComponentRegister />}
+              />
+              <Route
+                path="/company-admin/components"
+                element={
+                  <Suspense fallback={<PageSkeleton />}>
+                    <ComponentRegister />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="/company_admin/components"
+                element={
+                  <Suspense fallback={<PageSkeleton />}>
+                    <ComponentRegister />
+                  </Suspense>
+                }
+              />
 
                 <Route
                   path="/company-admin/heatmap"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <FleetHeatMap />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/company-admin/heat-map"
                   element={
                     <Suspense fallback={<PageSkeleton />}>
                       <FleetHeatMap />
@@ -697,6 +725,30 @@ export default function App() {
                   element={
                     <Suspense fallback={<PageSkeleton />}>
                       <FleetHeatMap />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/company_admin/heat-map"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <FleetHeatMap />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/company-admin/inspection-entry"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <InspectionDataEntry />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/company_admin/inspection-entry"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <InspectionDataEntry />
                     </Suspense>
                   }
                 />

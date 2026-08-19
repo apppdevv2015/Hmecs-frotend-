@@ -76,6 +76,18 @@ export const componentService = {
     });
   },
 
+  getComponentsByMachineId: (machineId: string) => {
+    return apiCall<any[]>(`/components/machine/${machineId}`, {
+      method: "GET",
+    });
+  },
+
+  getMachineComponents: (machineId: string) => {
+    return apiCall<any[]>(`/machines/${machineId}/components`, {
+      method: "GET",
+    });
+  },
+
   createComponent: (payload: ComponentPayload) => {
     return apiCall<any>(
       "/components",

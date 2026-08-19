@@ -18,6 +18,7 @@ import {
   FileCheck,
 } from "lucide-react";
 import AppSelect from "../../components/ui/dropdown/AppSelect";
+import StorageService, { STORAGE_KEYS } from "../../services/storage.service";
 import Pagination from "../../components/common/Pagination";
 import { showSuccessToast, showErrorToast } from "../../utils/toastUtils";
 
@@ -66,15 +67,16 @@ export default function SupervisorTaskReview() {
   // Load all tasks from storage & normalize
   const loadAllTasks = () => {
     setLoading(true);
-    let supName = "Marcus Supervisor";
-    try {
-      const rawUser = localStorage.getItem("hme_user");
-      if (rawUser) {
-        const p = JSON.parse(rawUser);
-        const n = `${p.firstName || p.first_name || ""} ${p.lastName || p.last_name || ""}`.trim() || p.name;
-        if (n) supName = n;
-      }
-    } catch {}
+    let supName = (() => {
+      try {
+        const u = StorageService.getUser();
+        if (u) {
+          const n = u.name || u.fullName || `${u.firstName || u.first_name || ""} ${u.lastName || u.last_name || ""}`.trim();
+          if (n) return n;
+        }
+      } catch {}
+      return StorageService.get<string>(STORAGE_KEYS.USER_NAME) || "Supervisor";
+    })();
 
     const combined: ReviewTaskItem[] = [];
 

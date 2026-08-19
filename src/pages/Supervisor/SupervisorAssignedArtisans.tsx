@@ -23,6 +23,7 @@ import {
   Calendar,
 } from "lucide-react";
 import AppSelect from "../../components/ui/dropdown/AppSelect";
+import StorageService, { STORAGE_KEYS } from "../../services/storage.service";
 import Pagination from "../../components/common/Pagination";
 import { machineService } from "../../services/companyadmin/machineService";
 import { userService, normalizeUsersResponse } from "../../services/Auth/userService";
@@ -331,6 +332,7 @@ export default function SupervisorAssignedArtisans() {
 
     const generatedTaskId = `TSK-${Math.floor(100000 + Math.random() * 900000)}`;
 
+<<<<<<< Updated upstream
     const result = await dispatch(
       assignArtisanToMachine({
         machineId: modalMachineId,
@@ -347,6 +349,44 @@ export default function SupervisorAssignedArtisans() {
         startDate: modalStartDate,
         dueDate: modalDueDate,
       })
+=======
+    const newEntry: ComponentArtisanAssignment = {
+      id: `ASGN-${Date.now()}`,
+      taskId: generatedTaskId,
+      machineId: modalMachineId,
+      machineName: mName,
+      componentId: `comp-${Date.now()}`,
+      componentName: modalComponentName,
+      artisanId: modalArtisanId,
+      artisanName: selectedArtisan?.name || "Assigned Artisan",
+      artisanSpecialization: selectedArtisan?.specialization || "Maintenance Specialist",
+      supervisorName: (() => {
+        try {
+          const user = StorageService.getUser();
+          if (user) {
+            const n = user.name || user.fullName || `${user.firstName || user.first_name || ""} ${user.lastName || user.last_name || ""}`.trim();
+            if (n) return n;
+          }
+        } catch {}
+        return StorageService.get<string>(STORAGE_KEYS.USER_NAME) || "Supervisor";
+      })(),
+      workScope: modalWorkScope || "General component maintenance inspection & diagnostic.",
+      priority: modalPriority,
+      startDate: modalStartDate,
+      dueDate: modalDueDate,
+      assignedAt: new Date().toLocaleString("en-GB", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      status: "Active",
+    };
+
+    const existingIndex = assignments.findIndex(
+      (a) => a.machineId === modalMachineId && a.componentName === modalComponentName
+>>>>>>> Stashed changes
     );
 
     if (assignArtisanToMachine.fulfilled.match(result)) {
@@ -752,7 +792,13 @@ export default function SupervisorAssignedArtisans() {
                     <td className="whitespace-nowrap px-6 py-4">
                       <span className="inline-flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700 dark:border-blue-800/60 dark:bg-blue-950/40 dark:text-blue-300">
                         <ShieldCheck size={14} />
+<<<<<<< Updated upstream
                         {item.supervisorName || "—"}
+=======
+                        {item.supervisorName && item.supervisorName !== "Marcus Supervisor"
+                          ? item.supervisorName
+                          : (StorageService.getUser()?.name || StorageService.getUser()?.fullName || StorageService.get<string>(STORAGE_KEYS.USER_NAME) || "Supervisor")}
+>>>>>>> Stashed changes
                       </span>
                     </td>
 

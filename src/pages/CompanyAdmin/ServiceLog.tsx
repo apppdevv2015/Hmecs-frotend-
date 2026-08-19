@@ -22,6 +22,7 @@ import {
   Edit,
   Trash2,
   X,
+  User,
 } from "lucide-react";
 
 export type ServiceLogStatus = "Pending" | "Completed" | "In Progress";
@@ -43,6 +44,9 @@ interface ServiceLog {
   component: string;
   serviceType: string;
   engineerId: string;
+  artisanName: string;
+  artisanRole: string;
+  assignedBy: string;
   serviceDate: string;
   nextServiceDate: string;
   runtimeHours: number;
@@ -141,6 +145,9 @@ export default function ServiceLogs() {
     component: "",
     serviceType: "",
     engineerId: "ENG-101",
+    artisanName: "Vikram Sharma (Artisan)",
+    artisanRole: "Hydraulic Specialist",
+    assignedBy: "Company Admin",
     serviceDate: "",
     nextServiceDate: "",
     runtimeHours: 0,
@@ -186,13 +193,16 @@ export default function ServiceLogs() {
         setLogs([
           {
             id: "1",
-            machineId: formattedMachines[0]?.machineId || "CAT-EX001",
+            machineId: formattedMachines[0]?.machineId || "CAT-777WT-001",
             machineName:
-              formattedMachines[0]?.machineName || "Caterpillar 6040 Excavator",
+              formattedMachines[0]?.machineName || "Mining Water Truck 01",
             site: formattedMachines[0]?.site || "Limpopo Mine Site",
             component: "Hydraulic Pump",
             serviceType: "Preventive Maintenance",
             engineerId: "ENG-SA-101",
+            artisanName: "Vikram Sharma (Artisan)",
+            artisanRole: "Hydraulic Specialist",
+            assignedBy: "Company Admin",
             serviceDate: "2026-06-10",
             nextServiceDate: "2026-07-10",
             runtimeHours: 12450,
@@ -206,13 +216,16 @@ export default function ServiceLogs() {
 
           {
             id: "2",
-            machineId: formattedMachines[1]?.machineId || "KOM-HD785",
+            machineId: formattedMachines[1]?.machineId || "CAT-MD6310-001",
             machineName:
-              formattedMachines[1]?.machineName || "Komatsu HD785 Dump Truck",
+              formattedMachines[1]?.machineName || "Rotary Drill Rig 01",
             site: formattedMachines[1]?.site || "Mpumalanga Coal Mine",
             component: "Engine Cooling System",
             serviceType: "Corrective Maintenance",
             engineerId: "ENG-SA-102",
+            artisanName: "Rajesh Kumar (Artisan)",
+            artisanRole: "Engine Lead Tech",
+            assignedBy: "Supervisor Amit",
             serviceDate: "2026-06-14",
             nextServiceDate: "2026-07-14",
             runtimeHours: 18720,
@@ -226,13 +239,16 @@ export default function ServiceLogs() {
 
           {
             id: "3",
-            machineId: formattedMachines[2]?.machineId || "HIT-EX3600",
+            machineId: formattedMachines[2]?.machineId || "KOM-PC8000-001",
             machineName:
-              formattedMachines[2]?.machineName || "Hitachi EX3600 Excavator",
+              formattedMachines[2]?.machineName || "Hydraulic Excavator 01",
             site: formattedMachines[2]?.site || "Northern Cape Iron Ore Mine",
             component: "Track Assembly",
             serviceType: "Emergency Repair",
             engineerId: "ENG-SA-103",
+            artisanName: "Suresh Patel (Artisan)",
+            artisanRole: "Heavy Mechanical Specialist",
+            assignedBy: "Company Admin",
             serviceDate: "2026-06-16",
             nextServiceDate: "2026-06-30",
             runtimeHours: 22340,
@@ -246,13 +262,16 @@ export default function ServiceLogs() {
 
           {
             id: "4",
-            machineId: formattedMachines[3]?.machineId || "CAT-D11T",
+            machineId: formattedMachines[3]?.machineId || "KOM-D475A-001",
             machineName:
-              formattedMachines[3]?.machineName || "Caterpillar D11T Dozer",
+              formattedMachines[3]?.machineName || "Mining Dozer 01",
             site: formattedMachines[3]?.site || "Free State Mining Project",
             component: "Transmission System",
             serviceType: "Inspection",
             engineerId: "ENG-SA-104",
+            artisanName: "Amit Singh (Artisan)",
+            artisanRole: "Drivetrain Technician",
+            assignedBy: "Supervisor Priya",
             serviceDate: "2026-06-12",
             nextServiceDate: "2026-07-12",
             runtimeHours: 16480,
@@ -266,14 +285,17 @@ export default function ServiceLogs() {
 
           {
             id: "5",
-            machineId: formattedMachines[4]?.machineId || "VOL-A40G",
+            machineId: formattedMachines[4]?.machineId || "KOM-WA1200-001",
             machineName:
               formattedMachines[4]?.machineName ||
-              "Volvo A40G Articulated Hauler",
+              "Wheel Loader 01",
             site: formattedMachines[4]?.site || "KwaZulu-Natal Quarry",
             component: "Brake System",
             serviceType: "Safety Inspection",
             engineerId: "ENG-SA-105",
+            artisanName: "Dinesh Verma (Artisan)",
+            artisanRole: "Brake & Pneumatic Specialist",
+            assignedBy: "Company Admin",
             serviceDate: "2026-06-18",
             nextServiceDate: "2026-07-18",
             runtimeHours: 9840,
@@ -598,10 +620,14 @@ export default function ServiceLogs() {
             <div className="overflow-x-auto">
               <table className="w-full min-w-[900px]">
                 <thead className="border-b border-slate-200 bg-slate-100 transition-colors dark:border-slate-700 dark:bg-slate-700/60">
-                  <tr className="text-left text-sm text-slate-600 dark:text-slate-300">
+                  <tr className="text-left text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
                     <th className="p-4">Machine</th>
 
                     <th className="p-4">Component</th>
+
+                    <th className="p-4">Assigned Artisan</th>
+
+                    <th className="p-4">Assigned By</th>
 
                     <th className="p-4">Service Type</th>
 
@@ -619,7 +645,7 @@ export default function ServiceLogs() {
                   {loading ? (
                     <tr>
                       <td
-                        colSpan={8}
+                        colSpan={9}
                         className="p-10 text-center text-slate-500 dark:text-slate-400"
                       >
                         Loading...
@@ -628,7 +654,7 @@ export default function ServiceLogs() {
                   ) : paginatedLogs.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={8}
+                        colSpan={9}
                         className="p-10 text-center text-slate-500 dark:text-slate-400"
                       >
                         No service logs found
@@ -678,6 +704,35 @@ export default function ServiceLogs() {
                               Machine Component
                             </p>
                           </div>
+                        </td>
+
+                        {/* ASSIGNED ARTISAN */}
+
+                        <td className="p-4">
+                          <div className="flex items-center gap-2">
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-100 font-black text-xs text-blue-600 dark:bg-blue-900/50 dark:text-blue-300">
+                              {log.artisanName?.charAt(0) || "A"}
+                            </div>
+
+                            <div className="min-w-0">
+                              <p className="truncate text-xs font-bold text-slate-900 dark:text-white">
+                                {log.artisanName || "Unassigned"}
+                              </p>
+
+                              <p className="truncate text-[10px] font-semibold text-slate-400">
+                                {log.artisanRole || "Artisan Tech"}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* ASSIGNED BY */}
+
+                        <td className="p-4">
+                          <span className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-bold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                            <User size={12} className="text-slate-400" />
+                            {log.assignedBy || "Company Admin"}
+                          </span>
                         </td>
 
                         {/* SERVICE TYPE */}
@@ -894,6 +949,35 @@ function ServiceLogModal({
               <p className="text-[11px] text-slate-500">
                 {formData.serviceType}
               </p>
+            </div>
+          </div>
+
+          {/* Assigned Artisan + Assigned By */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-xl border border-slate-200 bg-blue-50/50 p-3 dark:border-slate-700 dark:bg-blue-950/20">
+              <p className="text-[9px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+                Assigned Artisan / Technician
+              </p>
+
+              <h3 className="mt-1 text-sm font-bold text-slate-900 dark:text-white">
+                {formData.artisanName || "Vikram Sharma (Artisan)"}
+              </h3>
+
+              <p className="text-[11px] text-blue-600 dark:text-blue-400 font-medium">
+                {formData.artisanRole || "Hydraulic Specialist"}
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/50">
+              <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">
+                Assigned By
+              </p>
+
+              <h3 className="mt-1 text-sm font-bold text-slate-900 dark:text-white">
+                {formData.assignedBy || "Company Admin"}
+              </h3>
+
+              <p className="text-[11px] text-slate-500">Authorized Assignment</p>
             </div>
           </div>
 

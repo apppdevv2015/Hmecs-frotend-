@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { machineService } from "../../services/companyadmin/machineService";
+import { componentService } from "../../services/companyadmin/componentService";
 import { fleetService } from "../../services/Fleet/fleetService";
 import StorageService from "../../services/storage.service";
 
@@ -17,6 +18,7 @@ import {
   Search,
   RefreshCcw,
   ChevronRight,
+  ChevronLeft,
   Download,
   Eye,
   X,
@@ -28,6 +30,8 @@ import {
   ChevronDown,
   BarChart2,
   Building2,
+  Loader2,
+  Cog,
 } from "lucide-react";
 
 /* ==========================================================
@@ -680,8 +684,39 @@ export default function FleetHeatMap() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"All" | "Healthy" | "Warning" | "Critical">("All");
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
-  const [activeTab, setActiveTab] = useState<CategoryTab>("All Equipment");
-  const [selectedCompanyId, setSelectedCompanyId] = useState<string>("all");
+  const [activeTab, setActiveTab] = useState<string>("All Equipment");
+  const [eqCategoriesList, setEqCategoriesList] = useState<any[]>([]);
+
+  useEffect(() => {
+    const loadCategories = async () => {
+      try {
+        const res: any = await machineService.getEquipmentCategories();
+        let cats: any[] = [];
+        if (Array.isArray(res)) cats = res;
+        else if (Array.isArray(res?.data)) cats = res.data;
+        else if (Array.isArray(res?.data?.data)) cats = res.data.data;
+        setEqCategoriesList(cats);
+      } catch (e) {
+        console.error("Error loading categories:", e);
+      }
+    };
+    loadCategories();
+  }, []);
+
+  const dynamicCategoryTabs = useMemo(() => {
+    const listFromApi = eqCategoriesList
+      .map((c: any) => c.name || c.title || c.equipmentType)
+      .filter(Boolean);
+
+    const listFromFleet = fleetTable
+      .map((m) => m.type)
+      .filter(Boolean);
+
+    const set = new Set(["All Equipment", ...listFromApi, ...listFromFleet]);
+    return Array.from(set);
+  }, [eqCategoriesList, fleetTable]);
+
+  const [selectedMachineFilter, setSelectedMachineFilter] = useState<string>("all");
   const [companies, setCompanies] = useState<Company[]>([
     { id: "CMP-01", companyName: "Tata Mining", companyCode: "TM001" },
     { id: "CMP-02", companyName: "L&T Construction", companyCode: "LT001" },
@@ -693,6 +728,112 @@ export default function FleetHeatMap() {
 
   // Selected Machine for Component Health Overview cards above the table
   const [overviewMachine, setOverviewMachine] = useState<FleetMachine | null>(INITIAL_FLEET_MACHINES[0]);
+  const [overviewComponentsList, setOverviewComponentsList] = useState<any[]>([]);
+  const [loadingOverviewComponents, setLoadingOverviewComponents] = useState(false);
+  const carouselContainerRef = useRef<HTMLDivElement>(null);
+
+  const scrollCarousel = (direction: "left" | "right") => {
+    if (carouselContainerRef.current) {
+      const scrollAmount = direction === "left" ? -340 : 340;
+      carouselContainerRef.current.scrollBy({ left: scrollAmount, behavior: "smooth" });
+    }
+  };
+
+  useEffect(() => {
+    if (!overviewMachine?.id) return;
+
+    const deriveCompName = (item: any): string => {
+      const directName = item?.name || item?.componentName || item?.component_name;
+      if (directName && directName !== "General") return String(directName);
+      const desc = String(item?.description || "").trim();
+      if (desc) {
+        const cleaned = desc.replace(/^Spec Notes:\s*/i, "").trim();
+        const parts = cleaned.split(" - ");
+        if (parts[0]) return parts[0].trim();
+      }
+      return directName || "Component";
+    };
+
+    const fetchComponentsForOverview = async () => {
+      setLoadingOverviewComponents(true);
+      try {
+        const res: any = await componentService.getComponentsByMachineId(overviewMachine.id);
+        let list: any[] = [];
+        if (Array.isArray(res)) list = res;
+        else if (Array.isArray(res?.data)) list = res.data;
+
+        const mapped = list.map((c: any) => ({
+          ...c,
+          displayName: deriveCompName(c),
+          serialNumber: String(c.serialNumber || c.serial_number || "").replace(/^DEMO-/i, ""),
+        }));
+
+        setOverviewComponentsList(mapped);
+      } catch (err) {
+        console.error("Error fetching overview components:", err);
+        setOverviewComponentsList([]);
+      } finally {
+        setLoadingOverviewComponents(false);
+      }
+    };
+
+    fetchComponentsForOverview();
+  }, [overviewMachine?.id]);
+
+  useEffect(() => {
+    if (selectedMachineFilter !== "all") {
+      const found = fleetTable.find(
+        (m) => m.id === selectedMachineFilter || m.machine === selectedMachineFilter
+      );
+      if (found) {
+        setOverviewMachine(found);
+      }
+    }
+  }, [selectedMachineFilter, fleetTable]);
+
+  const [modalComponentsList, setModalComponentsList] = useState<any[]>([]);
+  const [loadingModalComponents, setLoadingModalComponents] = useState(false);
+
+  useEffect(() => {
+    if (!openModal || !selectedMachine?.id) return;
+
+    const deriveCompName = (item: any): string => {
+      const directName = item?.name || item?.componentName || item?.component_name;
+      if (directName && directName !== "General") return String(directName);
+      const desc = String(item?.description || "").trim();
+      if (desc) {
+        const cleaned = desc.replace(/^Spec Notes:\s*/i, "").trim();
+        const parts = cleaned.split(" - ");
+        if (parts[0]) return parts[0].trim();
+      }
+      return directName || "Component";
+    };
+
+    const fetchModalComponents = async () => {
+      setLoadingModalComponents(true);
+      try {
+        const res: any = await componentService.getComponentsByMachineId(selectedMachine.id);
+        let list: any[] = [];
+        if (Array.isArray(res)) list = res;
+        else if (Array.isArray(res?.data)) list = res.data;
+
+        const mapped = list.map((c: any) => ({
+          ...c,
+          displayName: deriveCompName(c),
+          serialNumber: String(c.serialNumber || c.serial_number || "").replace(/^DEMO-/i, ""),
+        }));
+
+        setModalComponentsList(mapped);
+      } catch (err) {
+        console.error("Error fetching modal components:", err);
+        setModalComponentsList([]);
+      } finally {
+        setLoadingModalComponents(false);
+      }
+    };
+
+    fetchModalComponents();
+  }, [openModal, selectedMachine?.id]);
 
   const chartRef = useRef<any>(null);
 
@@ -841,7 +982,7 @@ export default function FleetHeatMap() {
     fetchDashboard();
   }, [fetchDashboard]);
 
-  /* ── Filtered Machines ── */
+  /* ── Filtered Machines for Fleet Table ── */
   const filteredFleet = useMemo(() => {
     return fleetTable.filter((item) => {
       const q = search.toLowerCase();
@@ -855,21 +996,16 @@ export default function FleetHeatMap() {
       const matchesStatus =
         statusFilter === "All" || item.status === statusFilter;
 
-      const matchesCompany =
-        selectedCompanyId === "all" || item.companyId === selectedCompanyId;
-
       let matchesTab = true;
       if (activeTab !== "All Equipment") {
         const typeLower = item.type.toLowerCase();
-        if (activeTab === "Excavators") matchesTab = typeLower.includes("excavator") || typeLower.includes("pc");
-        else if (activeTab === "Trucks") matchesTab = typeLower.includes("truck") || typeLower.includes("haul");
-        else if (activeTab === "Dozers") matchesTab = typeLower.includes("dozer") || typeLower.includes("d10");
-        else if (activeTab === "Graders") matchesTab = typeLower.includes("grader");
+        const tabLower = activeTab.toLowerCase();
+        matchesTab = typeLower.includes(tabLower) || item.machine.toLowerCase().includes(tabLower);
       }
 
-      return matchesSearch && matchesStatus && matchesCompany && matchesTab;
+      return matchesSearch && matchesStatus && matchesTab;
     });
-  }, [fleetTable, search, statusFilter, selectedCompanyId, activeTab]);
+  }, [fleetTable, search, statusFilter, activeTab]);
 
   /* ── Summary Stats ── */
   const stats: FleetStats = useMemo(() => {
@@ -1131,21 +1267,28 @@ export default function FleetHeatMap() {
                 />
               </div>
 
-              {/* Company Filter Dropdown */}
+              {/* Machine Filter Dropdown */}
               <div className="relative">
-                <Building2
+                <Truck
                   size={16}
                   className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400"
                 />
                 <select
-                  value={selectedCompanyId}
-                  onChange={(e) => setSelectedCompanyId(e.target.value)}
-                  className="h-14 min-w-[220px] appearance-none rounded-[20px] border border-slate-200 bg-slate-50 pl-12 pr-10 text-sm font-semibold text-slate-700 outline-none transition focus:border-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                  value={selectedMachineFilter}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setSelectedMachineFilter(val);
+                    if (val !== "all") {
+                      const found = fleetTable.find((m) => m.id === val || m.machine === val);
+                      if (found) setOverviewMachine(found);
+                    }
+                  }}
+                  className="h-14 min-w-[220px] appearance-none rounded-[20px] border border-slate-200 bg-slate-50 pl-12 pr-10 text-sm font-extrabold text-slate-800 outline-none transition focus:border-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
                 >
-                  <option value="all">All Companies</option>
-                  {companies.map((company) => (
-                    <option key={company.id} value={company.id}>
-                      {company.companyName}
+                  <option value="all">All Machines ({fleetTable.length})</option>
+                  {fleetTable.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.machine}
                     </option>
                   ))}
                 </select>
@@ -1191,9 +1334,9 @@ export default function FleetHeatMap() {
             </div>
           </div>
 
-          {/* Category Tabs */}
+          {/* Category Tabs (Fetched Dynamically from API) */}
           <div className="mt-5 flex flex-wrap gap-2 border-t border-slate-100 pt-5 dark:border-slate-800">
-            {CATEGORY_TABS.map((tab) => (
+            {dynamicCategoryTabs.map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -1263,112 +1406,231 @@ export default function FleetHeatMap() {
           )}
         </div>
 
-        {/* ── COMPONENT HEALTH OVERVIEW CARDS (4 LIVE CARDS FOR SELECTED MACHINE) ── */}
+        {/* ── COMPONENT HEALTH OVERVIEW CARDS (DYNAMIC SLIDER FOR SELECTED MACHINE) ── */}
         <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-xs dark:border-slate-800 dark:bg-slate-900">
-          <div className="mb-5 flex items-start justify-between">
+          <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h3 className="text-xl font-black text-slate-900 dark:text-white">
-                Component Health Overview
+                Component Health Overview ({overviewMachine?.machine || "Selected Machine"})
               </h3>
               <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                 {overviewMachine
-                  ? `Showing live component health for ${overviewMachine.machine} (${overviewMachine.company})`
-                  : "Select a machine from the table below to see its component health."}
+                  ? `Showing all ${overviewComponentsList.length > 0 ? overviewComponentsList.length : "registered"} components for ${overviewMachine.machine}. Use arrows to slide.`
+                  : "Select a machine from the table below to see its components."}
               </p>
             </div>
-            {overviewMachine && (
-              <button
-                onClick={() => {
-                  setSelectedMachine(overviewMachine);
-                  setOpenModal(true);
-                }}
-                className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-600 transition hover:text-blue-700 dark:text-blue-400"
-              >
-                <span>View Detailed Analytics</span>
-                <ChevronRight size={14} />
-              </button>
-            )}
+
+            <div className="flex items-center gap-3">
+              {/* Slider Navigation Buttons */}
+              <div className="flex items-center gap-1.5 rounded-2xl border border-slate-200 bg-slate-50 p-1 dark:border-slate-800 dark:bg-slate-950">
+                <button
+                  type="button"
+                  onClick={() => scrollCarousel("left")}
+                  className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-slate-700 shadow-xs transition hover:bg-blue-50 hover:text-blue-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                  title="Slide Left"
+                >
+                  <ChevronLeft size={18} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => scrollCarousel("right")}
+                  className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-slate-700 shadow-xs transition hover:bg-blue-50 hover:text-blue-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                  title="Slide Right"
+                >
+                  <ChevronRight size={18} />
+                </button>
+              </div>
+            </div>
           </div>
 
-          {overviewMachine ? (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {(["tyre", "engine", "hydraulic", "transmission"] as const).map(
-                (compKey) => {
-                  const comp = overviewMachine[compKey];
-                  const img = COMPONENT_ICON_MAP[comp.label] || tyreImg;
-                  const isOk = comp.status === "ok";
-                  const isWarn = comp.status === "warn";
-                  const isCrit = comp.status === "crit";
+          {loadingOverviewComponents ? (
+            <div className="flex items-center justify-center py-12 text-sm text-slate-500">
+              <Loader2 size={22} className="mr-2.5 animate-spin text-blue-600" />
+              Loading components for selected machine...
+            </div>
+          ) : overviewComponentsList.length > 0 ? (
+            <div
+              ref={carouselContainerRef}
+              className="flex overflow-x-auto gap-4 pb-2 pt-1 hme-hide-scrollbar scroll-smooth"
+            >
+              {overviewComponentsList.map((comp) => {
+                const name = comp.displayName || comp.name || comp.description || "Component";
+                const score = comp.healthScore !== null && comp.healthScore !== undefined
+                  ? Number(comp.healthScore)
+                  : comp.health_score !== null && comp.health_score !== undefined
+                  ? Number(comp.health_score)
+                  : null;
 
-                  let badgeBg = "bg-green-100 text-green-700 dark:bg-green-950/60 dark:text-green-400";
-                  let badgeLabel = "GOOD";
-                  let barBg = "bg-green-500";
+                const isCrit = score !== null && score < 50;
+                const isWarn = score !== null && score >= 50 && score < 85;
 
-                  if (isWarn) {
-                    badgeBg = "bg-orange-100 text-orange-700 dark:bg-orange-950/60 dark:text-orange-400";
-                    badgeLabel = "WARN";
-                    barBg = "bg-orange-500";
-                  } else if (isCrit) {
-                    badgeBg = "bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-400";
-                    badgeLabel = "CRITICAL";
-                    barBg = "bg-red-500";
-                  }
+                let badgeBg = "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400";
+                let badgeLabel = "HEALTHY";
+                let barBg = "bg-emerald-500";
 
-                  return (
-                    <div
-                      key={compKey}
-                      className="flex flex-col justify-between rounded-2xl border border-slate-200/80 bg-slate-50/60 p-5 transition hover:bg-slate-50 hover:shadow-xs dark:border-slate-800 dark:bg-slate-950/60 dark:hover:bg-slate-950"
-                    >
-                      <div>
-                        <div className="flex items-center justify-between">
-                          <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider ${badgeBg}`}>
-                            {badgeLabel}
+                if (score === null) {
+                  badgeBg = "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400";
+                  badgeLabel = "UNCALCULATED";
+                  barBg = "bg-slate-300";
+                } else if (isCrit) {
+                  badgeBg = "bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-400";
+                  badgeLabel = "CRITICAL";
+                  barBg = "bg-red-500";
+                } else if (isWarn) {
+                  badgeBg = "bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400";
+                  badgeLabel = "MONITOR";
+                  barBg = "bg-amber-500";
+                }
+
+                const upperName = name.toUpperCase();
+                const matchedIconKey = Object.keys(COMPONENT_ICON_MAP).find(k => upperName.includes(k));
+                const img = matchedIconKey ? COMPONENT_ICON_MAP[matchedIconKey] : null;
+
+                return (
+                  <div
+                    key={comp.id}
+                    className="w-[280px] shrink-0 flex flex-col justify-between rounded-2xl border border-slate-200/80 bg-slate-50/60 p-5 transition hover:bg-slate-50 hover:shadow-md dark:border-slate-800 dark:bg-slate-950/60 dark:hover:bg-slate-950"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider ${badgeBg}`}>
+                          {badgeLabel}
+                        </span>
+                        {comp.serialNumber && (
+                          <span className="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-bold text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
+                            {comp.serialNumber}
                           </span>
-                        </div>
+                        )}
+                      </div>
 
-                        {/* Component Image Illustration */}
-                        <div className="my-4 flex h-24 items-center justify-center">
+                      {/* Component Image Illustration */}
+                      <div className="my-4 flex h-20 items-center justify-center">
+                        {img ? (
                           <img
                             src={img}
-                            alt={comp.label}
-                            className="max-h-20 max-w-full object-contain transition-transform duration-300 hover:scale-105"
+                            alt={name}
+                            className="max-h-16 max-w-full object-contain transition-transform duration-300 hover:scale-105"
                           />
-                        </div>
-
-                        <h4 className="text-base font-bold text-slate-900 dark:text-white capitalize">
-                          {compKey === "transmission" ? "Suspension" : compKey}
-                        </h4>
-                        <p className="text-[11px] font-semibold text-slate-400">Overall Health</p>
-
-                        <div className="mt-3 flex items-baseline justify-between">
-                          <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Health Score</span>
-                          <span className="text-2xl font-black text-slate-900 dark:text-white">
-                            {comp.lifePercent}%
-                          </span>
-                        </div>
-
-                        {/* Progress Bar */}
-                        <div className="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
-                          <div
-                            className={`h-full rounded-full transition-all duration-500 ${barBg}`}
-                            style={{ width: `${comp.lifePercent}%` }}
-                          />
-                        </div>
+                        ) : (
+                          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white shadow-sm dark:bg-slate-800 dark:text-slate-200">
+                            <Cog size={28} className="text-blue-600 dark:text-blue-400" />
+                          </div>
+                        )}
                       </div>
 
-                      {/* Sub-Metrics Details */}
-                      <div className="mt-5 space-y-2 border-t border-slate-200/80 pt-4 dark:border-slate-800">
-                        {comp.subMetrics.map((m, idx) => (
-                          <div key={idx} className="flex items-center justify-between text-xs">
-                            <span className="font-medium text-slate-500 dark:text-slate-400">{m.label}</span>
-                            <span className="font-bold text-slate-900 dark:text-white">{m.value}</span>
-                          </div>
-                        ))}
+                      <h4 className="text-sm font-black text-slate-900 dark:text-white truncate" title={name}>
+                        {name}
+                      </h4>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Overall Health</p>
+
+                      <div className="mt-3 flex items-baseline justify-between">
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Health Score</span>
+                        <span className="text-2xl font-black text-slate-900 dark:text-white">
+                          {score !== null ? `${score}%` : "-"}
+                        </span>
+                      </div>
+
+                      {/* Progress Bar */}
+                      <div className="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+                        <div
+                          className={`h-full rounded-full transition-all duration-500 ${barBg}`}
+                          style={{ width: `${score !== null ? score : 0}%` }}
+                        />
                       </div>
                     </div>
-                  );
+
+                    {/* Parameters / Life Info */}
+                    <div className="mt-4 space-y-1.5 border-t border-slate-200/80 pt-3 dark:border-slate-800 text-[11px]">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-slate-500 dark:text-slate-400">Supplier:</span>
+                        <span className="font-bold text-slate-800 dark:text-slate-200 truncate max-w-[130px]" title={comp.supplier || "Komatsu"}>{comp.supplier || "Komatsu"}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-slate-500 dark:text-slate-400">Install Hrs:</span>
+                        <span className="font-bold text-slate-800 dark:text-slate-200">{comp.installHours || comp.install_hours || 0} hrs</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : overviewMachine ? (
+            <div
+              ref={carouselContainerRef}
+              className="flex overflow-x-auto gap-4 pb-2 pt-1 hme-hide-scrollbar scroll-smooth"
+            >
+              {(["tyre", "engine", "hydraulic", "transmission"] as const).map((compKey) => {
+                const comp = overviewMachine[compKey];
+                const img = COMPONENT_ICON_MAP[comp.label] || tyreImg;
+                const isOk = comp.status === "ok";
+                const isWarn = comp.status === "warn";
+                const isCrit = comp.status === "crit";
+
+                let badgeBg = "bg-green-100 text-green-700 dark:bg-green-950/60 dark:text-green-400";
+                let badgeLabel = "GOOD";
+                let barBg = "bg-green-500";
+
+                if (isWarn) {
+                  badgeBg = "bg-orange-100 text-orange-700 dark:bg-orange-950/60 dark:text-orange-400";
+                  badgeLabel = "WARN";
+                  barBg = "bg-orange-500";
+                } else if (isCrit) {
+                  badgeBg = "bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-400";
+                  badgeLabel = "CRITICAL";
+                  barBg = "bg-red-500";
                 }
-              )}
+
+                return (
+                  <div
+                    key={compKey}
+                    className="w-[280px] shrink-0 flex flex-col justify-between rounded-2xl border border-slate-200/80 bg-slate-50/60 p-5 transition hover:bg-slate-50 hover:shadow-xs dark:border-slate-800 dark:bg-slate-950/60 dark:hover:bg-slate-950"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider ${badgeBg}`}>
+                          {badgeLabel}
+                        </span>
+                      </div>
+
+                      <div className="my-4 flex h-24 items-center justify-center">
+                        <img
+                          src={img}
+                          alt={comp.label}
+                          className="max-h-20 max-w-full object-contain transition-transform duration-300 hover:scale-105"
+                        />
+                      </div>
+
+                      <h4 className="text-base font-bold text-slate-900 dark:text-white capitalize">
+                        {compKey === "transmission" ? "Suspension" : compKey}
+                      </h4>
+                      <p className="text-[11px] font-semibold text-slate-400">Overall Health</p>
+
+                      <div className="mt-3 flex items-baseline justify-between">
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Health Score</span>
+                        <span className="text-2xl font-black text-slate-900 dark:text-white">
+                          {comp.lifePercent}%
+                        </span>
+                      </div>
+
+                      <div className="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+                        <div
+                          className={`h-full rounded-full transition-all duration-500 ${barBg}`}
+                          style={{ width: `${comp.lifePercent}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="mt-5 space-y-2 border-t border-slate-200/80 pt-4 dark:border-slate-800">
+                      {comp.subMetrics.map((m, idx) => (
+                        <div key={idx} className="flex items-center justify-between text-xs">
+                          <span className="font-medium text-slate-500 dark:text-slate-400">{m.label}</span>
+                          <span className="font-bold text-slate-900 dark:text-white">{m.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <div className="py-12 text-center text-sm font-semibold text-slate-400">
@@ -1399,10 +1661,7 @@ export default function FleetHeatMap() {
                   <th className="px-6 py-4">Company</th>
                   <th className="px-6 py-4">Fleet ID</th>
                   <th className="px-6 py-4">Operator</th>
-                  <th className="px-4 py-4 text-center">Tyre</th>
-                  <th className="px-4 py-4 text-center">Engine</th>
-                  <th className="px-4 py-4 text-center">Hydraulic</th>
-                  <th className="px-4 py-4 text-center">Suspension</th>
+                  <th className="px-6 py-4 text-center">Components</th>
                   <th className="px-6 py-4 text-center">Health</th>
                   <th className="px-6 py-4 text-center">Actions</th>
                 </tr>
@@ -1466,18 +1725,21 @@ export default function FleetHeatMap() {
                           </div>
                         </td>
 
-                        {/* Component Rings */}
-                        <td className="px-4 py-4 text-center align-middle">
-                          {renderComponentRing(row.tyre)}
-                        </td>
-                        <td className="px-4 py-4 text-center align-middle">
-                          {renderComponentRing(row.engine)}
-                        </td>
-                        <td className="px-4 py-4 text-center align-middle">
-                          {renderComponentRing(row.hydraulic)}
-                        </td>
-                        <td className="px-4 py-4 text-center align-middle">
-                          {renderComponentRing(row.transmission)}
+                        {/* Real Components Column */}
+                        <td className="px-6 py-4 text-center align-middle">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOverviewMachine(row);
+                              setSelectedMachine(row);
+                              setOpenModal(true);
+                            }}
+                            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-1.5 text-xs font-extrabold text-slate-700 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                          >
+                            <Cog size={14} className="text-blue-600 dark:text-blue-400" />
+                            <span>View Components</span>
+                          </button>
                         </td>
 
                         {/* Overall Health Badge */}
@@ -1567,36 +1829,89 @@ export default function FleetHeatMap() {
                   </div>
                 </div>
 
-                {/* Component Breakdown */}
+                {/* Dynamic Component Health Breakdown (Circular Health Rings) */}
                 <div>
-                  <h4 className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-400">
-                    Component Health Breakdown
-                  </h4>
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    {(["tyre", "engine", "hydraulic", "transmission"] as const).map((compKey) => {
-                      const comp = selectedMachine[compKey];
-                      return (
-                        <div key={compKey} className="rounded-2xl border border-slate-200/80 bg-slate-50/60 p-4 dark:border-slate-800 dark:bg-slate-950">
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm font-bold capitalize text-slate-900 dark:text-white">
-                              {compKey === "transmission" ? "Suspension" : compKey}
-                            </span>
-                            <span className="text-sm font-bold text-blue-600 dark:text-blue-400">
-                              {comp.lifePercent}%
-                            </span>
-                          </div>
-                          <div className="mt-2 space-y-1">
-                            {comp.subMetrics.map((m, i) => (
-                              <div key={i} className="flex justify-between text-xs text-slate-500">
-                                <span>{m.label}:</span>
-                                <span className="font-semibold text-slate-800 dark:text-slate-200">{m.value}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    })}
+                  <div className="mb-4 flex items-center justify-between">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                      Component Health Breakdown ({modalComponentsList.length > 0 ? modalComponentsList.length : "Registered"} Components)
+                    </h4>
                   </div>
+
+                  {loadingModalComponents ? (
+                    <div className="flex items-center justify-center py-12 text-sm text-slate-400">
+                      <Loader2 size={22} className="mr-2 animate-spin text-blue-600" />
+                      Loading machine components...
+                    </div>
+                  ) : modalComponentsList.length > 0 ? (
+                    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 max-h-[50vh] overflow-y-auto pr-1">
+                      {modalComponentsList.map((comp) => {
+                        const name = comp.displayName || comp.name || "Component";
+                        const score = comp.healthScore !== null && comp.healthScore !== undefined
+                          ? Number(comp.healthScore)
+                          : comp.health_score !== null && comp.health_score !== undefined
+                          ? Number(comp.health_score)
+                          : null;
+
+                        const isCrit = score !== null && score < 50;
+                        const isWarn = score !== null && score >= 50 && score < 85;
+
+                        let circleStyle = "border-emerald-500 bg-emerald-50 text-emerald-700 dark:border-emerald-500 dark:bg-emerald-950/40 dark:text-emerald-400";
+                        if (score === null) {
+                          circleStyle = "border-slate-300 bg-slate-50 text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-500";
+                        } else if (isCrit) {
+                          circleStyle = "border-red-500 bg-red-50 text-red-700 dark:border-red-500 dark:bg-red-950/40 dark:text-red-400";
+                        } else if (isWarn) {
+                          circleStyle = "border-amber-500 bg-amber-50 text-amber-700 dark:border-amber-500 dark:bg-amber-950/40 dark:text-amber-400";
+                        }
+
+                        return (
+                          <div
+                            key={comp.id}
+                            className="flex flex-col items-center justify-between rounded-2xl border border-slate-200/80 bg-slate-50/60 p-4 text-center transition hover:bg-white hover:shadow-md dark:border-slate-800 dark:bg-slate-950/60 dark:hover:bg-slate-950"
+                          >
+                            {/* Circular Health Percentage Ring */}
+                            <div className={`flex h-16 w-16 items-center justify-center rounded-full border-4 text-sm font-black shadow-xs ${circleStyle}`}>
+                              {score !== null ? `${score}%` : "-"}
+                            </div>
+
+                            {/* Component Name */}
+                            <h5 className="mt-3 text-xs font-black text-slate-900 dark:text-white line-clamp-2" title={name}>
+                              {name}
+                            </h5>
+
+                            {/* Serial Number */}
+                            {comp.serialNumber && (
+                              <span className="mt-1.5 rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[9px] font-bold text-slate-400 dark:border-slate-800 dark:bg-slate-900">
+                                {comp.serialNumber}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                      {(["tyre", "engine", "hydraulic", "transmission"] as const).map((compKey) => {
+                        const comp = selectedMachine[compKey];
+                        const isCrit = comp.lifePercent < 50;
+                        const isWarn = comp.lifePercent >= 50 && comp.lifePercent < 85;
+                        let circleStyle = "border-emerald-500 bg-emerald-50 text-emerald-700";
+                        if (isCrit) circleStyle = "border-red-500 bg-red-50 text-red-700";
+                        else if (isWarn) circleStyle = "border-amber-500 bg-amber-50 text-amber-700";
+
+                        return (
+                          <div key={compKey} className="flex flex-col items-center rounded-2xl border border-slate-200/80 bg-slate-50/60 p-4 text-center">
+                            <div className={`flex h-16 w-16 items-center justify-center rounded-full border-4 text-sm font-black ${circleStyle}`}>
+                              {comp.lifePercent}%
+                            </div>
+                            <h5 className="mt-3 text-xs font-black capitalize text-slate-900 dark:text-white">
+                              {compKey === "transmission" ? "Suspension" : compKey}
+                            </h5>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </div>
 
