@@ -279,6 +279,16 @@ export const sidebarConfig: Record<
             path: "/artisans/tasks",
             icon: <ClipboardCheck className={artisansIconClass} />,
           },
+          {
+            name: "Pre-Start Inspection",
+            path: "/artisans/pre-start-inspection",
+            icon: <ClipboardCheck className={artisansIconClass} />,
+          },
+          {
+            name: "Work Order Capture",
+            path: "/artisans/work-order-capture",
+            icon: <ClipboardList className={artisansIconClass} />,
+          },
 
           {
             name: "Fleet Heat",
@@ -355,14 +365,12 @@ export const sidebarConfig: Record<
             path: "/operator/machines",
             icon: <Truck className={operatorIconClass} />,
           },
-          
 
           {
             name: "Assigned Machines",
             path: "/operator/assigned-machines",
             icon: <Truck className={operatorIconClass} />,
           },
-
 
           {
             name: "Pre-Start Inspection",
@@ -384,11 +392,7 @@ export const sidebarConfig: Record<
             path: "/operator/work-order-capture",
             icon: <ClipboardList className={operatorIconClass} />,
           },
-          {
-            name: "Active Task",
-            path: "/operator/active-task",
-            icon: <Activity className={operatorIconClass} />,
-          },
+
           {
             name: "Shift Summary",
             path: "/operator/shift-summary",
@@ -415,6 +419,11 @@ export const sidebarConfig: Record<
             name: "Alerts",
             path: "/operator/alerts",
             icon: <AlertTriangle className={operatorIconClass} />,
+          },
+          {
+            name: "Active Task",
+            path: "/operator/active-task",
+            icon: <Activity className={operatorIconClass} />,
           },
           {
             name: "Service Logs",

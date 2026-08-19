@@ -1,6 +1,22 @@
 import { useMemo, useState, useEffect, useCallback } from "react";
 import { z } from "zod";
 
+import {
+  useDispatch,
+  useSelector,
+} from "react-redux";
+
+import type {
+  RootState,
+  AppDispatch,
+} from "../../redux/store";
+
+import {
+  assignArtisanToMachine,
+  unassignArtisanFromMachine,
+  fetchArtisanAssignments,
+} from "../../redux/slices/artisanAssignmentSlice";
+
 import { machineService } from "../../services/Operator/machineService";
 
 import AppSelect from "../../components/ui/dropdown/AppSelect";
@@ -107,6 +123,18 @@ export default function SupervisorTaskPage() {
   const [editingOperatorId, setEditingOperatorId] = useState<string | null>(null);
 
   const [formErrors, setFormErrors] = useState<FormErrors>({});
+
+const dispatch = useDispatch<AppDispatch>();
+
+const artisanAssignments = useSelector(
+  (state: RootState) =>
+    state.artisanAssignment.assignments,
+);
+
+const artisanAssigning = useSelector(
+  (state: RootState) =>
+    state.artisanAssignment.assigning,
+);
 
   // Load live data from API and stored assignments
   const loadData = useCallback(async (isSilent = false) => {
@@ -373,6 +401,10 @@ export default function SupervisorTaskPage() {
       const engineerName = engineerObj?.name || "";
       const engineerId = engineerObj?.id || selectedEngineer;
 
+
+
+
+
       const success = await supervisorTaskService.assignTask({
         operatorId: targetOpId,
         operatorName: opName,
@@ -408,6 +440,67 @@ export default function SupervisorTaskPage() {
       setSaving(false);
     }
   };
+
+
+  
+      const handleAssignArtisan = async () => {
+  try {
+    if (!selectedMachine) {
+      showErrorToast("Please select a machine");
+      return;
+    }
+
+    if (!selectedEngineer) {
+      showErrorToast("Please select an artisan");
+      return;
+    }
+
+    const machineObj = machines.find(
+      (machine) =>
+        machine.id === selectedMachine,
+    );
+
+    const artisanObj = engineers.find(
+      (artisan) =>
+        artisan.id === selectedEngineer,
+    );
+
+    if (!machineObj) {
+      throw new Error("Machine not found");
+    }
+
+    if (!artisanObj) {
+      throw new Error("Artisan not found");
+    }
+
+    await dispatch(
+      assignArtisanToMachine({
+        machineId: machineObj.id,
+        machineName: machineObj.machineName,
+
+        artisanId: artisanObj.id,
+        artisanName: artisanObj.name,
+
+        // Yahan actual logged-in supervisor ID/name
+        // tumhare auth Redux se lena better rahega.
+      }),
+    ).unwrap();
+
+    showSuccessToast(
+      "Artisan assigned to machine successfully",
+    );
+
+    await dispatch(
+      fetchArtisanAssignments(),
+    ).unwrap();
+
+  } catch (error: any) {
+    showErrorToast(
+      error?.message ||
+        "Failed to assign artisan",
+    );
+  }
+};
 
 const handleUnassignTask = async (targetOpId: string) => {
   try {
