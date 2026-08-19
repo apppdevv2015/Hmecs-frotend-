@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { useDispatch, useSelector } from "react-redux";
 import {
   Wrench,
   UserCheck,
@@ -27,26 +28,25 @@ import { machineService } from "../../services/companyadmin/machineService";
 import { userService, normalizeUsersResponse } from "../../services/Auth/userService";
 import SupervisorUserDetailModal, { type UserDetailData } from "../../components/supervisor/SupervisorUserDetailModal";
 
-export type ComponentArtisanAssignment = {
-  id: string;
-  taskId?: string;
-  machineId: string;
-  machineName: string;
-  componentId: string;
-  componentName: string;
-  artisanId: string;
-  artisanName: string;
-  artisanSpecialization: string;
-  supervisorName?: string;
-  workScope: string;
-  priority: "High" | "Medium" | "Low";
-  startDate?: string;
-  dueDate?: string;
-  assignedAt: string;
-  status: "Active" | "Completed" | "Pending";
-};
+// Confirmed from store.ts: artisanAssignmentReducer lives at
+// "./slices/artisanAssignmentSlice" relative to the store folder,
+// and is registered under the "artisanAssignment" key — matches
+// the selectors below. If this component doesn't sit exactly two
+// folders under src/ (same depth as its other "../../services/..."
+// imports), adjust this path accordingly.
+import {
+  fetchArtisanAssignments,
+  assignArtisanToMachine,
+  unassignArtisanFromMachine,
+  selectArtisanAssignments,
+  selectArtisanAssignmentLoading,
+  selectArtisanAssigning,
+  selectArtisanUnassigning,
+  selectArtisanAssignmentError,
+  type ArtisanAssignment,
+} from "../../redux/slices/artisanAssignmentSlice";
 
-const ARTISAN_ASSIGNMENTS_KEY = "hme_supervisor_artisan_component_assignments";
+export type ComponentArtisanAssignment = ArtisanAssignment;
 
 const DEFAULT_COMPONENTS = [
   "Engine & Turbocharger",
@@ -59,10 +59,19 @@ const DEFAULT_COMPONENTS = [
 ];
 
 export default function SupervisorAssignedArtisans() {
+  // TODO: swap `useDispatch()` / `useSelector` for your typed
+  // `useAppDispatch` / `useAppSelector` hooks if your project has them.
+  const dispatch = useDispatch<any>();
+
+  const assignments = useSelector(selectArtisanAssignments);
+  const assignmentsLoading = useSelector(selectArtisanAssignmentLoading);
+  const assigning = useSelector(selectArtisanAssigning);
+  const unassigning = useSelector(selectArtisanUnassigning);
+  const assignmentsError = useSelector(selectArtisanAssignmentError);
+
   const [machines, setMachines] = useState<any[]>([]);
   const [artisans, setArtisans] = useState<any[]>([]);
-  const [assignments, setAssignments] = useState<ComponentArtisanAssignment[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [directoryLoading, setDirectoryLoading] = useState(true);
   const [search, setSearch] = useState("");
 
   // Machine, Component & Artisan Selection Filters (Default to "all" for all!)
@@ -82,10 +91,11 @@ export default function SupervisorAssignedArtisans() {
   const [modalPriority, setModalPriority] = useState<"High" | "Medium" | "Low">("Medium");
   const [modalStartDate, setModalStartDate] = useState(new Date().toISOString().split("T")[0]);
   const [modalDueDate, setModalDueDate] = useState(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]);
-  const [saving, setSaving] = useState(false);
 
   const [selectedUserDetail, setSelectedUserDetail] = useState<UserDetailData | null>(null);
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
+
+  const loading = directoryLoading || assignmentsLoading;
 
   const getOperatorForMachine = (machineId: string, machineName = "") => {
     try {
@@ -146,9 +156,11 @@ export default function SupervisorAssignedArtisans() {
     setIsUserModalOpen(true);
   };
 
-  const loadInitialData = async () => {
+  // Machines + artisan directory still come straight from their own
+  // services (the slice only owns assignment data).
+  const loadDirectory = async () => {
     try {
-      setLoading(true);
+      setDirectoryLoading(true);
       const [machinesRes, usersRes] = await Promise.allSettled([
         machineService.getCompanyMachines(),
         userService.getUsers({ limit: 100 }),
@@ -172,23 +184,21 @@ export default function SupervisorAssignedArtisans() {
       }
 
       // Filter Artisans / Engineers
-      const artisanUsers = userList.filter((u) => {
-        const r = String(
-          (typeof u.role === "string" ? u.role : u.role?.name) || u.role_name || ""
-        ).toLowerCase();
-        const full = `${u.firstName || u.first_name || ""} ${u.lastName || u.last_name || ""} ${u.name || ""}`.toLowerCase();
+      const artisanUsers = userList.filter((u: any) => {
+  const roleValue =
+    typeof u.role === "string"
+      ? u.role
+      : u.role?.name ??
+        u.role?.role ??
+        u.role?.value ??
+        u.role_name ??
+        u.roleName ??
+        "";
 
-        // Strict Exclusion: Filter out any DB user with "engineer" in name or role!
-        if (full.includes("engineer") || r.includes("engineer")) {
-          return false;
-        }
+  const role = String(roleValue).toLowerCase().trim();
 
-        return (
-          r.includes("artisan") ||
-          r.includes("mechanic") ||
-          r.includes("technician")
-        );
-      });
+  return role === "artisan" || role.includes("artisan");
+});
 
       // Normalize Artisans
       const normalizedArtisans = artisanUsers
@@ -210,110 +220,24 @@ export default function SupervisorAssignedArtisans() {
         })
         .filter((a) => !a.name.toLowerCase().includes("engineer") && !a.specialization.toLowerCase().includes("engineer"));
 
-      const finalArtisans =
-        normalizedArtisans.length > 0
-          ? normalizedArtisans
-          : [
-              { id: "ART-101", name: "David Miller", specialization: "Senior Hydraulics Artisan" },
-              { id: "ART-102", name: "Alex Vance", specialization: "Diesel Engine Specialist" },
-              { id: "ART-103", name: "Suresh Patil", specialization: "Electrical Auto Tech" },
-              { id: "ART-104", name: "Rahul Sharma", specialization: "Undercarriage Specialist" },
-            ];
-
       setMachines(rawMachines);
-      setArtisans(finalArtisans);
-
-      // Load stored assignments & permanently delete old Thabo / ckevin / Engineer entries
-      try {
-        const storedJson = localStorage.getItem(ARTISAN_ASSIGNMENTS_KEY);
-        if (storedJson) {
-          const loaded: ComponentArtisanAssignment[] = JSON.parse(storedJson);
-          const cleanLoaded = loaded.filter(
-            (a) =>
-              !a.artisanName?.toLowerCase().includes("engineer") &&
-              !a.artisanSpecialization?.toLowerCase().includes("engineer") &&
-              !a.artisanName?.toLowerCase().includes("thabo") &&
-              !a.artisanName?.toLowerCase().includes("ckevin")
-          ).map((item) => {
-            const startDate = item.startDate || (item.assignedAt ? "2026-08-14" : new Date().toISOString().split("T")[0]);
-            const dueDate = item.dueDate || "2026-08-21";
-            return {
-              ...item,
-              startDate,
-              dueDate,
-            };
-          });
-          setAssignments(cleanLoaded);
-          localStorage.setItem(ARTISAN_ASSIGNMENTS_KEY, JSON.stringify(cleanLoaded));
-        } else {
-          // Generate sample assignments if none exist
-          const sampleAssignments: ComponentArtisanAssignment[] = rawMachines.slice(0, 3).flatMap((m, mIdx) => {
-            const mName = m.name || m.model || `Machine ${m.id}`;
-            return [
-              {
-                id: `ASGN-${mIdx}-1`,
-                taskId: `TSK-${849200 + mIdx * 2 + 1}`,
-                machineId: m.id || `m_${mIdx}`,
-                machineName: mName,
-                componentId: `comp-${mIdx}-1`,
-                componentName: "Hydraulic Main Pump",
-                artisanId: finalArtisans[0]?.id || "ART-101",
-                artisanName: finalArtisans[0]?.name || "David Miller",
-                artisanSpecialization: finalArtisans[0]?.specialization || "Senior Hydraulics Artisan",
-                supervisorName: "Marcus Supervisor",
-                workScope: "Pressure test relief valves, inspect main line seals, and recalibrate fluid flow.",
-                priority: "High",
-                startDate: "2026-08-14",
-                dueDate: "2026-08-21",
-                assignedAt: new Date().toLocaleDateString("en-GB"),
-                status: "Active",
-              },
-              {
-                id: `ASGN-${mIdx}-2`,
-                taskId: `TSK-${849200 + mIdx * 2 + 2}`,
-                machineId: m.id || `m_${mIdx}`,
-                machineName: mName,
-                componentId: `comp-${mIdx}-2`,
-                componentName: "Engine & Turbocharger",
-                artisanId: finalArtisans[1]?.id || "ART-102",
-                artisanName: finalArtisans[1]?.name || "Alex Vance",
-                artisanSpecialization: finalArtisans[1]?.specialization || "Diesel Engine Specialist",
-                supervisorName: "Marcus Supervisor",
-                workScope: "Inspect turbo manifold clamps, replace air intake filters, and log boost pressure.",
-                priority: "Medium",
-                startDate: "2026-08-14",
-                dueDate: "2026-08-21",
-                assignedAt: new Date().toLocaleDateString("en-GB"),
-                status: "Active",
-              },
-            ];
-          });
-          setAssignments(sampleAssignments);
-          persistAssignments(sampleAssignments);
-        }
-      } catch (err) {
-        console.error("Failed to parse stored assignments:", err);
-      }
+      setArtisans(normalizedArtisans);
     } catch (err) {
-      console.error("Failed to load assigned artisans data:", err);
+      console.error("Failed to load machine/artisan directory:", err);
     } finally {
-      setLoading(false);
+      setDirectoryLoading(false);
     }
+  };
+
+  const refreshAll = () => {
+    loadDirectory();
+    dispatch(fetchArtisanAssignments());
   };
 
   useEffect(() => {
-    loadInitialData();
+    refreshAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // Save stored assignments
-  const persistAssignments = (newAssignments: ComponentArtisanAssignment[]) => {
-    setAssignments(newAssignments);
-    try {
-      localStorage.setItem(ARTISAN_ASSIGNMENTS_KEY, JSON.stringify(newAssignments));
-    } catch (err) {
-      console.warn("Failed to persist artisan assignments:", err);
-    }
-  };
 
   // Open Modal for a specific Machine & Component
   const handleOpenModal = (machineId = "", componentName = "") => {
@@ -344,87 +268,97 @@ export default function SupervisorAssignedArtisans() {
     );
   }, [modalArtisanId, assignments]);
 
-  // Toggle Task Status (Active <-> Completed / Free Artisan)
-  const handleToggleTaskStatus = (id: string) => {
-    const updated = assignments.map((a) => {
-      if (a.id === id) {
-        const nextStatus: "Active" | "Completed" | "Pending" =
-          a.status === "Active" ? "Completed" : "Active";
-        return { ...a, status: nextStatus };
-      }
-      return a;
-    });
-    persistAssignments(updated);
+  // Toggle Task Status (Active -> Completed / Free Component)
+  // The backend only exposes assign + unassign, so "completing" a task
+  // means unassigning it via the same API the Operator side uses. If you
+  // need to keep a history of completed tasks instead of clearing them,
+  // the API/slice needs a dedicated "update status" endpoint + thunk.
+  const handleToggleTaskStatus = (item: ComponentArtisanAssignment) => {
+    if (item.status === "Active") {
+      dispatch(unassignArtisanFromMachine({ machineId: item.machineId }));
+    } else {
+      dispatch(
+        assignArtisanToMachine({
+          machineId: item.machineId,
+          machineName: item.machineName,
+          artisanId: item.artisanId,
+          artisanName: item.artisanName,
+          supervisorId: item.supervisorId,
+          supervisorName: item.supervisorName,
+          taskId: item.taskId,
+          componentId: item.componentId,
+          componentName: item.componentName,
+          workScope: item.workScope,
+          priority: item.priority,
+          startDate: item.startDate,
+          dueDate: item.dueDate,
+        })
+      );
+    }
   };
 
-  // Submit Modal
-  const handleSaveAssignment = () => {
+  // Submit Modal — goes through the redux assignArtisanToMachine thunk,
+  // which is what actually calls the backend assign API.
+  const handleSaveAssignment = async () => {
     if (!modalMachineId || !modalComponentName || !modalArtisanId) return;
-
-    setSaving(true);
 
     const selectedM = machines.find((m) => m.id === modalMachineId);
     const mName = selectedM?.name || selectedM?.model || "Equipment Unit";
     const selectedArtisan = artisans.find((a) => a.id === modalArtisanId);
 
+    const supervisorName = (() => {
+      try {
+        const raw = localStorage.getItem("hme_user");
+        if (raw) {
+          const p = JSON.parse(raw);
+          const n = `${p.firstName || p.first_name || ""} ${p.lastName || p.last_name || ""}`.trim() || p.name;
+          if (n) return n;
+        }
+      } catch {}
+      return undefined;
+    })();
+
+    const supervisorId = (() => {
+      try {
+        const raw = localStorage.getItem("hme_user");
+        if (raw) {
+          const p = JSON.parse(raw);
+          return p.id || p.userId || p.user_id;
+        }
+      } catch {}
+      return undefined;
+    })();
+
     const generatedTaskId = `TSK-${Math.floor(100000 + Math.random() * 900000)}`;
 
-    const newEntry: ComponentArtisanAssignment = {
-      id: `ASGN-${Date.now()}`,
-      taskId: generatedTaskId,
-      machineId: modalMachineId,
-      machineName: mName,
-      componentId: `comp-${Date.now()}`,
-      componentName: modalComponentName,
-      artisanId: modalArtisanId,
-      artisanName: selectedArtisan?.name || "Assigned Artisan",
-      artisanSpecialization: selectedArtisan?.specialization || "Maintenance Specialist",
-      supervisorName: (() => {
-        try {
-          const raw = localStorage.getItem("hme_user");
-          if (raw) {
-            const p = JSON.parse(raw);
-            const n = `${p.firstName || p.first_name || ""} ${p.lastName || p.last_name || ""}`.trim() || p.name;
-            if (n) return n;
-          }
-        } catch {}
-        return "Marcus Supervisor";
-      })(),
-      workScope: modalWorkScope || "General component maintenance inspection & diagnostic.",
-      priority: modalPriority,
-      startDate: modalStartDate,
-      dueDate: modalDueDate,
-      assignedAt: new Date().toLocaleString("en-GB", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-      status: "Active",
-    };
-
-    const existingIndex = assignments.findIndex(
-      (a) => a.machineId === modalMachineId && a.componentName === modalComponentName
+    const result = await dispatch(
+      assignArtisanToMachine({
+        machineId: modalMachineId,
+        machineName: mName,
+        artisanId: modalArtisanId,
+        artisanName: selectedArtisan?.name,
+        supervisorId,
+        supervisorName,
+        taskId: generatedTaskId,
+        componentId: `comp-${Date.now()}`,
+        componentName: modalComponentName,
+        workScope: modalWorkScope || "General component maintenance inspection & diagnostic.",
+        priority: modalPriority,
+        startDate: modalStartDate,
+        dueDate: modalDueDate,
+      })
     );
 
-    let updatedList: ComponentArtisanAssignment[];
-    if (existingIndex !== -1) {
-      updatedList = [...assignments];
-      updatedList[existingIndex] = newEntry;
-    } else {
-      updatedList = [newEntry, ...assignments];
+    if (assignArtisanToMachine.fulfilled.match(result)) {
+      setIsModalOpen(false);
     }
-
-    persistAssignments(updatedList);
-    setSaving(false);
-    setIsModalOpen(false);
+    // on rejection, assignError (from the slice) stays populated —
+    // surface it in the modal below instead of closing.
   };
 
-  // Delete Assignment
-  const handleDeleteAssignment = (id: string) => {
-    const updated = assignments.filter((a) => a.id !== id);
-    persistAssignments(updated);
+  // Delete Assignment — calls the unassign API through the slice.
+  const handleDeleteAssignment = (item: ComponentArtisanAssignment) => {
+    dispatch(unassignArtisanFromMachine({ machineId: item.machineId }));
   };
 
   // Machine Options for Dropdown (Includes "All Fleet Machines")
@@ -460,58 +394,6 @@ export default function SupervisorAssignedArtisans() {
     ];
   }, [artisans]);
 
-  // Filtered Component Breakdown Cards for selected machines & components
-  const displayComponentCards = useMemo(() => {
-    let targetMachines = machines;
-    if (selectedMachineId && selectedMachineId !== "all") {
-      targetMachines = machines.filter((m) => m.id === selectedMachineId);
-    }
-
-    let componentsList = DEFAULT_COMPONENTS;
-    if (selectedComponentFilter !== "all") {
-      componentsList = componentsList.filter((c) => c === selectedComponentFilter);
-    }
-
-    const cards: Array<{
-      key: string;
-      machineId: string;
-      machineName: string;
-      componentName: string;
-      assignment?: ComponentArtisanAssignment;
-    }> = [];
-
-    const q = search.toLowerCase().trim();
-
-    targetMachines.forEach((m) => {
-      const mName = m.name || m.model || "Equipment Unit";
-      componentsList.forEach((compName) => {
-        const assignment = assignments.find(
-          (a) => a.machineId === m.id && a.componentName === compName
-        );
-
-        if (q) {
-          const matches =
-            mName.toLowerCase().includes(q) ||
-            compName.toLowerCase().includes(q) ||
-            (assignment &&
-              (assignment.artisanName.toLowerCase().includes(q) ||
-                assignment.workScope.toLowerCase().includes(q)));
-          if (!matches) return;
-        }
-
-        cards.push({
-          key: `${m.id}-${compName}`,
-          machineId: m.id,
-          machineName: mName,
-          componentName: compName,
-          assignment,
-        });
-      });
-    });
-
-    return cards;
-  }, [machines, selectedMachineId, selectedComponentFilter, assignments, search]);
-
   // Master Filtered Assignments Table
   const filteredAssignments = useMemo(() => {
     const q = search.toLowerCase().trim();
@@ -520,8 +402,8 @@ export default function SupervisorAssignedArtisans() {
         !q ||
         item.artisanName.toLowerCase().includes(q) ||
         item.machineName.toLowerCase().includes(q) ||
-        item.componentName.toLowerCase().includes(q) ||
-        item.workScope.toLowerCase().includes(q);
+        (item.componentName || "").toLowerCase().includes(q) ||
+        (item.workScope || "").toLowerCase().includes(q);
 
       const matchesMachine = selectedMachineId === "all" || item.machineId === selectedMachineId;
       const matchesComponent = selectedComponentFilter === "all" || item.componentName === selectedComponentFilter;
@@ -574,7 +456,7 @@ export default function SupervisorAssignedArtisans() {
 
             <button
               type="button"
-              onClick={loadInitialData}
+              onClick={refreshAll}
               disabled={loading}
               title="Refresh Data"
               className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/15 bg-white/10 text-white backdrop-blur-md transition hover:bg-white/20 active:scale-95 disabled:opacity-50"
@@ -584,6 +466,13 @@ export default function SupervisorAssignedArtisans() {
           </div>
         </div>
       </div>
+
+      {assignmentsError && (
+        <div className="rounded-2xl border border-red-300 bg-red-50 px-4 py-3 text-xs font-semibold text-red-700 dark:border-red-500/40 dark:bg-red-950/40 dark:text-red-300">
+          <AlertCircle className="mr-1.5 inline h-4 w-4 -mt-0.5" />
+          {assignmentsError}
+        </div>
+      )}
 
       {/* ── Registered Artisans Directory & Status Roster ── */}
       <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xs dark:border-slate-800 dark:bg-slate-900 space-y-4">
@@ -657,7 +546,7 @@ export default function SupervisorAssignedArtisans() {
                 <div className="mt-3 pt-2.5 border-t border-slate-200/60 dark:border-slate-800/80 flex items-center justify-between gap-2 text-[11px]">
                   {activeAssignment ? (
                     <span className="text-amber-700 dark:text-amber-300 font-semibold line-clamp-1 text-[10px]">
-                      📍 {activeAssignment.machineName} ({activeAssignment.componentName.split(" ")[0]})
+                      📍 {activeAssignment.machineName} ({(activeAssignment.componentName || "").split(" ")[0]})
                     </span>
                   ) : (
                     <span className="text-emerald-600 dark:text-emerald-400 font-semibold text-[10px]">
@@ -839,7 +728,7 @@ export default function SupervisorAssignedArtisans() {
                     <td className="px-6 py-4">
                       <div className="inline-flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-bold text-indigo-700 dark:border-indigo-800/60 dark:bg-indigo-950/40 dark:text-indigo-300">
                         <Cpu size={14} />
-                        {item.componentName}
+                        {item.componentName || "—"}
                       </div>
                     </td>
 
@@ -853,7 +742,7 @@ export default function SupervisorAssignedArtisans() {
                             {item.artisanName}
                           </p>
                           <p className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
-                            {item.artisanSpecialization}
+                            {artisans.find((a) => a.id === item.artisanId)?.specialization || ""}
                           </p>
                         </div>
                       </div>
@@ -863,7 +752,7 @@ export default function SupervisorAssignedArtisans() {
                     <td className="whitespace-nowrap px-6 py-4">
                       <span className="inline-flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700 dark:border-blue-800/60 dark:bg-blue-950/40 dark:text-blue-300">
                         <ShieldCheck size={14} />
-                        {item.supervisorName || "Marcus Supervisor"}
+                        {item.supervisorName || "—"}
                       </span>
                     </td>
 
@@ -872,50 +761,53 @@ export default function SupervisorAssignedArtisans() {
                         <p className="text-slate-700 dark:text-slate-300 font-medium">
                           {item.workScope}
                         </p>
-                        <span className={`inline-block rounded-md px-2 py-0.5 text-[10px] font-bold ${
-                          item.priority === "High"
-                            ? "bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400"
-                            : "bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400"
-                        }`}>
-                          Priority: {item.priority}
-                        </span>
+                        {item.priority && (
+                          <span className={`inline-block rounded-md px-2 py-0.5 text-[10px] font-bold ${
+                            item.priority === "High"
+                              ? "bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400"
+                              : "bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400"
+                          }`}>
+                            Priority: {item.priority}
+                          </span>
+                        )}
                       </div>
                     </td>
 
                     <td className="whitespace-nowrap px-6 py-4 text-xs">
                       <div>
                         <p className="font-semibold text-slate-700 dark:text-slate-300">{item.assignedAt}</p>
-                        <div className="mt-1 flex items-center gap-1.5 text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-800/60 px-2 py-1 rounded-lg">
-                          <Calendar size={12} />
-                          <span>
-                            {(() => {
-                              const s = item.startDate || "2026-08-14";
-                              const d = item.dueDate || "2026-08-21";
-                              const formatNice = (dateStr: string) => {
-                                if (!dateStr) return "14 Aug 2026";
-                                if (dateStr.includes("-")) {
-                                  const parts = dateStr.split("-");
-                                  if (parts.length === 3) {
-                                    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-                                    const m = parseInt(parts[1], 10) - 1;
-                                    return `${parseInt(parts[2], 10)} ${months[m] || "Aug"} ${parts[0]}`;
+                        {(item.startDate || item.dueDate) && (
+                          <div className="mt-1 flex items-center gap-1.5 text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-800/60 px-2 py-1 rounded-lg">
+                            <Calendar size={12} />
+                            <span>
+                              {(() => {
+                                const formatNice = (dateStr?: string) => {
+                                  if (!dateStr) return "—";
+                                  if (dateStr.includes("-")) {
+                                    const parts = dateStr.split("-");
+                                    if (parts.length === 3) {
+                                      const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+                                      const m = parseInt(parts[1], 10) - 1;
+                                      return `${parseInt(parts[2], 10)} ${months[m] || ""}  ${parts[0]}`;
+                                    }
                                   }
-                                }
-                                return dateStr;
-                              };
-                              return `${formatNice(s)} ➔ ${formatNice(d)}`;
-                            })()}
-                          </span>
-                        </div>
+                                  return dateStr;
+                                };
+                                return `${formatNice(item.startDate)} ➔ ${formatNice(item.dueDate)}`;
+                              })()}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </td>
 
                     <td className="whitespace-nowrap px-6 py-4 text-center">
                       <div className="flex flex-col items-center gap-1">
                         <button
-                          onClick={() => handleToggleTaskStatus(item.id)}
+                          onClick={() => handleToggleTaskStatus(item)}
+                          disabled={assigning || unassigning}
                           title="Click to toggle Artisan Task Status (Completed / Closed frees component)"
-                          className="group inline-flex items-center gap-1.5 rounded-full border border-slate-200 px-3 py-1 text-xs font-bold transition hover:scale-105 dark:border-slate-800"
+                          className="group inline-flex items-center gap-1.5 rounded-full border border-slate-200 px-3 py-1 text-xs font-bold transition hover:scale-105 disabled:opacity-50 dark:border-slate-800"
                         >
                           {item.status === "Active" ? (
                             <span className="inline-flex items-center gap-1.5 text-amber-700 dark:text-amber-300">
@@ -947,9 +839,10 @@ export default function SupervisorAssignedArtisans() {
                           <Edit2 size={14} />
                         </button>
                         <button
-                          onClick={() => handleDeleteAssignment(item.id)}
+                          onClick={() => handleDeleteAssignment(item)}
+                          disabled={unassigning}
                           title="Remove Assignment"
-                          className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-xs transition hover:border-red-500 hover:bg-red-50 hover:text-red-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-red-500 dark:hover:bg-red-950/40"
+                          className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-xs transition hover:border-red-500 hover:bg-red-50 hover:text-red-600 disabled:opacity-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-red-500 dark:hover:bg-red-950/40"
                         >
                           <Trash2 size={14} />
                         </button>
@@ -1198,11 +1091,11 @@ export default function SupervisorAssignedArtisans() {
               </button>
               <button
                 type="button"
-                disabled={saving}
+                disabled={assigning}
                 onClick={handleSaveAssignment}
                 className="inline-flex items-center gap-2 rounded-xl bg-[#3B37E6] px-5 py-2 text-xs font-bold text-white shadow-md shadow-blue-600/30 hover:bg-blue-700 disabled:opacity-50"
               >
-                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserCheck className="h-4 w-4" />}
+                {assigning ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserCheck className="h-4 w-4" />}
                 Save Assignment
               </button>
             </div>

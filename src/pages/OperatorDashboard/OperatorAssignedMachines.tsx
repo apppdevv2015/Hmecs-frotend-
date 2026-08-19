@@ -1,7 +1,19 @@
 import React, { useEffect, useMemo, useState } from "react";
 import machineService from "../../services/Operator/machineService";
-import { componentService } from "../../services/companyadmin/componentService";
-import StorageService, { STORAGE_KEYS } from "../../services/storage.service";
+
+import { useDispatch, useSelector } from "react-redux";
+
+import type { RootState, AppDispatch } from "../../redux/store";
+
+import {
+  fetchOperatorAssignments,
+} from "../../redux/slices/assignedMachineSlice";
+import type { AssignmentHistoryItem } from "../../redux/slices/assignedMachineSlice";
+
+import {
+  fetchMachineComponents,
+} from "../../redux/slices/machineComponentSlice";
+import type { MachineComponent } from "../../redux/slices/machineComponentSlice";
 
 import {
   AlertTriangle,
@@ -23,42 +35,6 @@ import AppSelect from "../../components/ui/dropdown/AppSelect";
 
 type AssignmentStatus = "Active" | "Completed";
 
-type ApiComponent = {
-  id: string;
-  machineId: string;
-  category: string;
-  description: string;
-  serialNumber: string;
-  currentHours?: number;
-  condition?: number;
-};
-
-type CurrentMachine = {
-  machineName: string;
-  machineId: string;
-  serialNumber: string;
-  modelYear: string;
-  fuelType: string;
-  status: AssignmentStatus;
-  assignedOn: string;
-  assignedBy: string;
-  location: string;
-  overallHealth: number;
-  totalHours: number;
-  fuelLevel: number;
-  nextServiceDue: string;
-};
-
-type AssignmentHistoryItem = {
-  id: string;
-  machineName: string;
-  machineId: string;
-  assignedOn: string;
-  assignedBy: string;
-  status: AssignmentStatus;
-  notes: string;
-};
-
 type AssignmentDetails = AssignmentHistoryItem & {
   serialNumber: string;
   modelYear: string;
@@ -66,33 +42,22 @@ type AssignmentDetails = AssignmentHistoryItem & {
   location: string;
 };
 
-const getArrayData = <T,>(response: any): T[] => {
-  if (Array.isArray(response)) return response;
-  if (Array.isArray(response?.data)) return response.data;
-  if (Array.isArray(response?.data?.data)) return response.data.data;
-  if (Array.isArray(response?.items)) return response.items;
-  if (Array.isArray(response?.history)) return response.history;
-  if (Array.isArray(response?.data?.history)) return response.data.history;
-  return [];
-};
-
-const getOverallHealth = (components: ApiComponent[]) => {
+const getOverallHealth = (components: MachineComponent[]) => {
   if (!components.length) return 0;
 
   const total = components.reduce((sum, component) => {
     const condition = Number(component.condition || 0);
-
     return sum + Math.min(Math.max(condition, 0), 5) * 20;
   }, 0);
 
   return Math.round(total / components.length);
 };
 
-const normalizeHistoryItem = (item: any): AssignmentHistoryItem => ({
+// Raw single-assignment API response ko normalize karta hai
+// (ye redux se nahi, seedha machineService.getMachineAssignment se aata hai)
+const normalizeAssignmentDetails = (item: any): AssignmentDetails => ({
   id: String(item?.id ?? item?.assignmentId ?? item?.assignment_id ?? ""),
-
   machineName: String(item?.machineName ?? item?.machine_name ?? ""),
-
   machineId: String(item?.machineId ?? item?.machine_id ?? ""),
 
   assignedOn: String(
@@ -112,129 +77,13 @@ const normalizeHistoryItem = (item: any): AssignmentHistoryItem => ({
   ),
 
   status: item?.status === "Active" ? "Active" : "Completed",
-
   notes: String(item?.notes ?? ""),
-});
 
-const normalizeCurrentMachine = (item: any): CurrentMachine => ({
-  machineName: String(item?.machineName ?? item?.machine_name ?? ""),
-  machineId: String(item?.machineId ?? item?.machine_id ?? ""),
   serialNumber: String(item?.serialNumber ?? item?.serial_number ?? ""),
   modelYear: String(item?.modelYear ?? item?.model_year ?? ""),
   fuelType: String(item?.fuelType ?? item?.fuel_type ?? ""),
-
-  status: (item?.status as AssignmentStatus) || "Active",
-
-  assignedOn: String(
-    item?.assignedOn ??
-      item?.assignedAt ??
-      item?.assigned_on ??
-      item?.assigned_at ??
-      "",
-  ),
-
-  assignedBy: String(
-    item?.assignedBy ??
-      item?.assignedSupervisorName ??
-      item?.assigned_by ??
-      item?.assigned_supervisor_name ??
-      "",
-  ),
-
   location: String(item?.location ?? ""),
-
-  overallHealth: Number(item?.overallHealth ?? item?.overall_health ?? 0),
-
-  totalHours: Number(item?.totalHours ?? item?.total_hours ?? 0),
-
-  fuelLevel: Number(item?.fuelLevel ?? item?.fuel_level ?? 0),
-
-  nextServiceDue: String(item?.nextServiceDue ?? item?.next_service_due ?? "-"),
 });
-
-const normalizeAssignmentDetails = (item: any): AssignmentDetails => ({
-  ...normalizeHistoryItem(item),
-  serialNumber: String(item?.serialNumber || item?.serial_number || ""),
-  modelYear: String(item?.modelYear || item?.model_year || ""),
-  fuelType: String(item?.fuelType || item?.fuel_type || ""),
-  location: String(item?.location || ""),
-});
-
-// GET /machines/assignments - Fetch assigned machines, pick the Active one
-// GET /machines/operator-assignments - Single source of truth for both the
-// operator's current active machine and their full assignment history.
-const fetchOperatorAssignments = async (): Promise<{
-  rawCurrent: any | null;
-  rawHistory: any[];
-}> => {
-  const response: any = await machineService.getOperatorAssignments();
-
-  // TEMP: keep this while wiring up — remove once field names are confirmed.
-  console.log("RAW OPERATOR ASSIGNMENTS RESPONSE:", response);
-
-  const payload = response?.data ?? response;
-
-  // The "current / active" assignment may arrive under any of these keys
-  // depending on how the backend shaped the response.
-  let rawCurrent: any =
-    payload?.current ??
-    payload?.currentMachine ??
-    payload?.current_machine ??
-    payload?.active ??
-    payload?.activeAssignment ??
-    payload?.active_assignment ??
-    payload?.activeMachine ??
-    null;
-
-  if (!rawCurrent && Array.isArray(payload?.activeAssignments)) {
-    rawCurrent = payload.activeAssignments[0] ?? null;
-  }
-
-  // The full history array may arrive under any of these keys, or the
-  // whole payload itself might just be the array.
-  let rawHistory: any[] =
-    payload?.history ??
-    payload?.assignmentHistory ??
-    payload?.assignment_history ??
-    payload?.assignments ??
-    (Array.isArray(payload) ? payload : []);
-
-  if (!Array.isArray(rawHistory)) rawHistory = [];
-
-  // Fallback: if no explicit "current" object was found, derive it from
-  // the history list — pick the most recent item with an Active status.
-  if (!rawCurrent && rawHistory.length) {
-    const activeItems = rawHistory.filter((item: any) => {
-      const status = String(
-        item?.status ?? item?.assignmentStatus ?? item?.assignment_status ?? "",
-      )
-        .trim()
-        .toLowerCase();
-      return status !== "completed" && status !== "unassigned";
-    });
-
-    rawCurrent =
-      [...activeItems].sort((a: any, b: any) => {
-        const dateA = new Date(
-          a?.assignedAt ||
-            a?.assignedOn ||
-            a?.assigned_at ||
-            a?.assigned_on ||
-            0,
-        ).getTime();
-        const dateB = new Date(
-          b?.assignedAt ||
-            b?.assignedOn ||
-            b?.assigned_at ||
-            b?.assigned_on ||
-            0,
-        ).getTime();
-        return dateB - dateA;
-      })[0] ?? null;
-  }
-
-  return { rawCurrent, rawHistory };
-};
 
 const getStatusBadge = (status: AssignmentStatus) =>
   status === "Active"
@@ -242,26 +91,27 @@ const getStatusBadge = (status: AssignmentStatus) =>
     : "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300";
 
 const OperatorAssignedMachines: React.FC = () => {
- const [currentMachine, setCurrentMachine] =
-  useState<CurrentMachine | null>(null);
+  const dispatch = useDispatch<AppDispatch>();
 
-const [history, setHistory] = useState<AssignmentHistoryItem[]>([]);
+  const { currentMachine, assignmentHistory, loading, error } = useSelector(
+    (state: RootState) => state.assignedMachine,
+  );
 
-const [components, setComponents] = useState<ApiComponent[]>([]);
-
+  const { components } = useSelector(
+    (state: RootState) => state.machineComponent,
+  );
 
   const [selectedDetails, setSelectedDetails] =
     useState<AssignmentDetails | null>(null);
-  const [viewingMachineId, setViewingMachineId] = useState<string | null>(null);
+  const [viewingMachineId, setViewingMachineId] = useState<string | null>(
+    null,
+  );
 
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
-  const [loading, setLoading] = useState(true);
-  const [historyLoading, setHistoryLoading] = useState(false);
-
   const filteredHistory = useMemo(() => {
-    let result = history;
+    let result = assignmentHistory;
 
     if (statusFilter !== "all") {
       result = result.filter(
@@ -270,6 +120,7 @@ const [components, setComponents] = useState<ApiComponent[]>([]);
     }
 
     const query = searchQuery.trim().toLowerCase();
+
     if (query) {
       result = result.filter(
         (item) =>
@@ -281,9 +132,7 @@ const [components, setComponents] = useState<ApiComponent[]>([]);
     }
 
     return result;
-  }, [history, statusFilter, searchQuery]);
-
-  // history loading is now bundled into fetchInitialData below since a
+  }, [assignmentHistory, statusFilter, searchQuery]);
 
   const handleViewAssignment = async (machineId: string) => {
     if (!machineId) return;
@@ -302,98 +151,27 @@ const [components, setComponents] = useState<ApiComponent[]>([]);
     }
   };
 
-  const fetchInitialData = async () => {
-  try {
-    setLoading(true);
-    setHistoryLoading(true);
+  const handleRefresh = () => {
+    dispatch(fetchOperatorAssignments());
+  };
 
-    const { rawCurrent, rawHistory } =
-      await fetchOperatorAssignments();
+  // Step 1: current + history dono ek hi call se aate hain
+  useEffect(() => {
+    dispatch(fetchOperatorAssignments());
+  }, [dispatch]);
 
-    const normalizedCurrent = rawCurrent
-      ? normalizeCurrentMachine(rawCurrent)
-      : null;
-
-    setCurrentMachine(normalizedCurrent);
-
-    setHistory(
-      rawHistory.map(normalizeHistoryItem),
-    );
-
-    // Fetch components for the currently assigned machine
-    if (normalizedCurrent?.machineId) {
-      try {
-        const componentsResponse =
-          await componentService.getComponents(
-            normalizedCurrent.machineId,
-          );
-
-        const rawComponents = getArrayData<any>(
-          componentsResponse,
-        );
-
-        const normalizedComponents: ApiComponent[] =
-          rawComponents.map((item: any) => ({
-            id: String(
-              item?.id ??
-                item?._id ??
-                item?.componentId ??
-                item?.component_id ??
-                "",
-            ),
-
-            machineId: String(
-              item?.machineId ??
-                item?.machine_id ??
-                normalizedCurrent.machineId,
-            ),
-
-            category: String(
-              item?.category ?? "",
-            ),
-
-            description: String(
-              item?.description ??
-                item?.category ??
-                "",
-            ),
-
-            serialNumber: String(
-              item?.serialNumber ??
-                item?.serial_number ??
-                "",
-            ),
-
-            currentHours: Number(
-              item?.currentHours ??
-                item?.current_hours ??
-                0,
-            ),
-
-            condition: Number(
-              item?.condition ?? 0,
-            ),
-          }));
-
-        setComponents(normalizedComponents);
-      } catch {
-        setComponents([]);
-      }
-    } else {
-      setComponents([]);
+  // Step 2: current machine mil jaane ke baad uske components fetch karo
+  useEffect(() => {
+    if (currentMachine?.machineId) {
+      dispatch(fetchMachineComponents(currentMachine.machineId));
     }
-  } catch {
-    // apiCall centralized error toast already handles this
-    setComponents([]);
-  } finally {
-    setLoading(false);
-    setHistoryLoading(false);
-  }
-};
+  }, [dispatch, currentMachine?.machineId]);
 
   useEffect(() => {
-    fetchInitialData();
-  }, []);
+    if (error) {
+      toast.error(error);
+    }
+  }, [error]);
 
   useEffect(() => {
     document.body.style.overflow = selectedDetails ? "hidden" : "";
@@ -404,11 +182,10 @@ const [components, setComponents] = useState<ApiComponent[]>([]);
 
   const overallHealth = getOverallHealth(components);
 
-const totalCurrentHours = components.reduce(
-  (sum, component) =>
-    sum + Number(component.currentHours || 0),
-  0,
-);
+  const totalCurrentHours = components.reduce(
+    (sum, component) => sum + Number(component.currentHours || 0),
+    0,
+  );
 
   const handleExportReport = () => {
     // BACKEND TODO: GET /api/operator/assigned-machine/export (PDF/CSV)
@@ -479,7 +256,7 @@ const totalCurrentHours = components.reduce(
 
                 <button
                   type="button"
-                  onClick={fetchInitialData}
+                  onClick={handleRefresh}
                   disabled={loading}
                   className="inline-flex h-11 w-full shrink-0 items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/10 px-5 text-sm font-semibold text-white backdrop-blur-md transition-all duration-300 hover:-translate-y-0.5 hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-60 sm:w-fit"
                 >
@@ -494,32 +271,31 @@ const totalCurrentHours = components.reduce(
             </div>
           </div>
 
-<div className="grid grid-cols-1 gap-4 p-5 sm:grid-cols-2 xl:grid-cols-4">
-  <MetricCard
-    icon={<Heart size={16} />}
-    title="Overall Health"
-    value={`${overallHealth}%`}
-  />
+          <div className="grid grid-cols-1 gap-4 p-5 sm:grid-cols-2 xl:grid-cols-4">
+            <MetricCard
+              icon={<Heart size={16} />}
+              title="Overall Health"
+              value={`${overallHealth}%`}
+            />
 
-  <MetricCard
-    icon={<Clock size={16} />}
-    title="Total Hours"
-    value={`${totalCurrentHours.toLocaleString("en-IN")} Hrs`}
-  />
+            <MetricCard
+              icon={<Clock size={16} />}
+              title="Total Hours"
+              value={`${totalCurrentHours.toLocaleString("en-IN")} Hrs`}
+            />
 
-  <MetricCard
-    icon={<Fuel size={16} />}
-    title="Fuel Level"
-    value={`${currentMachine?.fuelLevel ?? 0}%`}
-  />
+            <MetricCard
+              icon={<Fuel size={16} />}
+              title="Fuel Level"
+              value={`${currentMachine?.fuelLevel ?? 0}%`}
+            />
 
-  <MetricCard
-    icon={<Wrench size={16} />}
-    title="Next Service Due"
-    value={currentMachine?.nextServiceDue ?? "-"}
-  />
-</div>
-
+            <MetricCard
+              icon={<Wrench size={16} />}
+              title="Next Service Due"
+              value={currentMachine?.nextServiceDue ?? "-"}
+            />
+          </div>
         </div>
 
         {/* Currently Assigned Machine */}
@@ -662,11 +438,7 @@ const totalCurrentHours = components.reduce(
             </div>
           </div>
 
-          {historyLoading ? (
-            <div className="flex min-h-[220px] items-center justify-center">
-              <Loader2 className="animate-spin text-blue-600" size={30} />
-            </div>
-          ) : filteredHistory.length === 0 ? (
+          {filteredHistory.length === 0 ? (
             <div className="flex min-h-[220px] flex-col items-center justify-center p-6 text-center">
               <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 text-blue-600 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300">
                 <AlertTriangle size={24} strokeWidth={2.4} />

@@ -1,9 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 
-import machineService from "../../services/Operator/machineService";
-import { componentService } from "../../services/companyadmin/componentService";
-import StorageService, { STORAGE_KEYS } from "../../services/storage.service";
+import { useDispatch, useSelector } from "react-redux";
+import type { RootState, AppDispatch } from "../../redux/store";
 
+import {
+  fetchOperatorAssignments,
+} from "../../redux/slices/assignedMachineSlice";
+
+import {
+  fetchMachineComponents,
+} from "../../redux/slices/machineComponentSlice";
+import type { MachineComponent } from "../../redux/slices/machineComponentSlice";
 
 import { Link } from "react-router-dom";
 
@@ -12,7 +19,6 @@ import {
   AlertTriangle,
   ArrowRight,
   CheckCircle2,
-  Cpu,
   Gauge,
   RefreshCw,
   Settings2,
@@ -30,22 +36,6 @@ import MachineHealthChart from "../../components/operator/MachineHealthChart";
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-type ApiComponent = {
-  id: string;
-  machineId: string;
-  category: string;
-  description: string;
-  serialNumber: string;
-  supplier?: string;
-  installHours?: number;
-  currentHours?: number;
-  plannedLife?: number;
-  replacementCost?: string | number;
-  condition?: number;
-  createdAt?: string;
-  updatedAt?: string;
-};
 
 type ApiMachine = {
   machineId: string;
@@ -69,14 +59,6 @@ const getConditionStatus = (condition?: number): ComponentCondition => {
   if (value >= 4) return "Healthy";
   if (value === 3) return "Warning";
   return "Critical";
-};
-
-const getArrayData = <T = any,>(response: any): T[] => {
-  if (Array.isArray(response)) return response;
-  if (Array.isArray(response?.data)) return response.data;
-  if (Array.isArray(response?.data?.data)) return response.data.data;
-  if (Array.isArray(response?.items)) return response.items;
-  return [];
 };
 
 const getRiskLevel = (condition?: number): RiskLevel => {
@@ -112,14 +94,14 @@ const getRiskBadgeClass = (risk: RiskLevel) => {
   }
 };
 
-const getRemainingLife = (component: ApiComponent) => {
+const getRemainingLife = (component: MachineComponent) => {
   const plannedLife = Number(component.plannedLife || 0);
   const currentHours = Number(component.currentHours || 0);
   if (!plannedLife) return 0;
   return Math.max(plannedLife - currentHours, 0);
 };
 
-const getOverallHealth = (components: ApiComponent[]) => {
+const getOverallHealth = (components: MachineComponent[]) => {
   if (!components.length) return 0;
   const total = components.reduce((sum, component) => {
     const condition = Number(component.condition || 0);
@@ -127,25 +109,6 @@ const getOverallHealth = (components: ApiComponent[]) => {
   }, 0);
   return Math.round(total / components.length);
 };
-
-// Normalizes a raw component API record (snake_case / camelCase fallback) into ApiComponent
-const normalizeComponent = (raw: any): ApiComponent => ({
-  id: String(
-    raw?.id ?? raw?._id ?? raw?.componentId ?? raw?.component_id ?? "",
-  ),
-  machineId: String(raw?.machineId ?? raw?.machine_id ?? ""),
-  category: raw?.category ?? "",
-  description: raw?.description ?? raw?.category ?? "",
-  serialNumber: raw?.serialNumber ?? raw?.serial_number ?? "",
-  supplier: raw?.supplier ?? "",
-  installHours: Number(raw?.installHours ?? raw?.install_hours ?? 0),
-  currentHours: Number(raw?.currentHours ?? raw?.current_hours ?? 0),
-  plannedLife: Number(raw?.plannedLife ?? raw?.planned_life ?? 0),
-  replacementCost: raw?.replacementCost ?? raw?.replacement_cost ?? 0,
-  condition: Number(raw?.condition ?? 0),
-  createdAt: raw?.createdAt ?? raw?.created_at,
-  updatedAt: raw?.updatedAt ?? raw?.updated_at,
-});
 
 // ---------------------------------------------------------------------------
 // Shared style tokens
@@ -382,135 +345,39 @@ const NoMachineState = ({ onRetry }: { onRetry: () => void }) => (
 );
 
 const OperatorDashboard = () => {
-  const [machine, setMachine] = useState<ApiMachine | null>(null);
-  const [components, setComponents] = useState<ApiComponent[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const dispatch = useDispatch<AppDispatch>();
 
-  const loadMachine = async () => {
-    setIsLoading(true);
-    setError(null);
+  const {
+    currentMachine,
+    loading: assignmentLoading,
+    error: assignmentError,
+  } = useSelector((state: RootState) => state.assignedMachine);
 
-    try {
-      const response = await machineService.getAssignedMachines();
-      console.log("RAW ASSIGNMENTS:", JSON.stringify(response, null, 2));
-      const machines = getArrayData<any>(response);
-      console.log("PARSED MACHINES:", machines);
+  const {
+    components,
+    loading: componentsLoading,
+    error: componentsError,
+  } = useSelector((state: RootState) => state.machineComponent);
 
-      const storedUser =
-        StorageService.get<any>(STORAGE_KEYS.USER) ||
-        StorageService.get<any>("user") ||
-        {};
-
-      const operatorId = String(
-        storedUser?.id || storedUser?.userId || storedUser?.user?.id || "",
-      ).trim();
-
-      console.log("CURRENT OPERATOR ID:", operatorId);
-      console.log("STORED USER DATA:", storedUser);
-
-      if (!operatorId) {
-        console.warn("No operator ID found in storage");
-        setMachine(null);
-        setComponents([]);
-        return;
-      }
-
-      // Filter machines assigned to current operator
-      const assignedMachines = machines.filter((item) => {
-        const assignedOpId = String(
-          item?.assignedOperatorId ?? 
-          item?.assigned_operator_id ?? 
-          item?.operatorId ?? 
-          item?.operator_id ?? 
-          item?.operator?.id ??
-          ""
-        ).trim();
-        
-        console.log(`Comparing: operatorId="${operatorId}" vs assignedOpId="${assignedOpId}"`, {
-          matches: assignedOpId === operatorId,
-          machineId: item?.id || item?.machineId,
-          machineName: item?.name || item?.machineName
-        });
-        
-        return assignedOpId === operatorId || assignedOpId.toLowerCase() === operatorId.toLowerCase();
-      });
-
-      console.log("FILTERED ASSIGNED MACHINES:", assignedMachines);
-
-      if (!assignedMachines.length) {
-        console.warn("No machines assigned to this operator");
-        setMachine(null);
-        setComponents([]);
-        return;
-      }
-
-            const currentAssignment = assignedMachines.find((item) => {
-        const status = String(
-          item?.status ??
-            item?.assignmentStatus ??
-            item?.assignment_status ??
-            "",
-        )
-          .trim()
-          .toLowerCase();
-
-        // Blacklist approach (matches OperatorAssignedMachines.tsx logic):
-        // treat everything as a valid/current assignment unless it's
-        // explicitly marked completed or unassigned.
-        return status !== "completed" && status !== "unassigned";
-      });
-
-      if (!currentAssignment) {
-        console.warn("No active assignment found");
-        setMachine(null);
-        setComponents([]);
-        return;
-      }
-
-      const resolvedMachineId = String(
-        currentAssignment?.machineId || 
-        currentAssignment?.id || 
-        currentAssignment?._id ||
-        "",
-      ).trim();
-
-      console.log("RESOLVED MACHINE ID:", resolvedMachineId);
-      console.log("CURRENT ASSIGNMENT:", currentAssignment);
-
-      if (!resolvedMachineId) {
-        console.error("Machine ID is empty");
-        setMachine(null);
-        setComponents([]);
-        return;
-      }
-
-      setMachine(currentAssignment as ApiMachine);
-
-      // ---- Component API integration ----
-      if (resolvedMachineId) {
-        const componentsResponse =
-          await componentService.getComponents(resolvedMachineId);
-        const rawComponents = getArrayData<any>(componentsResponse);
-        setComponents(rawComponents.map(normalizeComponent));
-      } else {
-        setComponents([]);
-      }
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Something went wrong while loading your machine.",
-      );
-    } finally {
-      setIsLoading(false);
-    }
+  const loadMachine = () => {
+    dispatch(fetchOperatorAssignments());
   };
 
+  // Step 1: current assigned machine (+ history) redux se
   useEffect(() => {
     loadMachine();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Step 2: current machine mil jaane par uske components redux se
+  useEffect(() => {
+    if (currentMachine?.machineId) {
+      dispatch(fetchMachineComponents(currentMachine.machineId));
+    }
+  }, [dispatch, currentMachine?.machineId]);
+
+  const isLoading = assignmentLoading || (Boolean(currentMachine?.machineId) && componentsLoading && components.length === 0);
+  const error = assignmentError || componentsError;
 
   if (isLoading) {
     return <DashboardSkeleton />;
@@ -520,24 +387,15 @@ const OperatorDashboard = () => {
     return <ErrorState message={error} onRetry={loadMachine} />;
   }
 
+  const machine = currentMachine;
+
   const assignedMachine: ApiMachine = {
-  machineId: machine?.machineId || (machine as any)?.id || "",
-  machineName: machine?.machineName || (machine as any)?.name || "",
-  machineType:
-    machine?.machineType ||
-    (machine as any)?.equipmentType ||
-    (machine as any)?.model ||
-    "",
-  fleetId:
-    machine?.fleetId ||
-    (machine as any)?.serialNumber ||
-    (machine as any)?.id ||
-    "",
-  hoursRun:
-    machine?.hoursRun ||
-    (machine as any)?.installHours ||
-    0,
-};
+    machineId: machine?.machineId || "",
+    machineName: machine?.machineName || "",
+    machineType: (machine as any)?.machineType || machine?.fuelType || "",
+    fleetId: machine?.serialNumber || "",
+    hoursRun: machine?.totalHours || 0,
+  };
 
   const healthyComponents = components.filter(
     (component) => getConditionStatus(component.condition) === "Healthy",
@@ -624,7 +482,6 @@ const OperatorDashboard = () => {
                   </>
                 ) : (
                   <>
-
                     <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold text-white backdrop-blur-md">
                       <span className="h-1.5 w-1.5 rounded-full bg-white" />
                       Machine Not Assigned
@@ -652,29 +509,29 @@ const OperatorDashboard = () => {
           </div>
         </div>
 
-       {machine ? (
-  <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-    <InfoTile
-      label="Machine name"
-      value={assignedMachine?.machineName || "-"}
-    />
+        {machine ? (
+          <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <InfoTile
+              label="Machine name"
+              value={assignedMachine?.machineName || "-"}
+            />
 
-    <InfoTile
-      label="Model"
-      value={assignedMachine?.machineType || "-"}
-    />
+            <InfoTile
+              label="Model"
+              value={assignedMachine?.machineType || "-"}
+            />
 
-    <InfoTile
-      label="Serial number"
-      value={assignedMachine?.fleetId || "-"}
-    />
+            <InfoTile
+              label="Serial number"
+              value={assignedMachine?.fleetId || "-"}
+            />
 
-    <InfoTile
-      label="Total running hours"
-      value={`${formatNumber(totalCurrentHours)} hrs`}
-    />
-  </div>
-) : null}
+            <InfoTile
+              label="Total running hours"
+              value={`${formatNumber(totalCurrentHours)} hrs`}
+            />
+          </div>
+        ) : null}
       </div>
 
       {/* Main Content - Show based on machine assignment status */}
@@ -852,184 +709,184 @@ const OperatorDashboard = () => {
           </div>
 
           {/* Components table + priority */}
-      <div className="grid gap-5 xl:grid-cols-[1.35fr_1fr]">
-        <div className={`${panelClass} overflow-x-hidden w-full max-w-full`}>
-          <div className="flex flex-col gap-3 border-b border-slate-200 p-5 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h2 className={sectionHeadingClass}>Assigned components</h2>
-              <p className={sectionSubClass}>
-                Current status of components on this machine.
-              </p>
-            </div>
-          </div>
+          <div className="grid gap-5 xl:grid-cols-[1.35fr_1fr]">
+            <div className={`${panelClass} overflow-x-hidden w-full max-w-full`}>
+              <div className="flex flex-col gap-3 border-b border-slate-200 p-5 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h2 className={sectionHeadingClass}>Assigned components</h2>
+                  <p className={sectionSubClass}>
+                    Current status of components on this machine.
+                  </p>
+                </div>
+              </div>
 
-          {components.length > 0 ? (
-            <div
-              className="overflow-x-auto"
-              style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-            >
-              <table className="min-w-full text-left text-sm">
-                <thead className="bg-slate-50 text-xs font-medium uppercase tracking-wide text-slate-500 dark:bg-slate-950/40 dark:text-slate-400">
-                  <tr>
-                    <th className="whitespace-nowrap px-5 py-3">Component</th>
-                    <th className="whitespace-nowrap px-5 py-3">Category</th>
-                    <th className="whitespace-nowrap px-5 py-3">Condition</th>
-                    <th className="whitespace-nowrap px-5 py-3">
-                      Current hours
-                    </th>
-                    <th className="whitespace-nowrap px-5 py-3">
-                      Remaining life
-                    </th>
-                    <th className="whitespace-nowrap px-5 py-3">Risk</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {components.map((component) => {
-                    const condition = getConditionStatus(component.condition);
-                    const risk = getRiskLevel(component.condition);
-
-                    return (
-                      <tr
-                        key={component.id}
-                        className="transition hover:bg-slate-50 dark:hover:bg-slate-800/40"
-                      >
-                        <td className="px-5 py-3">
-                          <div className="flex items-center gap-3">
-                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-                              <Settings2 className="h-4 w-4" />
-                            </div>
-                            <div className="min-w-0">
-                              <p className="truncate font-semibold text-slate-900 dark:text-slate-50">
-                                {component.description || component.category}
-                              </p>
-                              <p className="mt-0.5 truncate text-xs text-slate-500 dark:text-slate-400">
-                                SN: {component.serialNumber}
-                              </p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="whitespace-nowrap px-5 py-3 text-slate-600 dark:text-slate-300">
-                          {component.category}
-                        </td>
-                        <td className="whitespace-nowrap px-5 py-3">
-                          <span
-                            className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${getConditionBadgeClass(condition)}`}
-                          >
-                            {condition}
-                          </span>
-                        </td>
-                        <td className="whitespace-nowrap px-5 py-3 font-medium text-slate-700 dark:text-slate-200">
-                          {formatNumber(component.currentHours)} hrs
-                        </td>
-                        <td className="whitespace-nowrap px-5 py-3 font-medium text-slate-700 dark:text-slate-200">
-                          {formatNumber(getRemainingLife(component))} hrs
-                        </td>
-                        <td className="whitespace-nowrap px-5 py-3">
-                          <span
-                            className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${getRiskBadgeClass(risk)}`}
-                          >
-                            {risk}
-                          </span>
-                        </td>
+              {components.length > 0 ? (
+                <div
+                  className="overflow-x-auto"
+                  style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+                >
+                  <table className="min-w-full text-left text-sm">
+                    <thead className="bg-slate-50 text-xs font-medium uppercase tracking-wide text-slate-500 dark:bg-slate-950/40 dark:text-slate-400">
+                      <tr>
+                        <th className="whitespace-nowrap px-5 py-3">Component</th>
+                        <th className="whitespace-nowrap px-5 py-3">Category</th>
+                        <th className="whitespace-nowrap px-5 py-3">Condition</th>
+                        <th className="whitespace-nowrap px-5 py-3">
+                          Current hours
+                        </th>
+                        <th className="whitespace-nowrap px-5 py-3">
+                          Remaining life
+                        </th>
+                        <th className="whitespace-nowrap px-5 py-3">Risk</th>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="p-6">
-              <div className="rounded-xl border border-dashed border-slate-300 p-8 text-center dark:border-slate-700">
-                <p className="text-sm text-slate-500 dark:text-slate-400">
-                  No components available for this machine yet.
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {components.map((component) => {
+                        const condition = getConditionStatus(component.condition);
+                        const risk = getRiskLevel(component.condition);
 
-        <div className={`${panelClass} p-5`}>
-          <div className="mb-5 flex items-start justify-between gap-3">
-            <div>
-              <h2 className={sectionHeadingClass}>Priority component</h2>
-              <p className={sectionSubClass}>
-                Component with the lowest condition score.
-              </p>
+                        return (
+                          <tr
+                            key={component.id}
+                            className="transition hover:bg-slate-50 dark:hover:bg-slate-800/40"
+                          >
+                            <td className="px-5 py-3">
+                              <div className="flex items-center gap-3">
+                                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                                  <Settings2 className="h-4 w-4" />
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="truncate font-semibold text-slate-900 dark:text-slate-50">
+                                    {component.description || component.category}
+                                  </p>
+                                  <p className="mt-0.5 truncate text-xs text-slate-500 dark:text-slate-400">
+                                    SN: {component.serialNumber}
+                                  </p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="whitespace-nowrap px-5 py-3 text-slate-600 dark:text-slate-300">
+                              {component.category}
+                            </td>
+                            <td className="whitespace-nowrap px-5 py-3">
+                              <span
+                                className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${getConditionBadgeClass(condition)}`}
+                              >
+                                {condition}
+                              </span>
+                            </td>
+                            <td className="whitespace-nowrap px-5 py-3 font-medium text-slate-700 dark:text-slate-200">
+                              {formatNumber(component.currentHours)} hrs
+                            </td>
+                            <td className="whitespace-nowrap px-5 py-3 font-medium text-slate-700 dark:text-slate-200">
+                              {formatNumber(getRemainingLife(component))} hrs
+                            </td>
+                            <td className="whitespace-nowrap px-5 py-3">
+                              <span
+                                className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${getRiskBadgeClass(risk)}`}
+                              >
+                                {risk}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="p-6">
+                  <div className="rounded-xl border border-dashed border-slate-300 p-8 text-center dark:border-slate-700">
+                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                      No components available for this machine yet.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
-            {mostImportantComponent && (
-              <span
-                className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ${getRiskBadgeClass(getRiskLevel(mostImportantComponent.condition))}`}
+
+            <div className={`${panelClass} p-5`}>
+              <div className="mb-5 flex items-start justify-between gap-3">
+                <div>
+                  <h2 className={sectionHeadingClass}>Priority component</h2>
+                  <p className={sectionSubClass}>
+                    Component with the lowest condition score.
+                  </p>
+                </div>
+                {mostImportantComponent && (
+                  <span
+                    className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ${getRiskBadgeClass(getRiskLevel(mostImportantComponent.condition))}`}
+                  >
+                    {getRiskLevel(mostImportantComponent.condition)} risk
+                  </span>
+                )}
+              </div>
+
+              {mostImportantComponent ? (
+                <div className="rounded-xl border border-slate-200 p-5 dark:border-slate-800">
+                  <div className="flex h-24 w-full items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-950/40">
+                    <Wrench className="h-9 w-9 text-slate-400 dark:text-slate-500" />
+                  </div>
+                  <h3 className="mt-4 text-lg font-semibold tracking-tight">
+                    {mostImportantComponent.description ||
+                      mostImportantComponent.category}
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                    {mostImportantComponent.category} &middot; SN{" "}
+                    {mostImportantComponent.serialNumber}
+                  </p>
+
+                  <div className="mt-4 space-y-2">
+                    <MetricRow
+                      icon={TimerReset}
+                      label="Current hours"
+                      value={`${formatNumber(mostImportantComponent.currentHours)} hrs`}
+                    />
+                    <MetricRow
+                      icon={Gauge}
+                      label="Planned life"
+                      value={`${formatNumber(mostImportantComponent.plannedLife)} hrs`}
+                    />
+                    <MetricRow
+                      icon={Activity}
+                      label="Remaining life"
+                      value={`${formatNumber(getRemainingLife(mostImportantComponent))} hrs`}
+                    />
+                    <MetricRow
+                      icon={CheckCircle2}
+                      label="Condition score"
+                      value={`${Number(mostImportantComponent.condition || 0)} / 5`}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-dashed border-slate-300 p-8 text-center dark:border-slate-700">
+                  <Wrench className="mx-auto h-8 w-8 text-slate-400" />
+                  <h3 className="mt-3 text-sm font-semibold text-slate-900 dark:text-slate-50">
+                    No priority component
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                    Once components are added, the highest-priority one will
+                    appear here.
+                  </p>
+                </div>
+              )}
+
+              <Link
+                to="/operator/fleet"
+                className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-300"
               >
-                {getRiskLevel(mostImportantComponent.condition)} risk
-              </span>
-            )}
+                Open component view
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
           </div>
-
-          {mostImportantComponent ? (
-            <div className="rounded-xl border border-slate-200 p-5 dark:border-slate-800">
-              <div className="flex h-24 w-full items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-950/40">
-                <Wrench className="h-9 w-9 text-slate-400 dark:text-slate-500" />
-              </div>
-              <h3 className="mt-4 text-lg font-semibold tracking-tight">
-                {mostImportantComponent.description ||
-                  mostImportantComponent.category}
-              </h3>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                {mostImportantComponent.category} &middot; SN{" "}
-                {mostImportantComponent.serialNumber}
-              </p>
-
-              <div className="mt-4 space-y-2">
-                <MetricRow
-                  icon={TimerReset}
-                  label="Current hours"
-                  value={`${formatNumber(mostImportantComponent.currentHours)} hrs`}
-                />
-                <MetricRow
-                  icon={Gauge}
-                  label="Planned life"
-                  value={`${formatNumber(mostImportantComponent.plannedLife)} hrs`}
-                />
-                <MetricRow
-                  icon={Activity}
-                  label="Remaining life"
-                  value={`${formatNumber(getRemainingLife(mostImportantComponent))} hrs`}
-                />
-                <MetricRow
-                  icon={CheckCircle2}
-                  label="Condition score"
-                  value={`${Number(mostImportantComponent.condition || 0)} / 5`}
-                />
-              </div>
-            </div>
-          ) : (
-            <div className="rounded-xl border border-dashed border-slate-300 p-8 text-center dark:border-slate-700">
-              <Wrench className="mx-auto h-8 w-8 text-slate-400" />
-              <h3 className="mt-3 text-sm font-semibold text-slate-900 dark:text-slate-50">
-                No priority component
-              </h3>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                Once components are added, the highest-priority one will appear
-                here.
-              </p>
-            </div>
-          )}
-
-          <Link
-            to="/operator/fleet"
-            className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-300"
-          >
-            Open component view
-            <ArrowRight className="h-4 w-4" />
-                    </Link>
-        </div>
-      </div>
-
-      </>
-    ) : (
-      <NoMachineState onRetry={loadMachine} />
-    )}
+        </>
+      ) : (
+        <NoMachineState onRetry={loadMachine} />
+      )}
     </div>
   );
-}
+};
+
 export default OperatorDashboard;

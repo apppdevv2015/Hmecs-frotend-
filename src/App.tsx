@@ -209,6 +209,14 @@ const ArtisansReport = lazy(
   () => import("./pages/ArtisansDashboard/ArtisansReport"),
 );
 
+const ArtisanPreStartInspection = lazy(
+  () => import("./pages/ArtisansDashboard/ArtisanPreStartInspection"),
+);
+
+const ArtisanWorkOrderCapture = lazy(
+  () => import("./pages/ArtisansDashboard/WorkOrderCapture"),
+);
+
 const ArtisansAlerts = lazy(
   () => import("./pages/ArtisansDashboard/ArtisansAlerts"),
 );
@@ -875,6 +883,24 @@ export default function App() {
                 <Route path="/artisans/profile" element={<UserProfiles />} />
 
                 <Route path="/artisans/tasks" element={<ArtisansTasks />} />
+
+                <Route
+                  path="/artisans/pre-start-inspection"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <ArtisanPreStartInspection />
+                    </Suspense>
+                  }
+                />
+
+                <Route
+                  path="/artisans/work-order-capture"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <ArtisanWorkOrderCapture />
+                    </Suspense>
+                  }
+                />
 
                 <Route path="/artisans/machines" element={<ArtisansReport />} />
 
