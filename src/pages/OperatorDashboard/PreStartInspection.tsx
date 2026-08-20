@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
+
 import machineService from "../../services/Operator/machineService";
 import { componentService } from "../../services/companyadmin/componentService";
 import StorageService, { STORAGE_KEYS } from "../../services/storage.service";
@@ -30,6 +31,7 @@ import {
   Wind,
   Wrench,
   X,
+  ClipboardCheck,
 } from "lucide-react";
 
 // ============================================================================
@@ -769,12 +771,12 @@ function ReportIssueModal({
           Cancel
         </button>
         <button
-          type="button"
-          onClick={handleSubmit}
-          className="h-11 rounded-lg bg-red-600 px-5 text-sm font-bold text-white transition hover:bg-red-700"
-        >
-          Submit Issue
-        </button>
+  type="button"
+  onClick={handleSubmit}
+  className="h-11 rounded-xl bg-blue-600 px-5 text-sm font-bold text-white shadow-sm transition-all hover:bg-blue-700 hover:shadow-md"
+>
+  Submit Issue
+</button>
       </ModalFooter>
     </ModalShell>
   );
@@ -1813,25 +1815,32 @@ const PreStartInspection: React.FC = () => {
       `}</style>
 
       <div className="mx-auto max-w-[1500px] space-y-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-black tracking-tight text-slate-950 dark:text-white sm:text-3xl">
-              Pre-Start Inspection
-            </h1>
-            <p className="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">
-              Inspect and ensure the machine is safe to operate.
-            </p>
-          </div>
+       <div className="flex flex-col gap-4 rounded-2xl border border-white/20 bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 p-5 shadow-lg sm:flex-row sm:items-center sm:justify-between sm:p-6">
+  <div>
+    <div className="mb-2 inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.18em] text-white backdrop-blur-md">
+      <ClipboardCheck size={14} />
+      Machine Safety
+    </div>
 
-          <button
-            type="button"
-            onClick={() => setReportModalOpen(true)}
-            className="inline-flex h-11 w-full shrink-0 items-center justify-center gap-2 rounded-xl bg-red-600 px-5 text-sm font-bold text-white transition hover:bg-red-700 sm:w-fit"
-          >
-            <AlertTriangle size={16} strokeWidth={2.5} />
-            Report New Issue
-          </button>
-        </div>
+    <h1 className="text-2xl font-black tracking-tight text-white sm:text-3xl">
+      Pre-Start Inspection
+    </h1>
+
+    <p className="mt-2 max-w-2xl text-sm font-medium leading-6 text-blue-100">
+      Complete the pre-start safety inspection to verify that the machine is
+      safe, ready, and fit for operation.
+    </p>
+  </div>
+
+    <button
+    type="button"
+    onClick={() => setReportModalOpen(true)}
+    className="inline-flex h-11 w-full shrink-0 items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-5 text-sm font-bold text-white shadow-md backdrop-blur-md transition-all hover:bg-white/20 hover:shadow-lg sm:w-fit"
+  >
+    <AlertTriangle size={16} strokeWidth={2.5} />
+    Report Issue
+  </button>
+</div>
 
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-[340px_1fr] lg:items-start">
           <MachineCard machine={machine} />

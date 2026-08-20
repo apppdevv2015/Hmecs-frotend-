@@ -822,7 +822,7 @@ function ComponentDetailsModal({
   return (
     <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-950/85 p-4 backdrop-blur-sm">
       <div className="max-h-[92vh] w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-700 bg-white shadow-2xl dark:bg-[#0b1728]">
-        <div className="flex items-center justify-between border-b border-slate-200 bg-slate-950 p-5 dark:border-slate-800">
+        <div className="flex items-center justify-between border-b border-white/20 bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 p-5 shadow-md">
           <div>
             <h2 className="text-xl font-extrabold tracking-tight text-white">
               Component Details

@@ -272,22 +272,21 @@ const OperatorMachines: React.FC = () => {
             <div className="relative z-10 flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
               {/* Left Content */}
               <div>
-                <div className="mb-3 inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.18em] text-white backdrop-blur-md">
-                  <Truck size={14} />
-                  Machine Operations
-                </div>
+  <div className="mb-3 inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.18em] text-white backdrop-blur-md">
+    <Truck size={14} />
+    Company Machines
+  </div>
 
-                <h1 className="text-3xl font-black tracking-tight text-white">
-                  Machines
-                </h1>
+  <h1 className="text-3xl font-black tracking-tight text-white">
+    Company Machines
+  </h1>
 
-                <p className="mt-3 max-w-2xl text-sm leading-6 text-blue-100">
-                  Monitor machine status, operational performance, fleet
-                  activity, machine health and real-time operational insights
-                  from a centralized machine management dashboard.
-                </p>
-              </div>
-
+  <p className="mt-3 max-w-2xl text-sm leading-6 text-blue-100">
+    Manage and monitor all machines across your company fleet, including
+    machine status, operational performance, health, assignments, and
+    real-time fleet activity from one centralized dashboard.
+  </p>
+</div>
               {/* Refresh Button */}
               <button
                 onClick={fetchMachines}
