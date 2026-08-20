@@ -1711,19 +1711,13 @@ const MachineWorkReport: React.FC = () => {
 
           <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
             {/* Left Content */}
-            <div className="flex min-w-0 items-center gap-4">
-              {/* Icon */}
-              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-white/20 bg-white/10 backdrop-blur-sm sm:h-16 sm:w-16">
-                <Wrench size={28} strokeWidth={2} className="text-white sm:h-8 sm:w-8" />
-              </div>
 
+            <div className="flex min-w-0 items-center gap-4">
               <div className="min-w-0">
                 {/* Small Label */}
                 <div className="mb-2 inline-flex items-center gap-2 rounded-lg border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.15em] text-white/90 backdrop-blur-sm">
-                  <span className="h-1.5 w-1.5 rounded-full bg-green-300" />
                   Machine Work Center
                 </div>
-
                 {/* Title */}
                 <h1 className="truncate text-2xl font-bold tracking-tight sm:text-3xl lg:text-4xl">
                   Machine Work / End Report
