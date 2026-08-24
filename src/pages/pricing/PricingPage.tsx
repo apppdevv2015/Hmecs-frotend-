@@ -1,741 +1,128 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
+import mine from "../../assets/images/pricingpage.jpg";
+
 import { useNavigate } from "react-router";
 import toast from "react-hot-toast";
+import {
+  ShieldCheck,
+  CheckCircle2,
+  Building2,
+  ClipboardList,
+  Users,
+  Mail,
+  BarChart3,
+  Truck,
+  Settings,
+  Puzzle,
+  ChevronDown,
+  type LucideIcon,
+} from "lucide-react";
 import Header from "../../components/landing/Navbar";
 import Footer from "../../components/landing/Footer";
-import {
-  getSubscriptionPlans,
-  type SubscriptionPlanApi,
-} from "../../services/SuperAdmin/subscriptionService";
 import { userService } from "../../services/Auth/userService";
 import StorageService, { STORAGE_KEYS } from "../../services/storage.service";
 
-type FlexibleSubscriptionPlanApi = SubscriptionPlanApi & {
-  id: string | number;
+type RequestType = "trial" | "quotation";
 
-  name?: string;
-  planName?: string;
-  plan_name?: string;
-
-  price: string | number;
-
-  machineLimit?: number;
-  machine_limit?: number;
-
-  staffLimit?: number;
-  staff_limit?: number;
-
-  validityDays?: number;
-  validity_days?: number;
-
-  isPublic?: boolean;
-  is_public?: boolean;
-
-  isActive?: boolean;
-  is_active?: boolean;
-
-  description?: string;
-  features?: Record<string, boolean> | string[] | null;
-};
-
-type PricingPlan = {
-  id: string | number;
-  name: string;
-  subtitle: string;
-  price: string;
-  numericPrice: number;
-  period: string;
-  limit: string;
-  staffLimit: string;
-  validity: string;
-  features: string[];
-  unavailableFeatures: string[];
-  popular: boolean;
-  icon: string;
-  rawPlan: FlexibleSubscriptionPlanApi;
-};
-
-const featuresToArray = (
-  features: Record<string, boolean> | string[] | null | undefined,
-): string[] => {
-  if (Array.isArray(features)) {
-    return features.filter(Boolean);
-  }
-
-  if (features && typeof features === "object") {
-    return Object.keys(features).filter((key) => features[key]);
-  }
-
-  return [];
-};
-
-const formatPrice = (price: string | number) => {
-  const numericPrice = Number(String(price ?? "0").replace(/[^\d.]/g, ""));
-
-  return new Intl.NumberFormat("en-ZA", {
-    style: "currency",
-    currency: "ZAR",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(isNaN(numericPrice) ? 0 : numericPrice);
-};
-
-const getPlanName = (plan: FlexibleSubscriptionPlanApi) => {
-  return (
-    plan.planName ||
-    plan.plan_name ||
-    plan.name ||
-    "Untitled Plan"
-  ).trim();
-};
-
-const getMachineLimit = (plan: FlexibleSubscriptionPlanApi) => {
-  return Number(plan.machineLimit ?? plan.machine_limit ?? 0);
-};
-
-const getStaffLimit = (plan: FlexibleSubscriptionPlanApi) => {
-  return Number(plan.staffLimit ?? plan.staff_limit ?? 0);
-};
-
-const getValidityDays = (plan: FlexibleSubscriptionPlanApi) => {
-  return Number(plan.validityDays ?? plan.validity_days ?? 30);
-};
-
-const getPlanType = (planName: string) => {
-  const name = planName.toLowerCase();
-
-  if (name.includes("gold")) return "gold";
-  if (name.includes("demo") || name.includes("free")) return "demo";
-  if (name.includes("basic")) return "basic";
-  if (name.includes("standard")) return "standard";
-  if (name.includes("pro") || name.includes("plus")) return "pro";
-  if (name.includes("enterprise")) return "enterprise";
-
-  return "default";
-};
-
-const getUnavailableFeatures = (planName: string): string[] => {
-  const type = getPlanType(planName);
-
-  if (type === "gold" || type === "enterprise") {
-    return [];
-  }
-
-  if (type === "demo") {
-    return [
-      "Advanced reporting not included",
-      "Limited machine and staff access",
-      "Priority support not available",
-    ];
-  }
-
-  if (type === "basic") {
-    return [
-      "Predictive intelligence not included",
-      "Advanced reports not available",
-      "Priority support not included",
-    ];
-  }
-
-  if (type === "standard") {
-    return [
-      "Enterprise-level analytics not included",
-      "Priority support not included",
-      "Unlimited scaling not available",
-    ];
-  }
-
-  if (type === "pro") {
-    return [
-      "Unlimited machine access not included",
-      "Dedicated enterprise support not included",
-    ];
-  }
-
-  return [
-    "Some advanced modules may be limited",
-    "Enterprise support not included",
-  ];
-};
-
-const getFallbackFeatures = (
-  planName: string,
-  machineLimit: number,
-  staffLimit: number,
-  validityDays: number,
-) => {
-  const type = getPlanType(planName);
-
-  if (type === "demo") {
-    return [
-      `${machineLimit} machines included`,
-      `${staffLimit} staff users included`,
-      `${validityDays} days demo validity`,
-      "Basic machine health preview",
-      "Limited component intelligence access",
-    ];
-  }
-
-  if (type === "gold") {
-    return [
-      `${machineLimit} machines included`,
-      `${staffLimit} staff users included`,
-      `${validityDays} days validity`,
-      "Advanced machine health monitoring",
-      "Predictive component intelligence",
-      "Priority support and reports",
-    ];
-  }
-
-  if (type === "basic") {
-    return [
-      `${machineLimit} machines included`,
-      `${staffLimit} staff users included`,
-      `${validityDays} days validity`,
-      "Machine health monitoring",
-      "Basic alerts and reports",
-    ];
-  }
-
-  if (type === "standard") {
-    return [
-      `${machineLimit} machines included`,
-      `${staffLimit} staff users included`,
-      `${validityDays} days validity`,
-      "Machine and component monitoring",
-      "Maintenance alerts and reports",
-    ];
-  }
-
-  if (type === "pro") {
-    return [
-      `${machineLimit} machines included`,
-      `${staffLimit} staff users included`,
-      `${validityDays} days validity`,
-      "Component intelligence access",
-      "Advanced alerts and reports",
-    ];
-  }
-
-  return [
-    `${machineLimit} machines included`,
-    `${staffLimit} staff users included`,
-    `${validityDays} days validity`,
-    "Machine health monitoring",
-    "Component intelligence access",
-    "Alerts and reports",
-  ];
-};
-
-const mapApiPlanToPricingPlan = (
-  plan: FlexibleSubscriptionPlanApi,
-  index: number,
-): PricingPlan => {
-  const planName = getPlanName(plan);
-  const machineLimit = getMachineLimit(plan);
-  const staffLimit = getStaffLimit(plan);
-  const validityDays = getValidityDays(plan);
-
-  const apiFeatures = featuresToArray(plan.features);
-
-  const finalFeatures =
-    apiFeatures.length > 0
-      ? apiFeatures
-      : getFallbackFeatures(planName, machineLimit, staffLimit, validityDays);
-
-  const lowerPlanName = planName.toLowerCase();
-
-  return {
-    id: plan.id,
-    name: planName,
-    subtitle:
-      plan.description ||
-      `${machineLimit} machine limit and ${staffLimit} staff users for mining operations.`,
-
-    price: formatPrice(plan.price),
-
-    numericPrice: Number(String(plan.price ?? "0").replace(/[^\d.]/g, "")),
-
-    period: `/${validityDays} days`,
-    limit: `${machineLimit} Machines`,
-    staffLimit: `${staffLimit} Staff`,
-    validity: `${validityDays} Days`,
-    features: finalFeatures,
-    unavailableFeatures: getUnavailableFeatures(planName),
-    popular:
-      lowerPlanName.includes("pro") ||
-      lowerPlanName.includes("plus") ||
-      index === 1,
-    icon: planName.charAt(0).toUpperCase(),
-    rawPlan: plan,
-  };
-};
-
-function PricingHero() {
-  return (
-    <div className="relative mx-auto mb-16 max-w-6xl overflow-hidden rounded-[40px] px-6 py-12 text-center lg:px-10">
-      {/* Background Glow */}
-      <div className="absolute left-1/2 top-0 h-[280px] w-[280px] -translate-x-1/2 rounded-full bg-cyan-400/15 blur-[90px]" />
-
-      <div className="absolute left-[15%] top-10 h-[180px] w-[180px] rounded-full bg-violet-400/10 blur-[80px]" />
-
-      <div className="absolute right-[15%] top-10 h-[180px] w-[180px] rounded-full bg-sky-400/10 blur-[80px]" />
-
-      {/* Right Side Human PNG */}
-
-      {/* Main Content */}
-      <div className="relative z-10">
-        {/* Small Badge */}
-        <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-cyan-200 bg-white/80 px-5 py-2 text-sm font-semibold text-cyan-700 shadow-sm backdrop-blur-md dark:border-cyan-500/20 dark:bg-cyan-500/10 dark:text-cyan-300">
-          <span className="h-2 w-2 rounded-full bg-emerald-500" />
-          Flexible Pricing Plans
-        </div>
-
-        {/* Heading */}
-        <h1 className="mx-auto max-w-5xl text-5xl font-black leading-tight tracking-tight sm:text-6xl">
-          <span className="text-slate-900 dark:text-white">
-            Smart Pricing for
-          </span>
-
-          <br />
-
-          <span className="bg-gradient-to-r from-cyan-500 via-blue-600 to-violet-600 bg-clip-text text-transparent">
-            Smarter Mining Operations
-          </span>
-        </h1>
-
-        {/* Description */}
-        <p className="mx-auto mt-6 max-w-3xl text-lg leading-8 text-slate-600 dark:text-slate-300">
-          Choose the right subscription plan to monitor machines, track
-          components, manage staff, and scale your mining operations with
-          intelligent insights.
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function PricingCard({
-  plan,
-  activePlan,
-  hasUsedDemo,
-}: {
-  plan: PricingPlan;
-  activePlan?: string | null;
-  hasUsedDemo?: boolean;
-}) {
-  const navigate = useNavigate();
-  const [, setShowConfirm] = useState(false);
-
-  const isDemo =
-    plan.name.toLowerCase().includes("free") ||
-    plan.name.toLowerCase().includes("demo");
-
-  const isDemoDisabled = isDemo && hasUsedDemo;
-
-  const isCurrentPlan =
-    activePlan &&
-    activePlan.trim().toLowerCase() === plan.name.trim().toLowerCase();
-
-  const proceedToCart = () => {
-    const machineLimit =
-      plan.rawPlan.machineLimit ?? plan.rawPlan.machine_limit ?? 0;
-
-    const staffLimitValue =
-      plan.rawPlan.staffLimit ?? plan.rawPlan.staff_limit ?? 0;
-
-    const validityDays =
-      plan.rawPlan.validityDays ?? plan.rawPlan.validity_days ?? 30;
-
-    StorageService.set(STORAGE_KEYS.SELECTED_PLAN, {
-      id: plan.id,
-      name: plan.name,
-      subtitle: plan.subtitle,
-      price: plan.price,
-      period: plan.period,
-      limit: plan.limit,
-      machineLimit,
-      machine_limit: machineLimit,
-      staffLimit: staffLimitValue,
-      staff_limit: staffLimitValue,
-      validityDays,
-      validity_days: validityDays,
-      validity: plan.validity,
-      features: plan.features,
-      icon: plan.icon,
-      rawPlan: plan.rawPlan,
-    });
-
-    navigate("/cart");
-  };
-
-  const handleSelectPlan = () => {
-    if (isDemoDisabled) {
-      toast.dismiss();
-      toast.error("You already used the demo plan. Please upgrade now.");
-      return;
-    }
-
-    if (activePlan && !isCurrentPlan) {
-      setShowConfirm(true);
-      return;
-    }
-
-    proceedToCart();
-  };
-
-  return (
-    <div
-      className={`relative w-[360px] min-h-[600px]
-    overflow-hidden rounded-[30px]
-    border bg-white shadow-lg
-    transition-all duration-300
-    hover:-translate-y-1 hover:shadow-2xl
-    dark:border-slate-700 dark:bg-[#0B1220]
-    ${plan.popular ? "border-cyan-400/30" : "border-slate-200"}`}
-    >
-      {/* TOP COLORED SECTION */}
-      <div
-        className={`relative rounded-b-[36px] px-7 pt-8 pb-8 text-white
-      ${
-        plan.popular
-          ? `
-            bg-gradient-to-br
-            from-cyan-500
-            via-sky-500
-            to-blue-600
-          `
-          : `
-            bg-gradient-to-br
-            from-violet-500
-            via-indigo-500
-            to-blue-600
-          `
-      }`}
-      >
-        {/* Recommended */}
-        {plan.popular && (
-          <div className="absolute top-5 right-5">
-            <span className="rounded-full bg-white/20 px-3 py-1 text-[10px] font-bold uppercase tracking-wider backdrop-blur-md border border-white/20">
-              Best Deal
-            </span>
-          </div>
-        )}
-
-        {/* Title */}
-        <h3 className="text-[30px] font-extrabold tracking-tight">
-          {plan.name}
-        </h3>
-
-        {/* Subtitle */}
-        <p className="mt-3 min-h-[52px] text-sm leading-6 text-white/90">
-          {plan.subtitle}
-        </p>
-
-        {/* Price */}
-        <div className="mt-8 flex items-end gap-2">
-          <span className="text-[56px] font-black leading-none">
-            {plan.price}
-          </span>
-
-          <span className="mb-2 text-sm font-medium text-white/80">
-            {plan.period}
-          </span>
-        </div>
-
-        {/* CTA */}
-        <button
-          type="button"
-          onClick={handleSelectPlan}
-          className={`
-          mt-8 h-[52px] w-full rounded-[18px]
-          bg-white text-slate-900
-          text-sm font-bold
-          transition hover:scale-[1.01]
-          hover:bg-slate-100
-          active:scale-[0.98]
-          shadow-lg
-        `}
-        >
-          {isDemoDisabled
-            ? "Upgrade Now"
-            : isCurrentPlan
-              ? "Current Plan"
-              : "Get Started"}
-        </button>
-      </div>
-
-      {/* BOTTOM CONTENT */}
-      <div className="px-7 py-7">
-        {/* Features */}
-        <div className="mt-8">
-          <p className="mb-5 text-sm font-bold text-slate-800 dark:text-white">
-            Benefits
-          </p>
-
-          <div className="space-y-4">
-            {plan.features.slice(0, 5).map((feature) => (
-              <div key={feature} className="flex items-start gap-3">
-                <div
-                  className={`
-                  mt-1 flex h-5 w-5 shrink-0
-                  items-center justify-center
-                  rounded-full text-white
-                  ${plan.popular ? "bg-cyan-500" : "bg-violet-500"}
-                `}
-                >
-                  <span className="text-[10px] font-bold">✓</span>
-                </div>
-
-                <span className="text-sm leading-6 text-slate-700 dark:text-slate-300">
-                  {feature}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function PricingPlans({
-  visiblePlans,
-  loading,
-  activePlan,
-  hasUsedDemo,
-}: {
-  visiblePlans: PricingPlan[];
-  loading: boolean;
+interface SubscriptionStatus {
   activePlan: string | null;
   hasUsedDemo: boolean;
-}) {
-  return (
-    <main
-      id="plans"
-      className="relative z-10 overflow-x-hidden bg-gradient-to-br from-white via-blue-50 to-white px-4 py-10 lg:px-6 dark:from-[#050b18] dark:via-[#071b38] dark:to-[#050b18]"
-    >
-      <div className="pointer-events-none absolute left-1/2 top-16 h-72 w-72 -translate-x-1/2 rounded-full bg-blue-400/10 blur-3xl" />
-      <div className="pointer-events-none absolute right-0 top-10 h-56 w-56 rounded-full bg-blue-600/5 blur-3xl" />
-
-      <div className="relative mx-auto max-w-[1400px] w-full overflow-hidden px-4">
-        <PricingHero />
-
-        {loading ? (
-          <p className="py-8 text-center text-sm font-semibold text-slate-500 dark:text-slate-300">
-            Loading pricing plans...
-          </p>
-        ) : visiblePlans.length === 0 ? (
-          <p className="py-8 text-center text-sm font-semibold text-slate-500 dark:text-slate-300">
-            No pricing plans found.
-          </p>
-        ) : (
-          <div className="mx-auto flex flex-wrap items-stretch justify-center gap-8 max-w-[1400px] pt-8 pb-10">
-            {visiblePlans.map((plan) => (
-              <div key={plan.id} className="flex h-full">
-                <PricingCard
-                  plan={plan}
-                  activePlan={activePlan}
-                  hasUsedDemo={hasUsedDemo}
-                />
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </main>
-  );
 }
 
-const comparisonRows = [
-  {
-    label: "Machine Access",
-    value: (plan: PricingPlan) => plan.limit,
-  },
-  {
-    label: "Staff Access",
-    value: (plan: PricingPlan) => plan.staffLimit,
-  },
-  {
-    label: "Plan Validity",
-    value: (plan: PricingPlan) => plan.validity,
-  },
-  {
-    label: "Machine Health Monitoring",
-    value: (plan: PricingPlan) =>
-      plan.features.some((item) => item.toLowerCase().includes("machine"))
-        ? "✓ Included"
-        : "× Limited",
-  },
-  {
-    label: "Component Intelligence",
-    value: (plan: PricingPlan) =>
-      plan.features.some((item) => item.toLowerCase().includes("component"))
-        ? "✓ Included"
-        : "× Limited",
-  },
-  {
-    label: "Advanced Reports",
-    value: (plan: PricingPlan) =>
-      plan.unavailableFeatures.some((item) =>
-        item.toLowerCase().includes("report"),
-      )
-        ? "× Not Included"
-        : "✓ Included",
-  },
-  {
-    label: "Priority Support",
-    value: (plan: PricingPlan) =>
-      plan.unavailableFeatures.some((item) =>
-        item.toLowerCase().includes("support"),
-      )
-        ? "× Not Included"
-        : "✓ Included",
-  },
+const SELECTED_REQUEST_STORAGE_KEY = "hme_selected_request";
+
+const HOW_IT_WORKS_STEPS: {
+  icon: LucideIcon;
+  title: string;
+  description: string;
+}[] = [
+  { icon: Building2, title: "Register Company", description: "Create your company account on HME." },
+  { icon: ClipboardList, title: "Submit Request", description: "Provide your fleet details and requirements." },
+  { icon: Users, title: "Admin Review", description: "Our team reviews your request and may ask for more info." },
+  { icon: Mail, title: "Quotation Sent", description: "We prepare and send the best commercial offer." },
+  { icon: CheckCircle2, title: "Accept & Contract", description: "Accept the quotation and sign the agreement." },
+  { icon: BarChart3, title: "Full Access", description: "Account activated and full portal access granted." },
 ];
 
-function PricingComparison({ plans }: { plans: PricingPlan[] }) {
+const IMPLEMENTATION_FEE_ITEMS = [
+  "Platform and company setup",
+  "Fleet and component data loading",
+  "User and permission configuration",
+  "Workflow setup",
+  "Training",
+  "Initial dashboards and reports",
+  "Integration setup, where required",
+];
+
+const COMMON_SERVICES_ITEMS = [
+  "Telematics / ECU Integration",
+  "SAP / ERP Integration",
+  "Custom Reports",
+  "Historical Data Migration & Cleaning",
+  "Additional Training",
+  "On-site Technical Support",
+  "Custom API Development",
+  "SMS / WhatsApp Notifications",
+];
+
+const ADDITIONAL_MACHINE_ITEMS = [
+  "Additional Active Machine",
+  "Fixed Monthly Fee",
+  "Beyond Contracted Fleet Allowance",
+];
+
+const SITE_LICENCE_TIERS: {
+  allowance: string;
+  price: string;
+  highlight?: boolean;
+}[] = [
+  { allowance: "Up to 10 Machines", price: "Priced on request" },
+  { allowance: "11 – 25 Machines", price: "Priced on request" },
+  { allowance: "26 – 75 Machines", price: "Priced on request" },
+  { allowance: "76 – 150 Machines", price: "Priced on request" },
+  { allowance: "151+ Machines or Multiple Sites", price: "Custom Pricing", highlight: true },
+];
+
+function HeroSection() {
   return (
-    <section
-      id="comparison"
-      className="
-      relative overflow-hidden
-      bg-gradient-to-br
-      from-[#eef7ff]
-      via-[#f9fbff]
-      to-[#f3f7ff]
-      px-5 py-20 lg:px-8
+    <section className="relative overflow-hidden bg-white dark:bg-[#050b18]">
+      <div className="pointer-events-none absolute left-1/4 top-0 h-[280px] w-[280px] -translate-x-1/2 rounded-full bg-cyan-400/10 blur-[100px]" />
+      <div className="pointer-events-none absolute right-0 top-10 h-[240px] w-[240px] rounded-full bg-violet-400/10 blur-[100px]" />
 
-      dark:from-[#050b18]
-      dark:via-[#08111f]
-      dark:to-[#0b1424]
-    "
-    >
-      {/* Background Design */}
-      <div className="absolute inset-0 overflow-hidden">
-        {/* Left Blur */}
-        <div className="absolute left-[-100px] top-[80px] h-[320px] w-[320px] rounded-full bg-cyan-300/20 blur-[120px]" />
+      <div className="relative mx-auto grid max-w-7xl grid-cols-1 items-stretch gap-10 px-6 py-14 lg:grid-cols-2 lg:gap-14 lg:px-10 lg:py-16">
+        <div className="flex flex-col justify-center">
+          <h1 className="text-5xl font-black leading-[1.1] tracking-tight text-slate-900 sm:text-6xl dark:text-white">
+            Smart Mining.
+            <br />
+            <span className="bg-gradient-to-r from-blue-600 to-violet-600 bg-clip-text text-transparent">
+              Smarter Decisions.
+            </span>
+          </h1>
 
-        {/* Right Blur */}
-        <div className="absolute right-[-120px] bottom-[60px] h-[320px] w-[320px] rounded-full bg-violet-300/20 blur-[120px]" />
-
-        {/* Top Center */}
-        <div className="absolute left-1/2 top-0 h-[240px] w-[240px] -translate-x-1/2 rounded-full bg-sky-300/10 blur-[100px]" />
-
-        {/* Dot Pattern */}
-        <div className="absolute inset-0 opacity-[0.03] dark:opacity-[0.02]">
-          <div
-            className="h-full w-full"
-            style={{
-              backgroundImage:
-                "radial-gradient(circle at 1px 1px, #0f172a 1px, transparent 0)",
-              backgroundSize: "32px 32px",
-            }}
-          />
-        </div>
-      </div>
-
-      <div className="relative mx-auto max-w-7xl">
-        {/* Header */}
-        <div className="text-center">
-          <div className="inline-flex rounded-full border border-cyan-200 bg-cyan-50 px-5 py-2 text-sm font-semibold text-cyan-700 shadow-sm dark:border-cyan-500/20 dark:bg-cyan-500/10 dark:text-cyan-300">
-            Compare Plans
-          </div>
-
-          <h2 className="mt-5 text-4xl font-black tracking-tight text-slate-900 sm:text-5xl dark:text-white">
-            Compare Features Across Plans
-          </h2>
-
-          <p className="mx-auto mt-5 max-w-3xl text-base leading-7 text-slate-600 dark:text-slate-300">
-            Compare machine access, reports, monitoring, intelligence, and
-            support to choose the best plan for your business.
+          <p className="mt-5 max-w-lg text-base leading-7 text-slate-600 dark:text-slate-300">
+            HME helps you monitor, maintain and maximize your mining
+            equipment performance with intelligent insights.
           </p>
+
+          <div className="mt-8 inline-flex w-fit items-start gap-3 rounded-2xl border border-blue-100 bg-blue-50 px-5 py-4 dark:border-blue-500/20 dark:bg-blue-500/10">
+            <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400" />
+            <p className="text-sm leading-6 text-slate-700 dark:text-slate-200">
+              <span className="block font-semibold text-slate-900 dark:text-white">
+                No prices are shown here.
+              </span>
+              Pricing will be provided in the quotation.
+            </p>
+          </div>
         </div>
 
-        {/* Comparison Table */}
-        <div
-          className="
-          mt-14 overflow-hidden rounded-[34px]
-          border border-white/50
-          bg-white/75 backdrop-blur-2xl
-          shadow-[0_20px_60px_rgba(15,23,42,0.08)]
-
-          dark:border-white/10
-          dark:bg-white/[0.03]
-        "
-        >
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[950px]">
-              {/* Header */}
-              <thead>
-                <tr className="bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-700 text-white">
-                  <th className="px-6 py-7 text-left text-sm font-bold uppercase tracking-[0.15em]">
-                    Features
-                  </th>
-
-                  {plans.map((plan) => (
-                    <th key={plan.id} className="px-6 py-7 text-center">
-                      <div className="flex flex-col items-center">
-                        <span className="text-xs font-semibold uppercase tracking-[0.15em] text-white/80">
-                          Plan
-                        </span>
-
-                        <span className="mt-2 text-lg font-black">
-                          {plan.name}
-                        </span>
-                      </div>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-
-              {/* Body */}
-              <tbody className="divide-y divide-slate-200 dark:divide-white/10">
-                {comparisonRows.map((row) => (
-                  <tr
-                    key={row.label}
-                    className="
-                    transition-all duration-300
-                    hover:bg-cyan-50/70
-                    dark:hover:bg-cyan-500/5
-                  "
-                  >
-                    {/* Left Label */}
-                    <td className="px-6 py-5 font-semibold text-slate-800 dark:text-slate-100">
-                      {row.label}
-                    </td>
-
-                    {/* Plan Values */}
-                    {plans.map((plan) => {
-                      const value = row.value(plan);
-                      const isNegative = String(value).startsWith("×");
-
-                      const isIncluded = String(value).startsWith("✓");
-
-                      return (
-                        <td
-                          key={`${plan.id}-${row.label}`}
-                          className="px-6 py-5 text-center"
-                        >
-                          <div
-                            className={`inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold transition-all
-                            ${
-                              isNegative
-                                ? "bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-300"
-                                : isIncluded
-                                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"
-                                  : "bg-slate-100 text-slate-700 dark:bg-white/10 dark:text-slate-200"
-                            }`}
-                          >
-                            {value}
-                          </div>
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <div className="relative min-h-[280px] lg:min-h-0">
+          <div className="absolute inset-0 overflow-hidden rounded-[36px] shadow-2xl">
+            <img
+              src={mine}
+              alt="HME mining equipment fleet in operation"
+              className="h-full w-full object-cover"
+              loading="eager"
+            />
           </div>
         </div>
       </div>
@@ -743,148 +130,478 @@ function PricingComparison({ plans }: { plans: PricingPlan[] }) {
   );
 }
 
-function PricingCTA() {
-  return (
-    <section className="relative z-10 overflow-x-hidden bg-blue-600 px-5 py-16 text-center text-white lg:px-8">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.25),transparent_45%)]" />
+// ---------------- Commercial Structure: cards ----------------
+// NOTE: cards are intentionally NOT stretched to equal height (see the
+// grid wrapper below using `items-start`). That's what previously caused
+// the Implementation Fee card to visually "open up" / grow whenever the
+// Site Licence card's dropdown was toggled.
 
-      <div className="relative mx-auto max-w-4xl">
-        <h2 className="text-3xl font-black sm:text-5xl">
-          Ready to Transform Your Mining Operations?
+function ImplementationFeeCard({ onRequestQuote }: { onRequestQuote: () => void }) {
+  return (
+    <div className="flex h-full flex-col rounded-[26px] border border-blue-200 bg-white p-6 shadow-sm dark:border-blue-500/30 dark:bg-[#0B1220]">
+      <div className="mb-3 flex items-center gap-4">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300">
+          <Settings className="h-5 w-5" />
+        </div>
+        <div>
+          <span className="text-sm font-black text-blue-600 dark:text-blue-400">01</span>
+          <h3 className="text-lg font-extrabold text-slate-900 dark:text-white">
+            Once-Off Implementation Fee
+          </h3>
+        </div>
+      </div>
+
+      <span className="inline-flex w-fit items-center rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">
+        One-Time Fee
+      </span>
+
+      <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
+        Covers complete platform setup and deployment to get your operations
+        running smoothly.
+      </p>
+
+      <ul className="mt-4 grid grid-cols-1 gap-x-6 gap-y-2.5 border-t border-slate-100 pt-4 dark:border-slate-800 sm:grid-cols-2">
+        {IMPLEMENTATION_FEE_ITEMS.map((item) => (
+          <li
+            key={item}
+            className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200"
+          >
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-300" />
+            {item}
+          </li>
+        ))}
+      </ul>
+
+      <div className="mt-auto pt-6">
+        <button
+          type="button"
+          onClick={onRequestQuote}
+          className="flex h-[46px] w-full items-center justify-center gap-2 rounded-xl bg-violet-600 text-sm font-bold text-white transition hover:bg-violet-700"
+        >
+          <ClipboardList className="h-4 w-4" />
+          Request Quotation
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SiteLicenceCard({ onSelectFleetSize }: { onSelectFleetSize: () => void }) {
+  const [isAdditionalOpen, setIsAdditionalOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close the dropdown when clicking outside it, since it now overlays
+  // the card instead of pushing layout (so it won't stay stuck open).
+  useEffect(() => {
+    if (!isAdditionalOpen) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsAdditionalOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isAdditionalOpen]);
+
+  return (
+    <div className="flex h-full flex-col rounded-[26px] border border-violet-200 bg-white p-6 shadow-sm dark:border-violet-500/30 dark:bg-[#0B1220]">
+      <div className="mb-3 flex items-center gap-4">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-300">
+          <Building2 className="h-5 w-5" />
+        </div>
+        <div>
+          <span className="text-sm font-black text-violet-600 dark:text-violet-400">02</span>
+          <h3 className="text-lg font-extrabold text-slate-900 dark:text-white">
+            Fixed Monthly Site Licence
+          </h3>
+        </div>
+      </div>
+
+      <span className="inline-flex w-fit items-center rounded-full bg-violet-50 px-3 py-1 text-xs font-bold text-violet-700 dark:bg-violet-500/10 dark:text-violet-300">
+        Monthly Licence
+      </span>
+
+      <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
+        Licence fee is based on the number of active machines in your fleet.
+      </p>
+
+      <div className="mt-4 overflow-hidden rounded-2xl border border-violet-100 dark:border-violet-500/20">
+        <table className="w-full border-collapse text-left text-sm">
+          <thead>
+            <tr className="bg-violet-50 text-xs font-bold uppercase tracking-wide text-violet-700 dark:bg-violet-500/10 dark:text-violet-300">
+              <th className="px-4 py-2.5">Active Machines</th>
+              <th className="px-4 py-2.5">Monthly Licence</th>
+            </tr>
+          </thead>
+          <tbody>
+            {SITE_LICENCE_TIERS.map((tier) => (
+              <tr
+                key={tier.allowance}
+                className="border-t border-violet-100 dark:border-violet-500/10"
+              >
+                <td className="flex items-center gap-2 px-4 py-2.5 text-slate-700 dark:text-slate-200">
+                  <Truck className="h-4 w-4 shrink-0 text-violet-500" />
+                  {tier.allowance}
+                </td>
+                <td
+                  className={`px-4 py-2.5 ${
+                    tier.highlight
+                      ? "font-bold text-violet-700 dark:text-violet-300"
+                      : "font-semibold text-slate-800 dark:text-slate-100"
+                  }`}
+                >
+                  {tier.price}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+    
+      <div className="mt-4 border-t border-slate-100 pt-4 dark:border-slate-800">
+        <div className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
+          <Truck className="h-4 w-4 text-violet-500" />
+          Monthly Additional Charge
+        </div>
+
+        <p className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">
+          If the mine exceeds its contracted fleet allowance, a fixed
+          monthly fee will be charged for every additional active machine
+        </p>
+      </div>
+
+      <div className="mt-auto pt-4">
+        <button
+          type="button"
+          onClick={onSelectFleetSize}
+          className="flex h-[46px] w-full items-center justify-center gap-2 rounded-xl bg-violet-600 text-sm font-bold text-white transition hover:bg-violet-700"
+        >
+          <Building2 className="h-4 w-4" />
+          Request Quotation
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function CommonServicesCard() {
+  return (
+    <div className="flex flex-col rounded-[26px] border border-amber-200 bg-white p-6 shadow-sm dark:border-amber-500/30 dark:bg-[#0B1220]">
+      <div className="mb-3 flex items-center gap-4">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-300">
+          <Puzzle className="h-5 w-5" />
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <h3 className="text-lg font-extrabold text-slate-900 dark:text-white">
+             Optional Services 
+          </h3>
+          <span className="inline-flex w-fit items-center rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
+            Included / As Per Requirement
+          </span>
+        </div>
+      </div>
+
+      <p className="text-sm leading-6 text-slate-600 dark:text-slate-300">
+        Enhance your solution with additional integrations and value-added
+        services.
+      </p>
+
+      <ul className="mt-4 grid grid-cols-1 gap-x-8 gap-y-2.5 border-t border-slate-100 pt-4 dark:border-slate-800 sm:grid-cols-2 lg:grid-cols-3">
+        {COMMON_SERVICES_ITEMS.map((item) => (
+          <li
+            key={item}
+            className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200"
+          >
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-300" />
+            {item}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function CommercialStructureSection({
+  onRequestQuote,
+}: {
+  onRequestQuote: () => void;
+}) {
+  return (
+    <section className="relative bg-slate-50 px-6 py-16 lg:px-10 dark:bg-[#071322]">
+      <div className="mx-auto max-w-6xl text-center">
+        <p className="text-sm font-bold uppercase tracking-wide text-blue-600 dark:text-blue-400">
+          Commercial Structure
+        </p>
+        <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-900 sm:text-4xl dark:text-white">
+          Transparent Pricing, Flexible Options
+        </h2>
+        <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-300">
+          Our commercial model is simple, scalable and tailored to your
+          operational needs.
+        </p>
+      </div>
+
+      {/*
+        items-stretch: both cards always match height (bottom edges
+        aligned). This is safe now because the additional-charge dropdown
+        inside SiteLicenceCard is an absolute overlay (see SiteLicenceCard)
+        — it floats above the card instead of pushing its height, so
+        opening it never breaks the equal-height alignment.
+      */}
+      <div className="mx-auto mt-12 grid max-w-6xl grid-cols-1 items-stretch gap-8 lg:grid-cols-2">
+        <ImplementationFeeCard onRequestQuote={onRequestQuote} />
+        <SiteLicenceCard onSelectFleetSize={onRequestQuote} />
+      </div>
+
+      <div className="mx-auto mt-8 max-w-6xl">
+        <CommonServicesCard />
+      </div>
+    </section>
+  );
+}
+
+function RequestSummarySection({
+  type,
+  isLoggedIn,
+  isSubmitting,
+  onSubmit,
+  onChangeSelection,
+  containerRef,
+}: {
+  type: RequestType;
+  isLoggedIn: boolean;
+  isSubmitting: boolean;
+  onSubmit: () => void;
+  onChangeSelection: () => void;
+  containerRef: RefObject<HTMLElement | null>;
+}) {
+  const navigate = useNavigate();
+  const isTrial = type === "trial";
+
+  return <></>;
+}
+
+function HowItWorks() {
+  return (
+    <section className="relative bg-slate-50 px-6 py-16 lg:px-10 dark:bg-[#071322]">
+      <div className="mx-auto max-w-7xl">
+        <h2 className="text-center text-2xl font-black tracking-tight text-slate-900 sm:text-3xl dark:text-white">
+          How It Works
         </h2>
 
-        <p className="mx-auto mt-5 max-w-2xl text-blue-50">
-          Start with a plan that fits your fleet and scale your maintenance
-          intelligence as your company grows.
-        </p>
+        <div className="mt-12 flex flex-col gap-10 md:flex-row md:items-start md:justify-between">
+          {HOW_IT_WORKS_STEPS.map(({ icon: Icon, title, description }, index) => (
+            <div
+              key={title}
+              className="flex items-start gap-4 md:flex-1 md:flex-col md:items-center md:gap-0 md:text-center"
+            >
+              <div className="flex items-center">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white shadow-md">
+                  <Icon className="h-6 w-6" />
+                </div>
 
-        <a
-          href="#plans"
-          className="mt-8 inline-flex rounded-2xl bg-white px-8 py-4 text-sm font-black text-blue-600 shadow-xl transition hover:-translate-y-0.5 hover:bg-blue-50"
-        >
-          View Plans →
-        </a>
+                {index < HOW_IT_WORKS_STEPS.length - 1 && (
+                  <div className="ml-2 hidden h-0 w-10 border-t-2 border-dashed border-blue-200 dark:border-blue-500/30 md:block lg:w-16" />
+                )}
+              </div>
+
+              <div className="md:mt-3">
+                <p className="text-sm font-bold text-slate-900 dark:text-white">
+                  {index + 1}. {title}
+                </p>
+                <p className="mt-1 text-xs leading-5 text-slate-600 dark:text-slate-300 md:mx-auto md:max-w-[160px]">
+                  {description}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </section>
   );
 }
 
 export default function PricingPage() {
+  const navigate = useNavigate();
   const [active, setActive] = useState("plans");
-  const [plans, setPlans] = useState<PricingPlan[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [activePlan, setActivePlan] = useState<string | null>(null);
-  const [hasUsedDemo, setHasUsedDemo] = useState(false);
+
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [status, setStatus] = useState<SubscriptionStatus>({
+    activePlan: null,
+    hasUsedDemo: false,
+  });
+  const [checkingStatus, setCheckingStatus] = useState(true);
+
+  const [selectedType, setSelectedType] = useState<RequestType | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const summaryRef = useRef<HTMLElement>(null);
+
+  const getToken = () =>
+    StorageService.get<string>(STORAGE_KEYS.TOKEN) ||
+    StorageService.get<string>(STORAGE_KEYS.AUTH_TOKEN) ||
+    StorageService.get<string>(STORAGE_KEYS.ACCESS_TOKEN);
+
+  const refreshLoginStatus = () => {
+    setIsLoggedIn(Boolean(getToken()));
+  };
+
+  // Restore login status + any pending selection (e.g. user just came back
+  // from /signup or /signin after clicking a card).
+  useEffect(() => {
+    refreshLoginStatus();
+
+    const savedType = StorageService.get<RequestType>(
+      SELECTED_REQUEST_STORAGE_KEY,
+    );
+
+    if (savedType) {
+      setSelectedType(savedType);
+    }
+  }, []);
 
   useEffect(() => {
-    const fetchData = async () => {
+    const checkLogin = () => refreshLoginStatus();
+
+    window.addEventListener("storage", checkLogin);
+    window.addEventListener("focus", checkLogin);
+
+    return () => {
+      window.removeEventListener("storage", checkLogin);
+      window.removeEventListener("focus", checkLogin);
+    };
+  }, []);
+
+  useEffect(() => {
+    const fetchStatus = async () => {
+      if (!getToken()) {
+        setStatus({ activePlan: null, hasUsedDemo: false });
+        setCheckingStatus(false);
+        return;
+      }
+
       try {
-        setLoading(true);
+        setCheckingStatus(true);
 
-        const response: any = await getSubscriptionPlans();
+        const [activeSub, history] = await Promise.all([
+          userService.getActiveSubscription(),
+          userService.getSubscriptionHistory(),
+        ]);
 
-        const apiPlans: FlexibleSubscriptionPlanApi[] = Array.isArray(response)
-          ? response
-          : Array.isArray(response?.data)
-            ? response.data
-            : Array.isArray(response?.plans)
-              ? response.plans
-              : Array.isArray(response?.data?.plans)
-                ? response.data.plans
-                : Array.isArray(response?.result)
-                  ? response.result
-                  : Array.isArray(response?.subscriptions)
-                    ? response.subscriptions
-                    : [];
+        const activePlan =
+          activeSub?.plan_name || activeSub?.planName || activeSub?.name || null;
 
-        const publicActivePlans = apiPlans.filter((plan) => {
-          const isActive = plan.isActive ?? plan.is_active ?? true;
-          const isPublic = plan.isPublic ?? plan.is_public ?? true;
-          return isActive && isPublic;
-        });
+        const hasUsedDemo =
+          Array.isArray(history) &&
+          history.some((sub: any) => {
+            const name = String(
+              sub?.plan_name || sub?.planName || sub?.name || "",
+            ).toLowerCase();
+            return name.includes("demo") || name.includes("free");
+          });
 
-        setPlans(publicActivePlans.map(mapApiPlanToPricingPlan));
-
-        const token =
-          StorageService.get<string>(STORAGE_KEYS.TOKEN) ||
-          StorageService.get<string>(STORAGE_KEYS.AUTH_TOKEN);
-
-        if (token) {
-          try {
-            const [activeSub, history] = await Promise.all([
-              userService.getActiveSubscription(),
-              userService.getSubscriptionHistory(),
-            ]);
-
-            setActivePlan(
-              activeSub?.plan_name ||
-                activeSub?.planName ||
-                activeSub?.name ||
-                null,
-            );
-
-            setHasUsedDemo(
-              Array.isArray(history) &&
-                history.some((sub: any) => {
-                  const historyPlanName = String(
-                    sub?.plan_name || sub?.planName || sub?.name || "",
-                  ).toLowerCase();
-
-                  return (
-                    historyPlanName.includes("demo") ||
-                    historyPlanName.includes("free")
-                  );
-                }),
-            );
-          } catch (error) {
-            console.error("Failed to fetch subscription status", error);
-          }
-        }
+        setStatus({ activePlan, hasUsedDemo });
       } catch (error) {
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : "Failed to load pricing plans",
-        );
+        console.error("Failed to fetch subscription status", error);
       } finally {
-        setLoading(false);
+        setCheckingStatus(false);
       }
     };
 
-    fetchData();
-  }, []);
+    fetchStatus();
+  }, [isLoggedIn]);
 
-  const visiblePlans = useMemo(() => {
-    return [...plans]
-      .sort((a, b) => {
-        const priceA = Number(
-          String(a.rawPlan.price ?? "0").replace(/[^\d.]/g, ""),
-        );
+  useEffect(() => {
+    if (selectedType) {
+      summaryRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [selectedType, isLoggedIn]);
 
-        const priceB = Number(
-          String(b.rawPlan.price ?? "0").replace(/[^\d.]/g, ""),
-        );
+  const handleSelect = (type: RequestType) => {
+    if (checkingStatus) return;
 
-        return priceA - priceB;
-      })
-      .slice(0, 5);
-  }, [plans]);
+    if (status.activePlan) {
+      toast.dismiss();
+      toast.error("You already have an active subscription.");
+      navigate("/company-admin/dashboard");
+      return;
+    }
+
+    if (type === "trial" && status.hasUsedDemo) {
+      toast.dismiss();
+      toast.error(
+        "You have already used the 14-day trial. Please request a quotation instead.",
+      );
+      return;
+    }
+
+    StorageService.set(SELECTED_REQUEST_STORAGE_KEY, type);
+    setSelectedType(type);
+
+    if (!getToken()) {
+      navigate("/signup?redirect=/pricing");
+      return;
+    }
+  };
+
+  const handleChangeSelection = () => {
+    setSelectedType(null);
+  };
+
+  const handleSubmitRequest = async () => {
+    if (!selectedType) return;
+
+    try {
+      setIsSubmitting(true);
+
+      // BACKEND TODO: wire this to the actual trial/quotation request submission API
+      // await companyRequestService.submitRequest({ type: selectedType });
+
+      toast.success(
+        selectedType === "trial"
+          ? "Trial request submitted. Our team will activate your account shortly."
+          : "Quotation request submitted. Our team will get back to you shortly.",
+      );
+
+      setSelectedType(null);
+      navigate("/company-admin/dashboard");
+    } catch (error) {
+      console.error("Failed to submit request", error);
+      toast.error("Failed to submit your request. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <div className="min-h-screen overflow-x-hidden pt-[90px] bg-white text-slate-900 transition-colors duration-300 dark:bg-[#050b18] dark:text-white">
       <Header active={active} setActive={setActive} />
 
       <main className="overflow-x-hidden">
-        <PricingPlans
-          visiblePlans={visiblePlans}
-          loading={loading}
-          activePlan={activePlan}
-          hasUsedDemo={hasUsedDemo}
+        <HeroSection />
+
+        {selectedType && (
+          <RequestSummarySection
+            containerRef={summaryRef}
+            type={selectedType}
+            isLoggedIn={isLoggedIn}
+            isSubmitting={isSubmitting}
+            onSubmit={handleSubmitRequest}
+            onChangeSelection={handleChangeSelection}
+          />
+        )}
+
+        <CommercialStructureSection
+          onRequestQuote={() => handleSelect("quotation")}
         />
 
-        <PricingComparison plans={visiblePlans} />
-
-        <PricingCTA />
+        <HowItWorks />
       </main>
 
       <div className="overflow-x-hidden [&_.reveal]:!translate-y-0 [&_.reveal]:!opacity-100">

@@ -43,6 +43,8 @@ export type AuthResponse = {
   data?: unknown;
 };
 
+
+
 export const authService = {
   register: (payload: RegisterPayload) =>
     apiRequest<AuthResponse>("/auth/register", {
@@ -54,6 +56,11 @@ export const authService = {
     apiRequest<AuthResponse>("/auth/login", {
       method: "POST",
       body: JSON.stringify(payload),
+    }),
+
+    getMe: () =>
+    apiRequest<AuthResponse>("/auth/me", {
+      method: "GET",
     }),
 
   forgotPassword: (payload: ForgotPasswordPayload) =>
@@ -73,4 +80,8 @@ export const authService = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+
+    
 };
+
+

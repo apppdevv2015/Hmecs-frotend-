@@ -1,5 +1,4 @@
 import React from "react";
-
 import {
   LayoutDashboard,
   ClipboardCheck,
@@ -32,6 +31,13 @@ import {
   UserCheck,
   AlertCircle,
   CheckSquare,
+  CheckCircle,
+  User,
+
+  // Limited Company Admin
+  UserCircle,
+  MessageSquare,
+  FolderOpen,
 } from "lucide-react";
 
 export type UserRole =
@@ -75,6 +81,7 @@ export const sidebarConfig: Record<
   {
     dashboardItem: NavLinkItem;
     navGroups: NavGroup[];
+    limitedNavGroups?: NavGroup[];
     profile: SidebarProfile;
   }
 > = {
@@ -178,12 +185,19 @@ export const sidebarConfig: Record<
   },
 
   company_admin: {
+    // --------------------------------------------------
+    // Dashboard
+    // --------------------------------------------------
     dashboardItem: {
       icon: <LayoutDashboard className={sidebarIconClass} />,
       name: "Dashboard",
       path: "/company-admin/dashboard",
     },
 
+    // --------------------------------------------------
+    // FULL ACCESS
+    // Shown when Company Admin isActive === true
+    // --------------------------------------------------
     navGroups: [
       {
         title: "Company",
@@ -260,6 +274,36 @@ export const sidebarConfig: Record<
       },
     ],
 
+    // --------------------------------------------------
+    // LIMITED ACCESS
+    // Shown when Company Admin isActive === false
+    // --------------------------------------------------
+    // --------------------------------------------------
+    // LIMITED ACCESS
+    // Shown when Company Admin isActive === false
+    // --------------------------------------------------
+    limitedNavGroups: [
+      {
+        title: "Company",
+        items: [
+          {
+            name: "Company Profile",
+            path: "/company-admin/profile",
+            icon: <User className={sidebarIconClass} />,
+          },
+
+          {
+            name: "Quotation",
+            path: "/company-admin/quotation",
+            icon: <FileText className={sidebarIconClass} />,
+          },
+        ],
+      },
+    ],
+
+    // --------------------------------------------------
+    // PROFILE
+    // --------------------------------------------------
     profile: {
       shortName: "CA",
       title: "Company Admin",
