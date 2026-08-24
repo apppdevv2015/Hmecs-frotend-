@@ -1,6 +1,7 @@
 import React from "react";
 import {
   LayoutDashboard,
+  Receipt,
   ClipboardCheck,
   Truck,
   AlertTriangle,
@@ -33,6 +34,7 @@ import {
   CheckSquare,
   CheckCircle,
   User,
+  FileSignature,
 
   // Limited Company Admin
   UserCircle,
@@ -174,6 +176,22 @@ export const sidebarConfig: Record<
           },
         ],
       },
+      {
+        title: "quotation",
+        items: [
+          {
+            name: "Quotation",
+            path: "/super-admin/",
+            icon: <CreditCard className={sidebarIconClass} />,
+          },
+          {
+            name: "",
+            path: "/super-admin/settings",
+            icon: <Settings className={sidebarIconClass} />,
+            isComingSoon: true,
+          },
+        ],
+      },
     ],
 
     profile: {
@@ -297,6 +315,17 @@ export const sidebarConfig: Record<
             path: "/company-admin/quotation",
             icon: <FileText className={sidebarIconClass} />,
           },
+          {
+        name: "Contract",
+        path: "/company-admin/contracts",
+        icon: <FileSignature className={sidebarIconClass} />,
+      },
+
+      {
+        name: "Invoices",
+        path: "/company-admin/invoices",
+        icon: <Receipt className={sidebarIconClass} />,
+      },
         ],
       },
     ],

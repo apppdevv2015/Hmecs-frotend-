@@ -153,6 +153,27 @@ const ServiceLog1 = lazy(
   () => import("./pages/SuperAdmin/Asset Managment/ServiceLog"),
 );
 
+const SuperAdminQuotation = lazy(
+  () => import("./pages/SuperAdmin/Quotation/Quotation"),
+);
+
+const SuperAdminQuotationManagement = lazy(
+  () =>
+    import("./pages/SuperAdmin/Quotation/ContractManagement"),
+);
+
+const SuperAdminQuotationDetails = lazy(
+  () => import("./pages/SuperAdmin/Quotation/QuotationDetails"),
+);
+
+const SuperAdminContractManagement = lazy(
+  () => import("./pages/SuperAdmin/Quotation/ContractManagement"),
+);
+
+const SuperAdminInvoiceManagement = lazy(
+  () => import("./pages/SuperAdmin/Quotation/InvoiceManagement"),
+);
+
 // ---------------- Company Admin ----------------
 
 const CompanyProfile = lazy(

@@ -1,15 +1,11 @@
 import React, { useState } from "react";
 import {
-  ClipboardCheck,
-  FileText,
-  FileSignature,
-  Receipt,
   CheckCircle,
-  Building2,
-  CalendarDays,
-  Clock3,
-  ChevronRight,
-  CircleCheck,
+  ClipboardCheck,
+  FileSignature,
+  FileText,
+  Receipt,
+  type LucideIcon,
 } from "lucide-react";
 
 import QuotationStatus from "./QuotationStatus";
@@ -18,44 +14,67 @@ import QuotationContract from "./QuotationContract";
 import QuotationInvoices from "./quotationInvoices";
 import QuotationAction from "./QuotationActionPage";
 
+/* ============================================================
+   TYPES
+============================================================ */
+
+type QuotationTabId =
+  | "status"
+  | "details"
+  | "contract"
+  | "invoices"
+  | "decision";
+
+interface QuotationTab {
+  id: QuotationTabId;
+  label: string;
+  icon: LucideIcon;
+}
+
+/* ============================================================
+   TAB CONFIGURATION
+============================================================ */
+
+const quotationTabs: QuotationTab[] = [
+  {
+    id: "status",
+    label: "Quotation Status",
+    icon: ClipboardCheck,
+  },
+  {
+    id: "details",
+    label: "Quotation Details",
+    icon: FileText,
+  },
+  {
+    id: "decision",
+    label: "Accept / Reject",
+    icon: CheckCircle,
+  },
+  {
+    id: "contract",
+    label: "Contract",
+    icon: FileSignature,
+  },
+  {
+    id: "invoices",
+    label: "Invoices",
+    icon: Receipt,
+  },
+  
+];
+
+/* ============================================================
+   COMPONENT
+============================================================ */
+
 const QuotationManagement: React.FC = () => {
-  const [activeTab, setActiveTab] = useState("status");
+  const [activeTab, setActiveTab] =
+    useState<QuotationTabId>("status");
 
-  const tabs = [
-    {
-      id: "status",
-      label: "Quotation Status",
-      shortLabel: "Status",
-      icon: ClipboardCheck,
-    },
-    {
-      id: "details",
-      label: "Quotation Details",
-      shortLabel: "Details",
-      icon: FileText,
-    },
-    {
-      id: "contract",
-      label: "Contract",
-      shortLabel: "Contract",
-      icon: FileSignature,
-    },
-    {
-      id: "invoices",
-      label: "Invoices",
-      shortLabel: "Invoices",
-      icon: Receipt,
-    },
-    {
-      id: "decision",
-      label: "Accept / Reject",
-      shortLabel: "Decision",
-      icon: CheckCircle,
-    },
-  ] as const;
-
-  const currentTab =
-    tabs.find((tab) => tab.id === activeTab) ?? tabs[0];
+  /* ==========================================================
+     ACTIVE SECTION
+  ========================================================== */
 
   const renderActiveSection = () => {
     switch (activeTab) {
@@ -79,221 +98,184 @@ const QuotationManagement: React.FC = () => {
     }
   };
 
+  /* ==========================================================
+     RENDER
+  ========================================================== */
+
   return (
-    <div className="min-h-screen bg-slate-50">
-      <div className="mx-auto w-full max-w-[1600px] p-4 sm:p-6 lg:p-8">
+    <div className="min-h-screen w-full bg-slate-50">
+      <div className="mx-auto w-full max-w-[1600px] px-4 py-5 sm:px-6 lg:px-8">
 
-        {/* =====================================================
-            PAGE HEADER
-        ====================================================== */}
-        <div className="mb-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        {/* ==================================================
+            QUOTATION TABS
+        ================================================== */}
 
-          {/* Blue Header */}
-          <div className="relative overflow-hidden bg-gradient-to-r from-blue-700 via-blue-600 to-indigo-600 px-5 py-6 sm:px-7">
+        <section
+          aria-label="Quotation navigation"
+          className="mb-6"
+        >
+          <div className="w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
 
-            {/* Decorative circles */}
-            <div className="pointer-events-none absolute -right-10 -top-16 h-44 w-44 rounded-full bg-white/10" />
-            <div className="pointer-events-none absolute -bottom-20 right-28 h-36 w-36 rounded-full bg-white/5" />
+            {/* Responsive horizontal scrolling */}
+            <div
+              className="
+                w-full
+                overflow-x-auto
+                [scrollbar-width:none]
+                [&::-webkit-scrollbar]:hidden
+              "
+            >
+              <div
+                role="tablist"
+                aria-label="Quotation sections"
+                className="
+                  flex
+                  min-w-[760px]
+                  w-full
+                "
+              >
+                {quotationTabs.map((tab, index) => {
+                  const Icon = tab.icon;
+                  const isActive = activeTab === tab.id;
 
-            <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+                  return (
+                    <React.Fragment key={tab.id}>
 
-              {/* Left */}
-              <div className="flex items-start gap-4">
+                      {/* ==================================================
+                          TAB BUTTON
+                      ================================================== */}
 
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/20 backdrop-blur-sm">
-                  <FileText
-                    size={24}
-                    className="text-white"
-                    strokeWidth={2}
-                  />
-                </div>
+                      <button
+                        type="button"
+                        role="tab"
+                        aria-selected={isActive}
+                        aria-controls={`quotation-panel-${tab.id}`}
+                        id={`quotation-tab-${tab.id}`}
+                        onClick={() => setActiveTab(tab.id)}
+                        className={`
+                          group
+                          relative
+                          flex
+                          min-h-[84px]
+                          flex-1
+                          items-center
+                          justify-center
+                          gap-3
+                          px-4
+                          py-4
+                          text-left
+                          outline-none
+                          transition-colors
+                          duration-200
+                          focus-visible:z-10
+                          focus-visible:ring-2
+                          focus-visible:ring-inset
+                          focus-visible:ring-blue-500
+                          ${
+                            isActive
+                              ? "bg-white"
+                              : "bg-white hover:bg-slate-50"
+                          }
+                        `}
+                      >
 
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-sm font-medium text-blue-100">
-                      Company / Quotation
-                    </p>
+                        {/* Icon */}
+                        <span
+                          className={`
+                            flex
+                            h-10
+                            w-10
+                            shrink-0
+                            items-center
+                            justify-center
+                            rounded-xl
+                            ring-1
+                            transition-colors
+                            duration-200
+                            ${
+                              isActive
+                                ? "bg-blue-50 text-blue-600 ring-blue-100"
+                                : "bg-slate-50 text-slate-400 ring-slate-100 group-hover:bg-slate-100 group-hover:text-slate-600"
+                            }
+                          `}
+                        >
+                          <Icon
+                            size={19}
+                            strokeWidth={2}
+                            aria-hidden="true"
+                          />
+                        </span>
 
-                    <ChevronRight
-                      size={14}
-                      className="text-blue-200"
-                    />
+                        {/* Label */}
+                        <span
+                          className={`
+                            whitespace-nowrap
+                            text-sm
+                            font-semibold
+                            tracking-tight
+                            transition-colors
+                            duration-200
+                            ${
+                              isActive
+                                ? "text-blue-600"
+                                : "text-slate-600 group-hover:text-slate-900"
+                            }
+                          `}
+                        >
+                          {tab.label}
+                        </span>
 
-                    <p className="text-sm text-blue-100">
-                      Request Management
-                    </p>
-                  </div>
+                        {/* Active indicator */}
+                        <span
+                          aria-hidden="true"
+                          className={`
+                            absolute
+                            inset-x-6
+                            bottom-0
+                            h-[3px]
+                            rounded-t-full
+                            transition-colors
+                            duration-200
+                            ${
+                              isActive
+                                ? "bg-blue-600"
+                                : "bg-transparent"
+                            }
+                          `}
+                        />
 
-                  <h1 className="mt-2 text-xl font-bold tracking-tight text-white sm:text-2xl">
-                    Quotation #QR-2025-000124
-                  </h1>
+                      </button>
 
-                  <p className="mt-1 text-sm text-blue-100">
-                    Manage quotation, contract, invoices and approval
-                  </p>
-                </div>
+                      {/* ==================================================
+                          TAB DIVIDER
+                      ================================================== */}
+                      {index < quotationTabs.length - 1 && (
+                        <div
+                          aria-hidden="true"
+                          className="my-5 w-px shrink-0 bg-slate-100"
+                        />
+                      )}
+                    </React.Fragment>
+                  );
+                })}
               </div>
-
-              {/* Status */}
-              <div className="flex items-center gap-3 rounded-xl border border-white/20 bg-white/10 px-4 py-3 backdrop-blur-sm">
-                <span className="relative flex h-3 w-3">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-yellow-300 opacity-60" />
-                  <span className="relative inline-flex h-3 w-3 rounded-full bg-yellow-300" />
-                </span>
-
-                <div>
-                  <p className="text-xs text-blue-100">
-                    Current Status
-                  </p>
-
-                  <p className="text-sm font-semibold text-white">
-                    Under Review
-                  </p>
-                </div>
-              </div>
-
             </div>
           </div>
+        </section>
 
-          {/* Request Information */}
-          <div className="grid grid-cols-1 divide-y divide-slate-100 sm:grid-cols-2 sm:divide-x sm:divide-y-0 lg:grid-cols-4">
+        {/* ==================================================
+            ACTIVE CONTENT
+        ================================================== */}
 
-            <InfoItem
-              icon={<Building2 size={18} />}
-              label="Company"
-              value="Orion Mining Pvt. Ltd."
-            />
-
-            <InfoItem
-              icon={<CalendarDays size={18} />}
-              label="Requested On"
-              value="21 Aug 2026"
-            />
-
-            <InfoItem
-              icon={<Clock3 size={18} />}
-              label="Last Updated"
-              value="21 Aug 2026, 11:15 AM"
-            />
-
-            <InfoItem
-              icon={<FileText size={18} />}
-              label="Machines"
-              value="4 Machines"
-            />
-
-          </div>
-        </div>
-
-  
-        {/* =====================================================
-            TOP NAVIGATION / TABS
-        ====================================================== */}
-        <div className="mb-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-
-          <div className="border-b border-slate-100 px-2 pt-2 sm:px-3">
-
-            <div className="flex overflow-x-auto scrollbar-hide">
-
-              {tabs.map((tab) => {
-
-                const Icon = tab.icon;
-                const isActive = activeTab === tab.id;
-
-                return (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`
-                      relative flex min-w-fit items-center gap-2.5
-                      px-4 py-4 text-sm font-semibold
-                      transition-all duration-200
-                      sm:px-5
-                      ${
-                        isActive
-                          ? "text-blue-600"
-                          : "text-slate-500 hover:text-slate-800"
-                      }
-                    `}
-                  >
-
-                    {/* Icon */}
-                    <span
-                      className={`
-                        flex h-8 w-8 items-center justify-center
-                        rounded-lg transition-all
-                        ${
-                          isActive
-                            ? "bg-blue-100 text-blue-600"
-                            : "bg-slate-50 text-slate-400 group-hover:bg-slate-100"
-                        }
-                      `}
-                    >
-                      <Icon size={17} strokeWidth={2} />
-                    </span>
-
-                    <span className="whitespace-nowrap">
-                      {tab.label}
-                    </span>
-
-                    {/* Active indicator */}
-                    {isActive && (
-                      <span className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-blue-600" />
-                    )}
-
-                  </button>
-                );
-              })}
-
-            </div>
-          </div>
-        </div>
-
-        {/* =====================================================
-            ACTIVE PAGE CONTENT
-        ====================================================== */}
-        <div className="rounded-2xl">
+        <main
+          id={`quotation-panel-${activeTab}`}
+          role="tabpanel"
+          aria-labelledby={`quotation-tab-${activeTab}`}
+          className="w-full min-w-0"
+        >
           {renderActiveSection()}
-        </div>
-
+        </main>
       </div>
-    </div>
-  );
-};
-
-/* ============================================================
-   INFO ITEM
-============================================================ */
-
-interface InfoItemProps {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-}
-
-const InfoItem: React.FC<InfoItemProps> = ({
-  icon,
-  label,
-  value,
-}) => {
-  return (
-    <div className="flex items-center gap-3 px-5 py-4">
-
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
-        {icon}
-      </div>
-
-      <div className="min-w-0">
-        <p className="text-xs font-medium text-slate-400">
-          {label}
-        </p>
-
-        <p className="mt-0.5 truncate text-sm font-semibold text-slate-800">
-          {value}
-        </p>
-      </div>
-
     </div>
   );
 };
