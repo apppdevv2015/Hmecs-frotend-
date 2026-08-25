@@ -157,21 +157,16 @@ const SuperAdminQuotation = lazy(
   () => import("./pages/SuperAdmin/Quotation/Quotation"),
 );
 
-const SuperAdminQuotationManagement = lazy(
-  () =>
-    import("./pages/SuperAdmin/Quotation/ContractManagement"),
-);
-
-const SuperAdminQuotationDetails = lazy(
-  () => import("./pages/SuperAdmin/Quotation/QuotationDetails"),
-);
-
 const SuperAdminContractManagement = lazy(
   () => import("./pages/SuperAdmin/Quotation/ContractManagement"),
 );
 
 const SuperAdminInvoiceManagement = lazy(
   () => import("./pages/SuperAdmin/Quotation/InvoiceManagement"),
+);
+
+const SuperAdminAccessManagement = lazy(
+  () => import("./pages/SuperAdmin/Quotation/AccessManagement"),
 );
 
 // ---------------- Company Admin ----------------
@@ -212,6 +207,10 @@ const CategoryManagement = lazy(
   () => import("./pages/CompanyAdmin/CategoryManagement"),
 );
 
+const QuotationContract = lazy(
+  () => import("./pages/CompanyAdmin/QuotationContract"),
+);
+
 ////////////////
 
 const QuotationRequest = lazy(
@@ -220,8 +219,6 @@ const QuotationRequest = lazy(
 const QuotationStatus = lazy(
   () => import("./pages/CompanyAdmin/QuotationStatus"),
 );
-
-const Messages = lazy(() => import("./pages/CompanyAdmin/quotationInvoices"));
 
 // NEW
 const QuotationDetails = lazy(
@@ -234,6 +231,10 @@ const QuotationAction = lazy(
 
 const QuotationManagement = lazy(
   () => import("./pages/CompanyAdmin/QuotationManagement"),
+);
+
+const QuotationInvoice = lazy(
+  () => import("./pages/CompanyAdmin/quotationInvoices"),
 );
 
 //////////
@@ -590,6 +591,44 @@ export default function App() {
                   }
                 />
 
+                {/* Quotation routes  super admin  */}
+
+                <Route
+                  path="/super-admin/quotation"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <SuperAdminQuotation />
+                    </Suspense>
+                  }
+                />
+
+                <Route
+                  path="/super-admin/access-management"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <SuperAdminAccessManagement />
+                    </Suspense>
+                  }
+                />
+
+                <Route
+                  path="/super-admin/invoices"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <SuperAdminInvoiceManagement />
+                    </Suspense>
+                  }
+                />
+
+                <Route
+                  path="/super-admin/contracts"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <SuperAdminContractManagement />
+                    </Suspense>
+                  }
+                />
+
                 <Route
                   path="/super-admin/technical-support"
                   element={
@@ -717,7 +756,6 @@ export default function App() {
                   path="/company-admin"
                   element={<Navigate to="/company-admin/dashboard" replace />}
                 />
-
                 <Route
                   path="/company-admin/dashboard"
                   element={
@@ -726,7 +764,6 @@ export default function App() {
                     </Suspense>
                   }
                 />
-
                 <Route
                   path="/company-admin/quotation"
                   element={
@@ -735,16 +772,7 @@ export default function App() {
                     </Suspense>
                   }
                 />
-
-                <Route
-                  path="/company-admin/quotation"
-                  element={
-                    <Suspense fallback={<PageSkeleton />}>
-                      <QuotationRequest />
-                    </Suspense>
-                  }
-                />
-
+                x
                 <Route
                   path="/company-admin/quotation-status"
                   element={
@@ -754,22 +782,13 @@ export default function App() {
                   }
                 />
                 <Route
-                  path="/company-admin/messages"
+                  path="/company-admin/contracts"
                   element={
                     <Suspense fallback={<PageSkeleton />}>
-                      <Messages />
+                      <QuotationContract />
                     </Suspense>
                   }
                 />
-                <Route
-                  path="/company-admin/quotation-invoices"
-                  element={
-                    <Suspense fallback={<PageSkeleton />}>
-                      <Messages />
-                    </Suspense>
-                  }
-                />
-
                 <Route
                   path="/company-admin/quotation-details"
                   element={
@@ -778,7 +797,14 @@ export default function App() {
                     </Suspense>
                   }
                 />
-
+                <Route
+                  path="/company-admin/invoices"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <QuotationInvoice />
+                    </Suspense>
+                  }
+                />
                 <Route
                   path="/company-admin/quotation-action"
                   element={
@@ -787,7 +813,6 @@ export default function App() {
                     </Suspense>
                   }
                 />
-
                 <Route
                   path="/company-admin/documents"
                   element={
@@ -796,7 +821,6 @@ export default function App() {
                     </Suspense>
                   }
                 />
-
                 <Route
                   path="/company-admin/categories"
                   element={
@@ -805,7 +829,6 @@ export default function App() {
                     </Suspense>
                   }
                 />
-
                 <Route
                   path="/company-admin/profile"
                   element={
@@ -814,7 +837,6 @@ export default function App() {
                     </Suspense>
                   }
                 />
-
                 <Route
                   path="/company-admin/job-cards"
                   element={
@@ -831,7 +853,6 @@ export default function App() {
                     </Suspense>
                   }
                 />
-
                 <Route
                   path="/company-admin/register"
                   element={<ComponentRegister />}
@@ -852,7 +873,6 @@ export default function App() {
                     </Suspense>
                   }
                 />
-
                 <Route
                   path="/company-admin/heatmap"
                   element={
@@ -901,19 +921,15 @@ export default function App() {
                     </Suspense>
                   }
                 />
-
                 <Route
                   path="/company-admin/add-component"
                   element={<AddComponent />}
                 />
-
                 <Route path="/company-admin/alerts" element={<AlertsPage />} />
-
                 <Route
                   path="/company-admin/data-update"
                   element={<UpdatePage />}
                 />
-
                 <Route
                   path="/company-admin/staff"
                   element={<StaffManagement />}
@@ -954,7 +970,6 @@ export default function App() {
                   path="/company_admin/reporting"
                   element={<ReportingManagement />}
                 />
-
                 <Route
                   path="/company-admin/notifications"
                   element={
@@ -963,7 +978,6 @@ export default function App() {
                     </Suspense>
                   }
                 />
-
                 <Route
                   path="/company-admin/service-log"
                   element={
@@ -972,7 +986,6 @@ export default function App() {
                     </Suspense>
                   }
                 />
-
                 <Route
                   path="/company-admin/support-tickets"
                   element={

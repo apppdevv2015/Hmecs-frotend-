@@ -10,8 +10,6 @@ import {
 
 import QuotationStatus from "./QuotationStatus";
 import QuotationDetails from "./QuotationDetailsPage";
-import QuotationContract from "./QuotationContract";
-import QuotationInvoices from "./quotationInvoices";
 import QuotationAction from "./QuotationActionPage";
 
 /* ============================================================
@@ -21,8 +19,6 @@ import QuotationAction from "./QuotationActionPage";
 type QuotationTabId =
   | "status"
   | "details"
-  | "contract"
-  | "invoices"
   | "decision";
 
 interface QuotationTab {
@@ -36,30 +32,21 @@ interface QuotationTab {
 ============================================================ */
 
 const quotationTabs: QuotationTab[] = [
-  {
-    id: "status",
-    label: "Quotation Status",
-    icon: ClipboardCheck,
-  },
+
   {
     id: "details",
     label: "Quotation Details",
     icon: FileText,
   },
   {
+    id: "status",
+    label: "Quotation Status",
+    icon: ClipboardCheck,
+  },
+  {
     id: "decision",
     label: "Accept / Reject",
     icon: CheckCircle,
-  },
-  {
-    id: "contract",
-    label: "Contract",
-    icon: FileSignature,
-  },
-  {
-    id: "invoices",
-    label: "Invoices",
-    icon: Receipt,
   },
   
 ];
@@ -83,12 +70,6 @@ const QuotationManagement: React.FC = () => {
 
       case "details":
         return <QuotationDetails />;
-
-      case "contract":
-        return <QuotationContract />;
-
-      case "invoices":
-        return <QuotationInvoices />;
 
       case "decision":
         return <QuotationAction />;

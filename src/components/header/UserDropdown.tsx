@@ -31,17 +31,13 @@ function getProfilePath() {
     );
 
     if (
-      role === "super_admin" ||
-      role === "superadmin" ||
-      role === "system_admin"
+      role === "super_admin"
     ) {
       return "/super-admin/profile";
     }
 
     if (
-      role === "company_admin" ||
-      role === "companyadmin" ||
-      role === "admin"
+      role === "company_admin"
     ) {
       return "/company-admin/profile";
     }
@@ -50,7 +46,7 @@ function getProfilePath() {
       return "/Artisans/profile";
     }
 
-    if (role === "operator" || role === "planner") {
+    if (role === "operator") {
       return "/operator/profile";
     }
 

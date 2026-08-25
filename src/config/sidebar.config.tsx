@@ -96,6 +96,31 @@ export const sidebarConfig: Record<
 
     navGroups: [
       {
+        title: "quotation",
+        items: [
+          {
+            name: "Quotation",
+            path: "/super-admin/quotation",
+            icon: <FileText className={sidebarIconClass} />,
+          },
+          {
+            name: "Contract",
+            path: "/super-admin/contracts",
+            icon: <FileSignature className={sidebarIconClass} />,
+          },
+          {
+            name: "Access Management",
+            path: "/super-admin/access-management",
+            icon: <FileSignature className={sidebarIconClass} />,
+          },
+          {
+            name: "Invoices",
+            path: "/super-admin/invoices",
+            icon: <Receipt className={sidebarIconClass} />,
+          },
+        ],
+      },
+      {
         title: "User Management",
         items: [
           {
@@ -176,22 +201,7 @@ export const sidebarConfig: Record<
           },
         ],
       },
-      {
-        title: "quotation",
-        items: [
-          {
-            name: "Quotation",
-            path: "/super-admin/",
-            icon: <CreditCard className={sidebarIconClass} />,
-          },
-          {
-            name: "",
-            path: "/super-admin/settings",
-            icon: <Settings className={sidebarIconClass} />,
-            isComingSoon: true,
-          },
-        ],
-      },
+      
     ],
 
     profile: {
@@ -274,6 +284,30 @@ export const sidebarConfig: Record<
         ],
       },
 
+      // --------------------------------------------------
+      // COMMERCIAL
+      // --------------------------------------------------
+      {
+        title: "Commercial",
+        items: [
+          {
+            name: "Quotation",
+            path: "/company-admin/quotation",
+            icon: <FileText className={sidebarIconClass} />,
+          },
+          {
+            name: "Contract",
+            path: "/company-admin/contracts",
+            icon: <FileSignature className={sidebarIconClass} />,
+          },
+          {
+            name: "Invoices",
+            path: "/company-admin/invoices",
+            icon: <Receipt className={sidebarIconClass} />,
+          },
+        ],
+      },
+
       {
         title: "Account",
         items: [
@@ -296,10 +330,6 @@ export const sidebarConfig: Record<
     // LIMITED ACCESS
     // Shown when Company Admin isActive === false
     // --------------------------------------------------
-    // --------------------------------------------------
-    // LIMITED ACCESS
-    // Shown when Company Admin isActive === false
-    // --------------------------------------------------
     limitedNavGroups: [
       {
         title: "Company",
@@ -309,23 +339,30 @@ export const sidebarConfig: Record<
             path: "/company-admin/profile",
             icon: <User className={sidebarIconClass} />,
           },
+        ],
+      },
 
+      // --------------------------------------------------
+      // COMMERCIAL
+      // --------------------------------------------------
+      {
+        title: "Commercial",
+        items: [
           {
             name: "Quotation",
             path: "/company-admin/quotation",
             icon: <FileText className={sidebarIconClass} />,
           },
           {
-        name: "Contract",
-        path: "/company-admin/contracts",
-        icon: <FileSignature className={sidebarIconClass} />,
-      },
-
-      {
-        name: "Invoices",
-        path: "/company-admin/invoices",
-        icon: <Receipt className={sidebarIconClass} />,
-      },
+            name: "Contract",
+            path: "/company-admin/contracts",
+            icon: <FileSignature className={sidebarIconClass} />,
+          },
+          {
+            name: "Invoices",
+            path: "/company-admin/invoices",
+            icon: <Receipt className={sidebarIconClass} />,
+          },
         ],
       },
     ],
