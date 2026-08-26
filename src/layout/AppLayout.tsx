@@ -9,7 +9,6 @@ import { userService } from "../services/Auth/userService";
 import { AlertCircle, Rocket } from "lucide-react";
 import AppToaster from "../components/common/AppToaster";
 import offlineQueueService from "../services/offlineQueue.service";
-import { useLocation } from "react-router-dom";
 import { toast } from "react-hot-toast";
 
 type AppLayoutProps = {
@@ -45,9 +44,6 @@ const LayoutContent: React.FC<AppLayoutProps> = ({ role = "super_admin" }) => {
   const checkingRef = useRef(false);
   // Tracks if initial check has run
   const initialCheckDoneRef = useRef(false);
-
-  const location = useLocation();
-  const isInvoicePage = location.pathname.includes("/invoice");
 
   // ─── Core transition handler ─────────────────────────────────────────────
   // All online/offline transitions go through here to prevent duplicate toasts
@@ -172,21 +168,19 @@ const LayoutContent: React.FC<AppLayoutProps> = ({ role = "super_admin" }) => {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-slate-900 dark:bg-slate-950 dark:text-white">
-      {!isInvoicePage && <AppSidebar role={role} />}
-      {!isInvoicePage && <Backdrop />}
+      <AppSidebar role={role} />
+      <Backdrop />
 
       <div
         className={`min-h-screen min-w-0 transition-all duration-300 ease-in-out ${
-          isInvoicePage
+          isMobileOpen
             ? "ml-0"
-            : isMobileOpen
-              ? "ml-0"
-              : isExpanded || isHovered
-                ? "lg:ml-[280px]"
-                : "lg:ml-[92px]"
+            : isExpanded || isHovered
+              ? "lg:ml-[280px]"
+              : "lg:ml-[92px]"
         }`}
       >
-        {!isInvoicePage && <AppHeader />}
+        <AppHeader />
 
         {isOffline && (
           <div className="sticky top-0 z-50 border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-sm font-medium text-amber-800 dark:border-amber-900/30 dark:bg-amber-950/40 dark:text-amber-300">
@@ -229,7 +223,7 @@ const LayoutContent: React.FC<AppLayoutProps> = ({ role = "super_admin" }) => {
           </div>
         )}
 
-        <main className={isInvoicePage ? "w-full" : "w-full p-4 md:p-6"}>
+        <main className="w-full p-4 md:p-6">
           <Outlet />
         </main>
       </div>

@@ -1,407 +1,720 @@
 import React from "react";
 import {
-  Building2,
-  User,
-  Boxes,
-  Hash,
-  CalendarClock,
-  Flag,
-  Activity,
+  CalendarDays,
+  Check,
   CheckCircle2,
-  Circle,
-  Clock,
+  Clock3,
+  FileText,
+  MapPin,
+  XCircle,
 } from "lucide-react";
 
-/* -------------------------------------------------------------------------- */
-/* MOCK DATA — replace with real API data for this quotation                  */
-/* -------------------------------------------------------------------------- */
+/* ============================================================
+   TYPES
+============================================================ */
 
-const requestInfo = {
-  requestId: "QR-2025-000124",
-  company: "Orion Mining Pvt. Ltd.",
-  requestedBy: "Rakesh Verma",
-  machineCount: 4,
-  totalQuantity: 12,
-  requestedDate: "21 Aug 2026",
-  requestedTime: "10:30 AM",
-  priority: "High",
-  currentStatus: "Under Review",
-};
+type QuotationStatusType =
+  | "received"
+  | "in_progress"
+  | "in_review"
+  | "accepted"
+  | "completed"
+  | "rejected";
 
-type MachineStatus =
-  | "Pending"
-  | "Viewed"
-  | "Under Review"
-  | "Rejected"
-  | "Quotation Prepared"
-  | "Quotation Sent";
+type StepState = "completed" | "current" | "pending" | "rejected";
 
-interface MachineRow {
-  id: number;
-  name: string;
-  assetId: string;
-  quantity: number;
-  requestedOn: string;
-  viewedOn: string | null;
-  status: MachineStatus;
+interface QuotationData {
+  quotationNumber: string;
+  quotationType: string;
+  numberOfSites: number;
+  activeMachines: number;
+  contractDuration: string;
+  sites: string[];
+  equipmentTypes: string[];
+  currentStatus: QuotationStatusType;
+  statusMessage: string;
 }
 
-const machines: MachineRow[] = [
+interface ApprovalStep {
+  id: string;
+  title: string;
+  description: string;
+  date?: string;
+  state: StepState;
+}
+
+/* ============================================================
+   DUMMY QUOTATION DATA
+
+   NOTE:
+   This is intentionally kept as local static data for now.
+
+   When API integration is added later, only this data source
+   needs to be replaced/mapped with the API response.
+============================================================ */
+
+const quotationData: QuotationData = {
+  quotationNumber: "QR-2025-000124",
+
+  quotationType: "Equipment & Service",
+
+  numberOfSites: 2,
+
+  activeMachines: 12,
+
+  contractDuration: "12 Months",
+
+  sites: [
+    "Iron Valley Mine",
+    "Orion Mining Site",
+  ],
+
+  equipmentTypes: [
+    "Excavator",
+    "Loader",
+  ],
+
+  currentStatus: "in_review",
+
+  statusMessage:
+    "Your quotation request has been submitted successfully and is currently being reviewed by the admin.",
+};
+
+/* ============================================================
+   APPROVAL FLOW
+
+   Fixed business flow:
+
+   1. Received
+   2. In Progress
+   3. In Review
+   4. Accepted
+   5. Completed
+
+   Keep this structure stable for future API integration.
+============================================================ */
+
+const approvalSteps: ApprovalStep[] = [
   {
-    id: 1,
-    name: "Hydraulic Excavator EX-220",
-    assetId: "AST-1042",
-    quantity: 3,
-    requestedOn: "21 Aug 2026",
-    viewedOn: "21 Aug 2026",
-    status: "Under Review",
+    id: "received",
+    title: "Received",
+    description:
+      "Your quotation request has been received successfully.",
+    date: "22 Aug 2026",
+    state: "completed",
   },
+
   {
-    id: 2,
-    name: "Dump Truck DT-750",
-    assetId: "AST-1088",
-    quantity: 4,
-    requestedOn: "21 Aug 2026",
-    viewedOn: "21 Aug 2026",
-    status: "Under Review",
+    id: "in-progress",
+    title: "In Progress",
+    description:
+      "The quotation is being processed by the admin.",
+    date: "22 Aug 2026",
+    state: "completed",
   },
+
   {
-    id: 3,
-    name: "Wheel Loader WL-540",
-    assetId: "AST-1103",
-    quantity: 2,
-    requestedOn: "21 Aug 2026",
-    viewedOn: null,
-    status: "Pending",
+    id: "in-review",
+    title: "In Review",
+    description:
+      "The quotation is currently under review by the admin.",
+    date: "23 Aug 2026",
+    state: "current",
   },
+
   {
-    id: 4,
-    name: "Motor Grader MG-320",
-    assetId: "AST-1129",
-    quantity: 3,
-    requestedOn: "21 Aug 2026",
-    viewedOn: null,
-    status: "Pending",
+    id: "accepted",
+    title: "Accepted",
+    description:
+      "The quotation will move to this stage once it is approved.",
+    state: "pending",
+  },
+
+  {
+    id: "completed",
+    title: "Completed",
+    description:
+      "The quotation process will be completed after all required steps are finished.",
+    state: "pending",
   },
 ];
 
-interface ProgressStep {
-  id: number;
-  label: string;
-  timestamp: string | null;
-}
+/* ============================================================
+   STATUS CONFIGURATION
+============================================================ */
 
-const progressSteps: ProgressStep[] = [
-  { id: 1, label: "Request Submitted", timestamp: "21 Aug 2026, 10:30 AM" },
-  { id: 2, label: "Request Viewed", timestamp: "21 Aug 2026, 11:15 AM" },
-  { id: 3, label: "Under Review", timestamp: "21 Aug 2026, 11:20 AM" },
-  { id: 4, label: "Quotation Prepared", timestamp: null },
-  { id: 5, label: "Quotation Sent", timestamp: null },
-  { id: 6, label: "Decision", timestamp: null },
-];
-
-// Index (0-based) of the current active step
-const currentStepIndex = 2;
-
-interface TimelineEntry {
-  id: number;
-  date: string;
-  time: string;
-  user: string;
-  role: string;
-  action: string;
-  note?: string;
-}
-
-const activityTimeline: TimelineEntry[] = [
+const statusConfig: Record<
+  QuotationStatusType,
   {
-    id: 1,
-    date: "21 Aug 2026",
-    time: "10:30 AM",
-    user: "Rakesh Verma",
-    role: "Company Admin",
-    action: "Submitted a new quotation request",
+    label: string;
+    description: string;
+    className: string;
+    dotClassName: string;
+  }
+> = {
+  received: {
+    label: "Received",
+    description:
+      "Your quotation request has been received.",
+    className:
+      "bg-blue-50 text-blue-700 ring-blue-100",
+    dotClassName:
+      "bg-blue-500",
   },
-  {
-    id: 2,
-    date: "21 Aug 2026",
-    time: "11:15 AM",
-    user: "Ananya Sharma",
-    role: "Super Admin",
-    action: "Viewed the quotation request",
-  },
-  {
-    id: 3,
-    date: "21 Aug 2026",
-    time: "11:20 AM",
-    user: "Ananya Sharma",
-    role: "Super Admin",
-    action: "Started reviewing the request",
-    note: "Checking machine availability across sites.",
-  },
-];
 
-/* -------------------------------------------------------------------------- */
-/* STYLE HELPERS                                                              */
-/* -------------------------------------------------------------------------- */
+  in_progress: {
+    label: "In Progress",
+    description:
+      "Your quotation is currently being processed.",
+    className:
+      "bg-amber-50 text-amber-700 ring-amber-100",
+    dotClassName:
+      "bg-amber-500",
+  },
 
-const statusStyles: Record<string, string> = {
-  Pending: "bg-gray-100 text-gray-600",
-  Viewed: "bg-blue-50 text-blue-700",
-  "Under Review": "bg-amber-50 text-amber-700",
-  Rejected: "bg-red-50 text-red-700",
-  "Quotation Prepared": "bg-indigo-50 text-indigo-700",
-  "Quotation Sent": "bg-emerald-50 text-emerald-700",
+  in_review: {
+    label: "In Review",
+    description:
+      "Your quotation is currently under review by the admin.",
+    className:
+      "bg-amber-50 text-amber-700 ring-amber-100",
+    dotClassName:
+      "bg-amber-500",
+  },
+
+  accepted: {
+    label: "Accepted",
+    description:
+      "Your quotation has been accepted by the admin.",
+    className:
+      "bg-emerald-50 text-emerald-700 ring-emerald-100",
+    dotClassName:
+      "bg-emerald-500",
+  },
+
+  completed: {
+    label: "Completed",
+    description:
+      "Your quotation process has been completed successfully.",
+    className:
+      "bg-emerald-50 text-emerald-700 ring-emerald-100",
+    dotClassName:
+      "bg-emerald-500",
+  },
+
+  rejected: {
+    label: "Rejected",
+    description:
+      "Your quotation has been rejected by the admin.",
+    className:
+      "bg-red-50 text-red-700 ring-red-100",
+    dotClassName:
+      "bg-red-500",
+  },
 };
 
-const priorityStyles: Record<string, string> = {
-  Low: "bg-gray-100 text-gray-600",
-  Medium: "bg-blue-50 text-blue-700",
-  High: "bg-red-50 text-red-700",
-};
-
-/* -------------------------------------------------------------------------- */
-/* SMALL PRESENTATIONAL PIECES                                                */
-/* -------------------------------------------------------------------------- */
-
-const InfoItem: React.FC<{
-  icon: React.ElementType;
-  label: string;
-  value: React.ReactNode;
-}> = ({ icon: Icon, label, value }) => (
-  <div className="flex items-start gap-3">
-    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
-      <Icon size={16} strokeWidth={2} />
-    </div>
-    <div className="min-w-0">
-      <p className="text-xs font-medium uppercase tracking-wide text-gray-400">
-        {label}
-      </p>
-      <p className="mt-0.5 truncate text-sm font-semibold text-gray-900">
-        {value}
-      </p>
-    </div>
-  </div>
-);
-
-const StatusBadge: React.FC<{ status: string }> = ({ status }) => (
-  <span
-    className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
-      statusStyles[status] ?? "bg-gray-100 text-gray-600"
-    }`}
-  >
-    {status}
-  </span>
-);
-
-/* -------------------------------------------------------------------------- */
-/* MAIN COMPONENT                                                             */
-/* -------------------------------------------------------------------------- */
+/* ============================================================
+   MAIN COMPONENT
+============================================================ */
 
 const QuotationStatus: React.FC = () => {
+  const currentStatus =
+    statusConfig[quotationData.currentStatus];
+
   return (
-    <div className="space-y-6">
-      {/* A. REQUEST INFORMATION */}
-      <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-        <div className="mb-5 flex items-center justify-between">
-          <h2 className="text-base font-semibold text-gray-900">
-            Request Information
-          </h2>
-          <span
-            className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
-              priorityStyles[requestInfo.priority]
-            }`}
-          >
-            <Flag size={12} className="mr-1" />
-            {requestInfo.priority} Priority
-          </span>
-        </div>
+    <div className="w-full min-w-0">
+      <div className="space-y-5 sm:space-y-6">
 
-        <div className="grid grid-cols-1 gap-y-5 sm:grid-cols-2 lg:grid-cols-4">
-          <InfoItem icon={Hash} label="Request ID" value={requestInfo.requestId} />
-          <InfoItem icon={Building2} label="Company" value={requestInfo.company} />
-          <InfoItem icon={User} label="Requested By" value={requestInfo.requestedBy} />
-          <InfoItem
-            icon={Boxes}
-            label="No. of Machines"
-            value={requestInfo.machineCount}
-          />
-          <InfoItem
-            icon={Boxes}
-            label="Total Requested Qty"
-            value={requestInfo.totalQuantity}
-          />
-          <InfoItem
-            icon={CalendarClock}
-            label="Requested Date"
-            value={requestInfo.requestedDate}
-          />
-          <InfoItem
-            icon={CalendarClock}
-            label="Requested Time"
-            value={requestInfo.requestedTime}
-          />
-          <InfoItem
-            icon={Activity}
-            label="Current Status"
-            value={<StatusBadge status={requestInfo.currentStatus} />}
-          />
-        </div>
-      </section>
+        {/* ==================================================
+            QUOTATION STATUS SUMMARY
+        ================================================== */}
 
-      {/* B. MACHINE INFORMATION */}
-      <section className="rounded-xl border border-gray-200 bg-white shadow-sm">
-        <div className="border-b border-gray-100 px-6 py-4">
-          <h2 className="text-base font-semibold text-gray-900">
-            Machine Information
-          </h2>
-          <p className="mt-0.5 text-sm text-gray-500">
-            Machines / equipment included in this quotation request.
-          </p>
-        </div>
+        <section
+          aria-labelledby="quotation-status-heading"
+          className="rounded-2xl border border-slate-200 bg-white shadow-sm"
+        >
+          <div className="p-5 sm:p-6 lg:p-7">
 
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px] text-left text-sm">
-            <thead>
-              <tr className="border-b border-gray-100 bg-gray-50/60 text-xs uppercase tracking-wide text-gray-400">
-                <th className="px-6 py-3 font-medium">#</th>
-                <th className="px-6 py-3 font-medium">Machine / Equipment</th>
-                <th className="px-6 py-3 font-medium">Asset ID</th>
-                <th className="px-6 py-3 font-medium">Qty</th>
-                <th className="px-6 py-3 font-medium">Requested On</th>
-                <th className="px-6 py-3 font-medium">Viewed On</th>
-                <th className="px-6 py-3 font-medium">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {machines.map((m, idx) => (
-                <tr key={m.id} className="transition-colors hover:bg-blue-50/40">
-                  <td className="px-6 py-4 text-gray-500">{idx + 1}</td>
-                  <td className="px-6 py-4 font-medium text-gray-900">
-                    {m.name}
-                  </td>
-                  <td className="px-6 py-4 text-gray-500">{m.assetId}</td>
-                  <td className="px-6 py-4 text-gray-700">{m.quantity}</td>
-                  <td className="px-6 py-4 text-gray-500">{m.requestedOn}</td>
-                  <td className="px-6 py-4 text-gray-500">
-                    {m.viewedOn ?? (
-                      <span className="text-gray-300">—</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4">
-                    <StatusBadge status={m.status} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
 
-      {/* C. STATUS PROGRESS */}
-      <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-        <h2 className="mb-6 text-base font-semibold text-gray-900">
-          Status Progress
-        </h2>
+              {/* Quotation Information */}
 
-        <div className="relative">
-          {/* connecting line */}
-          <div className="absolute left-4 top-4 h-[calc(100%-2rem)] w-0.5 bg-gray-100 sm:left-0 sm:right-0 sm:top-4 sm:h-0.5 sm:w-full" />
+              <div className="min-w-0">
 
-          <div className="relative flex flex-col gap-8 sm:flex-row sm:justify-between sm:gap-4">
-            {progressSteps.map((step, idx) => {
-              const isDone = idx < currentStepIndex;
-              const isActive = idx === currentStepIndex;
+                <div className="flex items-center gap-2">
 
-              return (
-                <div
-                  key={step.id}
-                  className="relative flex flex-1 items-start gap-3 sm:flex-col sm:items-center sm:gap-2 sm:text-center"
-                >
-                  <div
-                    className={`z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 bg-white ${
-                      isDone
-                        ? "border-blue-600 text-blue-600"
-                        : isActive
-                        ? "border-blue-600 text-blue-600 ring-4 ring-blue-100"
-                        : "border-gray-200 text-gray-300"
-                    }`}
-                  >
-                    {isDone ? (
-                      <CheckCircle2 size={18} />
-                    ) : isActive ? (
-                      <Clock size={16} />
-                    ) : (
-                      <Circle size={14} />
-                    )}
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                    <FileText
+                      size={17}
+                      strokeWidth={2}
+                      aria-hidden="true"
+                    />
                   </div>
 
-                  <div className="sm:max-w-[110px]">
-                    <p
-                      className={`text-sm font-medium ${
-                        isDone || isActive ? "text-gray-900" : "text-gray-400"
-                      }`}
-                    >
-                      {step.label}
-                    </p>
-                    <p
-                      className={`mt-0.5 text-xs ${
-                        step.timestamp ? "text-gray-500" : "text-gray-300"
-                      }`}
-                    >
-                      {step.timestamp ?? "Pending"}
-                    </p>
-                  </div>
+                  <p className="text-sm font-semibold text-slate-500">
+                    Quotation Request
+                  </p>
+
                 </div>
-              );
-            })}
-          </div>
-        </div>
-      </section>
 
-      {/* D. ACTIVITY TIMELINE */}
-      <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-        <h2 className="mb-5 text-base font-semibold text-gray-900">
-          Activity Timeline
-        </h2>
+                <h1
+                  id="quotation-status-heading"
+                  className="mt-3 break-words text-xl font-bold tracking-tight text-slate-900 sm:text-2xl"
+                >
+                  {quotationData.quotationNumber}
+                </h1>
 
-        <ol className="space-y-6">
-          {activityTimeline.map((entry, idx) => (
-            <li key={entry.id} className="relative flex gap-4">
-              <div className="flex flex-col items-center">
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-600">
-                  <Activity size={14} />
-                </span>
-                {idx !== activityTimeline.length - 1 && (
-                  <span className="mt-1 w-px flex-1 bg-gray-100" />
-                )}
               </div>
 
-              <div className="flex-1 pb-1">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-sm font-medium text-gray-900">
-                    {entry.action}
-                  </p>
-                  <span className="text-xs text-gray-400">
-                    {entry.date} · {entry.time}
+              {/* Current Status */}
+
+              <div className="shrink-0">
+
+                <p className="mb-1.5 text-xs font-medium text-slate-400">
+                  Current Status
+                </p>
+
+                <div
+                  className={`inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-sm font-semibold ring-1 ${currentStatus.className}`}
+                >
+                  <span
+                    className={`h-2 w-2 shrink-0 rounded-full ${currentStatus.dotClassName}`}
+                    aria-hidden="true"
+                  />
+
+                  <span>
+                    {currentStatus.label}
                   </span>
                 </div>
-                <p className="mt-0.5 text-xs text-gray-500">
-                  {entry.user} ·{" "}
-                  <span className="text-gray-400">{entry.role}</span>
-                </p>
-                {entry.note && (
-                  <p className="mt-1.5 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600">
-                    {entry.note}
-                  </p>
-                )}
+
               </div>
-            </li>
-          ))}
-        </ol>
-      </section>
+
+            </div>
+
+            {/* Status Message */}
+
+            <div className="mt-5 border-t border-slate-100 pt-5">
+
+              <p className="max-w-3xl text-sm leading-6 text-slate-500">
+                {quotationData.statusMessage}
+              </p>
+
+            </div>
+
+          </div>
+        </section>
+
+        {/* ==================================================
+            QUOTATION INFORMATION
+        ================================================== */}
+
+        <section
+          aria-labelledby="quotation-information-heading"
+          className="rounded-2xl border border-slate-200 bg-white shadow-sm"
+        >
+
+          <div className="border-b border-slate-100 px-5 py-4 sm:px-6">
+
+            <h2
+              id="quotation-information-heading"
+              className="text-base font-bold text-slate-900"
+            >
+              Quotation Information
+            </h2>
+
+          </div>
+
+          <div className="px-5 py-5 sm:px-6 sm:py-6">
+
+            {/* Basic Information */}
+
+            <div className="grid grid-cols-1 gap-x-8 gap-y-6 sm:grid-cols-2 lg:grid-cols-4">
+
+              <InfoField
+                label="Quotation Type"
+                value={quotationData.quotationType}
+              />
+
+              <InfoField
+                label="Number of Sites"
+                value={quotationData.numberOfSites}
+              />
+
+              <InfoField
+                label="Active Machines"
+                value={quotationData.activeMachines}
+              />
+
+              <InfoField
+                label="Contract Duration"
+                value={quotationData.contractDuration}
+              />
+
+            </div>
+
+            {/* Sites */}
+
+            <div className="mt-7 border-t border-slate-100 pt-6">
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-[170px_minmax(0,1fr)] sm:gap-6">
+
+                <div className="flex items-center gap-2">
+
+                  <MapPin
+                    size={16}
+                    className="shrink-0 text-slate-400"
+                    aria-hidden="true"
+                  />
+
+                  <span className="text-sm font-medium text-slate-500">
+                    Sites
+                  </span>
+
+                </div>
+
+                <div className="min-w-0">
+
+                  {quotationData.sites.length > 0 ? (
+                    <div className="space-y-1.5">
+
+                      {quotationData.sites.map((site) => (
+                        <p
+                          key={site}
+                          className="break-words text-sm font-semibold text-slate-800"
+                        >
+                          {site}
+                        </p>
+                      ))}
+
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-400">
+                      No sites available
+                    </p>
+                  )}
+
+                </div>
+
+              </div>
+
+            </div>
+
+            {/* Equipment Types */}
+
+            <div className="mt-6 border-t border-slate-100 pt-6">
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-[170px_minmax(0,1fr)] sm:gap-6">
+
+                <div className="flex items-center gap-2">
+
+                  <FileText
+                    size={16}
+                    className="shrink-0 text-slate-400"
+                    aria-hidden="true"
+                  />
+
+                  <span className="text-sm font-medium text-slate-500">
+                    Equipment Types
+                  </span>
+
+                </div>
+
+                <p className="break-words text-sm font-semibold text-slate-800">
+                  {quotationData.equipmentTypes.length > 0
+                    ? quotationData.equipmentTypes.join(", ")
+                    : "No equipment types available"}
+                </p>
+
+              </div>
+
+            </div>
+
+          </div>
+
+        </section>
+
+        {/* ==================================================
+            APPROVAL STATUS
+        ================================================== */}
+
+        <section
+          aria-labelledby="approval-status-heading"
+          className="rounded-2xl border border-slate-200 bg-white shadow-sm"
+        >
+
+          {/* Section Header */}
+
+          <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-4 sm:px-6">
+
+            <div>
+
+              <h2
+                id="approval-status-heading"
+                className="text-base font-bold text-slate-900"
+              >
+                Approval Status
+              </h2>
+
+              <p className="mt-1 text-xs text-slate-400">
+                Track the progress of your quotation request.
+              </p>
+
+            </div>
+
+            <Clock3
+              size={17}
+              className="shrink-0 text-slate-400"
+              aria-hidden="true"
+            />
+
+          </div>
+
+          {/* Timeline */}
+
+          <div className="px-5 py-6 sm:px-6 sm:py-7 lg:px-8">
+
+            <div className="relative">
+
+              {approvalSteps.map((step, index) => (
+                <ApprovalTimelineItem
+                  key={step.id}
+                  step={step}
+                  isLast={
+                    index === approvalSteps.length - 1
+                  }
+                />
+              ))}
+
+            </div>
+
+          </div>
+
+        </section>
+
+      </div>
     </div>
   );
+};
+
+/* ============================================================
+   INFO FIELD
+============================================================ */
+
+interface InfoFieldProps {
+  label: string;
+  value: React.ReactNode;
+}
+
+const InfoField: React.FC<InfoFieldProps> = ({
+  label,
+  value,
+}) => {
+  return (
+    <div className="min-w-0">
+
+      <p className="text-xs font-medium text-slate-400">
+        {label}
+      </p>
+
+      <p className="mt-1.5 break-words text-sm font-semibold leading-5 text-slate-800">
+        {value}
+      </p>
+
+    </div>
+  );
+};
+
+/* ============================================================
+   APPROVAL TIMELINE ITEM
+============================================================ */
+
+interface ApprovalTimelineItemProps {
+  step: ApprovalStep;
+  isLast: boolean;
+}
+
+const ApprovalTimelineItem: React.FC<
+  ApprovalTimelineItemProps
+> = ({ step, isLast }) => {
+
+  const config = getStepConfig(step.state);
+
+  const Icon = config.icon;
+
+  return (
+    <div className="relative flex gap-4 sm:gap-5">
+
+      {/* ======================================================
+          CONNECTING LINE
+      ====================================================== */}
+
+      {!isLast && (
+        <div
+          aria-hidden="true"
+          className={`absolute left-[15px] top-8 h-[calc(100%-8px)] w-px ${config.lineClass}`}
+        />
+      )}
+
+      {/* ======================================================
+          STATUS ICON
+      ====================================================== */}
+
+      <div
+        className={`
+          relative z-10
+          flex h-8 w-8 shrink-0 items-center justify-center
+          rounded-full
+          ring-1
+          ${config.iconWrapperClass}
+        `}
+      >
+        <Icon
+          size={16}
+          strokeWidth={2.3}
+          aria-hidden="true"
+        />
+      </div>
+
+      {/* ======================================================
+          CONTENT
+      ====================================================== */}
+
+      <div
+        className={`
+          min-w-0 flex-1
+          ${isLast ? "" : "pb-7 sm:pb-8"}
+        `}
+      >
+
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-5">
+
+          <div className="min-w-0">
+
+            <h3
+              className={`break-words text-sm font-semibold ${config.titleClass}`}
+            >
+              {step.title}
+            </h3>
+
+            {step.date && (
+              <div className="mt-1.5 flex items-center gap-1.5">
+
+                <CalendarDays
+                  size={13}
+                  className="shrink-0 text-slate-400"
+                  aria-hidden="true"
+                />
+
+                <span className="text-xs text-slate-400">
+                  {step.date}
+                </span>
+
+              </div>
+            )}
+
+          </div>
+
+          {/* Status */}
+
+          <span
+            className={`
+              inline-flex
+              w-fit shrink-0
+              items-center
+              rounded-full
+              px-2.5 py-1
+              text-[11px]
+              font-semibold
+              ring-1
+              ${config.badgeClass}
+            `}
+          >
+            {config.badgeText}
+          </span>
+
+        </div>
+
+        <p className="mt-2 max-w-2xl text-xs leading-5 text-slate-500">
+          {step.description}
+        </p>
+
+      </div>
+
+    </div>
+  );
+};
+
+/* ============================================================
+   STEP CONFIGURATION
+============================================================ */
+
+const getStepConfig = (
+  state: StepState,
+) => {
+
+  switch (state) {
+
+    case "completed":
+      return {
+        icon: CheckCircle2,
+        iconWrapperClass:
+          "bg-emerald-50 text-emerald-600 ring-emerald-100",
+        titleClass:
+          "text-slate-800",
+        badgeClass:
+          "bg-emerald-50 text-emerald-700 ring-emerald-100",
+        badgeText:
+          "Completed",
+        lineClass:
+          "bg-emerald-200",
+      };
+
+    case "current":
+      return {
+        icon: Clock3,
+        iconWrapperClass:
+          "bg-blue-50 text-blue-600 ring-blue-100",
+        titleClass:
+          "text-slate-900",
+        badgeClass:
+          "bg-blue-50 text-blue-700 ring-blue-100",
+        badgeText:
+          "In Progress",
+        lineClass:
+          "bg-slate-200",
+      };
+
+    case "rejected":
+      return {
+        icon: XCircle,
+        iconWrapperClass:
+          "bg-red-50 text-red-600 ring-red-100",
+        titleClass:
+          "text-red-700",
+        badgeClass:
+          "bg-red-50 text-red-700 ring-red-100",
+        badgeText:
+          "Rejected",
+        lineClass:
+          "bg-red-200",
+      };
+
+    case "pending":
+    default:
+      return {
+        icon: Check,
+        iconWrapperClass:
+          "bg-slate-50 text-slate-400 ring-slate-200",
+        titleClass:
+          "text-slate-500",
+        badgeClass:
+          "bg-slate-50 text-slate-500 ring-slate-200",
+        badgeText:
+          "Pending",
+        lineClass:
+          "bg-slate-200",
+      };
+  }
 };
 
 export default QuotationStatus;

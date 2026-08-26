@@ -58,8 +58,6 @@ type Company = {
   role: string;
 };
 
-
-
 type EditCompanyFormValues = z.infer<typeof editCompanySchema>; // output (staffCount: number)
 type EditCompanyFormInput = z.input<typeof editCompanySchema>; // input (staffCount: unknown/string)
 
@@ -380,25 +378,21 @@ export default function CompanyAdminsPage() {
     try {
       setIsSavingEdit(true);
 
-      await superAdminMachineService.updateCompany(
-        targetUserId,
-        {
-          companyName: values.name,
-          companyCode: values.code,
-          adminName: values.adminName,
-          adminEmail: values.adminEmail,
-          staffCount: values.staffCount,
-          activePlan: values.activePlan,
-          status: values.status,
-        },
-      );
+      await superAdminMachineService.updateCompany(targetUserId, {
+        companyName: values.name,
+        companyCode: values.code,
+        adminName: values.adminName,
+        adminEmail: values.adminEmail,
+        staffCount: values.staffCount,
+        activePlan: values.activePlan,
+        status: values.status,
+      });
 
-setIsEditModalOpen(false);
-setEditCompany(null);
-resetEditForm();
+      setIsEditModalOpen(false);
+      setEditCompany(null);
+      resetEditForm();
 
-await fetchCompanyAdmins();
-
+      await fetchCompanyAdmins();
     } catch (error: any) {
       console.error("Update failed:", error);
       showErrorToast(error?.message || "Failed to update company");
@@ -480,7 +474,7 @@ await fetchCompanyAdmins();
       );
     } catch (error: any) {
       console.error("Status toggle failed:", error);
-      // Revert optimistic update on failure
+      
       setCompanies(previousCompanies);
       showErrorToast(error?.message || "Failed to update company status");
     } finally {
@@ -896,164 +890,164 @@ await fetchCompanyAdmins();
                           {serialNumber}
                         </td>
                         <td className="px-6 py-4 align-middle">
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-slate-100 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
-                            {getInitials(company.name)}
-                          </div>
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-slate-100 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                              {getInitials(company.name)}
+                            </div>
 
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-semibold text-slate-950 dark:text-white">
+                                {company.name}
+                              </p>
+                              <p className="mt-1 flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                                <Shield className="h-3.5 w-3.5 text-blue-500" />
+                                {company.code}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+
+                        <td className="px-6 py-4 align-middle">
                           <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold text-slate-950 dark:text-white">
-                              {company.name}
+                            <p className="truncate text-sm font-medium text-slate-900 dark:text-white">
+                              {company.admin.name}
                             </p>
                             <p className="mt-1 flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-                              <Shield className="h-3.5 w-3.5 text-blue-500" />
-                              {company.code}
+                              <Mail className="h-3.5 w-3.5" />
+                              {company.admin.email}
+                            </p>
+                            <p className="mt-1 text-xs font-medium text-blue-600 dark:text-blue-400">
+                              {formatRoleLabel(company.role)}
                             </p>
                           </div>
-                        </div>
-                      </td>
+                        </td>
 
-                      <td className="px-6 py-4 align-middle">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-slate-900 dark:text-white">
-                            {company.admin.name}
+                        <td className="px-6 py-4 align-middle text-center">
+                          <p className="text-sm font-semibold text-slate-950 dark:text-white">
+                            {company.staff_count}
                           </p>
-                          <p className="mt-1 flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-                            <Mail className="h-3.5 w-3.5" />
-                            {company.admin.email}
+                          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                            Members
                           </p>
-                          <p className="mt-1 text-xs font-medium text-blue-600 dark:text-blue-400">
-                            {formatRoleLabel(company.role)}
-                          </p>
-                        </div>
-                      </td>
+                        </td>
 
-                      <td className="px-6 py-4 align-middle text-center">
-                        <p className="text-sm font-semibold text-slate-950 dark:text-white">
-                          {company.staff_count}
-                        </p>
-                        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                          Members
-                        </p>
-                      </td>
-
-                      <td className="px-6 py-4 align-middle">
-                        <span
-                          className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium ${getPlanBadgeClass(company.active_plan)}`}
-                        >
+                        <td className="px-6 py-4 align-middle">
                           <span
-                            className={`h-2 w-2 rounded-full ${getPlanDotClass(company.active_plan)}`}
-                          />
-                          {company.active_plan}
-                        </span>
-                      </td>
-
-                      <td className="px-6 py-4 align-middle">
-                        <div
-                          onClick={(event) => event.stopPropagation()}
-                          className="flex items-center gap-2"
-                        >
-                          <label
-                            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
-                              company.status === "Active"
-                                ? "bg-emerald-500"
-                                : "bg-slate-300 dark:bg-slate-700"
-                            } ${
-                              togglingStatusId === company.id
-                                ? "cursor-not-allowed opacity-60"
-                                : "cursor-pointer"
-                            }`}
-                            title={
-                              company.status === "Active"
-                                ? "Click to mark Inactive"
-                                : "Click to mark Active"
-                            }
+                            className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium ${getPlanBadgeClass(company.active_plan)}`}
                           >
-                            <input
-                              type="checkbox"
-                              className="peer sr-only"
-                              checked={company.status === "Active"}
-                              disabled={togglingStatusId === company.id}
-                              onChange={() => handleToggleStatus(company)}
-                            />
                             <span
-                              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-                                company.status === "Active"
-                                  ? "translate-x-6"
-                                  : "translate-x-1"
-                              }`}
+                              className={`h-2 w-2 rounded-full ${getPlanDotClass(company.active_plan)}`}
                             />
-                          </label>
-
-                          <span
-                            className={`text-xs font-medium ${
-                              company.status === "Active"
-                                ? "text-emerald-700 dark:text-emerald-300"
-                                : company.status === "Expiring Soon"
-                                  ? "text-amber-700 dark:text-amber-300"
-                                  : "text-red-700 dark:text-red-300"
-                            }`}
-                          >
-                            {company.status}
+                            {company.active_plan}
                           </span>
+                        </td>
 
-                          {togglingStatusId === company.id && (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />
-                          )}
+                        <td className="px-6 py-4 align-middle">
+                          <div
+                            onClick={(event) => event.stopPropagation()}
+                            className="flex items-center gap-2"
+                          >
+                            <label
+                              className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+                                company.status === "Active"
+                                  ? "bg-emerald-500"
+                                  : "bg-slate-300 dark:bg-slate-700"
+                              } ${
+                                togglingStatusId === company.id
+                                  ? "cursor-not-allowed opacity-60"
+                                  : "cursor-pointer"
+                              }`}
+                              title={
+                                company.status === "Active"
+                                  ? "Click to mark Inactive"
+                                  : "Click to mark Active"
+                              }
+                            >
+                              <input
+                                type="checkbox"
+                                className="peer sr-only"
+                                checked={company.status === "Active"}
+                                disabled={togglingStatusId === company.id}
+                                onChange={() => handleToggleStatus(company)}
+                              />
+                              <span
+                                className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                                  company.status === "Active"
+                                    ? "translate-x-6"
+                                    : "translate-x-1"
+                                }`}
+                              />
+                            </label>
+
+                            <span
+                              className={`text-xs font-medium ${
+                                company.status === "Active"
+                                  ? "text-emerald-700 dark:text-emerald-300"
+                                  : company.status === "Expiring Soon"
+                                    ? "text-amber-700 dark:text-amber-300"
+                                    : "text-red-700 dark:text-red-300"
+                              }`}
+                            >
+                              {company.status}
+                            </span>
+
+                            {togglingStatusId === company.id && (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />
+                            )}
+                          </div>
+                        </td>
+
+                        <td className="px-6 py-4 align-middle text-right">
+                          <div
+                            className="flex items-center justify-end gap-2"
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            <button
+                              onClick={() => handleEditCompany(company)}
+                              title="Edit company"
+                              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-amber-200 bg-amber-50 text-amber-600 transition hover:bg-amber-100 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300 dark:hover:bg-amber-500/20"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </button>
+
+                            <button
+                              onClick={() => setDeleteCompany(company)}
+                              title="Delete company"
+                              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 transition hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300 dark:hover:bg-red-500/20"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan={7} className="px-6 py-16 text-center">
+                      <div className="mx-auto flex max-w-sm flex-col items-center">
+                        <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-slate-100 text-slate-400 dark:bg-slate-800">
+                          <Search className="h-5 w-5" />
                         </div>
-                      </td>
 
-                      <td className="px-6 py-4 align-middle text-right">
-                        <div
-                          className="flex items-center justify-end gap-2"
-                          onClick={(event) => event.stopPropagation()}
+                        <h3 className="text-base font-semibold text-slate-950 dark:text-white">
+                          No records found
+                        </h3>
+                        <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
+                          No company administrator records match your current
+                          search or filter selection.
+                        </p>
+
+                        <button
+                          onClick={resetFilters}
+                          className="mt-4 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-800"
                         >
-                          <button
-                            onClick={() => handleEditCompany(company)}
-                            title="Edit company"
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-amber-200 bg-amber-50 text-amber-600 transition hover:bg-amber-100 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300 dark:hover:bg-amber-500/20"
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </button>
-
-                          <button
-                            onClick={() => setDeleteCompany(company)}
-                            title="Delete company"
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 transition hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300 dark:hover:bg-red-500/20"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              ) : (
-                <tr>
-                  <td colSpan={7} className="px-6 py-16 text-center">
-                    <div className="mx-auto flex max-w-sm flex-col items-center">
-                      <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-slate-100 text-slate-400 dark:bg-slate-800">
-                        <Search className="h-5 w-5" />
+                          Clear Filters
+                        </button>
                       </div>
-
-                      <h3 className="text-base font-semibold text-slate-950 dark:text-white">
-                        No records found
-                      </h3>
-                      <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
-                        No company administrator records match your current
-                        search or filter selection.
-                      </p>
-
-                      <button
-                        onClick={resetFilters}
-                        className="mt-4 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-800"
-                      >
-                        Clear Filters
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              )}
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           )}
