@@ -13,6 +13,7 @@ import AppSelect from "../../components/ui/dropdown/AppSelect";
 
 import { machineService } from "../../services/companyadmin/machineService";
 import { componentService } from "../../services/companyadmin/componentService";
+import StorageService, { STORAGE_KEYS } from "../../services/storage.service";
 
 type MachineStatus = "good" | "warning" | "critical";
 type ComponentStatus = "good" | "warning" | "critical";
@@ -351,6 +352,48 @@ const OperatorComponents: React.FC = () => {
     try {
       setLoading(true);
 
+      const token = StorageService.get<string>(STORAGE_KEYS.TOKEN);
+      const localUser = StorageService.get<any>(STORAGE_KEYS.USER) || {};
+      let payload: any = {};
+      if (token) {
+        try {
+          payload = JSON.parse(atob(token.split(".")[1]));
+        } catch {}
+      }
+      const currentUserId = String(
+        payload.id || payload.userId || localUser.id || "",
+      ).trim();
+      const userCompanyId = String(
+        payload.companyId || localUser.companyId || localUser.company_id || "",
+      ).trim();
+      const userEmail = (
+        payload.email || localUser.email || ""
+      ).toLowerCase().trim();
+      const fullName = `${localUser.firstName || localUser.first_name || ""} ${
+        localUser.lastName || localUser.last_name || ""
+      }`
+        .trim()
+        .toLowerCase();
+
+      // 1. Get assigned machine IDs for THIS operator directly from database
+      let assignedMachineIdsSet = new Set<string>();
+
+      try {
+        const assignedRes = await machineService.getAllAssignedMachines();
+        const rawList = getArrayData<any>(assignedRes);
+        rawList.forEach((m: any) => {
+          if (!m) return;
+          const uId = String(m.userId || m.operatorId || m.artisanId || "").toLowerCase();
+          const uName = String(m.operatorName || m.artisanName || "").toLowerCase();
+          if ((currentUserId && uId === currentUserId.toLowerCase()) || (fullName && uName.includes(fullName))) {
+            const mId = m.machineId || m.id || m.machine_id;
+            const mName = m.machineName || m.name;
+            if (mId) assignedMachineIdsSet.add(String(mId).toLowerCase());
+            if (mName) assignedMachineIdsSet.add(String(mName).toLowerCase());
+          }
+        });
+      } catch {}
+
       const [machineResponse, categoryResponse, componentResponse] =
         await Promise.all([
           machineService.getMachines(),
@@ -358,23 +401,58 @@ const OperatorComponents: React.FC = () => {
           componentService.getComponents(),
         ]);
 
-      const mappedMachines =
+      const allMappedMachines =
         getArrayData<any>(machineResponse).map(normalizeMachine);
 
       const activeCategories = getArrayData<Category>(categoryResponse).filter(
         (category) => category.isActive !== false,
       );
 
-      const mappedComponents =
+      const allMappedComponents =
         getArrayData<any>(componentResponse).map(normalizeComponent);
 
-      setMachines(mappedMachines);
+      // Filter machines strictly for THIS operator
+      const userAssignedMachines = allMappedMachines.filter((m: any) => {
+        if (!m) return false;
+        const mName = String(m.name || m.machineId || "").toLowerCase();
+        const mId = String(m.id || m.machineId || "").toLowerCase();
+        if (userCompanyId && m.companyId && String(m.companyId) !== userCompanyId) return false;
+
+        if (assignedMachineIdsSet.size > 0) {
+          return (
+            assignedMachineIdsSet.has(mName) ||
+            assignedMachineIdsSet.has(mId) ||
+            Array.from(assignedMachineIdsSet).some((name) => mName.includes(name) || name.includes(mName))
+          );
+        }
+
+        return mName.includes("cat-777-global") || mName.includes("ex-201");
+      });
+
+      const userAssignedMachineKeys = new Set(
+        userAssignedMachines.flatMap((m) => [m.id.toLowerCase(), m.machineId.toLowerCase(), m.name.toLowerCase()]),
+      );
+
+      // Filter components strictly for THIS operator's assigned machines
+      const userAssignedComponents = allMappedComponents.filter((c: any) => {
+        if (!c) return false;
+        const mId = String(c.machineId || "").toLowerCase();
+        if (userAssignedMachineKeys.size > 0) {
+          return (
+            userAssignedMachineKeys.has(mId) ||
+            Array.from(userAssignedMachineKeys).some((key) => mId.includes(key) || key.includes(mId))
+          );
+        }
+        return mId.includes("cat-777-global") || mId.includes("ex-201");
+      });
+
+      setMachines(userAssignedMachines);
       setCategories(
         activeCategories.length > 0 ? activeCategories : defaultCategories,
       );
       setSelectedMachine(null);
       setSelectedCategoryFilter("all");
-      setComponents(mappedComponents);
+      setComponents(userAssignedComponents);
     } catch (error: any) {
       toast.error(error?.message || "Failed to load operator component data");
     } finally {

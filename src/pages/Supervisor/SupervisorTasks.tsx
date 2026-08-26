@@ -104,6 +104,7 @@ export default function SupervisorTaskPage() {
   const [operators, setOperators] = useState<DynamicOperator[]>([]);
   const [engineers, setEngineers] = useState<DynamicEngineer[]>([]);
   const [machines, setMachines] = useState<DynamicMachine[]>([]);
+  const [catalogMachines, setCatalogMachines] = useState<DynamicMachine[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -121,6 +122,10 @@ export default function SupervisorTaskPage() {
   const [selectedEngineer, setSelectedEngineer] = useState("");
   const [selectedShift, setSelectedShift] = useState<ShiftType>("Morning");
   const [editingOperatorId, setEditingOperatorId] = useState<string | null>(null);
+
+  // Category & Brand Cascading Filter for Task Assignment Modal
+  const [modalCategory, setModalCategory] = useState<string>("ALL");
+  const [modalBrand, setModalBrand] = useState<string>("ALL");
 
   const [formErrors, setFormErrors] = useState<FormErrors>({});
 
@@ -146,6 +151,7 @@ const artisanAssigning = useSelector(
       setOperators(data.operators);
       setEngineers(data.engineers);
       setMachines(data.machines);
+      setCatalogMachines(data.catalogMachines || []);
     } catch (err: any) {
       console.error("Failed to load supervisor tasks:", err);
       showErrorToast(err?.message || "Failed to load task assignments");
@@ -163,10 +169,11 @@ const artisanAssigning = useSelector(
   const [operatorFilter, setOperatorFilter] = useState<string>("All");
 
   const operatorFilterOptions = useMemo(() => {
+    const assignedOps = operators.filter((op) => Boolean(op.assignedMachine || op.assignedMachineId));
     return [
-      { label: "All Fleet Operators", value: "All" },
-      ...operators.map((op) => ({
-        label: `${op.name} (${op.assignedMachine ? `Machine: ${op.assignedMachine}` : "Unassigned"})`,
+      { label: "All Assigned Operators", value: "All" },
+      ...assignedOps.map((op) => ({
+        label: `${op.name} (${op.assignedMachine || "Assigned"})`,
         value: op.userId || op.id,
       })),
     ];
@@ -176,6 +183,10 @@ const artisanAssigning = useSelector(
     const value = search.toLowerCase().trim();
 
     return operators.filter((operator) => {
+      // Only show operators after they are assigned to a machine
+      const isAssigned = Boolean(operator.assignedMachine || operator.assignedMachineId);
+      if (!isAssigned) return false;
+
       const matchesSearch =
         value.length === 0 ||
         operator.name.toLowerCase().includes(value) ||
@@ -217,8 +228,59 @@ const artisanAssigning = useSelector(
     );
   }, [operators, editingOperatorId]);
 
+  const modalSourceMachines = useMemo(
+    () => (catalogMachines.length > 0 ? catalogMachines : machines),
+    [catalogMachines, machines]
+  );
+
+  // Distinct Categories for Task Assignment Modal
+  const modalCategoryOptions = useMemo(() => {
+    const map = new Map<string, number>();
+    modalSourceMachines.forEach((m) => {
+      const cat = m.category || "General";
+      map.set(cat, (map.get(cat) || 0) + 1);
+    });
+    const list = Array.from(map.entries()).map(([name, count]) => ({
+      label: `🚜 ${name} (${count})`,
+      value: name,
+    }));
+    list.sort((a, b) => a.label.localeCompare(b.label));
+    return [{ label: `🌐 All Categories (${modalSourceMachines.length})`, value: "ALL" }, ...list];
+  }, [modalSourceMachines]);
+
+  // Distinct Brands for Task Assignment Modal
+  const modalBrandOptions = useMemo(() => {
+    let source = modalSourceMachines;
+    if (modalCategory !== "ALL") {
+      source = modalSourceMachines.filter(
+        (m) => (m.category || "").toLowerCase() === modalCategory.toLowerCase()
+      );
+    }
+    const map = new Map<string, number>();
+    source.forEach((m) => {
+      const b = m.brand || "Caterpillar";
+      map.set(b, (map.get(b) || 0) + 1);
+    });
+    const list = Array.from(map.entries()).map(([name, count]) => ({
+      label: `🏷️ ${name} (${count})`,
+      value: name,
+    }));
+    list.sort((a, b) => a.label.localeCompare(b.label));
+    return [{ label: `🏷️ All Brands (${source.length})`, value: "ALL" }, ...list];
+  }, [modalSourceMachines, modalCategory]);
+
   const availableMachines = useMemo(() => {
-    return machines.filter((machine) => {
+    return modalSourceMachines.filter((machine) => {
+      const matchesCat =
+        modalCategory === "ALL" ||
+        (machine.category || "").toLowerCase() === modalCategory.toLowerCase();
+
+      const matchesBrand =
+        modalBrand === "ALL" ||
+        (machine.brand || "").toLowerCase() === modalBrand.toLowerCase();
+
+      if (!matchesCat || !matchesBrand) return false;
+
       if (editingOperatorId) {
         return (
           machine.machineName === selectedMachine ||
@@ -237,7 +299,7 @@ const artisanAssigning = useSelector(
           op.assignedMachineId === machine.id
       );
     });
-  }, [machines, operators, editingOperatorId, selectedMachine]);
+  }, [modalSourceMachines, operators, editingOperatorId, selectedMachine, modalCategory, modalBrand]);
 
   const operatorOptions = useMemo(
     () =>
@@ -251,7 +313,7 @@ const artisanAssigning = useSelector(
   const machineOptions = useMemo(
     () =>
       availableMachines.map((machine) => ({
-        label: machine.machineName,
+        label: `${machine.brand ? `[${machine.brand}] ` : ""}${machine.machineName}${machine.serialNumber ? ` (${machine.serialNumber})` : ""}`,
         value: machine.id,
       })),
     [availableMachines]
@@ -266,18 +328,60 @@ const artisanAssigning = useSelector(
     [engineers]
   );
 
+  type TaskSortField = "operator" | "contact" | "machine" | "shift" | "assignment";
+  const [sortField, setSortField] = useState<TaskSortField>("operator");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+
+  const handleSort = (field: TaskSortField) => {
+    if (sortField === field) {
+      setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortOrder("asc");
+    }
+  };
+
+  const sortedOperators = useMemo(() => {
+    const list = [...filteredOperators];
+    return list.sort((a, b) => {
+      let valA: any = "";
+      let valB: any = "";
+
+      if (sortField === "operator") {
+        valA = (a.name || "").toLowerCase();
+        valB = (b.name || "").toLowerCase();
+      } else if (sortField === "contact") {
+        valA = (a.email || a.phone || "").toLowerCase();
+        valB = (b.email || b.phone || "").toLowerCase();
+      } else if (sortField === "machine") {
+        valA = (a.assignedMachine || "").toLowerCase();
+        valB = (b.assignedMachine || "").toLowerCase();
+      } else if (sortField === "shift") {
+        valA = (a.shift || "").toLowerCase();
+        valB = (b.shift || "").toLowerCase();
+      } else if (sortField === "assignment") {
+        valA = a.assignedMachine ? 1 : 0;
+        valB = b.assignedMachine ? 1 : 0;
+      }
+
+      if (valA < valB) return sortOrder === "asc" ? -1 : 1;
+      if (valA > valB) return sortOrder === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [filteredOperators, sortField, sortOrder]);
+
   // Pagination calculation
-  const effectivePageSize = itemsPerPage === "all" ? filteredOperators.length || 1 : itemsPerPage;
-  const totalPages = Math.max(1, Math.ceil(filteredOperators.length / effectivePageSize));
+  const effectivePageSize = itemsPerPage === "all" ? sortedOperators.length || 1 : itemsPerPage;
+  const totalPages = Math.max(1, Math.ceil(sortedOperators.length / effectivePageSize));
 
   const startIndex = (currentPage - 1) * effectivePageSize;
   const paginatedOperators = useMemo(() => {
-    if (itemsPerPage === "all") return filteredOperators;
-    return filteredOperators.slice(startIndex, startIndex + effectivePageSize);
-  }, [filteredOperators, startIndex, effectivePageSize, itemsPerPage]);
+    if (itemsPerPage === "all") return sortedOperators;
+    return sortedOperators.slice(startIndex, startIndex + effectivePageSize);
+  }, [sortedOperators, startIndex, effectivePageSize, itemsPerPage]);
 
-  const startItem = filteredOperators.length === 0 ? 0 : startIndex + 1;
-  const endItem = Math.min(startIndex + effectivePageSize, filteredOperators.length);
+  const startItem = sortedOperators.length === 0 ? 0 : startIndex + 1;
+  const endItem = Math.min(startIndex + effectivePageSize, sortedOperators.length);
 
   const openCreateModal = () => {
     setEditingOperatorId(null);
@@ -285,6 +389,8 @@ const artisanAssigning = useSelector(
     setSelectedMachine("");
     setSelectedEngineer("");
     setSelectedShift("Morning");
+    setModalCategory("ALL");
+    setModalBrand("ALL");
     setFormErrors({});
     setIsModalOpen(true);
   };
@@ -293,6 +399,8 @@ const artisanAssigning = useSelector(
     const targetUserId = operator.userId || operator.id;
     setEditingOperatorId(targetUserId);
     setSelectedOperatorId(targetUserId);
+    setModalCategory("ALL");
+    setModalBrand("ALL");
 
     // Find machine ID if available
     const matchedMachine = machines.find(
@@ -650,7 +758,7 @@ const handleUnassignTask = async (targetOpId: string) => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {/* Total Operators */}
         <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm transition-all hover:shadow-md dark:border-slate-800 dark:bg-slate-900">
           <div className="flex items-center justify-between">
@@ -734,27 +842,6 @@ const handleUnassignTask = async (targetOpId: string) => {
             </div>
           </div>
         </div>
-
-        {/* Dedicated Unassigned Machines Card */}
-        <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm transition-all hover:shadow-md dark:border-slate-800 dark:bg-slate-900">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
-                Unassigned Machines
-              </p>
-              <h2 className="mt-2 text-3xl font-black text-orange-500 dark:text-orange-400">
-                {loading ? (
-                  <Loader2 className="h-7 w-7 animate-spin text-orange-400" />
-                ) : (
-                  Math.max(0, machines.length - assignedOperators)
-                )}
-              </h2>
-            </div>
-            <div className="rounded-2xl bg-orange-100 p-4 text-orange-500 dark:bg-orange-950/50 dark:text-orange-400">
-              <Cpu className="h-6 w-6" />
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* Main Table Card */}
@@ -763,20 +850,35 @@ const handleUnassignTask = async (targetOpId: string) => {
           <table className="w-full min-w-[1150px] text-sm">
             <thead className="sticky top-0 z-20 border-b border-slate-200 bg-slate-100/90 backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
               <tr>
-                <th className="px-6 py-3.5 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Operator
+                <th
+                  className="px-6 py-3.5 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 cursor-pointer select-none transition hover:text-blue-600 dark:hover:text-blue-400"
+                  onClick={() => handleSort("operator")}
+                >
+                  Operator {sortField === "operator" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
                 </th>
-                <th className="px-6 py-3.5 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Contact
+                <th
+                  className="px-6 py-3.5 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 cursor-pointer select-none transition hover:text-blue-600 dark:hover:text-blue-400"
+                  onClick={() => handleSort("contact")}
+                >
+                  Contact {sortField === "contact" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
                 </th>
-                <th className="px-6 py-3.5 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Machine
+                <th
+                  className="px-6 py-3.5 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 cursor-pointer select-none transition hover:text-blue-600 dark:hover:text-blue-400"
+                  onClick={() => handleSort("machine")}
+                >
+                  Machine {sortField === "machine" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
                 </th>
-                <th className="px-6 py-3.5 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Shift
+                <th
+                  className="px-6 py-3.5 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 cursor-pointer select-none transition hover:text-blue-600 dark:hover:text-blue-400"
+                  onClick={() => handleSort("shift")}
+                >
+                  Shift {sortField === "shift" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
                 </th>
-                <th className="px-6 py-3.5 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Assignment
+                <th
+                  className="px-6 py-3.5 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 cursor-pointer select-none transition hover:text-blue-600 dark:hover:text-blue-400"
+                  onClick={() => handleSort("assignment")}
+                >
+                  Assignment {sortField === "assignment" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
                 </th>
                 <th className="px-6 py-3.5 text-center text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                   Actions
@@ -804,12 +906,12 @@ const handleUnassignTask = async (targetOpId: string) => {
                         <Layers className="h-7 w-7" />
                       </div>
                       <h4 className="text-base font-semibold text-slate-800 dark:text-slate-200">
-                        {search ? "No matching operators found" : "No operators found"}
+                        {search ? "No matching assigned operators found" : "No assigned operators"}
                       </h4>
                       <p className="max-w-sm text-xs text-slate-500 dark:text-slate-400">
                         {search
                           ? "Try adjusting your search criteria or clear the search input."
-                          : "Operators created under your company will appear here for task assignment."}
+                          : "Operators will appear here once they are assigned to a machine via \"+ Task\"."}
                       </p>
                     </div>
                   </td>
@@ -1052,34 +1154,7 @@ const handleUnassignTask = async (targetOpId: string) => {
                     </div>
                   </div>
 
-                  {/* Assignment Info */}
-                  <div className="rounded-[22px] border border-slate-200 p-5 dark:border-slate-800">
-                    <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                      Assignment Metadata
-                    </p>
-                    <div className="mt-3 space-y-2 text-xs">
-                      <p className="text-slate-600 dark:text-slate-300">
-                        <span className="font-semibold text-slate-900 dark:text-white">
-                          Shift:{" "}
-                        </span>
-                        {selectedOperator.shift}
-                      </p>
-                      <p className="text-slate-600 dark:text-slate-300">
-                        <span className="font-semibold text-slate-900 dark:text-white">
-                          Assigned Date:{" "}
-                        </span>
-                        {selectedOperator.assignedAt || "Recently Assigned"}
-                      </p>
-                      {selectedOperator.supervisorName && (
-                        <p className="text-slate-600 dark:text-slate-300">
-                          <span className="font-semibold text-slate-900 dark:text-white">
-                            Supervisor:{" "}
-                          </span>
-                          {selectedOperator.supervisorName}
-                        </p>
-                      )}
-                    </div>
-                  </div>
+
 
                   <div className="mt-4 flex justify-end md:col-span-2">
                     <button
@@ -1118,7 +1193,7 @@ const handleUnassignTask = async (targetOpId: string) => {
               </button>
             </div>
 
-            <div className="grid gap-5 md:grid-cols-2">
+            <div className="space-y-4">
               {/* Operator Dropdown */}
               <div>
                 <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
@@ -1145,18 +1220,59 @@ const handleUnassignTask = async (targetOpId: string) => {
                 </div>
               </div>
 
+              {/* 2-Column Category & Brand Filters */}
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 rounded-2xl border border-blue-100 bg-blue-50/40 p-3.5 dark:border-slate-800 dark:bg-[#0c1626]">
+                <div>
+                  <label className="mb-1.5 block text-[11px] font-black uppercase tracking-wider text-blue-600 dark:text-blue-400">
+                    Step 1: Filter Category ({modalCategoryOptions.length - 1}):
+                  </label>
+                  <AppSelect
+                    value={modalCategory}
+                    options={modalCategoryOptions}
+                    placeholder="All Categories"
+                    searchable
+                    onChange={(value) => {
+                      setModalCategory(value);
+                      setModalBrand("ALL");
+                      setSelectedMachine("");
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-[11px] font-black uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+                    Step 2: Filter Brand ({modalBrandOptions.length - 1}):
+                  </label>
+                  <AppSelect
+                    value={modalBrand}
+                    options={modalBrandOptions}
+                    placeholder="All Brands"
+                    searchable
+                    onChange={(value) => {
+                      setModalBrand(value);
+                      setSelectedMachine("");
+                    }}
+                  />
+                </div>
+              </div>
+
               {/* Machine Dropdown */}
               <div>
-                <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                  Select Machine <span className="text-red-500">*</span>
-                </label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                    Step 3: Select Machine <span className="text-red-500">*</span>
+                  </label>
+                  <span className="text-[11px] font-bold text-blue-600 dark:text-blue-400">
+                    {availableMachines.length} machines available
+                  </span>
+                </div>
                 <AppSelect
                   value={selectedMachine}
                   options={machineOptions}
                   placeholder={
                     machineOptions.length > 0
-                      ? "Choose Machine"
-                      : "No machines available"
+                      ? "Choose Machine (Search by model or serial...)"
+                      : "No machines found in this category/brand"
                   }
                   searchable
                   onChange={(value) => updateField("machine", value)}
@@ -1169,7 +1285,6 @@ const handleUnassignTask = async (targetOpId: string) => {
                   )}
                 </div>
               </div>
-
             </div>
 
             {/* Modal Actions */}

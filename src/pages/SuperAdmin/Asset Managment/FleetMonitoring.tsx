@@ -450,6 +450,83 @@ function getHealthStatus(score: number): HealthStatus {
   return "CRITICAL";
 }
 
+function CircularHealthBadge({ percent }: { percent: number }) {
+  const safePercent = Math.max(0, Math.min(100, Math.round(Number(percent) || 0)));
+  const radius = 13;
+  const strokeWidth = 3;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circumference - (safePercent / 100) * circumference;
+
+  const colorConfig =
+    safePercent >= 80
+      ? {
+          stroke: "#10B981",
+          text: "text-emerald-600 dark:text-emerald-400",
+          bg: "bg-emerald-50 dark:bg-emerald-500/10",
+          border: "border-emerald-200 dark:border-emerald-500/20",
+        }
+      : safePercent >= 50
+      ? {
+          stroke: "#F59E0B",
+          text: "text-amber-600 dark:text-amber-400",
+          bg: "bg-amber-50 dark:bg-amber-500/10",
+          border: "border-amber-200 dark:border-amber-500/20",
+        }
+      : {
+          stroke: "#EF4444",
+          text: "text-red-600 dark:text-red-400",
+          bg: "bg-red-50 dark:bg-red-500/10",
+          border: "border-red-200 dark:border-red-500/20",
+        };
+
+  return (
+    <div
+      className={`inline-flex items-center gap-2.5 rounded-full border px-3 py-1 shadow-2xs ${colorConfig.bg} ${colorConfig.border}`}
+    >
+      <div className="relative flex h-8 w-8 shrink-0 items-center justify-center">
+        <svg className="h-8 w-8 -rotate-90 transform" viewBox="0 0 36 36">
+          <circle
+            cx="18"
+            cy="18"
+            r={radius}
+            stroke="currentColor"
+            strokeWidth={strokeWidth}
+            fill="transparent"
+            className="text-slate-200 dark:text-slate-700/60"
+          />
+          <circle
+            cx="18"
+            cy="18"
+            r={radius}
+            stroke={colorConfig.stroke}
+            strokeWidth={strokeWidth}
+            strokeDasharray={circumference}
+            strokeDashoffset={strokeDashoffset}
+            strokeLinecap="round"
+            fill="transparent"
+            className="transition-all duration-500 ease-out"
+          />
+        </svg>
+        <span
+          className={`absolute text-[9px] font-black tracking-tighter ${colorConfig.text}`}
+        >
+          {safePercent}%
+        </span>
+      </div>
+      <div className="flex flex-col text-left">
+        <span
+          className={`text-[10px] font-extrabold uppercase tracking-wider ${colorConfig.text}`}
+        >
+          {safePercent}% Health
+        </span>
+        <span className="text-[9px] font-medium text-slate-400 dark:text-slate-400">
+          Overall Components
+        </span>
+      </div>
+    </div>
+  );
+}
+
 interface PaletteStop {
   fill: string;
   badgeBg: string;
@@ -2179,14 +2256,7 @@ export default function SuperAdminFleet() {
 
                           {/* HEALTH BADGE */}
                           <td className="px-6 py-4 align-middle">
-                            <span
-                              className={`inline-flex min-w-[110px] items-center justify-center gap-2 rounded-full border px-4 py-2 text-[12px] font-semibold ${statusStyles.badge}`}
-                            >
-                              <div
-                                className={`h-2 w-2 rounded-full ${statusStyles.dot}`}
-                              />
-                              {machine.status}
-                            </span>
+                            <CircularHealthBadge percent={machine.healthPercent ?? 0} />
                           </td>
 
                           {/* ACTIONS */}

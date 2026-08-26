@@ -48,17 +48,9 @@ export interface SupervisorProfile {
   email: string;
 }
 
-const getCompanyId = (): string => {
-  try {
-    const user = StorageService.get<any>(STORAGE_KEYS.USER) || {};
-    return user.companyId || user.company_id || user.company?.id || "default_company";
-  } catch {
-    return "default_company";
-  }
-};
-
-const getReportsStorageKey = () => `hme_supervisor_reports_${getCompanyId()}`;
-const getHistoryStorageKey = () => `hme_supervisor_report_history_${getCompanyId()}`;
+// In-memory runtime session storage (No localStorage persistence)
+let memoryReports: Report[] = [];
+let memoryHistory: HistoryEntry[] = [];
 
 export const getCurrentSupervisor = (): SupervisorProfile => {
   try {
@@ -77,35 +69,19 @@ export const getCurrentSupervisor = (): SupervisorProfile => {
 };
 
 const getStoredReports = (): Report[] => {
-  try {
-    return StorageService.get<Report[]>(getReportsStorageKey()) || [];
-  } catch {
-    return [];
-  }
+  return memoryReports;
 };
 
 const saveStoredReports = (reports: Report[]): void => {
-  try {
-    StorageService.set(getReportsStorageKey(), reports);
-  } catch (err) {
-    console.warn("Failed to persist reports:", err);
-  }
+  memoryReports = reports;
 };
 
 const getStoredHistory = (): HistoryEntry[] => {
-  try {
-    return StorageService.get<HistoryEntry[]>(getHistoryStorageKey()) || [];
-  } catch {
-    return [];
-  }
+  return memoryHistory;
 };
 
 const saveStoredHistory = (history: HistoryEntry[]): void => {
-  try {
-    StorageService.set(getHistoryStorageKey(), history);
-  } catch (err) {
-    console.warn("Failed to persist report history:", err);
-  }
+  memoryHistory = history;
 };
 
 export const reportApprovalService = {

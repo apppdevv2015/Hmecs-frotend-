@@ -39,11 +39,25 @@ function getProfilePath() {
     }
 
     if (
+      role === "sub_super_admin" ||
+      role === "subsuperadmin"
+    ) {
+      return "/sub-super-admin/profile";
+    }
+
+    if (
       role === "company_admin" ||
       role === "companyadmin" ||
       role === "admin"
     ) {
       return "/company-admin/profile";
+    }
+
+    if (
+      role === "sub_admin" ||
+      role === "subadmin"
+    ) {
+      return "/sub-admin/profile";
     }
 
     if (role === "Artisans") {
