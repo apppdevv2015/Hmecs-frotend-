@@ -276,6 +276,54 @@ export const fetchOperatorAssignments =
             )[0] ?? null;
         }
 
+        // If no direct active assignment found from /operator-assignments,
+        // query live machine assignments API to find the active assigned machine.
+        if (!rawCurrent) {
+          try {
+            const allAssignedRes: any = await machineService.getAssignedMachines().catch(() => null);
+            const list = Array.isArray(allAssignedRes?.data)
+              ? allAssignedRes.data
+              : Array.isArray(allAssignedRes)
+                ? allAssignedRes
+                : Array.isArray(allAssignedRes?.machines)
+                  ? allAssignedRes.machines
+                  : [];
+
+            if (list.length > 0) {
+              const storedUser = StorageService.getUser();
+              const curName = (storedUser?.name || storedUser?.fullName || "").toLowerCase();
+              const curId = (storedUser?.id || "").toLowerCase();
+
+              let match = list.find((m: any) => {
+                const opId = String(m?.assignedOperatorId || m?.operatorId || m?.operator?.id || "").toLowerCase();
+                const opName = String(m?.assignedOperatorName || m?.operatorName || m?.operator?.name || "").toLowerCase();
+                return (curId && opId === curId) || (curName && opName.includes(curName));
+              });
+
+              if (!match && list.length > 0) {
+                match = list[0];
+              }
+
+              if (match) {
+                rawCurrent = {
+                  machineId: match.machineId || match.id || match._id,
+                  machineName: match.machineName || match.name,
+                  serialNumber: match.serialNumber || match.fleetId || match.serialNo || "—",
+                  modelYear: match.modelYear || match.model || "—",
+                  fuelType: match.equipmentType || match.fuelType || match.machineType || "Equipment",
+                  location: match.site || match.location || "Main Mine Site",
+                  overallHealth: Number(match.healthScore || match.health || match.overallHealth || 85),
+                  totalHours: Number(match.runningHours || match.hoursRun || match.totalHours || 0),
+                  fuelLevel: Number(match.fuelLevel || 80),
+                  status: "Active",
+                  assignedOn: match.assignedAt || match.assignedOn || new Date().toISOString(),
+                  assignedBy: match.assignedSupervisorName || match.assignedBy || "Company Admin",
+                };
+              }
+            }
+          } catch {}
+        }
+
         return {
           currentMachine: rawCurrent
             ? normalizeCurrentMachine(rawCurrent)

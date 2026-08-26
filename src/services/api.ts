@@ -1,12 +1,32 @@
 import offlineQueueService from "./offlineQueue.service";
 
 export const getApiBaseUrl = () => {
-  return import.meta.env.VITE_API_BASE_URL || "";
+  const envUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000/api/v1";
+  if (typeof window !== "undefined" && window.location && window.location.hostname) {
+    const currentHost = window.location.hostname;
+    if (currentHost !== "localhost" && currentHost !== "127.0.0.1") {
+      return envUrl.replace(/localhost|127\.0\.0\.1/, currentHost);
+    }
+  }
+  return envUrl;
 };
 
 import StorageService, { STORAGE_KEYS } from "./storage.service";
 
-import { fetchWithCache } from "./api-cache.service";
+// Strict localStorage Cleanup: Keep ONLY authentication session keys & theme
+if (typeof window !== "undefined" && window.localStorage) {
+  try {
+    const keysToRemove: string[] = [];
+    const allowedKeys = new Set(["token", "accessToken", "refreshToken", "theme", "user", "role", "email", "companyId", "name"]);
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && !allowedKeys.has(k)) {
+        keysToRemove.push(k);
+      }
+    }
+    keysToRemove.forEach((k) => localStorage.removeItem(k));
+  } catch { }
+}
 
 const parseRequestBody = (body: any) => {
   if (!body) return undefined;
@@ -58,10 +78,10 @@ export async function apiRequest<T>(
     endpoint.includes("/checkout") ||
     endpoint.includes("/payment");
 
-  
+
 
   if (isMutationMethod && !shouldSkipOfflineQueue && !navigator.onLine) {
-    
+
     console.warn(`[Offline Queue] Saved: ${endpoint}`);
     console.log("OFFLINE QUEUE HIT");
     await offlineQueueService.saveRequest({
@@ -75,8 +95,8 @@ export async function apiRequest<T>(
 
         ...(token
           ? {
-              Authorization: `Bearer ${token}`,
-            }
+            Authorization: `Bearer ${token}`,
+          }
           : {}),
       },
     });
@@ -94,24 +114,25 @@ export async function apiRequest<T>(
    */
   const makeRequest = async (): Promise<T> => {
     try {
+      const rawBody = (options as any).data !== undefined ? (options as any).data : options.body;
+      const isBodyObject = rawBody && typeof rawBody === "object" && !(rawBody instanceof FormData) && !(rawBody instanceof Blob);
+      const serializedBody = isBodyObject ? JSON.stringify(rawBody) : rawBody;
+
+      const fetchHeaders: Record<string, string> = {
+        "ngrok-skip-browser-warning": "true",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...((options.headers as Record<string, string>) || {}),
+      };
+
+      if (serializedBody !== undefined && serializedBody !== null && !(rawBody instanceof FormData)) {
+        fetchHeaders["Content-Type"] = "application/json";
+      }
+
       const response = await fetch(finalUrl, {
         ...options,
-
+        body: isMutationMethod ? serializedBody : undefined,
         cache: isMutationMethod ? "no-store" : "no-cache",
-
-        headers: {
-          "Content-Type": "application/json",
-
-          "ngrok-skip-browser-warning": "true",
-
-          ...(token
-            ? {
-                Authorization: `Bearer ${token}`,
-              }
-            : {}),
-
-          ...options.headers,
-        },
+        headers: fetchHeaders,
       });
 
       let data: any = null;
@@ -166,19 +187,7 @@ export async function apiRequest<T>(
   };
 
   /**
-   * Cache GET APIs
-   */
-  const shouldCache =
-    method === "GET" &&
-    !endpoint.includes("/login") &&
-    !endpoint.includes("/logout");
-
-  if (shouldCache) {
-    return fetchWithCache<T>(cacheKey, makeRequest, 2);
-  }
-
-  /**
-   * Normal request
+   * Always execute direct API request without storing API responses in localStorage
    */
   return makeRequest();
 }
