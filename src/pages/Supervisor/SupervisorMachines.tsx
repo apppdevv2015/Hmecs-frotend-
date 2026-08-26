@@ -1,796 +1,836 @@
-import { useEffect, useMemo, useState } from "react";
-import { z } from "zod";
-
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import {
   Search,
-  Cpu,
-  ShieldCheck,
-  AlertCircle,
-  AlertTriangle,
-  Loader2,
-  Gauge,
-  User,
-  UserCheck,
   Truck,
-  HardHat,
-  Tractor,
-  Wrench,
-  Activity,
-  Cog,
+  Filter,
+  Tag,
+  Globe,
+  Layers,
+  Eye,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  ChevronDown,
+  RefreshCw,
+  Weight,
+  Zap,
 } from "lucide-react";
-import { fleetService } from "../../services/Fleet/fleetService";
-
-import type { MachinePayload } from "../../services/companyadmin/machineService";
+import PageMeta from "../../components/common/PageMeta";
+import { apiRequest } from "../../services/api";
 import StorageService, { STORAGE_KEYS } from "../../services/storage.service";
-import AppSelect from "../../components/ui/dropdown/AppSelect";
-import Pagination from "../../components/common/Pagination";
 
-import { useDispatch, useSelector } from "react-redux";
-
-import type { RootState, AppDispatch } from "../../redux/store";
-
-import {
-  fetchMachines,
-  addMachine as addMachineThunk,
-} from "../../redux/slices/machineSlice";
-
-type Machine = {
+interface MasterMachine {
   id: string;
-  name: string;
-  model: string;
-  serialNumber: string;
-  companyId?: string;
-  machineId?: string;
-  equipmentType?: string;
+  slug?: string;
+  brand: string;
+  category: string;
+  modelName: string;
+  operatingWeight?: string | null;
+  enginePower?: string | null;
   components?: any[];
-  status?: string;
-  site?: string;
-  location?: string;
-};
-
-type MachineForm = {
-  name: string;
-  model: string;
-  serialNumber: string;
-  equipmentType: string;
-  site: string;
-};
-
-type FormErrors = Partial<Record<keyof MachineForm, string>>;
-
-const PAGE_SIZE = 5;
-
-const machineSchema = z.object({
-  name: z
-    .string()
-    .trim()
-    .min(1, "Machine name is required")
-    .max(50, "Machine name cannot exceed 50 characters"),
-
-  model: z
-    .string()
-    .trim()
-    .min(1, "Model is required")
-    .max(30, "Model cannot exceed 30 characters"),
-
-  serialNumber: z
-    .string()
-    .trim()
-    .min(1, "Serial number is required")
-    .max(50, "Serial number cannot exceed 50 characters"),
-
-  equipmentType: z
-    .string()
-    .trim()
-    .min(1, "Equipment type is required")
-    .max(30, "Equipment type cannot exceed 30 characters"),
-
-  site: z
-    .string()
-    .trim()
-    .min(1, "Site is required")
-    .max(100, "Site cannot exceed 100 characters"),
-});
-
-const equipmentOptions = [
-  { label: "Excavator", value: "Excavator" },
-  { label: "Truck", value: "Truck" },
-  { label: "Dozer", value: "Dozer" },
-  { label: "Grader", value: "Grader" },
-];
-
-type FormInputProps = {
-  label: string;
-  value: string;
-  error?: string;
-  placeholder?: string;
-  type?: string;
-  onChange: (value: string) => void;
-};
-
-const FormInput = ({
-  label,
-  value,
-  error,
-  placeholder,
-  type = "text",
-  onChange,
-}: FormInputProps) => {
-  return (
-    <label className="block">
-      <span className="mb-1.5 block text-xs font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
-        {label}
-      </span>
-
-      <input
-        type={type}
-        value={value}
-        placeholder={placeholder}
-        onChange={(e) => onChange(e.target.value)}
-        className={`h-11 w-full rounded-lg border bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 dark:bg-[#101f33] dark:text-white ${
-          error
-            ? "border-red-500 focus:border-red-500 focus:ring-4 focus:ring-red-500/10"
-            : "border-slate-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-700"
-        }`}
-      />
-
-      <div className="mt-1 min-h-[20px]">
-        {error && <p className="text-xs font-medium text-red-500">{error}</p>}
-      </div>
-    </label>
-  );
-};
+  totalSpecsCount?: number;
+  serialNumber?: string;
+}
 
 export default function SupervisorMachines() {
-  const dispatch = useDispatch<AppDispatch>();
+  const [machines, setMachines] = useState<MasterMachine[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
 
-  const storedUser = StorageService.getUser();
-  const currentSupervisorName = useMemo(() => {
-    return (
-      storedUser?.name ||
-      storedUser?.fullName ||
-      (storedUser?.firstName ? `${storedUser.firstName} ${storedUser.lastName || ""}`.trim() : "") ||
-      StorageService.get<string>(STORAGE_KEYS.USER_NAME) ||
-      "Supervisor"
-    );
-  }, [storedUser]);
+  // Filter & Search State
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [selectedBrand, setSelectedBrand] = useState<string>("ALL");
+  const [selectedCategory, setSelectedCategory] = useState<string>("ALL");
+  const [selectedModelId, setSelectedModelId] = useState<string>("ALL");
 
-  const { machines, loading, submitLoading, error } = useSelector(
-    (state: RootState) => state.machine,
-  );
+  // Custom Downward Dropdown Open/Search States
+  const [isCatDropdownOpen, setIsCatDropdownOpen] = useState<boolean>(false);
+  const [catSearch, setCatSearch] = useState<string>("");
 
-  const [search, setSearch] = useState("");
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState<number | "all">(5);
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [fleetMachines, setFleetMachines] = useState<any[]>([]);
+  const [isBrandDropdownOpen, setIsBrandDropdownOpen] = useState<boolean>(false);
+  const [brandSearch, setBrandSearch] = useState<string>("");
 
+  const [isModelDropdownOpen, setIsModelDropdownOpen] = useState<boolean>(false);
+  const [modelSearch, setModelSearch] = useState<string>("");
+
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number | "ALL">(25);
+
+  // Detail Modal State
+  const [selectedMachineDetail, setSelectedMachineDetail] = useState<MasterMachine | null>(null);
+  const [loadingSpecs, setLoadingSpecs] = useState<boolean>(false);
+
+  // Close dropdowns on outside click
+  const dropdownRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    fleetService.getFleetMachines("company_admin").then((res) => {
-      if (Array.isArray(res)) setFleetMachines(res);
-    }).catch(() => {});
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsCatDropdownOpen(false);
+        setIsBrandDropdownOpen(false);
+        setIsModelDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const [form, setForm] = useState<MachineForm>({
-    name: "",
-    model: "",
-    serialNumber: "",
-    equipmentType: "",
-    site: "",
-  });
-  const [formErrors, setFormErrors] = useState<FormErrors>({});
-
-  const resetForm = () => {
-    setForm({
-      name: "",
-      model: "",
-      serialNumber: "",
-      equipmentType: "",
-      site: "",
-    });
-
-    setFormErrors({});
-  };
-
-  const updateField = (field: keyof MachineForm, value: string) => {
-    const updatedForm = {
-      ...form,
-      [field]: value,
-    };
-
-    setForm(updatedForm);
-
-    const result = machineSchema.safeParse(updatedForm);
-
-    if (result.success) {
-      setFormErrors((prev) => ({
-        ...prev,
-        [field]: undefined,
-      }));
-
-      return;
-    }
-
-    const issue = result.error.issues.find((error) => error.path[0] === field);
-
-    setFormErrors((prev) => ({
-      ...prev,
-      [field]: issue?.message,
-    }));
-  };
-
-  const validateForm = () => {
-    const result = machineSchema.safeParse(form);
-
-    if (result.success) {
-      setFormErrors({});
-      return true;
-    }
-
-    const errors: FormErrors = {};
-
-    result.error.issues.forEach((issue) => {
-      const field = issue.path[0] as keyof MachineForm;
-
-      errors[field] = issue.message;
-    });
-
-    setFormErrors(errors);
-
-    return false;
-  };
-
-  const buildPayload = (): MachinePayload => {
-    return {
-      name: form.name.trim(),
-      model: form.model.trim(),
-      serialNumber: form.serialNumber.trim(),
-      equipmentType: form.equipmentType.trim(),
-      site: form.site.trim(),
-    };
-  };
-
-  useEffect(() => {
-    dispatch(fetchMachines());
-  }, [dispatch]);
-
-  useEffect(() => {
-    if (isAddModalOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
-    }
-
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, [isAddModalOpen]);
-
-  const handleAddMachine = async () => {
+  // Load Company Fleet Machines (Only machines registered to this company)
+  const loadCompanyFleet = async () => {
     try {
-      if (!validateForm()) return;
+      setRefreshing(true);
+      const user = StorageService.getUser();
+      const companyId = user?.companyId || user?.company_id || StorageService.getCompanyId() || "";
 
-      const payload = buildPayload();
+      const queryParam = companyId ? `?companyId=${encodeURIComponent(companyId)}` : "";
+      const res: any = await apiRequest(`/machines/company-fleet${queryParam}`);
+      const fleetData = res?.data || res || [];
 
-      await dispatch(addMachineThunk(payload)).unwrap();
-
-      setIsAddModalOpen(false);
-
-      resetForm();
-    } catch {
-    } finally {
-    }
-  };
-
-  const getOperatorForMachine = (machine: Machine, index: number) => {
-    if ((machine as any).assignedOperatorName) return (machine as any).assignedOperatorName;
-    if ((machine as any).operatorName) return (machine as any).operatorName;
-    if ((machine as any).operator?.name) return (machine as any).operator.name;
-
-    try {
-      const storedTasks = JSON.parse(localStorage.getItem("hme_supervisor_task_assignments") || "[]");
-      const task = storedTasks.find((t: any) => t.machineId === machine.id || t.machineName === machine.name);
-      if (task?.operatorName) return task.operatorName;
-    } catch {}
-
-    const fleetMatch = fleetMachines.find(
-      (f: any) => f.machineName === machine.name || f.id === machine.id || f.machineId === machine.machineId
-    );
-    if (fleetMatch?.operator?.name && fleetMatch.operator.name !== "N/A" && !fleetMatch.operator.name.includes("Assigned Operator")) {
-      return fleetMatch.operator.name;
-    }
-    
-    return null;
-  };
-
-  const assignedMachinesCount = useMemo(
-    () => machines.filter((m, idx) => Boolean(getOperatorForMachine(m, idx))).length,
-    [machines, fleetMachines]
-  );
-
-  const unassignedMachinesCount = Math.max(0, machines.length - assignedMachinesCount);
-
-  const filteredMachines = useMemo(() => {
-    const value = search.toLowerCase().trim();
-
-    return machines.filter(
-      (machine, idx) => {
-        const opName = (getOperatorForMachine(machine, idx) || "").toLowerCase();
-        return (
-          machine.name?.toLowerCase().includes(value) ||
-          machine.model?.toLowerCase().includes(value) ||
-          machine.serialNumber?.toLowerCase().includes(value) ||
-          machine.equipmentType?.toLowerCase().includes(value) ||
-          machine.site?.toLowerCase().includes(value) ||
-          opName.includes(value)
-        );
+      if (Array.isArray(fleetData)) {
+        const mapped: MasterMachine[] = fleetData.map((m: any) => ({
+          id: m.id || m.serialNumber,
+          slug: m.id,
+          brand: m.manufacturer || m.brand || "Fleet Equipment",
+          category: m.equipmentType || m.category || "Heavy Equipment",
+          modelName: m.model || m.name || "Equipment Model",
+          operatingWeight: m.operatingWeight || "Standard Spec",
+          enginePower: m.enginePower || "Standard Spec",
+          components: Array.isArray(m.components) ? m.components : [],
+          totalSpecsCount: Array.isArray(m.components)
+            ? m.components.reduce(
+                (s: number, c: any) =>
+                  s + (c.inspectionParameters?.length || c.parameters?.length || 0),
+                0
+              )
+            : 12,
+          serialNumber: m.serialNumber || `SN-${m.id?.substring(0, 6)}`,
+        }));
+        setMachines(mapped);
       }
+    } catch (err) {
+      console.error("Failed to load company fleet machines for supervisor:", err);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    loadCompanyFleet();
+  }, []);
+
+  // Compute Distinct Categories with Counts
+  const categoriesList = useMemo(() => {
+    const map = new Map<string, number>();
+    machines.forEach((m) => {
+      const cat = m.category || "General";
+      map.set(cat, (map.get(cat) || 0) + 1);
+    });
+
+    const list = Array.from(map.entries()).map(([name, count]) => ({ name, count }));
+    list.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+    return list;
+  }, [machines]);
+
+  const filteredCategoryOptions = useMemo(() => {
+    if (!catSearch.trim()) return categoriesList;
+    return categoriesList.filter((c) =>
+      c.name.toLowerCase().includes(catSearch.toLowerCase())
     );
-  }, [machines, search, fleetMachines]);
+  }, [categoriesList, catSearch]);
 
-  const isShowAll = itemsPerPage === "all";
-
-  const effectivePageSize = isShowAll
-    ? Math.max(1, filteredMachines.length)
-    : itemsPerPage;
-
-  const totalPages = isShowAll
-    ? 1
-    : Math.max(1, Math.ceil(filteredMachines.length / effectivePageSize));
-
-  const startIndex = (currentPage - 1) * effectivePageSize;
-
-  const paginatedMachines = isShowAll
-    ? filteredMachines
-    : filteredMachines.slice(startIndex, startIndex + effectivePageSize);
-
-  const startItem =
-    filteredMachines.length === 0 ? 0 : isShowAll ? 1 : startIndex + 1;
-
-  const endItem = isShowAll
-    ? filteredMachines.length
-    : Math.min(startIndex + effectivePageSize, filteredMachines.length);
-
-  const getMachineHealth = (machine: Machine) => {
-    const components = machine.components || [];
-
-    if (components.length === 0) {
-      return 0;
+  // Compute Distinct Brands with Counts (Cascading based on selected category)
+  const brandsList = useMemo(() => {
+    let source = machines;
+    if (selectedCategory !== "ALL") {
+      source = machines.filter(
+        (m) => (m.category || "").toLowerCase() === selectedCategory.toLowerCase()
+      );
     }
 
-    const totalHealth = components.reduce((sum, component) => {
-      const condition = Number(component?.condition ?? 3);
+    const map = new Map<string, number>();
+    source.forEach((m) => {
+      const b = m.brand || "Caterpillar";
+      map.set(b, (map.get(b) || 0) + 1);
+    });
 
-      const safeCondition = Math.max(1, Math.min(5, condition));
+    const list = Array.from(map.entries()).map(([name, count]) => ({ name, count }));
+    list.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+    return list;
+  }, [machines, selectedCategory]);
 
-      const health = (6 - safeCondition) * 20;
+  const filteredBrandOptions = useMemo(() => {
+    if (!brandSearch.trim()) return brandsList;
+    return brandsList.filter((b) =>
+      b.name.toLowerCase().includes(brandSearch.toLowerCase())
+    );
+  }, [brandsList, brandSearch]);
 
-      return sum + health;
-    }, 0);
+  // Machines available for Step 3 Quick Picker (scoped to Category & Brand)
+  const pickerMachinesList = useMemo(() => {
+    return machines.filter((m) => {
+      const matchesCat =
+        selectedCategory === "ALL" ||
+        (m.category || "").toLowerCase() === selectedCategory.toLowerCase();
 
-    return Math.round(totalHealth / components.length);
+      const matchesBrand =
+        selectedBrand === "ALL" ||
+        (m.brand || "").toLowerCase() === selectedBrand.toLowerCase();
+
+      return matchesCat && matchesBrand;
+    });
+  }, [machines, selectedCategory, selectedBrand]);
+
+  const filteredPickerMachines = useMemo(() => {
+    if (!modelSearch.trim()) return pickerMachinesList;
+    const q = modelSearch.toLowerCase().trim();
+    return pickerMachinesList.filter(
+      (m) =>
+        m.modelName.toLowerCase().includes(q) ||
+        m.brand.toLowerCase().includes(q) ||
+        m.category.toLowerCase().includes(q)
+    );
+  }, [pickerMachinesList, modelSearch]);
+
+  // Main Filtered Machines for Table Display
+  const filteredMachines = useMemo(() => {
+    return machines.filter((m) => {
+      const matchesCat =
+        selectedCategory === "ALL" ||
+        (m.category || "").toLowerCase() === selectedCategory.toLowerCase();
+
+      const matchesBrand =
+        selectedBrand === "ALL" ||
+        (m.brand || "").toLowerCase() === selectedBrand.toLowerCase();
+
+      const matchesModel =
+        selectedModelId === "ALL" ||
+        m.id === selectedModelId;
+
+      const q = searchQuery.toLowerCase().trim();
+      const matchesSearch =
+        !q ||
+        (m.modelName && m.modelName.toLowerCase().includes(q)) ||
+        (m.brand && m.brand.toLowerCase().includes(q)) ||
+        (m.category && m.category.toLowerCase().includes(q)) ||
+        (m.serialNumber && m.serialNumber.toLowerCase().includes(q)) ||
+        (m.operatingWeight && m.operatingWeight.toLowerCase().includes(q)) ||
+        (m.enginePower && m.enginePower.toLowerCase().includes(q));
+
+      return matchesCat && matchesBrand && matchesModel && matchesSearch;
+    });
+  }, [machines, selectedCategory, selectedBrand, selectedModelId, searchQuery]);
+
+  // Reset to page 1 on filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedBrand, selectedCategory, selectedModelId, pageSize]);
+
+  // Pagination calculation
+  const totalItems = filteredMachines.length;
+  const isAll = pageSize === "ALL";
+  const effectivePageSize = isAll ? totalItems : (pageSize as number);
+  const totalPages = isAll || totalItems === 0 ? 1 : Math.ceil(totalItems / effectivePageSize);
+
+  const paginatedMachines = useMemo(() => {
+    if (isAll) return filteredMachines;
+    const start = (currentPage - 1) * effectivePageSize;
+    return filteredMachines.slice(start, start + effectivePageSize);
+  }, [filteredMachines, currentPage, effectivePageSize, isAll]);
+
+  const handleOpenSpecsModal = async (machine: MasterMachine) => {
+    setSelectedMachineDetail(machine);
+    if (!machine.components || machine.components.length === 0) {
+      try {
+        setLoadingSpecs(true);
+        const supUser = StorageService.getUser();
+        const supCompanyId = supUser?.companyId || supUser?.company_id || (machine as any)?.companyId || "";
+        const supMachineId = machine.id || (machine as any)?.machineId || "";
+        const res: any = await apiRequest(
+          `/machines/spec-template?equipmentType=${encodeURIComponent(machine.category)}&modelName=${encodeURIComponent(machine.modelName)}&companyId=${encodeURIComponent(supCompanyId)}&machineId=${encodeURIComponent(supMachineId)}`
+        );
+        const comps = res?.data?.components || res?.components || [];
+        if (comps.length > 0) {
+          setSelectedMachineDetail((prev) => (prev ? { ...prev, components: comps } : prev));
+        }
+      } catch (e) {
+        console.warn("Spec template fetch error:", e);
+      } finally {
+        setLoadingSpecs(false);
+      }
+    }
   };
 
-  const getHealthStatus = (health: number) => {
-    if (health >= 85) {
-      return {
-        text: "Excellent",
-        bg: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300",
-        progress: "bg-emerald-500",
-      };
+  // Pagination Quick Jump range calculation
+  const getPageNumbers = () => {
+    const pages: (number | string)[] = [];
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      if (currentPage <= 4) {
+        pages.push(1, 2, 3, 4, 5, "...", totalPages);
+      } else if (currentPage >= totalPages - 3) {
+        pages.push(1, "...", totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
+      } else {
+        pages.push(1, "...", currentPage - 1, currentPage, currentPage + 1, "...", totalPages);
+      }
     }
-
-    if (health >= 70) {
-      return {
-        text: "Good",
-        bg: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300",
-        progress: "bg-amber-500",
-      };
-    }
-
-    return {
-      text: "Critical",
-      bg: "border-red-200 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300",
-      progress: "bg-red-500",
-    };
+    return pages;
   };
-
-  const healthyMachines = machines.filter(
-    (machine) => getMachineHealth(machine) >= 85,
-  ).length;
-
-  const warningMachines = machines.filter(
-    (machine) => getMachineHealth(machine) < 85,
-  ).length;
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-100 dark:bg-[#07111f]">
-        <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-6 py-5 shadow-sm dark:border-slate-800 dark:bg-[#0b1728]">
-          <Loader2 className="animate-spin text-blue-600" size={24} />
-
-          <span className="font-bold text-slate-800 dark:text-white">
-            Loading Machines...
-          </span>
+      <div className="flex min-h-[70vh] flex-col items-center justify-center p-8 text-center space-y-4">
+        <div className="relative">
+          <div className="h-16 w-16 rounded-full border-4 border-blue-200 border-t-blue-600 animate-spin dark:border-blue-950 dark:border-t-blue-400" />
+          <div className="absolute inset-0 flex items-center justify-center text-blue-600 dark:text-blue-400">
+            <Truck size={24} className="animate-pulse" />
+          </div>
+        </div>
+        <div className="space-y-1">
+          <h3 className="text-lg font-black text-slate-900 dark:text-white">
+            Loading Master Heavy Equipment Database...
+          </h3>
+          <p className="text-xs font-medium text-slate-500 max-w-sm">
+            55 Categories &amp; 47 Brands from PostgreSQL Master Catalog
+          </p>
         </div>
       </div>
     );
   }
 
+  const startRecord = totalItems === 0 ? 0 : (currentPage - 1) * effectivePageSize + 1;
+  const endRecord = isAll ? totalItems : Math.min(currentPage * effectivePageSize, totalItems);
+
   return (
     <>
-      <div className="min-h-screen bg-slate-100 p-4 font-sans text-slate-900 dark:bg-[#07111f] dark:text-white sm:p-6 lg:p-8">
-        <div className="mx-auto max-w-[1500px] space-y-6">
-          {/* Premium Header */}
-          <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-r from-[#3B37E6] via-[#3730D9] to-[#2E2AD9] shadow-[0_20px_60px_-15px_rgba(59,55,230,0.45)] dark:border-slate-700 dark:from-[#1E3A8A] dark:via-[#1D4ED8] dark:to-[#2563EB]">
-            {/* Premium Background Effects */}
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.10),transparent_40%)]" />
+      <PageMeta
+        title="Supervisor Company Equipment Fleet | Supervisor Hub"
+        description="Manage and monitor your company's registered machinery fleet"
+      />
 
-            {/* Top Right Glow */}
-            <div className="absolute -right-24 -top-24 h-80 w-80 rounded-full bg-cyan-400/20 blur-[120px]" />
+      <div className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
+        {/* Header Title Banner */}
+        <div className="flex flex-col gap-4 rounded-3xl border border-blue-200 bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 p-6 text-white shadow-xl dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2">
+              <span className="rounded-full bg-blue-500/20 px-3 py-1 text-xs font-extrabold uppercase tracking-wider text-blue-300 border border-blue-400/30 flex items-center gap-1.5">
+                <Globe size={13} />
+                Company Fleet Registry ({machines.length} Machines Assigned)
+              </span>
+            </div>
+            <h1 className="text-2xl font-black tracking-tight sm:text-3xl">
+              Supervisor Equipment &amp; Machine Fleet
+            </h1>
+            <p className="text-sm font-medium text-slate-300 max-w-2xl">
+              Inspect, monitor, and assign active company machinery marked and assigned by your Company Admin.
+            </p>
+          </div>
 
-            {/* Bottom Left Glow */}
-            <div className="absolute -bottom-20 -left-20 h-72 w-72 rounded-full bg-blue-500/25 blur-[110px]" />
+          <div className="flex items-center gap-3">
+            <button
+              onClick={loadCompanyFleet}
+              disabled={refreshing}
+              className="inline-flex items-center gap-2 rounded-2xl bg-white/10 px-4 py-2.5 text-xs font-bold text-white backdrop-blur-md border border-white/20 transition hover:bg-white/20 disabled:opacity-50"
+            >
+              <RefreshCw size={15} className={refreshing ? "animate-spin" : ""} />
+              Refresh Fleet
+            </button>
+          </div>
+        </div>
 
-            {/* Center Glow */}
-            <div className="absolute left-1/2 top-1/2 h-64 w-64 -translate-x-1/2 -translate-y-1/2 rounded-full bg-indigo-400/10 blur-[130px]" />
+        {/* Search & Downward Cascading Filter Controls Card */}
+        <div ref={dropdownRef} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-[#0c1626] space-y-5">
+          
+          {/* GLOBAL SEARCH BAR */}
+          <div className="relative space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+                <Search size={14} className="text-blue-500" />
+                Quick Search Equipment (Name, Model, Serial, Brand, Category, Power):
+              </label>
+              {searchQuery && (
+                <span className="text-[11px] font-bold text-blue-600 dark:text-blue-400">
+                  {filteredMachines.length.toLocaleString()} matching results
+                </span>
+              )}
+            </div>
 
-            {/* Premium Highlight */}
-            <div className="absolute right-1/3 top-0 h-48 w-48 rounded-full bg-white/5 blur-[100px]" />
+            <div className="relative">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search across all 9,735+ machines (e.g. Caterpillar 777, Komatsu PC8000, Sandvik, Excavator)..."
+                className="w-full rounded-2xl border-2 border-blue-500/40 bg-blue-50/40 pl-11 pr-10 py-3 text-sm font-bold text-slate-900 shadow-sm transition placeholder:text-slate-400 focus:border-blue-600 focus:bg-white focus:outline-none dark:border-blue-600/40 dark:bg-[#10223b]/60 dark:text-white dark:focus:bg-[#0a1628]"
+              />
+              <Search size={18} className="absolute left-4 top-3.5 text-blue-500" />
 
-            {/* Glass Pattern */}
-            <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.04)_0%,transparent_40%,rgba(255,255,255,0.02)_100%)]" />
-
-            <div className="relative z-10 px-6 py-7">
-              <div className="flex flex-col gap-2">
-                <div className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.18em] text-white backdrop-blur-md w-fit">
-                  <Gauge size={14} />
-                  Fleet Machine Control
-                </div>
-
-                <h1 className="text-3xl font-black tracking-tight text-white">
-                  Company Machines
-                </h1>
-
-                <p className="max-w-2xl text-sm leading-6 text-blue-100">
-                  Monitor machine performance, assigned operators, site locations, and overall health automatically calculated from Operator Shift Reports & Artisan Maintenance Logs.
-                </p>
-              </div>
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-3.5 top-3.5 text-slate-400 hover:text-slate-600 dark:hover:text-white"
+                >
+                  <X size={16} />
+                </button>
+              )}
             </div>
           </div>
 
-          {/* Stats */}
-          <div className="grid grid-cols-1 gap-4 p-5 md:grid-cols-2 lg:grid-cols-5">
-            {/* Total Machines */}
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-5 dark:border-slate-800 dark:bg-[#101f33]">
+          {/* THREE-STEP CASCADING DOWNWARD FILTER ROW */}
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            
+            {/* STEP 1: Category Filter (Always Downward) */}
+            <div className="relative space-y-1.5">
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
-                    Total Machines
-                  </p>
-                  <h2 className="mt-2 text-3xl font-extrabold text-slate-900 dark:text-white">
-                    {machines.length}
-                  </h2>
-                </div>
-                <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-blue-100 text-blue-600 dark:bg-blue-500/10">
-                  <Cpu />
-                </div>
+                <label className="text-xs font-extrabold uppercase tracking-wider text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
+                  <Filter size={14} />
+                  Step 1: Category ({categoriesList.length}):
+                </label>
+                {selectedCategory !== "ALL" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedCategory("ALL");
+                      setSelectedBrand("ALL");
+                      setSelectedModelId("ALL");
+                    }}
+                    className="text-[11px] font-bold text-blue-500 hover:underline"
+                  >
+                    Reset
+                  </button>
+                )}
               </div>
-            </div>
+              
+              <button
+                type="button"
+                onClick={() => {
+                  setIsCatDropdownOpen(!isCatDropdownOpen);
+                  setIsBrandDropdownOpen(false);
+                  setIsModelDropdownOpen(false);
+                }}
+                className="flex w-full items-center justify-between rounded-xl border-2 border-blue-500/40 bg-blue-50/50 px-3.5 py-2.5 text-left text-xs font-black text-slate-900 shadow-sm transition hover:border-blue-600 focus:outline-none dark:border-blue-600/40 dark:bg-[#10223b] dark:text-white"
+              >
+                <span className="truncate">
+                  {selectedCategory === "ALL"
+                    ? `🌐 All Categories (${machines.length.toLocaleString()})`
+                    : `🚜 ${selectedCategory}`}
+                </span>
+                <ChevronDown size={16} className={`text-blue-500 transition-transform ${isCatDropdownOpen ? "rotate-180" : ""}`} />
+              </button>
 
-            {/* Assigned Machines */}
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-5 dark:border-slate-800 dark:bg-[#101f33]">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
-                    Assigned Machines
-                  </p>
-                  <h2 className="mt-2 text-3xl font-extrabold text-indigo-600 dark:text-indigo-400">
-                    {assignedMachinesCount}
-                  </h2>
-                </div>
-                <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-indigo-100 text-indigo-600 dark:bg-indigo-500/10">
-                  <UserCheck />
-                </div>
-              </div>
-            </div>
-
-            {/* Dedicated Unassigned Machines Card */}
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-5 dark:border-slate-800 dark:bg-[#101f33]">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
-                    Unassigned Machines
-                  </p>
-                  <h2 className="mt-2 text-3xl font-extrabold text-orange-500 dark:text-orange-400">
-                    {unassignedMachinesCount}
-                  </h2>
-                </div>
-                <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-orange-100 text-orange-500 dark:bg-orange-500/10">
-                  <AlertTriangle />
-                </div>
-              </div>
-            </div>
-
-            {/* Healthy Machines */}
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-5 dark:border-slate-800 dark:bg-[#101f33]">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
-                    Healthy Machines
-                  </p>
-                  <h2 className="mt-2 text-3xl font-extrabold text-emerald-600">
-                    {healthyMachines}
-                  </h2>
-                </div>
-                <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600 dark:bg-emerald-500/10">
-                  <ShieldCheck />
-                </div>
-              </div>
-            </div>
-
-            {/* Warning Machines */}
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-5 dark:border-slate-800 dark:bg-[#101f33]">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
-                    Warning Machines
-                  </p>
-                  <h2 className="mt-2 text-3xl font-extrabold text-blue-600 dark:text-blue-400">
-                    {warningMachines}
-                  </h2>
-                </div>
-                <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-blue-100 text-blue-600 dark:bg-blue-500/10">
-                  <AlertCircle />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Machine Table */}
-          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-[#0b1728]">
-            <div className="border-b border-slate-200 p-5 dark:border-slate-800">
-              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <h2 className="text-xl font-extrabold tracking-tight text-slate-950 dark:text-white">
-                    Machine Overview
-                  </h2>
-
-                  <p className="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">
-                    Complete overview of machine inventory and health.
-                  </p>
-                </div>
-
-                {/* Search Bar placed right next to Machine Overview */}
-                <div className="flex items-center gap-3 w-full md:w-auto md:min-w-[380px]">
-                  <div className="relative w-full">
-                    <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+              {/* ALWAYS DOWNWARD Expanding Category Menu */}
+              {isCatDropdownOpen && (
+                <div className="absolute top-full left-0 right-0 z-[9999] mt-2 rounded-2xl border border-slate-200 bg-white p-3 shadow-2xl dark:border-slate-700 dark:bg-[#0c192c] max-h-[360px] overflow-y-auto space-y-2">
+                  <div className="relative">
                     <input
-                      value={search}
-                      onChange={(e) => {
-                        setSearch(e.target.value);
-                        setCurrentPage(1);
-                      }}
-                      placeholder="Search machine, model, serial or operator..."
-                      className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-4 text-sm font-semibold text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 dark:border-slate-700 dark:bg-[#101f33] dark:text-white dark:focus:border-blue-500"
+                      type="text"
+                      placeholder="Search categories..."
+                      value={catSearch}
+                      onChange={(e) => setCatSearch(e.target.value)}
+                      className="w-full rounded-xl border border-slate-300 bg-slate-50 pl-8 pr-3 py-1.5 text-xs font-bold text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-[#101f33] dark:text-white"
                     />
+                    <Search size={12} className="absolute left-2.5 top-2.5 text-slate-400" />
+                  </div>
+
+                  <div className="space-y-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedCategory("ALL");
+                        setSelectedBrand("ALL");
+                        setSelectedModelId("ALL");
+                        setIsCatDropdownOpen(false);
+                        setCatSearch("");
+                      }}
+                      className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-extrabold transition ${
+                        selectedCategory === "ALL"
+                          ? "bg-blue-600 text-white"
+                          : "text-slate-800 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+                      }`}
+                    >
+                      <span>🌐 All Categories</span>
+                      <span className="text-[10px] font-bold opacity-80">{machines.length.toLocaleString()}</span>
+                    </button>
+
+                    {filteredCategoryOptions.map((cat) => (
+                      <button
+                        key={cat.name}
+                        type="button"
+                        onClick={() => {
+                          setSelectedCategory(cat.name);
+                          setSelectedBrand("ALL");
+                          setSelectedModelId("ALL");
+                          setIsCatDropdownOpen(false);
+                          setCatSearch("");
+                        }}
+                        className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-extrabold transition ${
+                          selectedCategory.toLowerCase() === cat.name.toLowerCase()
+                            ? "bg-blue-600 text-white"
+                            : "text-slate-800 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+                        }`}
+                      >
+                        <span className="truncate">🚜 {cat.name}</span>
+                        <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-extrabold text-blue-800 dark:bg-blue-950 dark:text-blue-300 ml-2">
+                          {cat.count}
+                        </span>
+                      </button>
+                    ))}
                   </div>
                 </div>
-
-                <div className="rounded-full border border-slate-200 bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:bg-[#101f33] dark:text-slate-300 shrink-0">
-                  {filteredMachines.length} Machines
-                </div>
-              </div>
+              )}
             </div>
 
+            {/* STEP 2: Brand Filter (Always Downward) */}
+            <div className="relative space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-extrabold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
+                  <Tag size={14} />
+                  Step 2: Brand ({brandsList.length}):
+                </label>
+                {selectedBrand !== "ALL" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedBrand("ALL");
+                      setSelectedModelId("ALL");
+                    }}
+                    className="text-[11px] font-bold text-indigo-500 hover:underline"
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsBrandDropdownOpen(!isBrandDropdownOpen);
+                  setIsCatDropdownOpen(false);
+                  setIsModelDropdownOpen(false);
+                }}
+                className="flex w-full items-center justify-between rounded-xl border-2 border-indigo-500/40 bg-indigo-50/50 px-3.5 py-2.5 text-left text-xs font-black text-slate-900 shadow-sm focus:outline-none dark:border-indigo-600/40 dark:bg-[#151b36] dark:text-white"
+              >
+                <span className="truncate">
+                  {selectedBrand === "ALL"
+                    ? `🏷️ All Brands (${brandsList.length})`
+                    : `🏷️ ${selectedBrand}`}
+                </span>
+                <ChevronDown size={16} className={`text-indigo-500 transition-transform ${isBrandDropdownOpen ? "rotate-180" : ""}`} />
+              </button>
+
+              {/* ALWAYS DOWNWARD Expanding Brand Menu */}
+              {isBrandDropdownOpen && (
+                <div className="absolute top-full left-0 right-0 z-[9999] mt-2 rounded-2xl border border-slate-200 bg-white p-3 shadow-2xl dark:border-slate-700 dark:bg-[#0c192c] max-h-[360px] overflow-y-auto space-y-2">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Search brands..."
+                      value={brandSearch}
+                      onChange={(e) => setBrandSearch(e.target.value)}
+                      className="w-full rounded-xl border border-slate-300 bg-slate-50 pl-8 pr-3 py-1.5 text-xs font-bold text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-[#101f33] dark:text-white"
+                    />
+                    <Search size={12} className="absolute left-2.5 top-2.5 text-slate-400" />
+                  </div>
+
+                  <div className="space-y-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedBrand("ALL");
+                        setSelectedModelId("ALL");
+                        setIsBrandDropdownOpen(false);
+                        setBrandSearch("");
+                      }}
+                      className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-extrabold transition ${
+                        selectedBrand === "ALL"
+                          ? "bg-indigo-600 text-white"
+                          : "text-slate-800 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+                      }`}
+                    >
+                      <span>🏷️ All Brands</span>
+                      <span className="text-[10px] font-bold opacity-80">{brandsList.length}</span>
+                    </button>
+
+                    {filteredBrandOptions.map((brand) => (
+                      <button
+                        key={brand.name}
+                        type="button"
+                        onClick={() => {
+                          setSelectedBrand(brand.name);
+                          setSelectedModelId("ALL");
+                          setIsBrandDropdownOpen(false);
+                          setBrandSearch("");
+                        }}
+                        className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-extrabold transition ${
+                          selectedBrand.toLowerCase() === brand.name.toLowerCase()
+                            ? "bg-indigo-600 text-white"
+                            : "text-slate-800 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+                        }`}
+                      >
+                        <span className="truncate">🏷️ {brand.name}</span>
+                        <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-extrabold text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300 ml-2">
+                          {brand.count}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* STEP 3: All Machines / Model Selector (Always Downward) */}
+            <div className="relative space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-extrabold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                  <Truck size={14} />
+                  Step 3: All Machines ({pickerMachinesList.length.toLocaleString()}):
+                </label>
+                {selectedModelId !== "ALL" && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedModelId("ALL")}
+                    className="text-[11px] font-bold text-emerald-500 hover:underline"
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsModelDropdownOpen(!isModelDropdownOpen);
+                  setIsCatDropdownOpen(false);
+                  setIsBrandDropdownOpen(false);
+                }}
+                className="flex w-full items-center justify-between rounded-xl border-2 border-emerald-500/40 bg-emerald-50/50 px-3.5 py-2.5 text-left text-xs font-black text-slate-900 shadow-sm focus:outline-none dark:border-emerald-600/40 dark:bg-[#0c2419] dark:text-white"
+              >
+                <span className="truncate">
+                  {selectedModelId === "ALL"
+                    ? `🚚 All Machines (${pickerMachinesList.length.toLocaleString()} Models)`
+                    : `⚙️ ${machines.find((m) => m.id === selectedModelId)?.brand} ${machines.find((m) => m.id === selectedModelId)?.modelName}`}
+                </span>
+                <ChevronDown size={16} className={`text-emerald-500 transition-transform ${isModelDropdownOpen ? "rotate-180" : ""}`} />
+              </button>
+
+              {/* ALWAYS DOWNWARD Expanding Machine Picker Menu */}
+              {isModelDropdownOpen && (
+                <div className="absolute top-full left-0 right-0 z-[9999] mt-2 rounded-2xl border border-slate-200 bg-white p-3 shadow-2xl dark:border-slate-700 dark:bg-[#0c192c] max-h-[360px] overflow-y-auto space-y-2">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Type model name, brand..."
+                      value={modelSearch}
+                      onChange={(e) => setModelSearch(e.target.value)}
+                      className="w-full rounded-xl border border-slate-300 bg-slate-50 pl-8 pr-3 py-1.5 text-xs font-bold text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-[#101f33] dark:text-white"
+                    />
+                    <Search size={12} className="absolute left-2.5 top-2.5 text-slate-400" />
+                  </div>
+
+                  <div className="space-y-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedModelId("ALL");
+                        setIsModelDropdownOpen(false);
+                        setModelSearch("");
+                      }}
+                      className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-extrabold transition ${
+                        selectedModelId === "ALL"
+                          ? "bg-emerald-600 text-white"
+                          : "text-slate-800 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+                      }`}
+                    >
+                      <span>🚚 All Machines</span>
+                      <span className="text-[10px] font-bold opacity-80">{pickerMachinesList.length.toLocaleString()}</span>
+                    </button>
+
+                    {filteredPickerMachines.slice(0, 80).map((m) => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedModelId(m.id);
+                          setIsModelDropdownOpen(false);
+                          setModelSearch("");
+                          handleOpenSpecsModal(m);
+                        }}
+                        className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-extrabold transition ${
+                          selectedModelId === m.id
+                            ? "bg-emerald-600 text-white"
+                            : "text-slate-800 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+                        }`}
+                      >
+                        <div className="truncate">
+                          <p className="font-extrabold truncate">
+                            ⚙️ {m.brand} {m.modelName}
+                          </p>
+                          <p className="text-[10px] opacity-70 font-medium mt-0.5">
+                            {m.category} • {m.serialNumber}
+                          </p>
+                        </div>
+                        <Eye size={13} className="ml-2 opacity-80 flex-shrink-0" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Active Filter Chips Strip */}
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-100 dark:border-slate-800/80 text-xs font-medium">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-slate-400 font-bold text-[11px] uppercase">Active Scope:</span>
+              <span className="rounded-lg bg-blue-100 px-2.5 py-1 text-xs font-extrabold text-blue-800 dark:bg-blue-950 dark:text-blue-300">
+                Category: {selectedCategory === "ALL" ? "All Categories" : selectedCategory}
+              </span>
+              <span className="rounded-lg bg-indigo-100 px-2.5 py-1 text-xs font-extrabold text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300">
+                Brand: {selectedBrand === "ALL" ? "All Brands" : selectedBrand}
+              </span>
+              {selectedModelId !== "ALL" && (
+                <span className="rounded-lg bg-emerald-100 px-2.5 py-1 text-xs font-extrabold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                  Model: {machines.find((m) => m.id === selectedModelId)?.modelName || selectedModelId}
+                </span>
+              )}
+              {searchQuery && (
+                <span className="rounded-lg bg-amber-100 px-2.5 py-1 text-xs font-extrabold text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                  Search: &quot;{searchQuery}&quot;
+                </span>
+              )}
+            </div>
+
+            <div className="text-slate-500 dark:text-slate-400 font-bold">
+              Showing <strong className="text-slate-900 dark:text-white">{startRecord}–{endRecord}</strong> of {totalItems.toLocaleString()} matching machines
+            </div>
+          </div>
+        </div>
+
+        {/* Master Machines Table */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-[#0c1626] space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-4 dark:border-slate-800">
+            <div>
+              <h3 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
+                <Truck size={19} className="text-blue-500" />
+                Company Owned Machinery Fleet
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Machines owned and registered by your company. Supervisors can inspect telemetry and assign tasks.
+              </p>
+            </div>
+
+            {/* Page Size Selector */}
+            <div className="flex items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300">
+              <span>Show per page:</span>
+              <select
+                value={String(pageSize)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setPageSize(val === "ALL" ? "ALL" : parseInt(val, 10));
+                }}
+                className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-extrabold text-slate-800 shadow-sm dark:border-slate-700 dark:bg-[#101f33] dark:text-white"
+              >
+                <option value="10">10</option>
+                <option value="25">25</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+                <option value="ALL">All ({filteredMachines.length.toLocaleString()})</option>
+              </select>
+            </div>
+          </div>
+
+          {filteredMachines.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-slate-300 p-12 text-center text-xs font-bold text-slate-400 dark:border-slate-700">
+              No equipment machines found matching the selected filters or search query.
+            </div>
+          ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[950px]">
-                <thead className="border-b border-slate-200 bg-slate-100 dark:border-slate-800 dark:bg-[#07111f]">
-                  <tr>
-                    <th className="px-4 py-5 text-center text-xs font-bold uppercase tracking-[0.15em] text-slate-500">
-                      #
-                    </th>
-
-                    <th className="px-6 py-5 text-left text-xs font-bold uppercase tracking-[0.15em] text-slate-500">
-                      Machine
-                    </th>
-
-                    <th className="px-6 py-5 text-left text-xs font-bold uppercase tracking-[0.15em] text-slate-500">
-                      Model
-                    </th>
-
-                    <th className="px-6 py-5 text-left text-xs font-bold uppercase tracking-[0.15em] text-slate-500">
-                      Serial Number
-                    </th>
-
-                    <th className="px-6 py-5 text-left text-xs font-bold uppercase tracking-[0.15em] text-slate-500">
-                      Assigned Operator
-                    </th>
-
-                    <th className="px-6 py-5 text-left text-xs font-bold uppercase tracking-[0.15em] text-slate-500">
-                      Assigned By (Supervisor)
-                    </th>
-
-                    <th className="px-6 py-5 text-left text-xs font-bold uppercase tracking-[0.15em] text-slate-500">
-                      Assigned Date & Time
-                    </th>
-
-                    <th className="px-6 py-5 text-left text-xs font-bold uppercase tracking-[0.15em] text-slate-500">
-                      Health Status
-                    </th>
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-extrabold uppercase text-slate-500 dark:border-slate-800 dark:bg-[#07111f] dark:text-slate-400">
+                    <th className="p-3 w-12 text-center">#</th>
+                    <th className="p-3">Machine &amp; Model</th>
+                    <th className="p-3">Brand</th>
+                    <th className="p-3">Category / Type</th>
+                    <th className="p-3">Serial Number</th>
+                    <th className="p-3">Operating Specs</th>
+                    <th className="p-3 text-center">Components</th>
+                    <th className="p-3 text-center">Action</th>
                   </tr>
                 </thead>
-
-                <tbody>
-                  {paginatedMachines.map((machine, idx) => {
-                    const health = getMachineHealth(machine);
-                    const status = getHealthStatus(health);
-
-                    let task: any = null;
-                    try {
-                      const storedTasks = JSON.parse(localStorage.getItem("hme_supervisor_task_assignments") || "[]");
-                      task = storedTasks.find((t: any) => {
-                        if (!t) return false;
-                        if (t.machineId && (t.machineId === machine.id || t.machineId === (machine as any).machineId)) return true;
-                        if (t.machineName && machine.name && (t.machineName.includes(machine.name) || machine.name.includes(t.machineName.split(" (")[0]))) return true;
-                        if (t.machineName && machine.serialNumber && t.machineName.includes(machine.serialNumber)) return true;
-                        return false;
-                      });
-                    } catch {}
-
-                    const getOperatorForMachine = (m: any, index: number) => {
-                      if (m?.assignedOperatorName || m?.operatorName || m?.operator?.name) {
-                        return m.assignedOperatorName || m.operatorName || m.operator?.name;
-                      }
-                      if (m?.name?.includes("DZ-301") || m?.serialNumber?.includes("SN-DZ-301") || index === 3) {
-                        return "Shivam Srivastava";
-                      }
-                      if (m?.name?.includes("EX-202") || m?.serialNumber?.includes("SN-EX-202") || index === 6) {
-                        return "Alex Operator";
-                      }
-                      if (m?.name?.includes("CAT-777-DEMO") || m?.serialNumber?.includes("CAT-777") || index === 0) {
-                        return "John Operator";
-                      }
-                      return null;
-                    };
-
-                    const opName = (machine as any).assignedOperatorName || (machine as any).operatorName || (machine as any).operator?.name || task?.operatorName || getOperatorForMachine(machine, idx);
-                    const rawSup = (machine as any).assignedSupervisorName || (machine as any).supervisorName || (machine as any).supervisor?.name || task?.supervisorName;
-                    const supervisorName = opName ? (rawSup && rawSup !== "Marcus Supervisor" && rawSup !== "Unassigned" ? rawSup : currentSupervisorName) : null;
-                    const rawAssignedAt = task?.assignedAt || (machine as any).assignedAt || (opName ? ((machine as any).createdAt || "13 Aug 2026, 18:37") : null);
-
-                    const getDynamicIcon = () => {
-                      const name = (machine.name || machine.equipmentType || "").toLowerCase();
-                      if (name.includes("truck") || name.includes("dump") || name.includes("haul")) {
-                        return { icon: <Truck className="text-white h-6 w-6" />, bg: "from-blue-500 to-indigo-600" };
-                      }
-                      if (name.includes("excavator") || name.includes("shovel") || name.includes("cat")) {
-                        return { icon: <Tractor className="text-white h-6 w-6" />, bg: "from-amber-500 to-orange-600" };
-                      }
-                      if (name.includes("drill") || name.includes("rotary")) {
-                        return { icon: <Activity className="text-white h-6 w-6" />, bg: "from-purple-500 to-pink-600" };
-                      }
-                      if (name.includes("dozer") || name.includes("loader")) {
-                        return { icon: <HardHat className="text-white h-6 w-6" />, bg: "from-emerald-500 to-teal-600" };
-                      }
-                      const iconVariants = [
-                        { icon: <Truck className="text-white h-6 w-6" />, bg: "from-blue-500 to-cyan-500" },
-                        { icon: <Tractor className="text-white h-6 w-6" />, bg: "from-amber-500 to-orange-500" },
-                        { icon: <HardHat className="text-white h-6 w-6" />, bg: "from-emerald-500 to-teal-500" },
-                        { icon: <Wrench className="text-white h-6 w-6" />, bg: "from-indigo-500 to-purple-500" },
-                        { icon: <Cog className="text-white h-6 w-6" />, bg: "from-rose-500 to-pink-500" },
-                      ];
-                      return iconVariants[idx % iconVariants.length];
-                    };
-
-                    const dynamicIcon = getDynamicIcon();
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-medium">
+                  {paginatedMachines.map((m, idx) => {
+                    const rowNumber = isAll ? idx + 1 : (currentPage - 1) * (pageSize as number) + idx + 1;
 
                     return (
-                      <tr
-                        key={machine.id}
-                        className="border-b border-slate-100 transition hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-[#101f33]"
-                      >
-                        <td className="px-4 py-5 text-center font-bold text-xs text-slate-500 dark:text-slate-400">
-                          {startIndex + idx + 1}
+                      <tr key={m.id || idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                        <td className="p-3 text-center font-bold text-slate-400">
+                          {rowNumber}
                         </td>
 
-                        <td className="px-6 py-5">
-                          <div className="flex items-center gap-4">
-                            <div className={`flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br ${dynamicIcon.bg} shadow-lg shrink-0`}>
-                              {dynamicIcon.icon}
-                            </div>
-
-                            <div>
-                              <h3 className="font-bold text-slate-900 dark:text-white text-base">
-                                {machine.name}
-                              </h3>
-                              <p className="text-[11px] text-slate-400">
-                                Site: {machine.site || "Site A"}
-                              </p>
-                            </div>
-                          </div>
+                        <td className="p-3 text-slate-900 dark:text-white">
+                          <p className="font-black text-xs text-slate-900 dark:text-white">
+                            {m.brand} {m.modelName}
+                          </p>
+                          <p className="text-[10px] text-slate-400 font-medium mt-0.5">
+                            ID: <code className="font-mono">{m.id}</code>
+                          </p>
                         </td>
 
-                        <td className="px-6 py-5">
-                          <span className="inline-block rounded-xl border border-purple-200 bg-purple-50 px-3 py-1.5 text-xs font-bold text-purple-700 dark:border-purple-500/30 dark:bg-purple-500/10 dark:text-purple-300">
-                            {machine.model || "-"}
+                        <td className="p-3 whitespace-nowrap">
+                          <span className="rounded-md bg-blue-100 px-2 py-0.5 text-[10px] font-extrabold text-blue-800 dark:bg-blue-950 dark:text-blue-300">
+                            {m.brand}
                           </span>
                         </td>
 
-                        <td className="px-6 py-5">
-                          <span className="font-mono text-xs font-bold text-slate-800 dark:text-slate-200">
-                            {machine.serialNumber || "-"}
+                        <td className="p-3 text-slate-700 dark:text-slate-300 whitespace-nowrap font-bold">
+                          🚜 {m.category}
+                        </td>
+
+                        <td className="p-3 text-slate-600 dark:text-slate-300 whitespace-nowrap font-mono text-[11px]">
+                          {m.serialNumber}
+                        </td>
+
+                        <td className="p-3 text-slate-500 dark:text-slate-400 text-[11px] whitespace-nowrap">
+                          <div>
+                            {m.operatingWeight && m.operatingWeight !== "Standard Spec" ? (
+                              <span className="flex items-center gap-1 font-bold text-slate-700 dark:text-slate-300">
+                                <Weight size={12} className="text-blue-500" />
+                                {m.operatingWeight}
+                              </span>
+                            ) : (
+                              <span className="text-slate-400">Weight: Standard</span>
+                            )}
+                          </div>
+                          <div className="mt-0.5">
+                            {m.enginePower && m.enginePower !== "Standard Spec" ? (
+                              <span className="flex items-center gap-1 font-bold text-indigo-600 dark:text-indigo-400">
+                                <Zap size={12} />
+                                {m.enginePower}
+                              </span>
+                            ) : (
+                              <span className="text-slate-400">Power: Factory Spec</span>
+                            )}
+                          </div>
+                        </td>
+
+                        <td className="p-3 text-center whitespace-nowrap">
+                          <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[10px] font-extrabold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                            {m.components?.length || 4} Components • {m.totalSpecsCount || 15} Specs
                           </span>
                         </td>
 
-                        <td className="px-6 py-5">
-                          {opName ? (
-                            <div className="flex items-center gap-2.5">
-                              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-50 text-blue-600 font-bold text-xs dark:bg-blue-950/50 dark:text-blue-400 shrink-0">
-                                <User size={14} />
-                              </div>
-                              <div>
-                                <p className="font-bold text-slate-900 text-xs dark:text-white">
-                                  {opName}
-                                </p>
-                                {(machine as any).assignedOperatorId && (
-                                  <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
-                                    ID: {(machine as any).assignedOperatorId}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          ) : (
-                            <span className="text-xs font-semibold text-slate-400 italic">Unassigned</span>
-                          )}
-                        </td>
-
-                        <td className="px-6 py-5">
-                          {supervisorName ? (
-                            <span className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 dark:border-emerald-800/60 dark:bg-emerald-950/40 dark:text-emerald-300">
-                              <ShieldCheck size={14} />
-                              {supervisorName}
-                            </span>
-                          ) : (
-                            <span className="text-xs font-semibold text-slate-400 italic">Unassigned</span>
-                          )}
-                        </td>
-
-                        <td className="px-6 py-5">
-                          {rawAssignedAt ? (
-                            <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                              {isNaN(new Date(rawAssignedAt).getTime())
-                                ? String(rawAssignedAt)
-                                : new Date(rawAssignedAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                            </span>
-                          ) : (
-                            <span className="text-xs font-semibold text-slate-400 italic">Unassigned</span>
-                          )}
-                        </td>
-
-                        <td className="min-w-[250px] px-6 py-5">
-                          <div className="space-y-3">
-                            <div className="flex items-center justify-between">
-                              <span
-                                className={`rounded-full border px-3 py-1 text-xs font-bold uppercase tracking-wide ${status.bg}`}
-                              >
-                                {status.text}
-                              </span>
-
-                              <span className="font-extrabold text-slate-900 dark:text-white">
-                                {health}%
-                              </span>
-                            </div>
-
-                            <div className="h-3 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
-                              <div
-                                style={{
-                                  width: `${health}%`,
-                                }}
-                                className={`h-full rounded-full ${status.progress}`}
-                              />
-                            </div>
-                          </div>
+                        <td className="p-3 text-center whitespace-nowrap">
+                          <button
+                            type="button"
+                            title="View Full Machine Specs & Components"
+                            onClick={() => handleOpenSpecsModal(m)}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-blue-500 hover:bg-blue-50 hover:text-blue-600 dark:border-slate-700 dark:bg-[#101f33] dark:text-slate-300 dark:hover:border-blue-400 dark:hover:bg-blue-950/60 dark:hover:text-blue-300"
+                          >
+                            <Eye size={15} />
+                          </button>
                         </td>
                       </tr>
                     );
@@ -798,28 +838,195 @@ export default function SupervisorMachines() {
                 </tbody>
               </table>
             </div>
+          )}
 
-            {/* Pagination */}
-            <Pagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              startItem={startItem}
-              endItem={endItem}
-              totalItems={filteredMachines.length}
-              itemsPerPage={itemsPerPage}
-              itemLabel="machines"
-              pageSizeOptions={[5, 10, 20, 50]}
-              onPrev={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-              onNext={() =>
-                setCurrentPage((prev) => Math.min(prev + 1, totalPages))
-              }
-              onItemsPerPageChange={(val) => {
-                setItemsPerPage(val);
-                setCurrentPage(1);
-              }}
-            />
-          </section>
+          {/* Pagination Controls */}
+          {!isAll && totalPages > 1 && (
+            <div className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-200 pt-4 dark:border-slate-800">
+              <div className="text-xs font-bold text-slate-500 dark:text-slate-400">
+                Page {currentPage} of {totalPages} ({totalItems.toLocaleString()} matching machines)
+              </div>
+
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="inline-flex items-center gap-1 rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-40 dark:border-slate-700 dark:bg-[#101f33] dark:text-slate-200"
+                >
+                  <ChevronLeft size={14} />
+                  Prev
+                </button>
+
+                {/* Page Quick Numbers with Ellipsis */}
+                <div className="flex items-center gap-1 px-1">
+                  {getPageNumbers().map((pageNum, idx) => {
+                    if (pageNum === "...") {
+                      return (
+                        <span key={`ellipsis-${idx}`} className="px-1 text-slate-400 font-bold text-xs">
+                          ...
+                        </span>
+                      );
+                    }
+                    const num = Number(pageNum);
+                    const isActive = currentPage === num;
+
+                    return (
+                      <button
+                        key={num}
+                        type="button"
+                        onClick={() => setCurrentPage(num)}
+                        className={`h-8 min-w-[32px] px-2 rounded-xl text-xs font-black transition ${
+                          isActive
+                            ? "bg-blue-600 text-white shadow-md shadow-blue-500/30"
+                            : "text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+                        }`}
+                      >
+                        {num}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="inline-flex items-center gap-1 rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-40 dark:border-slate-700 dark:bg-[#101f33] dark:text-slate-200"
+                >
+                  Next
+                  <ChevronRight size={14} />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
+
+        {/* Machine Full Specs & Components Detail Modal */}
+        {selectedMachineDetail && (
+          <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/80 p-4 backdrop-blur-md">
+            <div className="max-h-[90vh] w-full max-w-2xl overflow-hidden rounded-3xl bg-white shadow-2xl dark:bg-[#07111f]">
+              <div className="flex items-center justify-between border-b border-blue-500/30 bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 px-6 py-4 text-white">
+                <div>
+                  <h3 className="text-lg font-black flex items-center gap-2">
+                    <Truck size={18} className="text-blue-400" />
+                    {selectedMachineDetail.brand} {selectedMachineDetail.modelName}
+                  </h3>
+                  <p className="text-xs text-slate-300 mt-0.5">
+                    Category: {selectedMachineDetail.category} • Serial: {selectedMachineDetail.serialNumber}
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => setSelectedMachineDetail(null)}
+                  className="rounded-xl bg-white/10 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-white/20"
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="max-h-[75vh] overflow-y-auto p-6 space-y-5 text-xs">
+                {/* Specs Summary Grid */}
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-[#0c1626]">
+                  <div>
+                    <span className="text-slate-400 font-bold">Brand</span>
+                    <p className="font-black text-slate-900 dark:text-white mt-0.5">
+                      {selectedMachineDetail.brand}
+                    </p>
+                  </div>
+
+                  <div>
+                    <span className="text-slate-400 font-bold">Model</span>
+                    <p className="font-black text-blue-600 dark:text-blue-400 mt-0.5">
+                      {selectedMachineDetail.modelName}
+                    </p>
+                  </div>
+
+                  <div>
+                    <span className="text-slate-400 font-bold">Category</span>
+                    <p className="font-black text-slate-900 dark:text-white mt-0.5">
+                      {selectedMachineDetail.category}
+                    </p>
+                  </div>
+
+                  <div>
+                    <span className="text-slate-400 font-bold">Operating Weight</span>
+                    <p className="font-bold text-slate-800 dark:text-slate-200 mt-0.5">
+                      {selectedMachineDetail.operatingWeight || "Standard Spec"}
+                    </p>
+                  </div>
+
+                  <div>
+                    <span className="text-slate-400 font-bold">Engine Power</span>
+                    <p className="font-bold text-indigo-600 dark:text-indigo-400 mt-0.5">
+                      {selectedMachineDetail.enginePower || "Factory Spec"}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Machine Components & Parameter Specs Breakdown */}
+                <div className="space-y-3">
+                  <h4 className="font-black text-slate-900 dark:text-white text-xs uppercase tracking-wider flex items-center gap-1.5">
+                    <Layers size={14} className="text-blue-500" />
+                    Standard Factory Components &amp; Parameters:
+                  </h4>
+
+                  {loadingSpecs ? (
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-6 text-center text-xs font-bold text-slate-500 dark:border-slate-800 dark:bg-[#0c1626] flex items-center justify-center gap-2">
+                      <RefreshCw size={14} className="animate-spin text-blue-500" />
+                      Loading engineering parameters &amp; safe bounds...
+                    </div>
+                  ) : selectedMachineDetail.components && selectedMachineDetail.components.length > 0 ? (
+                    <div className="space-y-3">
+                      {selectedMachineDetail.components.map((comp: any, idx: number) => (
+                        <div key={idx} className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-[#0c1626] space-y-2">
+                          <div className="flex items-center justify-between border-b border-slate-100 pb-2 dark:border-slate-800">
+                            <h5 className="font-extrabold text-slate-900 dark:text-white text-xs">
+                              ⚙️ {comp.name || `Component ${idx + 1}`}
+                            </h5>
+                            <span className="rounded bg-blue-100 px-2 py-0.5 text-[9px] font-bold text-blue-800 dark:bg-blue-950 dark:text-blue-300">
+                              {comp.category || "General"}
+                            </span>
+                          </div>
+
+                          {comp.parameters && comp.parameters.length > 0 && (
+                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 pt-1">
+                              {comp.parameters.map((param: any, pIdx: number) => (
+                                <div key={pIdx} className="rounded-lg bg-slate-50 p-2.5 dark:bg-[#101f33] text-[11px]">
+                                  <div className="flex items-center justify-between font-bold text-slate-800 dark:text-slate-200">
+                                    <span>{param.name}</span>
+                                    <span className="text-blue-600 dark:text-blue-400">{param.unit}</span>
+                                  </div>
+                                  <p className="text-[10px] text-slate-400 mt-0.5">
+                                    Safe Range: {param.safeMin} – {param.safeMax} {param.unit} (Default: {param.defaultVal})
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-center text-xs text-slate-500 dark:border-slate-800 dark:bg-[#0c1626]">
+                      Standard mining component packages (Industrial Engine Assembly, Main Hydraulic System, Powertrain Transmission, Electrical Systems) are mapped to this model.
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-end pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedMachineDetail(null)}
+                    className="rounded-xl bg-slate-800 px-5 py-2.5 text-xs font-extrabold text-white hover:bg-slate-700"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </>
   );

@@ -15,7 +15,6 @@ import {
   Gauge,
   Sliders,
   ChevronRight,
-  ChevronLeft,
   ChevronDown,
   Info,
   User,
@@ -36,7 +35,6 @@ import {
   FileText,
   CheckCircle,
   X,
-  Building2,
   Plus,
   PlusCircle,
   Trash2,
@@ -44,9 +42,9 @@ import {
   Wrench,
   Zap,
 } from "lucide-react";
-import PageMeta from "../../components/common/PageMeta";
-import { apiRequest } from "../../services/api";
-import StorageService, { STORAGE_KEYS } from "../../services/storage.service";
+import PageMeta from "../../../components/common/PageMeta";
+import { apiRequest } from "../../../services/api";
+import StorageService, { STORAGE_KEYS } from "../../../services/storage.service";
 
 interface Machine {
   id: string;
@@ -124,7 +122,7 @@ const getCustomComponentsForMachine = (m: Machine | null): SpecComponent[] => {
 
 const saveCustomComponentForMachine = (m: Machine, comp: SpecComponent) => {
   try {
-    apiRequest("/machines/custom-components", {
+    apiCall("/machines/custom-components", {
       method: "POST",
       body: JSON.stringify({
         machineId: m.id,
@@ -215,17 +213,13 @@ const PRESET_COMPONENT_TEMPLATES: Array<{
   },
 ];
 
-export default function InspectionDataEntry() {
+export default function MachineHealth() {
   const inspectionSectionRef = useRef<HTMLDivElement>(null);
 
   const [machines, setMachines] = useState<Machine[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [loadingSpecs, setLoadingSpecs] = useState<boolean>(false);
-
-  // Global Quick Machine Search State (Direct search across 9,742+ machines)
-  const [globalSearch, setGlobalSearch] = useState<string>("");
-  const [isGlobalSearchFocused, setIsGlobalSearchFocused] = useState<boolean>(false);
-
+  
   // 3-Tier Cascading Filter State: Category -> Brand -> Machine Model
   const [selectedCategory, setSelectedCategory] = useState<string>("ALL");
   const [selectedBrand, setSelectedBrand] = useState<string>("ALL");
@@ -236,10 +230,18 @@ export default function InspectionDataEntry() {
   const [isBrandDropdownOpen, setIsBrandDropdownOpen] = useState<boolean>(false);
   const [isMachineDropdownOpen, setIsMachineDropdownOpen] = useState<boolean>(false);
 
+  // Global Quick Machine Search State (Direct search across 9,742+ machines)
+  const [globalSearch, setGlobalSearch] = useState<string>("");
+  const [isGlobalSearchFocused, setIsGlobalSearchFocused] = useState<boolean>(false);
+
   // Search filter inside dropdowns
   const [catSearch, setCatSearch] = useState<string>("");
   const [brandSearch, setBrandSearch] = useState<string>("");
   const [machineSearch, setMachineSearch] = useState<string>("");
+
+  // Audit Log Pagination State
+  const [auditCurrentPage, setAuditCurrentPage] = useState<number>(1);
+  const [auditPageSize, setAuditPageSize] = useState<number>(5);
 
   // Inspection & Spec Components State
   const [specComponents, setSpecComponents] = useState<SpecComponent[]>([]);
@@ -248,47 +250,6 @@ export default function InspectionDataEntry() {
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [healthResult, setHealthResult] = useState<any>(null);
   const [successMsg, setSuccessMsg] = useState<string>("");
-
-  // Company Fleet Management State (Assign from Master Catalog to Company Fleet)
-  const [fleetMode, setFleetMode] = useState<"CATALOG" | "COMPANY_FLEET">("CATALOG");
-  const [companyFleet, setCompanyFleet] = useState<Machine[]>([]);
-  const [addingToFleet, setAddingToFleet] = useState<boolean>(false);
-  const [fleetCurrentPage, setFleetCurrentPage] = useState<number>(1);
-  const [fleetPageSize, setFleetPageSize] = useState<number>(5);
-  const [fleetTableSearch, setFleetTableSearch] = useState<string>("");
-
-  // Audit Trail History Pagination State
-  const [auditCurrentPage, setAuditCurrentPage] = useState<number>(1);
-  const [auditPageSize, setAuditPageSize] = useState<number>(5);
-
-  // Floating Toast State
-  const [toast, setToast] = useState<{ message: string; type: "warning" | "success" | "error" | "info" } | null>(null);
-
-  const showToast = (message: string, type: "warning" | "success" | "error" | "info" = "info") => {
-    setToast({ message, type });
-  };
-
-  useEffect(() => {
-    if (toast) {
-      const t = setTimeout(() => setToast(null), 4500);
-      return () => clearTimeout(t);
-    }
-  }, [toast]);
-
-  // Clean Model Name Formatter helper (Avoids "Ammann Ammann ADT-244")
-  const formatCleanModelName = (m: Machine | null | undefined) => {
-    if (!m) return "";
-    const brand = (m.brand || m.manufacturer || "").trim();
-    let raw = (m.model || m.modelName || m.name || "").trim();
-    if (brand && raw.toLowerCase().startsWith(`${brand.toLowerCase()} ${brand.toLowerCase()}`)) {
-      raw = raw.substring(brand.length).trim();
-    }
-    const cat = (m.category || m.equipmentType || "").trim();
-    if (cat && raw.toLowerCase().endsWith(` ${cat.toLowerCase()}`) && raw.length > cat.length + 5) {
-      raw = raw.substring(0, raw.length - cat.length).trim();
-    }
-    return raw;
-  };
 
   // Add Custom Component Modal State
   const [isAddComponentModalOpen, setIsAddComponentModalOpen] = useState<boolean>(false);
@@ -314,11 +275,13 @@ export default function InspectionDataEntry() {
   const currentUser = useMemo(() => {
     try {
       const storedUser: any = StorageService.get(STORAGE_KEYS.USER) || {};
-      const storedRole = StorageService.get<string>(STORAGE_KEYS.ROLE) || storedUser?.role || "COMPANY_ADMIN";
-      const storedName = StorageService.get<string>(STORAGE_KEYS.NAME) || storedUser?.name || `${storedUser?.firstName || ''} ${storedUser?.lastName || ''}`.trim() || "Company Admin";
+      const storedRole = StorageService.get<string>(STORAGE_KEYS.ROLE) || storedUser?.role || "SUPER_ADMIN";
+      const isSuper = String(storedRole || "").toLowerCase().includes("super");
+
+      const storedName = StorageService.get<string>(STORAGE_KEYS.NAME) || storedUser?.name || `${storedUser?.firstName || ''} ${storedUser?.lastName || ''}`.trim() || (isSuper ? "Super Admin" : "System User");
       const storedEmail = StorageService.get<string>(STORAGE_KEYS.EMAIL) || storedUser?.email;
-      const storedCompanyId = StorageService.get<string>(STORAGE_KEYS.COMPANY_ID) || storedUser?.companyId || storedUser?.company?.id || "";
-      const storedCompanyName = storedUser?.company?.name || storedUser?.companyName || "Company Equipment Fleet";
+      const storedCompanyId = isSuper ? null : (StorageService.get<string>(STORAGE_KEYS.COMPANY_ID) || storedUser?.companyId || storedUser?.company?.id || null);
+      const storedCompanyName = isSuper ? null : (storedUser?.company?.name || storedUser?.companyName || null);
 
       return {
         id: storedUser?.id || null,
@@ -327,112 +290,22 @@ export default function InspectionDataEntry() {
         email: storedEmail || null,
         companyId: storedCompanyId,
         companyName: storedCompanyName,
-        isSuperAdmin: false,
+        isSuperAdmin: isSuper,
       };
     } catch (e) {
       return {
         id: null,
-        name: "Company Admin",
-        role: "COMPANY_ADMIN",
+        name: "Super Admin",
+        role: "SUPER_ADMIN",
         email: null,
-        companyId: "",
-        companyName: "Company Equipment Fleet",
-        isSuperAdmin: false,
+        companyId: null,
+        companyName: null,
+        isSuperAdmin: true,
       };
     }
   }, []);
 
-  // Cleanup old loose un-scoped localStorage keys once on mount
-  useEffect(() => {
-    try {
-      const keysToRemove: string[] = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i);
-        if (k && k.startsWith("custom_components_") && !k.includes("_c123") && !k.includes("_c111") && !k.includes("-")) {
-          keysToRemove.push(k);
-        }
-      }
-      keysToRemove.forEach((k) => localStorage.removeItem(k));
-    } catch {}
-  }, []);
-
-  // Fetch Company Registered Fleet
-  const fetchCompanyFleet = async () => {
-    try {
-      const user = StorageService.getUser();
-      const compId = user?.companyId || user?.company_id || currentUser.companyId;
-      if (!compId) return;
-      const res: any = await apiRequest(`/machines/company-fleet?companyId=${encodeURIComponent(compId)}`);
-      const fleetData = res?.data || res || [];
-      if (Array.isArray(fleetData)) {
-        const mappedFleet: Machine[] = fleetData.map((m: any) => ({
-          id: m.id || m.serialNumber,
-          name: m.name || m.model,
-          model: m.model || m.name,
-          brand: m.manufacturer || m.brand || "Fleet Equipment",
-          category: m.equipmentType || m.category || "Heavy Equipment",
-          equipmentType: m.equipmentType || m.category || "Heavy Equipment",
-          serialNumber: m.serialNumber || `SN-${m.id?.substring(0, 6)}`,
-          status: m.status || "Healthy",
-          healthScore: m.healthScore ?? 100,
-          condition: m.condition ?? 5,
-          sourceCatalog: "Company Registered Fleet",
-          site: m.site || "Main Mining Site",
-          components: m.components || [],
-        }));
-        setCompanyFleet(mappedFleet);
-      }
-    } catch (e) {
-      console.warn("Notice: Fetch company fleet:", e);
-    }
-  };
-
-  // 1-Click Add Machine to Company Fleet Action
-  const handleAddToCompanyFleet = async (m: Machine) => {
-    if (!m) return;
-    setAddingToFleet(true);
-    try {
-      const user = StorageService.getUser();
-      const compId = user?.companyId || user?.company_id || currentUser.companyId;
-      await apiRequest('/machines/assign-to-company', {
-        method: 'POST',
-        data: {
-          companyId: compId,
-          modelName: m.model || m.name,
-          brand: m.brand || m.manufacturer,
-          category: m.equipmentType || m.category,
-          name: m.name || m.model,
-          serialNumber: m.serialNumber,
-        },
-      });
-      await fetchCompanyFleet();
-      setSuccessMsg(`✓ "${m.name || m.model}" successfully added to your Company Fleet! Now assigned and available to your Supervisors, Artisans, and Operators.`);
-    } catch (err: any) {
-      console.error("Failed to add machine to fleet:", err);
-    } finally {
-      setAddingToFleet(false);
-    }
-  };
-
-  // 1-Click Remove / Unassign Machine from Company Fleet
-  const handleRemoveFromCompanyFleet = async (mId: string, mName: string) => {
-    if (!window.confirm(`Are you sure you want to remove "${mName}" from your Company Fleet?`)) {
-      return;
-    }
-    try {
-      const user = StorageService.getUser();
-      const compId = user?.companyId || user?.company_id || currentUser.companyId;
-      await apiRequest(`/machines/assign-to-company/${encodeURIComponent(mId)}?companyId=${encodeURIComponent(compId)}`, {
-        method: 'DELETE',
-      });
-      await fetchCompanyFleet();
-      setSuccessMsg(`✓ "${mName}" has been removed from your Company Fleet.`);
-    } catch (err: any) {
-      console.error("Failed to remove machine from fleet:", err);
-    }
-  };
-
-  // Fetch Master Equipment Catalog and Company Fleet on Mount
+  // Fetch Master Equipment Catalog on Mount
   useEffect(() => {
     const fetchMasterCatalog = async () => {
       setLoading(true);
@@ -441,34 +314,21 @@ export default function InspectionDataEntry() {
         const catalogData = res?.data?.catalog || res?.catalog || [];
 
         if (Array.isArray(catalogData) && catalogData.length > 0) {
-          const mappedMachines: Machine[] = catalogData.map((item: any) => {
-            const rawModel = item.modelName || item.model || item.name || "Equipment";
-            const brandStr = item.brand || item.manufacturer || "";
-            let cleanTitle = rawModel;
-            if (brandStr && !cleanTitle.toLowerCase().startsWith(brandStr.toLowerCase())) {
-              cleanTitle = `${brandStr} ${cleanTitle}`.trim();
-            }
-
-            return {
-              id: item.id || `m-${item.slug || item.modelName}`,
-              name: cleanTitle,
-              model: item.modelName || cleanTitle,
-              brand: item.brand,
-              category: item.category,
-              equipmentType: item.category,
-              status: "Healthy",
-              condition: 5,
-              healthScore: 100,
-              imageUrl: null,
-              operatingWeight: item.operatingWeight || "N/A",
-              enginePower: item.enginePower || "N/A",
-              serialNumber: `SN-${(item.brand || 'HME').substring(0, 4).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`,
-              totalSpecsCount: item.totalSpecsCount || 12,
-              sourceCatalog: "PostgreSQL DB (" + item.brand + ")",
-              components: item.components || [],
-            };
-          });
-
+          const mappedMachines: Machine[] = catalogData.map((item: any) => ({
+            id: item.id || item.slug || `heh-${item.brand?.toLowerCase()}-${item.modelName?.toLowerCase().replace(/\s+/g, '-')}`,
+            machineId: item.id,
+            name: `${item.brand} ${item.modelName} ${item.category || ""}`.trim(),
+            brand: item.brand,
+            manufacturer: item.brand,
+            category: item.category,
+            equipmentType: item.category,
+            model: item.modelName,
+            modelName: item.modelName,
+            serialNumber: `SN-${item.brand?.toUpperCase().substring(0, 4)}-${Math.abs(item.modelName?.split('').reduce((a: any,b: any)=>{a=((a<<5)-a)+b.charCodeAt(0);return a&a},0) % 9000 + 1000)}`,
+            status: "Not Inspected",
+            healthScore: null as any,
+            sourceCatalog: `PostgreSQL DB (${item.brand})`,
+          }));
           setMachines(mappedMachines);
 
           if (mappedMachines.length > 0) {
@@ -483,21 +343,12 @@ export default function InspectionDataEntry() {
     };
 
     fetchMasterCatalog();
-    fetchCompanyFleet();
   }, []);
-
-  // Active Source Machines depending on Fleet Mode
-  const activeSourceMachines = useMemo(() => {
-    if (fleetMode === "COMPANY_FLEET") {
-      return companyFleet;
-    }
-    return machines;
-  }, [fleetMode, companyFleet, machines]);
 
   // Computed Distinct Categories with Machine Counts
   const categoriesList = useMemo(() => {
     const map = new Map<string, number>();
-    activeSourceMachines.forEach((m) => {
+    machines.forEach((m) => {
       const cat = m.equipmentType || m.equipment_type || m.category || "General";
       map.set(cat, (map.get(cat) || 0) + 1);
     });
@@ -505,7 +356,7 @@ export default function InspectionDataEntry() {
     const list = Array.from(map.entries()).map(([name, count]) => ({ name, count }));
     list.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
     return list;
-  }, [activeSourceMachines]);
+  }, [machines]);
 
   // Filter Categories by search
   const filteredCategoryOptions = useMemo(() => {
@@ -517,9 +368,9 @@ export default function InspectionDataEntry() {
 
   // Computed Distinct Brands filtered by Selected Category
   const brandsList = useMemo(() => {
-    let source = activeSourceMachines;
+    let source = machines;
     if (selectedCategory !== "ALL") {
-      source = activeSourceMachines.filter(
+      source = machines.filter(
         (m) =>
           (m.equipmentType || m.equipment_type || m.category || "").toLowerCase() ===
           selectedCategory.toLowerCase()
@@ -535,7 +386,7 @@ export default function InspectionDataEntry() {
     const list = Array.from(map.entries()).map(([name, count]) => ({ name, count }));
     list.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
     return list;
-  }, [activeSourceMachines, selectedCategory]);
+  }, [machines, selectedCategory]);
 
   // Filter Brands by search
   const filteredBrandOptions = useMemo(() => {
@@ -547,7 +398,7 @@ export default function InspectionDataEntry() {
 
   // Filtered Machines based on Category, Brand and Search
   const filteredMachines = useMemo(() => {
-    return activeSourceMachines.filter((m) => {
+    return machines.filter((m) => {
       const matchesCategory =
         selectedCategory === "ALL" ||
         (m.equipmentType || m.equipment_type || m.category || "").toLowerCase() ===
@@ -565,24 +416,7 @@ export default function InspectionDataEntry() {
 
       return matchesCategory && matchesBrand && matchesSearch;
     });
-  }, [activeSourceMachines, selectedCategory, selectedBrand, machineSearch]);
-
-  // Filtered & Paginated Company Fleet List
-  const filteredFleetList = useMemo(() => {
-    if (!fleetTableSearch.trim()) return companyFleet;
-    const q = fleetTableSearch.toLowerCase().trim();
-    return companyFleet.filter(
-      (m) =>
-        (m.name && m.name.toLowerCase().includes(q)) ||
-        (m.model && m.model.toLowerCase().includes(q)) ||
-        (m.brand && m.brand.toLowerCase().includes(q)) ||
-        (m.serialNumber && m.serialNumber.toLowerCase().includes(q)) ||
-        (m.category && m.category.toLowerCase().includes(q)) ||
-        (m.equipmentType && m.equipmentType.toLowerCase().includes(q))
-    );
-  }, [companyFleet, fleetTableSearch]);
-
-  const totalFleetPages = Math.max(1, Math.ceil(filteredFleetList.length / fleetPageSize));
+  }, [machines, selectedCategory, selectedBrand, machineSearch]);
 
   // Build map of latest health per component for the selected machine
   const compHealthMap = useMemo(() => {
@@ -615,16 +449,11 @@ export default function InspectionDataEntry() {
     return map;
   }, [selectedMachine, historyLogs]);
 
-  const paginatedFleetMachines = useMemo(() => {
-    const startIndex = (fleetCurrentPage - 1) * fleetPageSize;
-    return filteredFleetList.slice(startIndex, startIndex + fleetPageSize);
-  }, [filteredFleetList, fleetCurrentPage, fleetPageSize]);
-
-  // Global Quick Search Results across active dataset
+  // Global Quick Search Results across all 9,742+ machines
   const globalSearchResults = useMemo(() => {
     if (!globalSearch.trim()) return [];
     const q = globalSearch.toLowerCase().trim();
-    return activeSourceMachines
+    return machines
       .filter((m) =>
         (m.name && m.name.toLowerCase().includes(q)) ||
         (m.model && m.model.toLowerCase().includes(q)) ||
@@ -636,7 +465,7 @@ export default function InspectionDataEntry() {
         (m.serialNumber && m.serialNumber.toLowerCase().includes(q))
       )
       .slice(0, 25);
-  }, [activeSourceMachines, globalSearch]);
+  }, [machines, globalSearch]);
 
   const handleSelectFromGlobalSearch = (m: Machine) => {
     if (m.category || m.equipmentType) {
@@ -704,14 +533,13 @@ export default function InspectionDataEntry() {
     const typeStr = m.equipmentType || m.equipment_type || m.category || m.model || "Truck";
 
     try {
-      // Call backend API with companyId and machineId so backend automatically returns OEM components + company's custom components
       const res: any = await apiRequest(
         `/machines/spec-template?equipmentType=${encodeURIComponent(typeStr)}&modelName=${encodeURIComponent(m.model || m.modelName || "")}&companyId=${encodeURIComponent(companyId)}&machineId=${encodeURIComponent(m.id || m.serialNumber || "")}`
       );
       const templateData = res?.data || res;
       const rawTemplateComponents: SpecComponent[] = templateData?.components || [];
 
-      // Merge standard factory components with company-added custom components (strictly company scoped)
+      // Merge standard factory components with company-added custom components
       const customComps = getCustomComponentsForMachine(m);
       const mergedComponents: SpecComponent[] = [
         ...rawTemplateComponents,
@@ -793,19 +621,6 @@ export default function InspectionDataEntry() {
       return;
     }
 
-    // Check if machine is marked as owned by company
-    const isAssigned = companyFleet.some(
-      (fm) =>
-        (fm.serialNumber && fm.serialNumber === selectedMachine?.serialNumber) ||
-        (fm.model && selectedMachine?.model && fm.model.toLowerCase() === selectedMachine.model.toLowerCase()) ||
-        (fm.id && fm.id === selectedMachine?.id)
-    );
-
-    if (!isAssigned) {
-      setCompFormError(`⚠️ Machine is not marked as owned yet! Please click "⭐ Mark as Owned" on the machine header before adding custom components.`);
-      return;
-    }
-
     // Auto-fallback: if user didn't type component name, use first parameter name or 'Custom Component'
     const effectiveCompName = newCompName.trim() || newCompParams[0]?.name.trim() || "Custom Component";
 
@@ -858,7 +673,7 @@ export default function InspectionDataEntry() {
       console.warn("Notice: Custom component backend sync:", apiErr);
     }
 
-    // 2. Save to machine-specific company local storage
+    // 2. Save to machine-specific local storage
     saveCustomComponentForMachine(selectedMachine, newComponent);
 
     // 3. Update active component list
@@ -898,20 +713,6 @@ export default function InspectionDataEntry() {
           status: payload.machine.status
         } : prev);
 
-        // Instantly update Company Fleet Registry table state without manual refresh
-        setCompanyFleet((prevFleet) =>
-          prevFleet.map((fm) =>
-            fm.id === mId || (fm.serialNumber && payload.machine.serialNumber && fm.serialNumber === payload.machine.serialNumber) || (fm.model && payload.machine.model && fm.model.toLowerCase() === payload.machine.model.toLowerCase())
-              ? {
-                  ...fm,
-                  healthScore: payload.machine.healthScore,
-                  status: payload.machine.status
-                }
-              : fm
-          )
-        );
-
-        // Also update machines catalog list state
         setMachines((prevMachines) =>
           prevMachines.map((m) =>
             m.id === mId || (m.serialNumber && payload.machine.serialNumber && m.serialNumber === payload.machine.serialNumber)
@@ -925,7 +726,6 @@ export default function InspectionDataEntry() {
         );
       }
       fetchAllHistoryLogs();
-      fetchCompanyFleet();
     } catch (err) {
       console.error("Error fetching machine inspection data:", err);
     }
@@ -934,22 +734,13 @@ export default function InspectionDataEntry() {
   const fetchAllHistoryLogs = async () => {
     setLoadingHistory(true);
     try {
-      const compId = currentUser?.companyId || StorageService.getCompanyId() || "";
-      const res: any = await apiRequest(`/machines/all/inspection-history?companyId=${encodeURIComponent(compId)}`);
+      const res: any = await apiRequest(`/machines/all/inspection-history`);
       const payload = res?.data || res;
       if (payload && payload.historyLogs) {
-        // Enforce company boundary & STRICT SUPER ADMIN EXCLUSION:
-        // Company Admin must NEVER see Super Admin records
-        const filtered = payload.historyLogs.filter((l: HistoryLog) => {
-          const role = String(l.userRole || "").toLowerCase();
-          if (role.includes("super")) return false;
-          if (compId && l.companyId && l.companyId !== compId) return false;
-          return true;
-        });
-        setHistoryLogs(filtered);
+        setHistoryLogs(payload.historyLogs);
       }
     } catch (err) {
-      console.error("Error fetching company history:", err);
+      console.error("Error fetching global history:", err);
     } finally {
       setLoadingHistory(false);
     }
@@ -970,12 +761,12 @@ export default function InspectionDataEntry() {
       await apiRequest(`/machines/inspection-history/${encodeURIComponent(deletingLogTarget.id)}`, {
         method: "DELETE",
       });
-      showToast(`✓ Inspection record for "${deletingLogTarget.name}" deleted successfully.`, "info");
+      setSuccessMsg(`✓ Inspection record for "${deletingLogTarget.name}" permanently deleted.`);
       setDeletingLogTarget(null);
       fetchAllHistoryLogs();
     } catch (err: any) {
       console.error("Failed to delete audit log:", err);
-      showToast(err?.message || "Failed to delete inspection log", "error");
+      setErrorMsg(err?.message || "Failed to delete inspection log");
     } finally {
       setIsDeletingLog(false);
     }
@@ -1020,6 +811,7 @@ export default function InspectionDataEntry() {
 
   // Action: Load Historical Log into Form for Editing
   const handleEditFromHistory = async (log: HistoryLog) => {
+    // 1. Find matching machine in master catalog
     const targetMachine = machines.find(
       (m) =>
         m.id === log.machineId ||
@@ -1037,6 +829,7 @@ export default function InspectionDataEntry() {
         setSelectedBrand(targetMachine.brand || targetMachine.manufacturer || "ALL");
       }
 
+      // Fetch template for that machine
       setLoadingSpecs(true);
       const typeStr = targetMachine.equipmentType || targetMachine.category || targetMachine.model || "Truck";
       const user = StorageService.getUser();
@@ -1056,10 +849,12 @@ export default function InspectionDataEntry() {
       }
     }
 
+    // 2. Select component tab
     if (log.componentName) {
       setActiveTab(log.componentName);
     }
 
+    // 3. Populate inputs with historical values
     let fields: any[] = [];
     if (Array.isArray(log.currentParameters)) fields = log.currentParameters;
     else if (Array.isArray(log.parameters)) fields = log.parameters;
@@ -1080,6 +875,7 @@ export default function InspectionDataEntry() {
 
     setSuccessMsg(`✏️ Loaded inspection record for ${log.componentName} (${log.machineName || log.modelName}) into form. You can now modify values and recalculate health.`);
 
+    // 4. Scroll smoothly to inspection form
     if (inspectionSectionRef.current) {
       inspectionSectionRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
     } else {
@@ -1090,20 +886,6 @@ export default function InspectionDataEntry() {
   // Handle Save Inspection
   const handleSaveInspection = async () => {
     if (!selectedMachine || !activeTab) return;
-
-    // Verify company ownership before saving inspection record
-    const isAssigned = companyFleet.some(
-      (fm) =>
-        (fm.serialNumber && fm.serialNumber === selectedMachine?.serialNumber) ||
-        (fm.model && selectedMachine?.model && fm.model.toLowerCase() === selectedMachine.model.toLowerCase()) ||
-        (fm.id && fm.id === selectedMachine?.id)
-    );
-
-    if (!isAssigned) {
-      showToast(`Please mark "${formatCleanModelName(selectedMachine)}" as owned ("⭐ Mark as Owned") first before saving inspection logs.`, "warning");
-      return;
-    }
-
     setSubmitting(true);
     setSuccessMsg("");
 
@@ -1132,12 +914,12 @@ export default function InspectionDataEntry() {
         modelName: selectedMachine.model || selectedMachine.modelName || selectedMachine.name || "",
         serialNumber: selectedMachine.serialNumber || "SN-AUTO-001",
         machineName: selectedMachine.name || selectedMachine.model || "",
-        companyId: currentUser?.companyId || StorageService.getCompanyId() || "",
-        companyName: currentUser?.companyName || "HME Mining Corp",
+        companyId: currentUser?.isSuperAdmin ? null : (currentUser?.companyId || null),
+        companyName: currentUser?.isSuperAdmin ? null : (currentUser?.companyName || null),
         userId: currentUser?.id || null,
-        userName: currentUser?.name || "Company Admin",
-        userRole: currentUser?.role || "COMPANY_ADMIN",
-        userEmail: currentUser?.email || "admin@hmemining.com",
+        userName: currentUser?.name || "Super Admin",
+        userRole: currentUser?.role || "SUPER_ADMIN",
+        userEmail: currentUser?.email || "superadmin@hme.com",
       };
 
       const targetId = selectedMachine.id || selectedMachine.machineId || "heh-cat-777";
@@ -1163,25 +945,24 @@ export default function InspectionDataEntry() {
           status: machineStatus
         } : prev);
 
-        setCompanyFleet((prevFleet) =>
-          prevFleet.map((fm) =>
-            fm.id === targetId || (selectedMachine?.serialNumber && fm.serialNumber === selectedMachine.serialNumber)
+        setMachines((prevMachines) =>
+          prevMachines.map((m) =>
+            m.id === targetId || (selectedMachine?.serialNumber && m.serialNumber === selectedMachine.serialNumber)
               ? {
-                  ...fm,
+                  ...m,
                   healthScore: overallHealth,
                   status: machineStatus
                 }
-              : fm
+              : m
           )
         );
       }
 
       setSuccessMsg(
-        `✅ ${actionType} for ${activeTab}! Status: ${compStatus} (${compScore}%). Saved to PostgreSQL Audit Log & Component Health Database.`
+        `✅ ${actionType} for ${activeTab}! Status: ${compStatus} (${compScore}%). Saved to PostgreSQL Audit Log Table.`
       );
       
       fetchMachineExistingData(targetId);
-      fetchCompanyFleet();
     } catch (err: any) {
       console.error("Failed to save inspection:", err);
       alert(err?.message || "Failed to save inspection readings");
@@ -1193,18 +974,6 @@ export default function InspectionDataEntry() {
   // Handle Save All Components in ONE single consolidated inspection call
   const handleSaveAllComponents = async () => {
     if (!selectedMachine || specComponents.length === 0) return;
-
-    const isAssigned = companyFleet.some(
-      (fm) =>
-        (fm.serialNumber && fm.serialNumber === selectedMachine?.serialNumber) ||
-        (fm.model && selectedMachine?.model && fm.model.toLowerCase() === selectedMachine.model.toLowerCase()) ||
-        (fm.id && fm.id === selectedMachine?.id)
-    );
-
-    if (!isAssigned) {
-      showToast(`Please mark "${formatCleanModelName(selectedMachine)}" as owned ("⭐ Mark as Owned") first before saving inspection logs.`, "warning");
-      return;
-    }
 
     setSubmitting(true);
     setSuccessMsg("");
@@ -1240,12 +1009,12 @@ export default function InspectionDataEntry() {
         modelName: selectedMachine.model || selectedMachine.modelName || selectedMachine.name || "",
         serialNumber: selectedMachine.serialNumber || "SN-AUTO-001",
         machineName: selectedMachine.name || selectedMachine.model || "",
-        companyId: currentUser?.companyId || StorageService.getCompanyId() || "",
-        companyName: currentUser?.companyName || "HME Mining Corp",
+        companyId: currentUser?.isSuperAdmin ? null : (currentUser?.companyId || null),
+        companyName: currentUser?.isSuperAdmin ? null : (currentUser?.companyName || null),
         userId: currentUser?.id || null,
-        userName: currentUser?.name || "Company Admin",
-        userRole: currentUser?.role || "COMPANY_ADMIN",
-        userEmail: currentUser?.email || "admin@hmemining.com",
+        userName: currentUser?.name || "Super Admin",
+        userRole: currentUser?.role || "SUPER_ADMIN",
+        userEmail: currentUser?.email || "superadmin@hme.com",
       };
 
       const res: any = await apiRequest(`/machines/${targetId}/manual-data`, {
@@ -1265,15 +1034,15 @@ export default function InspectionDataEntry() {
           status: machineStatus
         } : prev);
 
-        setCompanyFleet((prevFleet) =>
-          prevFleet.map((fm) =>
-            fm.id === targetId || (selectedMachine?.serialNumber && fm.serialNumber === selectedMachine.serialNumber)
+        setMachines((prevMachines) =>
+          prevMachines.map((m) =>
+            m.id === targetId || (selectedMachine?.serialNumber && m.serialNumber === selectedMachine.serialNumber)
               ? {
-                  ...fm,
+                  ...m,
                   healthScore: overallHealth,
                   status: machineStatus
                 }
-              : fm
+              : m
           )
         );
       }
@@ -1283,7 +1052,6 @@ export default function InspectionDataEntry() {
       );
       
       fetchMachineExistingData(targetId);
-      fetchCompanyFleet();
     } catch (err: any) {
       console.error("Failed to save all components:", err);
       alert(err?.message || "Failed to save all inspection readings");
@@ -1329,6 +1097,7 @@ export default function InspectionDataEntry() {
 
   const activeCompSpec = specComponents.find((c) => c.name === activeTab);
 
+  // Full Page Spinner when loading 9,735 machines initially
   if (loading) {
     return (
       <div className="flex min-h-[70vh] flex-col items-center justify-center p-8 text-center space-y-4">
@@ -1340,7 +1109,7 @@ export default function InspectionDataEntry() {
         </div>
         <div className="space-y-1">
           <h3 className="text-lg font-black text-slate-900 dark:text-white">
-            Loading Company Equipment Database...
+            Loading Heavy Equipment Database...
           </h3>
           <p className="text-xs font-medium text-slate-500 max-w-sm">
             Fetching 9,742+ Machines, 55 Categories &amp; 91 Brands from PostgreSQL Master Equipment Catalog
@@ -1353,8 +1122,8 @@ export default function InspectionDataEntry() {
   return (
     <>
       <PageMeta
-        title="Company Equipment Machine Health & Inspection Audit Log | Company Admin"
-        description="Company Equipment Specs Database & Health Center"
+        title="Heavy Equipment Machine Health & Inspection Audit Log | Super Admin Hub"
+        description="Heavy Equipment Specs Database & Health Center"
       />
 
       <div className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
@@ -1363,8 +1132,8 @@ export default function InspectionDataEntry() {
           <div className="space-y-1.5">
             <div className="flex items-center gap-2">
               <span className="rounded-full bg-blue-500/20 px-3 py-1 text-xs font-extrabold uppercase tracking-wider text-blue-300 border border-blue-400/30 flex items-center gap-1.5">
-                <Building2 size={13} />
-                {currentUser?.companyName || "HME Mining Operations"} ({machines.length} Total Machines)
+                <Globe size={13} />
+                Master Database Catalog ({machines.length} Total Machines)
               </span>
             </div>
             <h1 className="text-2xl font-black tracking-tight sm:text-3xl">
@@ -1728,41 +1497,9 @@ export default function InspectionDataEntry() {
               </div>
 
               <div className="flex items-center gap-3">
-                {/* 1-Click Fleet Assignment Button / Status Badge */}
-                {(() => {
-                  const isAssigned = companyFleet.some(
-                    (fm) =>
-                      (fm.serialNumber && fm.serialNumber === selectedMachine?.serialNumber) ||
-                      (fm.model && selectedMachine?.model && fm.model.toLowerCase() === selectedMachine.model.toLowerCase()) ||
-                      (fm.id && fm.id === selectedMachine?.id)
-                  );
-
-                  if (isAssigned) {
-                    return (
-                      <div className="flex items-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3.5 py-2 text-xs font-black text-emerald-600 dark:text-emerald-400 shadow-sm">
-                        <CheckCircle2 size={15} />
-                        <span>✓ Owned by Company</span>
-                        <span className="rounded-md bg-emerald-500/20 px-1.5 py-0.5 text-[9px] uppercase font-black text-emerald-800 dark:text-emerald-300 ml-1">Assigned</span>
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <button
-                      type="button"
-                      onClick={() => handleAddToCompanyFleet(selectedMachine)}
-                      disabled={addingToFleet}
-                      className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 px-4 py-2.5 text-xs font-black text-white shadow-lg shadow-amber-500/25 transition hover:from-amber-600 hover:to-orange-600 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
-                    >
-                      <Building2 size={15} />
-                      <span>{addingToFleet ? "Marking..." : "⭐ Mark as Owned"}</span>
-                    </button>
-                  );
-                })()}
-
-                <div className="text-right border-l border-slate-200 dark:border-slate-700 pl-3">
+                <div className="text-right">
                   <span className="text-[10px] font-extrabold uppercase text-slate-400">
-                    Overall Health
+                    Overall Machine Health
                   </span>
                   <div>
                     {getStatusBadge(selectedMachine.status || "Not Inspected", selectedMachine.healthScore ?? null)}
@@ -1842,18 +1579,6 @@ export default function InspectionDataEntry() {
                   <button
                     type="button"
                     onClick={() => {
-                      const isAssigned = companyFleet.some(
-                        (fm) =>
-                          (fm.serialNumber && fm.serialNumber === selectedMachine?.serialNumber) ||
-                          (fm.model && selectedMachine?.model && fm.model.toLowerCase() === selectedMachine.model.toLowerCase()) ||
-                          (fm.id && fm.id === selectedMachine?.id)
-                      );
-
-                      if (!isAssigned) {
-                        showToast(`Machine is not marked as owned yet! Please click "⭐ Mark as Owned" above to assign to your company fleet.`, "warning");
-                        return;
-                      }
-
                       setCompFormError("");
                       setIsAddComponentModalOpen(true);
                     }}
@@ -1966,77 +1691,38 @@ export default function InspectionDataEntry() {
                     })}
                   </div>
 
-                  {/* Save & Calculate Action */}
-                  <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4 dark:border-slate-800">
-                    {(() => {
-                      const isAssigned = companyFleet.some(
-                        (fm) =>
-                          (fm.serialNumber && fm.serialNumber === selectedMachine?.serialNumber) ||
-                          (fm.model && selectedMachine?.model && fm.model.toLowerCase() === selectedMachine.model.toLowerCase()) ||
-                          (fm.id && fm.id === selectedMachine?.id)
-                      );
+                  {/* Save & Calculate Action Buttons */}
+                  <div className="mt-6 flex flex-wrap items-center justify-end gap-3 border-t border-slate-200 pt-4 dark:border-slate-800">
+                    <button
+                      type="button"
+                      onClick={handleSaveInspection}
+                      disabled={submitting}
+                      className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-xs font-extrabold text-white shadow-md shadow-blue-500/30 transition hover:bg-blue-500 disabled:opacity-50"
+                    >
+                      {submitting ? (
+                        <>
+                          <Loader2 size={15} className="animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        <>
+                          <Save size={15} />
+                          💾 Save &amp; Calculate &quot;{activeTab}&quot;
+                        </>
+                      )}
+                    </button>
 
-                      if (!isAssigned) {
-                        return (
-                          <div className="flex items-center gap-2 text-xs font-bold text-amber-600 dark:text-amber-400">
-                            <AlertTriangle size={15} />
-                            <span>Preview Mode: Click &quot;⭐ Mark as Owned&quot; above to save inspections &amp; evaluate health.</span>
-                          </div>
-                        );
-                      }
-
-                      return <div />;
-                    })()}
-
-                    {(() => {
-                      const isAssigned = companyFleet.some(
-                        (fm) =>
-                          (fm.serialNumber && fm.serialNumber === selectedMachine?.serialNumber) ||
-                          (fm.model && selectedMachine?.model && fm.model.toLowerCase() === selectedMachine.model.toLowerCase()) ||
-                          (fm.id && fm.id === selectedMachine?.id)
-                      );
-
-                      return (
-                        <div className="flex flex-wrap items-center gap-3">
-                          {/* Button 1: Save Active Component */}
-                          <button
-                            type="button"
-                            onClick={handleSaveInspection}
-                            disabled={submitting || !isAssigned}
-                            className={`inline-flex items-center gap-2 rounded-xl px-5 py-3 text-xs font-extrabold shadow-md transition ${
-                              !isAssigned
-                                ? "bg-slate-300 text-slate-500 cursor-not-allowed dark:bg-slate-800 dark:text-slate-500"
-                                : "bg-blue-600 text-white shadow-blue-500/30 hover:bg-blue-500 disabled:opacity-50"
-                            }`}
-                          >
-                            {submitting ? (
-                              <>
-                                <Loader2 size={15} className="animate-spin" />
-                                Saving...
-                              </>
-                            ) : (
-                              <>
-                                <Save size={15} />
-                                💾 Save &amp; Calculate &quot;{activeTab}&quot;
-                              </>
-                            )}
-                          </button>
-
-                          {/* Button 2: Save All Components at Once */}
-                          {specComponents.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={handleSaveAllComponents}
-                              disabled={submitting || !isAssigned}
-                              className={`inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 px-5 py-3 text-xs font-black text-white shadow-lg shadow-indigo-500/25 transition hover:from-indigo-500 hover:to-purple-500 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50`}
-                            >
-                              <Zap size={15} className="text-amber-300" />
-                              ⚡ Save All ({specComponents.length}) Components &amp; Compute Full Machine Health
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })()}
+                    {specComponents.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={handleSaveAllComponents}
+                        disabled={submitting}
+                        className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 px-5 py-3 text-xs font-black text-white shadow-lg shadow-indigo-500/25 transition hover:from-indigo-500 hover:to-purple-500 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
+                      >
+                        <Zap size={15} className="text-amber-300" />
+                        ⚡ Save All ({specComponents.length}) Components &amp; Compute Full Machine Health
+                      </button>
+                    )}
                   </div>
 
                   {/* Calculated Health Result Panel */}
@@ -2073,7 +1759,7 @@ export default function InspectionDataEntry() {
                         </div>
 
                         <div className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-[#101f33]">
-                          <span className="text-slate-400">PostgreSQL Database</span>
+                          <span className="text-slate-400">PostgreSQL Audit Table</span>
                           <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 mt-1">
                             ✓ Snapshot Stored
                           </p>
@@ -2101,244 +1787,6 @@ export default function InspectionDataEntry() {
             </div>
           </div>
         )}
-
-        {/* COMPANY OWNED & ASSIGNED FLEET EQUIPMENT TABLE WITH PAGINATION */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-[#0c1626] space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-4 dark:border-slate-800">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="rounded-md bg-emerald-100 px-2 py-0.5 text-[10px] font-extrabold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 flex items-center gap-1">
-                  <Building2 size={12} />
-                  Company Fleet Registry
-                </span>
-                <span className="text-xs font-bold text-slate-400">
-                  {companyFleet.length} Machines Owned &amp; Assigned
-                </span>
-              </div>
-              <h3 className="text-lg font-black text-slate-900 dark:text-white mt-1 flex items-center gap-2">
-                <Truck size={18} className="text-emerald-500" />
-                Company Owned Equipment Fleet
-              </h3>
-              <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mt-0.5">
-                Machines marked as owned by <span className="font-bold text-slate-700 dark:text-slate-300">{currentUser.companyName}</span>. These machines are assigned and visible to your Supervisors and Operators for daily operations.
-              </p>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2.5">
-              {companyFleet.length > 0 && (
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={fleetTableSearch}
-                    onChange={(e) => {
-                      setFleetTableSearch(e.target.value);
-                      setFleetCurrentPage(1);
-                    }}
-                    placeholder="Search in fleet..."
-                    className="w-48 rounded-xl border border-slate-300 bg-slate-50 pl-8 pr-3 py-1.5 text-xs font-bold text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-[#101f33] dark:text-white"
-                  />
-                  <Search size={13} className="absolute left-2.5 top-2.5 text-slate-400" />
-                  {fleetTableSearch && (
-                    <button
-                      type="button"
-                      onClick={() => setFleetTableSearch("")}
-                      className="absolute right-2 top-2 text-slate-400 hover:text-slate-600 dark:hover:text-white"
-                    >
-                      <X size={12} />
-                    </button>
-                  )}
-                </div>
-              )}
-
-              <button
-                onClick={fetchCompanyFleet}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3.5 py-1.5 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-[#101f33] dark:text-slate-200"
-              >
-                <RefreshCw size={13} />
-                Refresh Fleet
-              </button>
-            </div>
-          </div>
-
-          {companyFleet.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-slate-300 p-8 text-center text-xs font-bold text-slate-400 dark:border-slate-700 space-y-2">
-              <Truck size={28} className="mx-auto text-slate-300 dark:text-slate-600" />
-              <p>No machines marked as owned yet by your company.</p>
-              <p className="text-[11px] font-normal text-slate-500">
-                Select any equipment from the catalog above and click <strong>&quot;⭐ Mark as Owned&quot;</strong> to assign it to your company!
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-extrabold uppercase text-slate-500 dark:border-slate-800 dark:bg-[#07111f] dark:text-slate-400">
-                      <th className="p-3 w-12 text-center">#</th>
-                      <th className="p-3">Equipment / Model</th>
-                      <th className="p-3">Serial Number</th>
-                      <th className="p-3">Category &amp; Brand</th>
-                      <th className="p-3">Health Status</th>
-                      <th className="p-3">Ownership Status</th>
-                      <th className="p-3 text-center">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
-                    {paginatedFleetMachines.map((fm, idx) => {
-                      const isSelected = selectedMachine && (selectedMachine.id === fm.id || selectedMachine.serialNumber === fm.serialNumber || selectedMachine.model === fm.model);
-                      const serialIndex = (fleetCurrentPage - 1) * fleetPageSize + idx + 1;
-                      return (
-                        <tr
-                          key={fm.id}
-                          className={`transition ${isSelected ? "bg-blue-50/70 dark:bg-blue-950/30" : "hover:bg-slate-50/50 dark:hover:bg-slate-800/30"}`}
-                        >
-                          <td className="p-3 text-center font-mono font-black text-xs text-slate-400">
-                            {serialIndex}
-                          </td>
-                          <td className="p-3 font-black text-slate-900 dark:text-white">
-                            <div className="flex items-center gap-2">
-                              <div className="rounded-lg bg-emerald-100 p-1.5 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 shrink-0">
-                                <Truck size={14} />
-                              </div>
-                              <div>
-                                <p className="font-extrabold truncate max-w-[240px] text-xs">{fm.name || fm.model}</p>
-                                {fm.name && fm.model && fm.name.toLowerCase() !== fm.model.toLowerCase() && (
-                                  <p className="text-[10px] text-slate-400 font-medium">{fm.model}</p>
-                                )}
-                              </div>
-                            </div>
-                          </td>
-
-                          <td className="p-3 whitespace-nowrap">
-                            <span className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-100/90 px-2.5 py-1 font-mono text-xs font-black text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 shadow-sm">
-                              {fm.serialNumber || "SN-AUTO"}
-                            </span>
-                          </td>
-
-                          <td className="p-3">
-                            <div className="flex items-center gap-1.5">
-                              <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-extrabold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                                {fm.brand}
-                              </span>
-                              <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                                {fm.category || fm.equipmentType}
-                              </span>
-                            </div>
-                          </td>
-
-                          <td className="p-3">
-                            {getStatusBadge(fm.status || "Healthy", fm.healthScore ?? 100)}
-                          </td>
-
-                          <td className="p-3">
-                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-black text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-                              <CheckCircle2 size={11} />
-                              Company Owned
-                            </span>
-                          </td>
-
-                          <td className="p-3 text-center">
-                            <div className="flex items-center justify-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  handleSelectMachine(fm);
-                                  inspectionSectionRef.current?.scrollIntoView({ behavior: "smooth" });
-                                }}
-                                className={`rounded-xl px-3 py-1.5 text-xs font-black transition ${
-                                  isSelected
-                                    ? "bg-blue-600 text-white shadow"
-                                    : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-[#101f33] dark:text-slate-200 dark:hover:bg-slate-700"
-                                }`}
-                              >
-                                {isSelected ? "Currently Inspecting" : "Inspect Equipment"}
-                              </button>
-
-                              <button
-                                type="button"
-                                title="Remove from Company Fleet"
-                                onClick={() => handleRemoveFromCompanyFleet(fm.id, fm.name || fm.model)}
-                                className="rounded-xl border border-red-200 bg-red-50/50 p-2 text-red-600 transition hover:bg-red-100 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-400 dark:hover:bg-red-900/50"
-                              >
-                                <Trash2 size={13} />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* FLEET TABLE PAGINATION CONTROLS */}
-              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3 text-xs dark:border-slate-800">
-                <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 font-medium">
-                  <span>
-                    Showing {filteredFleetList.length > 0 ? (fleetCurrentPage - 1) * fleetPageSize + 1 : 0} to{" "}
-                    {Math.min(fleetCurrentPage * fleetPageSize, filteredFleetList.length)} of {filteredFleetList.length} machines
-                  </span>
-                  
-                  <div className="flex items-center gap-1 ml-3">
-                    <span className="text-[11px]">Show:</span>
-                    <select
-                      value={fleetPageSize}
-                      onChange={(e) => {
-                        setFleetPageSize(Number(e.target.value));
-                        setFleetCurrentPage(1);
-                      }}
-                      className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs font-bold text-slate-700 dark:border-slate-700 dark:bg-[#101f33] dark:text-slate-200"
-                    >
-                      <option value={5}>5</option>
-                      <option value={10}>10</option>
-                      <option value={25}>25</option>
-                      <option value={50}>50</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setFleetCurrentPage((p) => Math.max(1, p - 1))}
-                    disabled={fleetCurrentPage === 1}
-                    className="inline-flex items-center gap-1 rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-extrabold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-40 dark:border-slate-700 dark:bg-[#101f33] dark:text-slate-200"
-                  >
-                    <ChevronLeft size={14} />
-                    Previous
-                  </button>
-
-                  <div className="flex items-center gap-1">
-                    {Array.from({ length: totalFleetPages }, (_, i) => i + 1).map((pageNum) => (
-                      <button
-                        key={pageNum}
-                        type="button"
-                        onClick={() => setFleetCurrentPage(pageNum)}
-                        className={`h-8 w-8 rounded-xl text-xs font-black transition ${
-                          fleetCurrentPage === pageNum
-                            ? "bg-emerald-600 text-white shadow-md shadow-emerald-500/20"
-                            : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-[#101f33] dark:text-slate-200"
-                        }`}
-                      >
-                        {pageNum}
-                      </button>
-                    ))}
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => setFleetCurrentPage((p) => Math.min(totalFleetPages, p + 1))}
-                    disabled={fleetCurrentPage === totalFleetPages}
-                    className="inline-flex items-center gap-1 rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-extrabold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-40 dark:border-slate-700 dark:bg-[#101f33] dark:text-slate-200"
-                  >
-                    Next
-                    <ChevronRight size={14} />
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
 
         {/* DIRECT ON-PAGE AUDIT LOG TIMELINE & PARAMETER CHANGES TABLE */}
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-[#0c1626] space-y-4">
@@ -2405,17 +1853,16 @@ export default function InspectionDataEntry() {
               <p className="text-xs font-bold text-slate-500">Loading audit history logs from PostgreSQL database...</p>
             </div>
           ) : (() => {
-            const baseLogs = historyLogs.filter((l: HistoryLog) => !String(l.userRole || "").toLowerCase().includes("super"));
             const displayed = auditViewScope === "SELECTED" && selectedMachine
-              ? baseLogs.filter(l => l.machineId === selectedMachine.id || l.machineId === selectedMachine.machineId || l.modelName === selectedMachine.model || l.serialNumber === selectedMachine.serialNumber)
-              : baseLogs;
+              ? historyLogs.filter(l => l.machineId === selectedMachine.id || l.machineId === selectedMachine.machineId || l.modelName === selectedMachine.model || l.serialNumber === selectedMachine.serialNumber)
+              : historyLogs;
 
             if (displayed.length === 0) {
               return (
                 <div className="rounded-xl border border-dashed border-slate-300 p-8 text-center text-xs font-bold text-slate-400 dark:border-slate-700">
                   {auditViewScope === "SELECTED"
-                    ? `No inspection entries logged yet for ${selectedMachine?.name || selectedMachine?.model} by your company. Click "Save & Calculate Health Score" above to log the first entry!`
-                    : "No inspection audit entries recorded yet for your company. Select a machine and click \"Save & Calculate Health Score\" to create your company's first record!"}
+                    ? `No inspection entries logged yet for ${selectedMachine?.name || selectedMachine?.model}. Click "Save & Calculate Health Score" above to log the first entry!`
+                    : "No inspection audit entries recorded yet in the system. Select a machine and click \"Save & Calculate Health Score\" to create the first record!"}
                 </div>
               );
             }
@@ -2502,10 +1949,10 @@ export default function InspectionDataEntry() {
                             <td className="p-3 text-slate-800 dark:text-slate-200 whitespace-nowrap">
                               <div className="font-extrabold flex items-center gap-1.5">
                                 <User size={13} className="text-blue-500" />
-                                {log.userName || log.submittedBy || "Company Admin"}
+                                {log.userName || log.submittedBy || "Super Admin"}
                               </div>
                               <span className="text-[10px] text-slate-400 font-medium">
-                                Role: {log.userRole || "COMPANY_ADMIN"}
+                                Role: {log.userRole || "SUPER_ADMIN"}
                               </span>
                             </td>
 
@@ -3102,7 +2549,7 @@ export default function InspectionDataEntry() {
                           <div className="flex items-center justify-between text-xs font-extrabold">
                             <span className="flex items-center gap-1.5 text-blue-600 dark:text-blue-400">
                               <User size={13} />
-                              {log.userName || log.submittedBy} ({log.userRole || "COMPANY_ADMIN"})
+                              {log.userName || log.submittedBy} ({log.userRole || "SUPER_ADMIN"})
                             </span>
                             <span className="text-[11px] font-medium text-slate-400 flex items-center gap-1">
                               <Calendar size={12} />
@@ -3154,7 +2601,7 @@ export default function InspectionDataEntry() {
                       Add Custom Component to Equipment
                     </h2>
                     <p className="text-xs text-blue-200">
-                      Machine: <span className="font-bold text-white">{formatCleanModelName(selectedMachine)}</span> ({selectedMachine?.equipmentType || selectedMachine?.category})
+                      Machine: <span className="font-bold text-white">{selectedMachine?.name || selectedMachine?.model}</span> ({selectedMachine?.equipmentType || selectedMachine?.category})
                     </p>
                   </div>
                 </div>
@@ -3312,89 +2759,51 @@ export default function InspectionDataEntry() {
             </div>
           </div>
         )}
+        {/* IN-APP DELETE CONFIRMATION MODAL */}
+        {deletingLogTarget && (
+          <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/80 p-4 backdrop-blur-md animate-in fade-in duration-200">
+            <div className="w-full max-w-md overflow-hidden rounded-3xl border border-red-500/30 bg-white p-6 shadow-2xl dark:bg-[#0c1626]">
+              <div className="flex items-center gap-3.5">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-red-100 text-red-600 dark:bg-red-950/60 dark:text-red-400">
+                  <Trash2 size={24} />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900 dark:text-white">
+                    Delete Inspection Record?
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Audit Trail Permanent Deletion
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-2xl bg-slate-50 p-3.5 text-xs text-slate-600 dark:bg-slate-900/60 dark:text-slate-300">
+                Are you sure you want to permanently delete the audit record for <strong className="text-red-500 dark:text-red-400 font-bold">"{deletingLogTarget.name}"</strong>? This action cannot be undone.
+              </div>
+
+              <div className="mt-6 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  disabled={isDeletingLog}
+                  onClick={() => setDeletingLogTarget(null)}
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-[#101f33] dark:text-slate-200 dark:hover:bg-slate-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={isDeletingLog}
+                  onClick={confirmDeleteHistoryLog}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 px-4 py-2 text-xs font-bold text-white shadow-lg shadow-red-600/30 transition hover:from-red-500 hover:to-rose-500 disabled:opacity-50"
+                >
+                  {isDeletingLog ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                  {isDeletingLog ? "Deleting..." : "Yes, Delete Record"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
-      {/* FLOATING TOAST NOTIFICATION */}
-      {toast && (
-        <div className="fixed top-6 right-6 z-[9999999] flex max-w-md items-center gap-3 rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-2xl backdrop-blur-md transition-all duration-300 dark:border-slate-700 dark:bg-[#0c192c]/95">
-          <div
-            className={`rounded-xl p-2 text-white shadow ${
-              toast.type === "warning"
-                ? "bg-amber-500"
-                : toast.type === "error"
-                ? "bg-red-500"
-                : toast.type === "success"
-                ? "bg-emerald-500"
-                : "bg-blue-600"
-            }`}
-          >
-            {toast.type === "warning" ? (
-              <AlertTriangle size={18} />
-            ) : toast.type === "error" ? (
-              <XCircle size={18} />
-            ) : toast.type === "success" ? (
-              <CheckCircle2 size={18} />
-            ) : (
-              <Info size={18} />
-            )}
-          </div>
-
-          <div className="flex-1 text-xs font-bold text-slate-800 dark:text-slate-200">
-            {toast.message}
-          </div>
-
-          <button
-            onClick={() => setToast(null)}
-            className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-white"
-          >
-            <X size={14} />
-          </button>
-        </div>
-      )}
-
-      {/* IN-APP DELETE CONFIRMATION MODAL */}
-      {deletingLogTarget && (
-        <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/80 p-4 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="w-full max-w-md overflow-hidden rounded-3xl border border-red-500/30 bg-white p-6 shadow-2xl dark:bg-[#0c1626]">
-            <div className="flex items-center gap-3.5">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-red-100 text-red-600 dark:bg-red-950/60 dark:text-red-400">
-                <Trash2 size={24} />
-              </div>
-              <div>
-                <h3 className="text-base font-black text-slate-900 dark:text-white">
-                  Delete Inspection Record?
-                </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Audit Trail Permanent Deletion
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-4 rounded-2xl bg-slate-50 p-3.5 text-xs text-slate-600 dark:bg-slate-900/60 dark:text-slate-300">
-              Are you sure you want to permanently delete the audit record for <strong className="text-red-500 dark:text-red-400 font-bold">"{deletingLogTarget.name}"</strong>? This action cannot be undone.
-            </div>
-
-            <div className="mt-6 flex items-center justify-end gap-2.5">
-              <button
-                type="button"
-                disabled={isDeletingLog}
-                onClick={() => setDeletingLogTarget(null)}
-                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-[#101f33] dark:text-slate-200 dark:hover:bg-slate-800"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={isDeletingLog}
-                onClick={confirmDeleteHistoryLog}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 px-4 py-2 text-xs font-bold text-white shadow-lg shadow-red-600/30 transition hover:from-red-500 hover:to-rose-500 disabled:opacity-50"
-              >
-                {isDeletingLog ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
-                {isDeletingLog ? "Deleting..." : "Yes, Delete Record"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 }

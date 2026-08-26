@@ -142,11 +142,29 @@ export default function AppSidebar({ role = "super_admin" }: AppSidebarProps) {
         StorageService.get(STORAGE_KEYS.ROLE) ||
         "",
     );
-    if (role === "super_admin" || role === "superadmin") {
+    if (
+      role === "super_admin" ||
+      role === "superadmin"
+    ) {
       return "/super-admin/profile";
     }
-    if (role === "company_admin" || role === "admin") {
+    if (
+      role === "sub_super_admin" ||
+      role === "subsuperadmin"
+    ) {
+      return "/sub-super-admin/profile";
+    }
+    if (
+      role === "company_admin" ||
+      role === "admin"
+    ) {
       return "/company-admin/profile";
+    }
+    if (
+      role === "sub_admin" ||
+      role === "subadmin"
+    ) {
+      return "/sub-admin/profile";
     }
 
     if (role === "artisans") {

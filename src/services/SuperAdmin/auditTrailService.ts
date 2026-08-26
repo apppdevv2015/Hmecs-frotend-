@@ -100,20 +100,14 @@ class AuditTrailService {
     };
   }
 
-  private getAllLogsFromStorage(): AuditLogEntry[] {
-    try {
-      const data = localStorage.getItem(STORAGE_AUDIT_LOGS);
-      if (data) {
-        return JSON.parse(data);
-      }
-    } catch {}
-    return [];
+  private memoryLogs: AuditLogEntry[] = [];
+
+  private getLogsFromStorage(): AuditLogEntry[] {
+    return this.memoryLogs;
   }
 
   private saveLogsToStorage(logs: AuditLogEntry[]): void {
-    try {
-      localStorage.setItem(STORAGE_AUDIT_LOGS, JSON.stringify(logs.slice(0, 500)));
-    } catch {}
+    this.memoryLogs = logs;
     this.notify();
   }
 
@@ -260,25 +254,19 @@ class AuditTrailService {
    * Get all logs (global stream)
    */
   public getAllRecentLogs(limit: number = 50): AuditLogEntry[] {
-    const logs = this.getAllLogsFromStorage();
+    const logs = this.getLogsFromStorage();
     return logs.slice(0, limit);
   }
 
   // --- Voice Notes API ---
-  private getAllVoiceNotesFromStorage(): AudioVoiceNote[] {
-    try {
-      const data = localStorage.getItem(STORAGE_VOICE_NOTES);
-      if (data) {
-        return JSON.parse(data);
-      }
-    } catch {}
-    return [];
+  private memoryVoiceNotes: AudioVoiceNote[] = [];
+
+  private getVoiceNotesFromStorage(): AudioVoiceNote[] {
+    return this.memoryVoiceNotes;
   }
 
   private saveVoiceNotesToStorage(notes: AudioVoiceNote[]): void {
-    try {
-      localStorage.setItem(STORAGE_VOICE_NOTES, JSON.stringify(notes));
-    } catch {}
+    this.memoryVoiceNotes = notes;
     this.notify();
   }
 
