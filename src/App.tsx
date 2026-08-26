@@ -900,6 +900,16 @@ export default function App() {
                     </Suspense>
                   }
                 />
+
+                <Route
+                  path="/company-admin/quotation-request"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <QuotationRequest />
+                    </Suspense>
+                  }
+                />
+
                 <Route
                   path="/company-admin/quotation-status"
                   element={
