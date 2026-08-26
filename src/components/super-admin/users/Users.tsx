@@ -21,6 +21,7 @@ import {
   type UpdateUserPayload,
 } from "../../../services/Auth/userService";
 import { getRoles, type ApiRole } from "../../../services/Auth/roleService";
+import { showErrorToast, showSuccessToast } from "../../../utils/toastUtils";
 
 export type UserStatus = "active" | "inactive";
 export type ModalMode = "add" | "edit";
@@ -854,6 +855,34 @@ export default function Users() {
   // HANDLERS
   // ========================
 
+  const [togglingUserId, setTogglingUserId] = useState<string | number | null>(null);
+
+  const handleToggleUserStatus = async (user: User) => {
+    if (togglingUserId) return;
+
+    const nextStatus: UserStatus = user.status === "active" ? "inactive" : "active";
+    const previousUsers = allUsersForFilters;
+
+    // Optimistic update
+    setAllUsersForFilters((prev) =>
+      prev.map((u) => (u.id === user.id ? { ...u, status: nextStatus } : u))
+    );
+    setTogglingUserId(user.id);
+
+    try {
+      await userService.updateUser(user.id, {
+        is_active: nextStatus === "active",
+      });
+      showSuccessToast(`${user.name} is now ${nextStatus === "active" ? "Active" : "Inactive"}`);
+    } catch (err: any) {
+      console.error("User status toggle error:", err);
+      setAllUsersForFilters(previousUsers);
+      showErrorToast(err?.message || "Failed to update user status");
+    } finally {
+      setTogglingUserId(null);
+    }
+  };
+
   const openAddModal = () => {
     setModalMode("add");
     setEditingUserId(null);
@@ -1034,6 +1063,8 @@ export default function Users() {
           onView={openViewModal}
           onEdit={openEditModal}
           onDelete={openDeleteModal}
+          onToggleStatus={handleToggleUserStatus}
+          togglingUserId={togglingUserId}
         />
 
         <Pagination
@@ -1204,6 +1235,8 @@ function UsersTable({
   onView,
   onEdit,
   onDelete,
+  onToggleStatus,
+  togglingUserId,
 }: {
   users: User[];
   startItem?: number;
@@ -1212,6 +1245,8 @@ function UsersTable({
   onView: (u: User) => void;
   onEdit: (u: User) => void;
   onDelete: (u: User) => void;
+  onToggleStatus?: (u: User) => void;
+  togglingUserId?: string | number | null;
 }) {
   if (loading)
     return (
@@ -1255,6 +1290,7 @@ function UsersTable({
               "Phone",
               "Role",
               "Company",
+              "Status",
               "Subscription",
               "Last Login",
             ].map((h) => (
@@ -1311,6 +1347,27 @@ function UsersTable({
                 ) : (
                   user.company || "-"
                 )}
+              </td>
+              <td className="px-6 py-5" onClick={(e) => e.stopPropagation()}>
+                <label className="relative inline-flex cursor-pointer items-center">
+                  <input
+                    type="checkbox"
+                    checked={user.status === "active"}
+                    onChange={() => onToggleStatus?.(user)}
+                    disabled={togglingUserId === user.id}
+                    className="peer sr-only"
+                  />
+                  <div className="peer h-6 w-11 rounded-full bg-slate-200 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-slate-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-emerald-500 peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none dark:border-slate-600 dark:bg-slate-700" />
+                  <span
+                    className={`ml-3 text-xs font-bold uppercase tracking-wider ${
+                      user.status === "active"
+                        ? "text-emerald-600 dark:text-emerald-400"
+                        : "text-slate-400 dark:text-slate-500"
+                    }`}
+                  >
+                    {user.status}
+                  </span>
+                </label>
               </td>
               <td className="px-6 py-5">
                 <span

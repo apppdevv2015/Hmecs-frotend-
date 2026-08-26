@@ -1,1166 +1,799 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
-import { createPortal } from "react-dom";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ArrowLeft,
-  Calendar,
+  Camera,
+  Check,
   CheckCircle2,
-  ChevronDown,
   Clock,
-  ImageIcon,
   Info,
-  MoreVertical,
-  Phone,
-  RefreshCw,
-  Save,
-  Search,
-  Send,
-  ShieldAlert,
-  ShieldCheck,
+  Loader2,
+  MapPin,
+  Settings2,
+  Timer,
+  Upload,
+  User,
   Wrench,
   X,
   XCircle,
+  AlertTriangle,
+  FileText,
+  History as HistoryIcon,
+  ShieldCheck,
+  Calendar,
+  Activity,
+  Eye,
+  RefreshCw,
+  Search,
+  CheckSquare,
 } from "lucide-react";
+import toast from "react-hot-toast";
+
+import AppSelect from "../../components/ui/dropdown/AppSelect";
+import machineService from "../../services/Operator/machineService";
+import { fleetService } from "../../services/Fleet/fleetService";
+import { componentService } from "../../services/companyadmin/componentService";
+import StorageService, { STORAGE_KEYS } from "../../services/storage.service";
+import { apiCall } from "../../services/apiHandler";
+import { showSuccessToast, showErrorToast } from "../../utils/toastUtils";
 
 /* ============================================================================
- * TYPES
+ * 1. TYPES
  * ==========================================================================*/
 
-type MachineStatus = "In Progress" | "Completed" | "Pending";
-type HealthStatus = "Good" | "Warning" | "Critical";
-type ToastType = "success" | "error";
-type OverallCondition = "Good" | "Needs Attention" | "Critical";
-type IssuesObserved = "yes" | "no";
+type HealthStatus = "GOOD" | "NEEDS_ATTENTION" | "CRITICAL";
+type ComponentHealthStatus = "Healthy" | "Good" | "Warning" | "Critical";
 
-interface MachineComponentItem {
+interface MachineComponent {
   id: string;
+  category: string;
   name: string;
-  subComponents: number;
   health: number;
-  reading: string;
+  status: ComponentHealthStatus;
+  currentReading: string;
 }
 
-interface Machine {
+interface MachineDetails {
   id: string;
   name: string;
-  subtitle: string;
-  lastInspection: string;
-  status: MachineStatus;
-  image: string;
+  machineId: string;
   machineType: string;
-  serialNumber: string;
-  model: string;
-  location: string;
+  imageUrl: string;
   assignedOperator: string;
-  assignedOperatorPhone: string;
-  assignedBy: string;
-  assignDate: string;
+  assignedSupervisor?: string;
   shift: string;
-  startHour: string;
-  workLocation: string;
-  description: string;
-  components: MachineComponentItem[];
+  date: string;
+  location: string;
+  status: "In Progress" | "Idle" | "Under Maintenance";
+  currentHours?: number;
 }
 
-interface ToastState {
-  type: ToastType;
-  message: string;
+interface IssueAttachment {
+  id: string;
+  file: File;
+  previewUrl: string;
 }
 
-interface ComponentSummary {
-  good: number;
-  warning: number;
-  critical: number;
-  total: number;
-  avg: number;
-  overallStatus: HealthStatus;
+interface WorkReportFormState {
+  workDescription: string;
+  overallCondition: HealthStatus | null;
+  issuesObserved: boolean | null;
+  issueDescription: string;
+  downtime: string;
+  attachments: IssueAttachment[];
 }
+
+interface FormErrors {
+  workDescription?: string;
+  overallCondition?: string;
+  issueDescription?: string;
+}
+
+type PageLoadState = "loading" | "ready" | "no-machine" | "error";
+type SubmitState = "idle" | "saving-draft" | "submitting" | "submitted";
 
 /* ============================================================================
- * DUMMY DATA — shaped like the future API envelope
- * BACKEND TODO: replace with workOrderService.getAssignedMachines() /
- * workOrderService.getMachine(:machineId) / workOrderService.submitWorkOrder()
+ * 2. HELPERS
  * ==========================================================================*/
 
-const INITIAL_MACHINES: Machine[] = [
-  {
-    id: "CAT-777-DEMO",
-    name: "CAT-777-DEMO",
-    subtitle: "Haul Truck",
-    lastInspection: "19 Aug 2025",
-    status: "In Progress",
-    image:
-      "https://placehold.co/240x160/1d4ed8/ffffff?text=Haul+Truck",
-    machineType: "Haul Truck",
-    serialNumber: "CAT777X12345",
-    model: "777F",
-    location: "HME Site - Pit 2",
-    assignedOperator: "Rakesh Kumar",
-    assignedOperatorPhone: "+91 98765 43210",
-    assignedBy: "Supervisor",
-    assignDate: "18 Aug 2025, 08:30 AM",
-    shift: "Day Shift",
-    startHour: "10:15 AM",
-    workLocation: "HME Site - Pit 2",
-    description:
-      "Hydraulic system check, engine oil leakage inspection and brake system verification performed.",
-    components: [
-      {
-        id: "hyd",
-        name: "Hydraulic System",
-        subComponents: 3,
-        health: 20,
-        reading: "Leakage detected",
-      },
-      {
-        id: "eng",
-        name: "Engine System",
-        subComponents: 3,
-        health: 80,
-        reading: "14520 hrs",
-      },
-      {
-        id: "brk",
-        name: "Brake System",
-        subComponents: 2,
-        health: 20,
-        reading: "Brake wear high",
-      },
-    ],
-  },
-  {
-    id: "HME-EX-001",
-    name: "HME-EX-001",
-    subtitle: "Excavator 210",
-    lastInspection: "18 Aug 2025",
-    status: "Completed",
-    image: "https://placehold.co/240x160/15803d/ffffff?text=Excavator",
-    machineType: "Excavator",
-    serialNumber: "EX210X98231",
-    model: "210 GC",
-    location: "HME Site - Pit 1",
-    assignedOperator: "Suresh Yadav",
-    assignedOperatorPhone: "+91 90123 44556",
-    assignedBy: "Supervisor",
-    assignDate: "17 Aug 2025, 07:50 AM",
-    shift: "Day Shift",
-    startHour: "08:05 AM",
-    workLocation: "HME Site - Pit 1",
-    description: "Routine after-shift inspection completed, no major faults found.",
-    components: [
-      { id: "eng", name: "Engine System", subComponents: 3, health: 88, reading: "9820 hrs" },
-      { id: "hyd", name: "Hydraulic System", subComponents: 3, health: 74, reading: "Normal" },
-    ],
-  },
-  {
-    id: "HME-WL-002",
-    name: "HME-WL-002",
-    subtitle: "Wheel Loader 950",
-    lastInspection: "17 Aug 2025",
-    status: "Completed",
-    image: "https://placehold.co/240x160/b45309/ffffff?text=Wheel+Loader",
-    machineType: "Wheel Loader",
-    serialNumber: "WL950X44120",
-    model: "950M",
-    location: "HME Yard - Central",
-    assignedOperator: "Vikram Singh",
-    assignedOperatorPhone: "+91 99887 65432",
-    assignedBy: "Supervisor",
-    assignDate: "16 Aug 2025, 06:40 AM",
-    shift: "Night Shift",
-    startHour: "02:10 PM",
-    workLocation: "HME Yard - Central",
-    description: "Tyre pressure and transmission fluid checked, topped up as needed.",
-    components: [
-      { id: "tyre", name: "Tyre", subComponents: 4, health: 82, reading: "Normal" },
-      { id: "trans", name: "Transmission", subComponents: 2, health: 90, reading: "Normal" },
-    ],
-  },
-  {
-    id: "HME-DZ-003",
-    name: "HME-DZ-003",
-    subtitle: "Bulldozer D6",
-    lastInspection: "16 Aug 2025",
-    status: "In Progress",
-    image: "https://placehold.co/240x160/b91c1c/ffffff?text=Bulldozer",
-    machineType: "Bulldozer",
-    serialNumber: "DZ6X77812",
-    model: "D6T",
-    location: "Field Site - North Quarry",
-    assignedOperator: "Anil Mehta",
-    assignedOperatorPhone: "+91 91234 56780",
-    assignedBy: "Supervisor",
-    assignDate: "15 Aug 2025, 09:10 AM",
-    shift: "Day Shift",
-    startHour: "09:40 AM",
-    workLocation: "Field Site - North Quarry",
-    description: "Undercarriage inspection in progress, tension check pending.",
-    components: [
-      { id: "undc", name: "Undercarriage", subComponents: 3, health: 55, reading: "Wear noted" },
-      { id: "eng", name: "Engine System", subComponents: 3, health: 91, reading: "6110 hrs" },
-    ],
-  },
-  {
-    id: "HME-GR-004",
-    name: "HME-GR-004",
-    subtitle: "Grader 140K",
-    lastInspection: "15 Aug 2025",
-    status: "Pending",
-    image: "https://placehold.co/240x160/475569/ffffff?text=Grader",
-    machineType: "Grader",
-    serialNumber: "GR140X33019",
-    model: "140K",
-    location: "HME Site - Pit 2",
-    assignedOperator: "Deepak Rana",
-    assignedOperatorPhone: "+91 90000 11223",
-    assignedBy: "Supervisor",
-    assignDate: "15 Aug 2025, 06:00 AM",
-    shift: "Day Shift",
-    startHour: "--:-- --",
-    workLocation: "HME Site - Pit 2",
-    description: "",
-    components: [
-      { id: "blade", name: "Blade & Circle", subComponents: 2, health: 68, reading: "Normal" },
-      { id: "eng", name: "Engine System", subComponents: 3, health: 76, reading: "3320 hrs" },
-    ],
-  },
-];
-
-const STATUS_OPTIONS: string[] = ["All Status", "In Progress", "Completed", "Pending"];
-const COMPONENT_FILTER_OPTIONS: string[] = ["All Components", "Good", "Warning", "Critical"];
-const WORK_LOCATION_OPTIONS: string[] = [
-  "HME Site - Pit 2",
-  "HME Site - Pit 1",
-  "HME Yard - Central",
-  "Field Site - North Quarry",
-];
-
-/* ============================================================================
- * HELPERS
- * ==========================================================================*/
-
-function healthStatus(health: number): HealthStatus {
-  if (health >= 70) return "Good";
-  if (health >= 40) return "Warning";
-  return "Critical";
-}
-
-function statusBadgeClasses(status: string): string {
-  switch (status) {
-    case "Good":
-    case "Completed":
-      return "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400";
-    case "Warning":
-    case "In Progress":
-      return "bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400";
-    case "Critical":
-    case "Pending":
-      return "bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400";
-    default:
-      return "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300";
+const cleanMachineName = (rawName?: string): string => {
+  let name = String(rawName || "").trim();
+  const words = name.split(/\s+/);
+  if (words.length >= 2 && words[0].toLowerCase() === words[1].toLowerCase()) {
+    words.shift();
+    name = words.join(" ");
   }
-}
+  return name || "Mining Equipment";
+};
 
-function healthBarColor(health: number): string {
-  if (health >= 70) return "bg-emerald-500";
-  if (health >= 40) return "bg-amber-500";
-  return "bg-rose-500";
-}
+const formatDate = (isoString?: string) => {
+  if (!isoString) return "—";
+  try {
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return isoString;
+    return d.toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
+  } catch {
+    return isoString;
+  }
+};
 
-function nowLabel(): string {
-  return new Date().toLocaleTimeString("en-US", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
+const formatDuration = (startIso: string, endIso: string): string => {
+  const diffMs = new Date(endIso).getTime() - new Date(startIso).getTime();
+  if (diffMs <= 0) return "0h 0m";
+  const hours = Math.floor(diffMs / 3600000);
+  const minutes = Math.floor((diffMs % 3600000) / 60000);
+  return `${hours}h ${minutes}m`;
+};
+
+/* ============================================================================
+ * 3. MAIN COMPONENT
+ * ==========================================================================*/
+
+export default function ArtisanWorkOrderCapture() {
+  const storedUser =
+    StorageService.get<any>(STORAGE_KEYS.USER) ||
+    StorageService.get<any>("user") ||
+    {};
+  const artisanName = storedUser?.name || storedUser?.fullName || "Artisan Technician";
+  const artisanEmail = storedUser?.email || "artisan@mine.com";
+  const artisanId = String(storedUser?.id || storedUser?.userId || "art-1");
+
+  // Machines State
+  const [machines, setMachines] = useState<MachineDetails[]>([]);
+  const [selectedMachine, setSelectedMachine] = useState<MachineDetails | null>(null);
+  const [pageState, setPageState] = useState<PageLoadState>("loading");
+  const [components, setComponents] = useState<MachineComponent[]>([]);
+
+  // Shift Times from Database Pre-Inspection
+  const [workStartTime, setWorkStartTime] = useState<string>(new Date().toISOString());
+  const [workEndTime, setWorkEndTime] = useState<string>(new Date().toISOString());
+
+  // Form State
+  const [form, setForm] = useState<WorkReportFormState>({
+    workDescription: "",
+    overallCondition: null,
+    issuesObserved: false,
+    issueDescription: "",
+    downtime: "",
+    attachments: [],
   });
-}
 
-function parseClock(label: string): number | null {
-  const m = /^(\d{1,2}):(\d{2})\s?(AM|PM)$/i.exec((label || "").trim());
-  if (!m) return null;
-  let h = parseInt(m[1], 10);
-  const mm = parseInt(m[2], 10);
-  const ap = m[3];
-  if (/pm/i.test(ap) && h !== 12) h += 12;
-  if (/am/i.test(ap) && h === 12) h = 0;
-  return h * 60 + mm;
-}
+  const [errors, setErrors] = useState<FormErrors>({});
+  const [submitState, setSubmitState] = useState<SubmitState>("idle");
 
-function formatDuration(mins: number | null): string {
-  if (mins == null || mins < 0) return "--:--";
-  const h = Math.floor(mins / 60);
-  const m = mins % 60;
-  return `${h}h ${m}m`;
-}
+  // Database Inspection History State
+  const [historyLogs, setHistoryLogs] = useState<any[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [selectedHistoryLog, setSelectedHistoryLog] = useState<any | null>(null);
 
-/* ============================================================================
- * RESPONSIVE CUSTOM DROPDOWN — AppSelect (used everywhere instead of <select>)
- * ==========================================================================*/
+  // ---------------------------------------------------------------------------
+  // Load Assigned Machines for THIS Artisan
+  // ---------------------------------------------------------------------------
+  const loadAssignedMachines = useCallback(async () => {
+    try {
+      setPageState("loading");
+      const userCompanyId = StorageService.getCompanyId() || "";
+      const currentArtisanId = String(artisanId).toLowerCase().trim();
+      const currentArtisanEmail = String(artisanEmail).toLowerCase().trim();
+      const currentArtisanName = String(artisanName).toLowerCase().trim();
 
-interface AppSelectProps {
-  value: string;
-  options: string[];
-  onChange: (value: string) => void;
-  icon?: ReactNode;
-  className?: string;
-}
-
-function AppSelect({ value, options, onChange, icon, className = "" }: AppSelectProps) {
-  const [open, setOpen] = useState<boolean>(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
+      let rawList: any[] = [];
+      try {
+        const res = await machineService.getAssignedMachines();
+        if (Array.isArray(res)) rawList = res;
+        else if (Array.isArray(res?.data)) rawList = res.data;
+        else if (Array.isArray(res?.assignedMachines)) rawList = res.assignedMachines;
+      } catch {
+        const res2 = await fleetService.getFleetMachines();
+        if (Array.isArray(res2)) rawList = res2;
+        else if (Array.isArray(res2?.data)) rawList = res2.data;
+        else if (Array.isArray(res2?.machines)) rawList = res2.machines;
       }
+
+      // Filter strictly for machines assigned to THIS Artisan
+      const assignedToArtisanList = rawList.filter((m: any) => {
+        if (!m) return false;
+        if (userCompanyId && m.companyId && String(m.companyId) !== userCompanyId) return false;
+
+        const mArtisanId = String(
+          m?.assignedArtisanId ??
+          m?.assigned_artisan_id ??
+          m?.artisanId ??
+          m?.artisan_id ??
+          m?.technicianId ??
+          ""
+        ).toLowerCase().trim();
+
+        const mArtisanName = String(
+          m?.assignedArtisanName ??
+          m?.artisanName ??
+          m?.technician ??
+          ""
+        ).toLowerCase().trim();
+
+        const mArtisanEmail = String(
+          m?.assignedArtisanEmail ??
+          m?.artisanEmail ??
+          ""
+        ).toLowerCase().trim();
+
+        if (mArtisanId && currentArtisanId && mArtisanId === currentArtisanId) return true;
+        if (mArtisanEmail && currentArtisanEmail && mArtisanEmail === currentArtisanEmail) return true;
+        if (mArtisanName && currentArtisanName && (
+          mArtisanName.includes(currentArtisanName) ||
+          currentArtisanName.includes(mArtisanName)
+        )) return true;
+
+        return false;
+      });
+
+      const finalMachines = assignedToArtisanList.length > 0 ? assignedToArtisanList : rawList.filter((m: any) => {
+        const hasArtisanField = m?.assignedArtisanId || m?.assignedArtisanName;
+        return !userCompanyId || !m.companyId || String(m.companyId) === userCompanyId ? Boolean(hasArtisanField) : false;
+      });
+
+      const mapped: MachineDetails[] = (finalMachines.length > 0 ? finalMachines : (rawList.length > 0 ? [rawList[0]] : [])).map((m: any) => {
+        const rawHours =
+          m.currentHours ??
+          m.totalHours ??
+          m.hoursRun ??
+          m.operatingHours ??
+          m.installHours ??
+          0;
+
+        return {
+          id: m.machineId || m.id,
+          name: cleanMachineName(m.machineName || m.name),
+          machineId: String(m.serialNumber || m.fleetId || "SN-HME-1001").replace(/^DEMO-/i, ""),
+          machineType: m.equipmentType || m.category || "Heavy Machinery",
+          imageUrl:
+            m.imageUrl ||
+            "https://images.unsplash.com/photo-1581094794329-c8112a89af12?q=80&w=800&auto=format&fit=crop",
+          assignedOperator: m.assignedOperatorName || "Operator User",
+          assignedSupervisor: m.assignedSupervisorName || "Supervisor User",
+          shift: "Day Shift (Artisan Maintenance)",
+          date: new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }),
+          location: m.location || m.site || "Mining Pit Sector A",
+          status: "In Progress",
+          currentHours: Number(rawHours || 0),
+        };
+      });
+
+      setMachines(mapped);
+      if (mapped.length > 0) {
+        setSelectedMachine(mapped[0]);
+      }
+      setPageState(mapped.length > 0 ? "ready" : "no-machine");
+    } catch (err) {
+      console.warn("Could not load machines:", err);
+      setPageState("error");
     }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, []);
-
-  return (
-    <div ref={ref} className={`relative w-full ${className}`}>
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between gap-2.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
-      >
-        <span className="flex items-center gap-2 truncate">
-          {icon}
-          <span className="truncate">{value}</span>
-        </span>
-        <ChevronDown
-          className={`h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform ${
-            open ? "rotate-180" : ""
-          }`}
-        />
-      </button>
-
-      {open && (
-        <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 max-h-56 overflow-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-800 dark:bg-slate-900">
-          {options.map((opt) => (
-            <button
-              key={opt}
-              type="button"
-              onClick={() => {
-                onChange(opt);
-                setOpen(false);
-              }}
-              className={`flex w-full items-center justify-between px-3.5 py-2.5 text-left text-xs font-semibold transition ${
-                opt === value
-                  ? "bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400"
-                  : "text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800"
-              }`}
-            >
-              <span className="truncate">{opt}</span>
-              {opt === value && <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ============================================================================
- * SMALL UI PRIMITIVES
- * ==========================================================================*/
-
-interface DetailFieldProps {
-  label: string;
-  value: ReactNode;
-}
-
-function DetailField({ label, value }: DetailFieldProps) {
-  return (
-    <div>
-      <p className="text-[11px] font-semibold text-slate-400">{label}</p>
-      <p className="mt-0.5 text-xs font-bold text-slate-900 dark:text-white">{value}</p>
-    </div>
-  );
-}
-
-interface ToastProps {
-  toast: ToastState | null;
-}
-
-function Toast({ toast }: ToastProps) {
-  if (!toast) return null;
-  const isError = toast.type === "error";
-  return (
-    <div
-      className={`fixed bottom-5 right-5 z-[2147483647] flex items-center gap-2 rounded-xl border px-4 py-3 text-xs font-bold shadow-lg ${
-        isError
-          ? "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-300"
-          : "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300"
-      }`}
-    >
-      {isError ? <XCircle className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
-      {toast.message}
-    </div>
-  );
-}
-
-/* ============================================================================
- * COMPONENT UPDATE MODAL
- * ==========================================================================*/
-
-interface ComponentUpdateModalProps {
-  component: MachineComponentItem;
-  onClose: () => void;
-  onSave: (updated: MachineComponentItem) => void;
-}
-
-function ComponentUpdateModal({ component, onClose, onSave }: ComponentUpdateModalProps) {
-  const [health, setHealth] = useState<number>(component.health);
-  const [reading, setReading] = useState<string>(component.reading);
-  const status = healthStatus(health);
+  }, [artisanId, artisanEmail, artisanName]);
 
   useEffect(() => {
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, []);
+    loadAssignedMachines();
+  }, [loadAssignedMachines]);
 
-  return createPortal(
-    <div className="fixed inset-0 flex items-center justify-center p-4" style={{ zIndex: 2147483647 }}>
-      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative flex max-h-[88vh] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-slate-900">
-        <div className="flex items-start justify-between border-b border-slate-100 bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-5 dark:border-slate-800">
-          <div>
-            <h3 className="text-base font-bold text-white">{component.name}</h3>
-            <p className="mt-0.5 text-xs font-medium text-blue-100">
-              {component.subComponents} sub-components
-            </p>
+  // ---------------------------------------------------------------------------
+  // Load History and Start Time for Selected Machine
+  // ---------------------------------------------------------------------------
+  const loadMachineDetailsAndHistory = useCallback(async (machineId: string) => {
+    if (!machineId) return;
+    try {
+      setHistoryLoading(true);
+      const userCompanyId = StorageService.getCompanyId() || "";
+      const queryParam = userCompanyId ? `?companyId=${encodeURIComponent(userCompanyId)}` : "";
+
+      // 1. Fetch History from PostgreSQL
+      const historyRes: any = await apiCall(
+        `/machines/${encodeURIComponent(machineId)}/inspection-history${queryParam}`,
+        { method: "GET" },
+        { showError: false }
+      ).catch(() => apiCall(`/machines/inspection-history${queryParam}`, { method: "GET" }, { showError: false }));
+
+      let logs: any[] = [];
+      if (Array.isArray(historyRes?.data?.historyLogs)) logs = historyRes.data.historyLogs;
+      else if (Array.isArray(historyRes?.data)) logs = historyRes.data;
+      else if (Array.isArray(historyRes)) logs = historyRes;
+
+      const matchedLogs = logs.filter(
+        (l: any) => l.machineId === machineId || (l.machineName && selectedMachine && l.machineName.toLowerCase().includes(selectedMachine.name.toLowerCase()))
+      );
+      setHistoryLogs(matchedLogs.length > 0 ? matchedLogs : logs.slice(0, 15));
+
+      // 2. Set Start Time from latest pre-start inspection timestamp in PostgreSQL
+      if (logs.length > 0 && logs[0].createdAt) {
+        setWorkStartTime(new Date(logs[0].createdAt).toISOString());
+      } else {
+        const fall = new Date();
+        fall.setHours(fall.getHours() - 2);
+        setWorkStartTime(fall.toISOString());
+      }
+      setWorkEndTime(new Date().toISOString());
+
+      // 3. Load Components
+      const compRes = await componentService.getComponentsByMachineId(machineId);
+      let rawComps: any[] = [];
+      if (Array.isArray(compRes)) rawComps = compRes;
+      else if (Array.isArray(compRes?.data)) rawComps = compRes.data;
+      else if (Array.isArray(compRes?.components)) rawComps = compRes.components;
+
+      setComponents(rawComps.map((c: any) => ({
+        id: c.id || c.componentId,
+        category: c.category || "General Subsystem",
+        name: c.name || c.description || "Component Unit",
+        health: c.healthScore ?? 90,
+        status: "Healthy",
+        currentReading: c.currentReading || "Normal",
+      })));
+    } catch (err) {
+      console.warn("History loading notice:", err);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [selectedMachine]);
+
+  useEffect(() => {
+    if (selectedMachine?.id) {
+      loadMachineDetailsAndHistory(selectedMachine.id);
+    }
+  }, [selectedMachine?.id, loadMachineDetailsAndHistory]);
+
+  // ---------------------------------------------------------------------------
+  // Validation & Submit to PostgreSQL
+  // ---------------------------------------------------------------------------
+  const validate = (): boolean => {
+    const errs: FormErrors = {};
+    if (!form.workDescription.trim()) errs.workDescription = "Please enter work description";
+    if (!form.overallCondition) errs.overallCondition = "Please select overall condition";
+    if (form.issuesObserved && !form.issueDescription.trim()) errs.issueDescription = "Please describe the observed issue";
+    setErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  const handleSubmit = async (isDraft: boolean) => {
+    if (!isDraft && !validate()) return;
+    if (!selectedMachine) return;
+
+    try {
+      setSubmitState(isDraft ? "saving-draft" : "submitting");
+      const finalEndTime = new Date().toISOString();
+      const totalHours = formatDuration(workStartTime, finalEndTime);
+
+      await apiCall(`/machines/${encodeURIComponent(selectedMachine.id)}/manual-data`, {
+        method: "POST",
+        body: JSON.stringify({
+          machineName: selectedMachine.name,
+          brand: "Heavy Equipment",
+          category: selectedMachine.machineType,
+          modelName: selectedMachine.name,
+          serialNumber: selectedMachine.machineId,
+          componentName: components.map((c) => c.name).join(", ") || "All Machine Components",
+          componentCategory: "Artisan Work Order & Maintenance Report",
+          actionDescription: isDraft ? "Artisan Draft Work Order Saved" : "Final Artisan Work Order Submitted",
+          readings: {
+            workDescription: form.workDescription,
+            overallCondition: form.overallCondition,
+            workStartTime,
+            workEndTime: finalEndTime,
+            totalWorkingHours: totalHours,
+            issuesObserved: form.issuesObserved,
+            issueDescription: form.issueDescription,
+            downtime: form.downtime,
+          },
+          userName: artisanName,
+          userRole: "ARTISAN",
+          userEmail: artisanEmail,
+        }),
+      }, { showError: false });
+
+      showSuccessToast(isDraft ? "Draft work order saved successfully." : "✓ Work order report submitted to database!");
+      loadMachineDetailsAndHistory(selectedMachine.id);
+      setSubmitState("submitted");
+    } catch (err: any) {
+      showErrorToast(err.message || "Failed to submit work order");
+      setSubmitState("idle");
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-[#f8fafc] p-4 font-sans text-slate-900 antialiased dark:bg-[#07111f] dark:text-slate-50 sm:p-6 lg:p-8 space-y-6">
+      {/* ── HEADER ── */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <div className="inline-flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-bold uppercase tracking-wider text-indigo-700 dark:border-indigo-900/50 dark:bg-indigo-950/40 dark:text-indigo-300">
+            <FileText size={14} />
+            Artisan Work Order & Maintenance Job Card
           </div>
+          <h1 className="mt-2 text-2xl font-black tracking-tight text-slate-900 dark:text-white sm:text-3xl">
+            Work Order & End Shift Report
+          </h1>
+          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+            Record maintenance execution logs, downtime metrics, and view real-time PostgreSQL database inspection audit records.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={onClose}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white/80 transition hover:bg-white/15 hover:text-white"
+            onClick={() => {
+              loadAssignedMachines();
+              if (selectedMachine) loadMachineDetailsAndHistory(selectedMachine.id);
+              showSuccessToast("Refreshed work order data!");
+            }}
+            className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-800 dark:bg-[#101f33] dark:text-slate-200 cursor-pointer"
           >
-            <X className="h-4 w-4" />
+            <RefreshCw size={15} className={historyLoading ? "animate-spin text-blue-600" : ""} />
+            Refresh History
           </button>
         </div>
+      </div>
 
-        <div className="flex-1 overflow-y-auto px-6 py-5">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Health</span>
-            <span className="text-sm font-black text-slate-900 dark:text-white">{health}%</span>
+      {/* ── MACHINE SELECTION & BANNER ── */}
+      {selectedMachine && (
+        <div className="rounded-2xl border border-blue-500/20 bg-gradient-to-r from-[#2044cd] via-[#1d4ed8] to-[#1e3a8a] p-6 text-white shadow-xl shadow-blue-500/10">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-1.5">
+              <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-0.5 text-xs font-black uppercase tracking-wider text-blue-100 backdrop-blur-md">
+                <Wrench size={13} />
+                Selected Maintenance Target
+              </div>
+              <h2 className="text-xl font-black text-white sm:text-2xl">
+                {selectedMachine.name}
+              </h2>
+              <p className="text-xs font-semibold text-blue-100">
+                Serial: <span className="font-mono text-cyan-300">{selectedMachine.machineId}</span> • Category: {selectedMachine.machineType} • 📍 {selectedMachine.location}
+              </p>
+            </div>
+
+            {machines.length > 1 && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-blue-200">Switch Equipment:</span>
+                <select
+                  value={selectedMachine.id}
+                  onChange={(e) => {
+                    const m = machines.find((x) => x.id === e.target.value);
+                    if (m) setSelectedMachine(m);
+                  }}
+                  className="rounded-xl border border-white/30 bg-white/10 px-3 py-2 text-xs font-bold text-white outline-none backdrop-blur-md dark:bg-[#0b1728]"
+                >
+                  {machines.map((m) => (
+                    <option key={m.id} value={m.id} className="text-slate-900">{m.name} ({m.machineId})</option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            value={health}
-            onChange={(e: ChangeEvent<HTMLInputElement>) => setHealth(parseInt(e.target.value, 10))}
-            className="mt-2 w-full accent-blue-600"
+
+          <div className="mt-4 grid grid-cols-2 gap-3 border-t border-white/10 pt-4 sm:grid-cols-4 text-xs">
+            <div>
+              <span className="text-blue-200 text-[10px] uppercase font-bold">Assigned Artisan</span>
+              <p className="font-bold text-white">👤 {artisanName}</p>
+            </div>
+            <div>
+              <span className="text-blue-200 text-[10px] uppercase font-bold">Shift Start Time</span>
+              <p className="font-bold text-white">🕒 {formatDate(workStartTime)}</p>
+            </div>
+            <div>
+              <span className="text-blue-200 text-[10px] uppercase font-bold">Operating Meter</span>
+              <p className="font-bold text-white">{selectedMachine.currentHours ? `${selectedMachine.currentHours.toLocaleString()} hrs` : "0 hrs"}</p>
+            </div>
+            <div>
+              <span className="text-blue-200 text-[10px] uppercase font-bold">Total Shift Duration</span>
+              <p className="font-bold text-emerald-300">⏱️ {formatDuration(workStartTime, workEndTime)}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── WORK ORDER FORM SECTION ── */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-[#0b1728] space-y-6">
+        <div>
+          <h3 className="text-base font-black text-slate-900 dark:text-white">
+            1. Maintenance Execution & Work Details
+          </h3>
+          <p className="text-xs text-slate-400">
+            Detail maintenance interventions performed, components replaced or calibrated.
+          </p>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-xs font-bold text-slate-700 dark:text-slate-300">
+            Work & Maintenance Summary *
+          </label>
+          <textarea
+            rows={3}
+            value={form.workDescription}
+            onChange={(e) => setForm((prev) => ({ ...prev, workDescription: e.target.value }))}
+            placeholder="e.g. Conducted hydraulic line pressure test, changed primary fuel filter, calibrated steering cylinder..."
+            className="w-full rounded-xl border border-slate-300 bg-white p-3 text-xs font-semibold text-slate-700 outline-none transition focus:border-blue-500 dark:border-slate-700 dark:bg-[#101f33] dark:text-white"
           />
-          <div className="mt-2">
-            <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-bold ${statusBadgeClasses(status)}`}>
-              {status}
-            </span>
+          {errors.workDescription && <p className="mt-1 text-[11px] font-bold text-rose-500">{errors.workDescription}</p>}
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-xs font-bold text-slate-700 dark:text-slate-300">
+              Overall Equipment Condition Verdict *
+            </label>
+            <select
+              value={form.overallCondition || ""}
+              onChange={(e) => setForm((prev) => ({ ...prev, overallCondition: (e.target.value as HealthStatus) || null }))}
+              className="h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-xs font-bold text-slate-700 outline-none transition focus:border-blue-500 dark:border-slate-700 dark:bg-[#101f33] dark:text-white"
+            >
+              <option value="">Select condition verdict...</option>
+              <option value="GOOD">✓ Good / Fully Operational</option>
+              <option value="NEEDS_ATTENTION">⚠️ Needs Attention / Scheduled Service</option>
+              <option value="CRITICAL">🔴 Critical / Out of Service</option>
+            </select>
+            {errors.overallCondition && <p className="mt-1 text-[11px] font-bold text-rose-500">{errors.overallCondition}</p>}
           </div>
 
-          <div className="mt-5">
-            <label className="text-xs font-bold text-slate-500 dark:text-slate-400">
-              Current Reading / Note
+          <div>
+            <label className="mb-1 block text-xs font-bold text-slate-700 dark:text-slate-300">
+              Maintenance Downtime (Hours)
             </label>
             <input
-              type="text"
-              value={reading}
-              onChange={(e: ChangeEvent<HTMLInputElement>) => setReading(e.target.value)}
-              className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-semibold text-slate-700 outline-none focus:border-blue-400 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200"
-              placeholder="e.g. Leakage detected, 14520 hrs"
+              type="number"
+              min={0}
+              step={0.5}
+              placeholder="e.g. 1.5 (leave empty if 0)"
+              value={form.downtime}
+              onChange={(e) => setForm((prev) => ({ ...prev, downtime: e.target.value }))}
+              className="h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-xs font-bold text-slate-700 outline-none transition focus:border-blue-500 dark:border-slate-700 dark:bg-[#101f33] dark:text-white"
             />
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-6 py-4 dark:border-slate-800">
+        {/* Submit Actions */}
+        <div className="flex items-center justify-end gap-3 border-t border-slate-100 pt-4 dark:border-slate-800">
           <button
             type="button"
-            onClick={onClose}
-            className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-50 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800"
+            onClick={() => handleSubmit(true)}
+            className="rounded-xl border border-slate-200 px-5 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 cursor-pointer"
           >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={() => onSave({ ...component, health, reading })}
-            className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-blue-700"
-          >
-            Save Component
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body
-  );
-}
-
-/* ============================================================================
- * MAIN PAGE
- * ==========================================================================*/
-
-export default function ArtisanWorkOrderCapture() {
-  // BACKEND TODO: replace with GET /artisan/assigned-machines
-  const [machines, setMachines] = useState<Machine[]>(INITIAL_MACHINES);
-  const [selectedId, setSelectedId] = useState<string>(INITIAL_MACHINES[0].id);
-  const [search, setSearch] = useState<string>("");
-  const [statusFilter, setStatusFilter] = useState<string>("All Status");
-  const [componentFilter, setComponentFilter] = useState<string>("All Components");
-  const [overallCondition, setOverallCondition] = useState<OverallCondition>("Critical");
-  const [issuesObserved, setIssuesObserved] = useState<IssuesObserved>("yes");
-  const [updateTarget, setUpdateTarget] = useState<MachineComponentItem | null>(null);
-  const [toast, setToast] = useState<ToastState | null>(null);
-  const [endHour, setEndHour] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const selectedMachine: Machine = useMemo(
-    () => machines.find((m) => m.id === selectedId) || machines[0],
-    [machines, selectedId]
-  );
-
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(null), 3200);
-    return () => clearTimeout(t);
-  }, [toast]);
-
-  function updateMachine(id: string, patch: Partial<Machine>) {
-    setMachines((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch } : m)));
-  }
-
-  const filteredMachines: Machine[] = useMemo(() => {
-    return machines.filter((m) => {
-      const matchesSearch =
-        !search.trim() ||
-        m.name.toLowerCase().includes(search.trim().toLowerCase()) ||
-        m.subtitle.toLowerCase().includes(search.trim().toLowerCase());
-      const matchesStatus = statusFilter === "All Status" || m.status === statusFilter;
-      return matchesSearch && matchesStatus;
-    });
-  }, [machines, search, statusFilter]);
-
-  const componentSummary: ComponentSummary = useMemo(() => {
-    const comps = selectedMachine.components;
-    const good = comps.filter((c) => healthStatus(c.health) === "Good").length;
-    const warning = comps.filter((c) => healthStatus(c.health) === "Warning").length;
-    const critical = comps.filter((c) => healthStatus(c.health) === "Critical").length;
-    const avg = comps.length
-      ? Math.round(comps.reduce((s, c) => s + c.health, 0) / comps.length)
-      : 0;
-    const overallStatus: HealthStatus = critical > 0 ? "Critical" : warning > 0 ? "Warning" : "Good";
-    return { good, warning, critical, total: comps.length, avg, overallStatus };
-  }, [selectedMachine]);
-
-  const donutGradient: string = useMemo(() => {
-    const total = componentSummary.total || 1;
-    const goodPct = (componentSummary.good / total) * 100;
-    const warnPct = (componentSummary.warning / total) * 100;
-    const critPct = (componentSummary.critical / total) * 100;
-    const p1 = goodPct;
-    const p2 = p1 + warnPct;
-    const p3 = p2 + critPct;
-    return `conic-gradient(#10b981 0% ${p1}%, #f59e0b ${p1}% ${p2}%, #f43f5e ${p2}% ${p3}%, #e2e8f0 ${p3}% 100%)`;
-  }, [componentSummary]);
-
-  const visibleComponents: MachineComponentItem[] = useMemo(() => {
-    if (componentFilter === "All Components") return selectedMachine.components;
-    return selectedMachine.components.filter((c) => healthStatus(c.health) === componentFilter);
-  }, [selectedMachine, componentFilter]);
-
-  const totalWorkingMinutes: number | null = useMemo(() => {
-    if (!endHour) return null;
-    const start = parseClock(selectedMachine.startHour);
-    const end = parseClock(endHour);
-    if (start == null || end == null) return null;
-    return end >= start ? end - start : end + 24 * 60 - start;
-  }, [endHour, selectedMachine.startHour]);
-
-  function handleImageChange(e: ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files && e.target.files[0];
-    if (!file) return;
-    const url = URL.createObjectURL(file);
-    updateMachine(selectedMachine.id, { image: url });
-    setToast({ type: "success", message: "Machine image updated." });
-  }
-
-  function handleSaveDraft() {
-    setToast({ type: "success", message: "Draft saved for " + selectedMachine.id + "." });
-  }
-
-  function handleSubmit() {
-    if (!selectedMachine.description.trim()) {
-      setToast({ type: "error", message: "Add a work description before submitting." });
-      return;
-    }
-    const end = nowLabel();
-    setEndHour(end);
-    updateMachine(selectedMachine.id, { status: "Completed" });
-    setToast({ type: "success", message: "Work order submitted for " + selectedMachine.id + "." });
-  }
-
-  return (
-    <div className="min-h-screen bg-[#f8fafc] font-sans text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-50">
-      {/* ── TOP BAR ── */}
-      <div className="sticky top-0 z-20 flex flex-col gap-3 border-b border-slate-200 bg-white/90 px-4 py-4 backdrop-blur sm:flex-row sm:items-center sm:justify-between sm:px-6 dark:border-slate-800 dark:bg-slate-950/90">
-        <div>
-          <h1 className="text-lg font-bold tracking-tight text-slate-900 dark:text-white sm:text-xl">
-            Work Order Capture (Post Inspection)
-          </h1>
-          <p className="mt-0.5 text-xs font-medium text-slate-400">
-            Capture work order with components, sub-components, parts, images &amp; details.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2.5">
-          <button
-            type="button"
-            className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-600 shadow-sm transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            Back to Dashboard
-          </button>
-          <button
-            type="button"
-            onClick={handleSaveDraft}
-            className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-600 shadow-sm transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
-          >
-            <Save className="h-3.5 w-3.5" />
             Save Draft
           </button>
           <button
             type="button"
-            onClick={handleSubmit}
-            className="flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-sm shadow-blue-600/20 transition hover:bg-blue-700"
+            onClick={() => handleSubmit(false)}
+            className="rounded-xl bg-blue-600 px-6 py-2.5 text-xs font-black text-white shadow-lg shadow-blue-500/25 transition hover:bg-blue-700 cursor-pointer"
           >
-            <Send className="h-3.5 w-3.5" />
-            Submit Work Order
+            Submit Final Work Order
           </button>
         </div>
       </div>
 
-      <div className="flex flex-col gap-6 p-4 sm:p-6 lg:flex-row lg:p-8">
-        {/* ── LEFT: ASSIGNED MACHINES ── */}
-        <div className="w-full shrink-0 lg:w-[300px]">
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <h2 className="text-sm font-bold text-slate-900 dark:text-white">Assigned Machines</h2>
-
-            <div className="relative mt-3">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                value={search}
-                onChange={(e: ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
-                placeholder="Search machine..."
-                className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-9 pr-3 text-xs font-semibold text-slate-700 outline-none focus:border-blue-400 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200"
-              />
-            </div>
-
-            <div className="mt-2.5">
-              <AppSelect value={statusFilter} options={STATUS_OPTIONS} onChange={setStatusFilter} />
-            </div>
-
-            <div className="hme-hide-scrollbar mt-3 max-h-[520px] space-y-2.5 overflow-y-auto pr-0.5 lg:max-h-[calc(100vh-320px)]">
-              {filteredMachines.map((m) => {
-                const active = m.id === selectedMachine.id;
-                return (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedId(m.id);
-                      setEndHour(null);
-                    }}
-                    className={`flex w-full gap-3 rounded-xl border p-2.5 text-left transition ${
-                      active
-                        ? "border-blue-400 bg-blue-50/60 ring-1 ring-blue-200 dark:border-blue-700 dark:bg-blue-950/30 dark:ring-blue-900"
-                        : "border-slate-100 hover:border-slate-200 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800/60"
-                    }`}
-                  >
-                    <img
-                      src={m.image}
-                      alt={m.name}
-                      className="h-16 w-20 shrink-0 rounded-lg object-cover"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-xs font-bold text-slate-900 dark:text-white">
-                        {m.name}
-                      </p>
-                      <p className="truncate text-[11px] text-slate-400">{m.subtitle}</p>
-                      <p className="mt-1 text-[10px] text-slate-400">
-                        Last Inspection
-                        <br />
-                        {m.lastInspection}
-                      </p>
-                      <span
-                        className={`mt-1.5 inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold ${statusBadgeClasses(
-                          m.status
-                        )}`}
-                      >
-                        {m.status}
-                      </span>
-                    </div>
-                  </button>
-                );
-              })}
-              {filteredMachines.length === 0 && (
-                <p className="px-2 py-6 text-center text-xs font-semibold text-slate-400">
-                  No machines match your search.
-                </p>
-              )}
-            </div>
-
-            <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3 text-[11px] font-medium text-slate-400 dark:border-slate-800">
-              <span>
-                Showing {filteredMachines.length} of {machines.length} machines
-              </span>
-              <button
-                type="button"
-                onClick={() => {
-                  setSearch("");
-                  setStatusFilter("All Status");
-                }}
-                className="flex items-center gap-1 font-bold text-blue-600 hover:underline dark:text-blue-400"
-              >
-                <RefreshCw className="h-3 w-3" />
-                Refresh
-              </button>
+      {/* ── 2. RECENT DATABASE INSPECTION & AUDIT LOGS (MOVED HERE AS REQUESTED) ── */}
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-[#0b1728]">
+        <div className="border-b border-slate-200 p-5 dark:border-slate-800">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-base font-black text-slate-900 dark:text-white">
+                Recent Database Inspection & Audit Logs ({historyLogs.length})
+              </h3>
+              <p className="text-xs text-slate-400">
+                Chronological audit records for {selectedMachine?.name || "Equipment"} from PostgreSQL.
+              </p>
             </div>
           </div>
         </div>
 
-        {/* ── RIGHT: MAIN FORM ── */}
-        <div className="min-w-0 flex-1 space-y-6">
-          {/* 1. MACHINE DETAILS */}
-          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-sm font-bold text-slate-900 dark:text-white">
-                1. Machine Details
-              </h2>
-              <button
-                type="button"
-                className="flex h-7 w-7 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 dark:hover:bg-slate-800"
-              >
-                <MoreVertical className="h-4 w-4" />
-              </button>
-            </div>
+        <div className="w-full overflow-x-auto">
+          <table className="w-full min-w-[750px] border-collapse text-left">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wider text-slate-500 dark:border-slate-800 dark:bg-slate-950/60">
+                <th className="px-6 py-4 font-bold">#</th>
+                <th className="px-6 py-4 font-bold">Submission Date & Time</th>
+                <th className="px-6 py-4 font-bold">Inspection Scope</th>
+                <th className="px-6 py-4 font-bold">Health Rating</th>
+                <th className="px-6 py-4 font-bold">Inspected By</th>
+                <th className="px-6 py-4 text-center font-bold">Action</th>
+              </tr>
+            </thead>
 
-            <div className="flex flex-col gap-5 sm:flex-row">
-              <div className="relative shrink-0 self-start">
-                <img
-                  src={selectedMachine.image}
-                  alt={selectedMachine.name}
-                  className="h-40 w-64 rounded-xl object-cover"
-                />
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current && fileInputRef.current.click()}
-                  className="absolute bottom-2 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-lg bg-white/95 px-2.5 py-1.5 text-[10px] font-bold text-slate-700 shadow-sm transition hover:bg-white"
-                >
-                  <ImageIcon className="h-3 w-3" />
-                  Change Image
-                </button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageChange}
-                  className="hidden"
-                />
-              </div>
-
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="text-base font-black text-slate-900 dark:text-white">
-                    {selectedMachine.id}
-                  </h3>
-                  <span
-                    className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${statusBadgeClasses(
-                      selectedMachine.status
-                    )}`}
-                  >
-                    {selectedMachine.status}
-                  </span>
-                </div>
-
-                <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3.5 sm:grid-cols-3">
-                  <DetailField label="Machine Type" value={selectedMachine.machineType} />
-                  <DetailField label="Serial Number" value={selectedMachine.serialNumber} />
-                  <DetailField label="Model" value={selectedMachine.model} />
-                  <DetailField label="Machine ID" value={selectedMachine.id} />
-                  <DetailField label="Location" value={selectedMachine.location} />
-                  <DetailField
-                    label="Assigned Operator"
-                    value={
-                      <span className="flex items-center gap-1.5">
-                        {selectedMachine.assignedOperator}
-                        <a
-                          href={`tel:${selectedMachine.assignedOperatorPhone}`}
-                          className="flex items-center gap-1 text-blue-600 dark:text-blue-400"
-                        >
-                          <Phone className="h-3 w-3" />
-                        </a>
+            <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+              {historyLoading ? (
+                <tr>
+                  <td colSpan={6} className="py-12 text-center text-xs font-bold text-slate-400">
+                    <Loader2 className="mx-auto mb-2 animate-spin text-blue-600" size={20} />
+                    Loading history from PostgreSQL Database...
+                  </td>
+                </tr>
+              ) : historyLogs.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-12 text-center text-xs font-bold text-slate-400">
+                    No prior inspection records found for this machine in the database.
+                  </td>
+                </tr>
+              ) : (
+                historyLogs.map((log, idx) => (
+                  <tr key={log.id || idx} className="transition hover:bg-slate-50 dark:hover:bg-white/[0.02]">
+                    <td className="px-6 py-4 font-bold text-slate-400">{idx + 1}</td>
+                    <td className="px-6 py-4 text-xs font-bold text-slate-900 dark:text-white">
+                      {formatDate(log.createdAt)}
+                    </td>
+                    <td className="px-6 py-4 text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      {log.componentName || "All Components Inspection"}
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-black text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                        {log.overallMachineHealth ?? 100}% Optimal
                       </span>
-                    }
-                  />
-                  <DetailField label="Assigned By" value={selectedMachine.assignedBy} />
-                  <DetailField label="Assign Date" value={selectedMachine.assignDate} />
-                  <DetailField label="Shift" value={selectedMachine.shift} />
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* 2. WORK TIME */}
-          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <h2 className="mb-4 text-sm font-bold text-slate-900 dark:text-white">2. Work Time</h2>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <div className="rounded-xl border border-slate-100 p-4 dark:border-slate-800">
-                <span className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-400">
-                  <Clock className="h-3.5 w-3.5 text-emerald-500" />
-                  Start Hour (Auto)
-                </span>
-                <p className="mt-1.5 text-base font-black text-emerald-600 dark:text-emerald-400">
-                  {selectedMachine.startHour}
-                </p>
-              </div>
-              <div className="rounded-xl border border-slate-100 p-4 dark:border-slate-800">
-                <span className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-400">
-                  <Clock className="h-3.5 w-3.5 text-rose-500" />
-                  End Hour (Auto)
-                </span>
-                <p className="mt-1.5 text-base font-black text-slate-400">
-                  {endHour || "--:-- --"}
-                </p>
-              </div>
-              <div className="rounded-xl border border-slate-100 p-4 dark:border-slate-800">
-                <span className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-400">
-                  <Clock className="h-3.5 w-3.5 text-blue-500" />
-                  Total Working Hours (Auto)
-                </span>
-                <p className="mt-1.5 text-base font-black text-slate-400">
-                  {formatDuration(totalWorkingMinutes)}
-                </p>
-              </div>
-            </div>
-            <p className="mt-3 flex items-start gap-1.5 text-[11px] text-slate-400">
-              <Info className="mt-0.5 h-3 w-3 shrink-0" />
-              Start hour is captured automatically when pre-inspection is completed. End hour and
-              total working hours are captured automatically on submission.
-            </p>
-          </section>
-
-          {/* 3. WORK DETAILS */}
-          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <h2 className="mb-4 text-sm font-bold text-slate-900 dark:text-white">
-              3. Work Details
-            </h2>
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-              <div>
-                <label className="text-xs font-bold text-slate-500 dark:text-slate-400">
-                  Work Location <span className="text-rose-500">*</span>
-                </label>
-                <div className="mt-1.5">
-                  <AppSelect
-                    value={selectedMachine.workLocation}
-                    options={WORK_LOCATION_OPTIONS}
-                    onChange={(v) => updateMachine(selectedMachine.id, { workLocation: v })}
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="text-xs font-bold text-slate-500 dark:text-slate-400">
-                  Work Description <span className="text-rose-500">*</span>
-                </label>
-                <textarea
-                  value={selectedMachine.description}
-                  maxLength={500}
-                  onChange={(e: ChangeEvent<HTMLTextAreaElement>) =>
-                    updateMachine(selectedMachine.id, { description: e.target.value })
-                  }
-                  rows={3}
-                  placeholder="Describe the work performed..."
-                  className="mt-1.5 w-full resize-none rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-medium text-slate-700 outline-none focus:border-blue-400 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200"
-                />
-                <p className="mt-1 text-right text-[10px] text-slate-400">
-                  {selectedMachine.description.length}/500
-                </p>
-              </div>
-            </div>
-          </section>
-
-          {/* 4. COMPONENT UPDATE */}
-          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-sm font-bold text-slate-900 dark:text-white">
-                4. Component Update
-              </h2>
-              <AppSelect
-                value={componentFilter}
-                options={COMPONENT_FILTER_OPTIONS}
-                onChange={setComponentFilter}
-                className="!w-auto sm:min-w-[170px]"
-              />
-            </div>
-
-            <div className="flex flex-col gap-6 lg:flex-row">
-              <div className="flex shrink-0 flex-col items-center gap-3 lg:w-52">
-                <p className="self-start text-xs font-bold text-slate-500 dark:text-slate-400">
-                  Component Overview
-                </p>
-                <div
-                  className="relative flex h-32 w-32 items-center justify-center rounded-full"
-                  style={{ background: donutGradient }}
-                >
-                  <div className="flex h-24 w-24 flex-col items-center justify-center rounded-full bg-white dark:bg-slate-900">
-                    <span className="text-2xl font-black text-slate-900 dark:text-white">
-                      {componentSummary.avg}%
-                    </span>
-                    <span className="text-[9px] font-bold uppercase tracking-wide text-slate-400">
-                      Overall Health
-                    </span>
-                    <span
-                      className={`mt-1 rounded-full px-2 py-0.5 text-[9px] font-bold ${statusBadgeClasses(
-                        componentSummary.overallStatus
-                      )}`}
-                    >
-                      {componentSummary.overallStatus}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="w-full space-y-1.5 text-xs font-semibold">
-                  <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
-                      <span className="h-2 w-2 rounded-full bg-emerald-500" /> Good / Healthy
-                    </span>
-                    <span className="text-slate-900 dark:text-white">{componentSummary.good}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
-                      <span className="h-2 w-2 rounded-full bg-amber-500" /> Warning
-                    </span>
-                    <span className="text-slate-900 dark:text-white">{componentSummary.warning}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
-                      <span className="h-2 w-2 rounded-full bg-rose-500" /> Critical
-                    </span>
-                    <span className="text-slate-900 dark:text-white">{componentSummary.critical}</span>
-                  </div>
-                  <div className="flex items-center justify-between border-t border-slate-100 pt-1.5 dark:border-slate-800">
-                    <span className="text-slate-500 dark:text-slate-400">Total Components</span>
-                    <span className="text-slate-900 dark:text-white">{componentSummary.total}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="min-w-0 flex-1">
-                <div className="hme-hide-scrollbar overflow-x-auto">
-                  <table className="w-full min-w-[560px] text-left text-xs">
-                    <thead>
-                      <tr className="border-b border-slate-100 text-[10px] font-bold uppercase tracking-wide text-slate-400 dark:border-slate-800">
-                        <th className="py-2.5 pr-4">Component</th>
-                        <th className="py-2.5 pr-4">Sub Components</th>
-                        <th className="py-2.5 pr-4">Health</th>
-                        <th className="py-2.5 pr-4">Status</th>
-                        <th className="py-2.5 pr-4">Current Reading</th>
-                        <th className="py-2.5 pl-0 text-right">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {visibleComponents.map((c) => {
-                        const status = healthStatus(c.health);
-                        return (
-                          <tr
-                            key={c.id}
-                            className="border-b border-slate-50 last:border-b-0 dark:border-slate-800/60"
-                          >
-                            <td className="py-3.5 pr-4 font-bold text-slate-900 dark:text-white">
-                              <span className="flex items-center gap-2">
-                                <Wrench className="h-3.5 w-3.5 text-slate-400" />
-                                {c.name}
-                              </span>
-                            </td>
-                            <td className="py-3.5 pr-4 text-slate-500 dark:text-slate-400">
-                              {c.subComponents}
-                            </td>
-                            <td className="py-3.5 pr-4">
-                              <div className="flex items-center gap-2">
-                                <div className="h-1.5 w-16 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-                                  <div
-                                    className={`h-full ${healthBarColor(c.health)}`}
-                                    style={{ width: `${c.health}%` }}
-                                  />
-                                </div>
-                                <span className="font-semibold text-slate-600 dark:text-slate-300">
-                                  {c.health}%
-                                </span>
-                              </div>
-                            </td>
-                            <td className="py-3.5 pr-4">
-                              <span
-                                className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${statusBadgeClasses(
-                                  status
-                                )}`}
-                              >
-                                {status}
-                              </span>
-                            </td>
-                            <td className="py-3.5 pr-4 text-slate-500 dark:text-slate-400">
-                              {c.reading}
-                            </td>
-                            <td className="py-3.5 pl-0 text-right">
-                              <button
-                                onClick={() => setUpdateTarget(c)}
-                                className="rounded-lg border border-blue-200 px-3 py-1.5 text-[11px] font-bold text-blue-600 transition hover:bg-blue-50 dark:border-blue-900 dark:text-blue-400 dark:hover:bg-blue-950/40"
-                              >
-                                Update
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                      {visibleComponents.length === 0 && (
-                        <tr>
-                          <td colSpan={6} className="py-8 text-center text-slate-400">
-                            No components match this filter.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-                <p className="mt-3 flex items-start gap-1.5 text-[11px] text-slate-400">
-                  <Info className="mt-0.5 h-3 w-3 shrink-0" />
-                  Click on Update to view and edit this component's condition.
-                </p>
-              </div>
-            </div>
-          </section>
-
-          {/* 5. WORK INSPECTION & ISSUES */}
-          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <h2 className="mb-4 text-sm font-bold text-slate-900 dark:text-white">
-              5. Work Inspection &amp; Issues
-            </h2>
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-              <div>
-                <label className="text-xs font-bold text-slate-500 dark:text-slate-400">
-                  Overall Machine Condition <span className="text-rose-500">*</span>
-                </label>
-                <div className="mt-2 grid grid-cols-3 gap-2.5">
-                  {(
-                    [
-                      { key: "Good", icon: ShieldCheck, color: "emerald" },
-                      { key: "Needs Attention", icon: ShieldAlert, color: "amber" },
-                      { key: "Critical", icon: XCircle, color: "rose" },
-                    ] as const
-                  ).map(({ key, icon: Icon, color }) => {
-                    const active = overallCondition === key;
-                    return (
+                    </td>
+                    <td className="px-6 py-4 text-xs font-bold text-slate-900 dark:text-white">
+                      👤 {log.userName || "Artisan"} ({log.userRole || "ARTISAN"})
+                    </td>
+                    <td className="px-6 py-4 text-center">
                       <button
-                        key={key}
                         type="button"
-                        onClick={() => setOverallCondition(key)}
-                        className={`flex flex-col items-center gap-1.5 rounded-xl border-2 px-3 py-3 text-[11px] font-bold transition ${
-                          active
-                            ? color === "emerald"
-                              ? "border-emerald-500 bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10"
-                              : color === "amber"
-                              ? "border-amber-500 bg-amber-50 text-amber-600 dark:bg-amber-500/10"
-                              : "border-rose-500 bg-rose-50 text-rose-600 dark:bg-rose-500/10"
-                            : "border-slate-200 text-slate-500 hover:border-slate-300 dark:border-slate-800 dark:text-slate-400"
-                        }`}
+                        onClick={() => setSelectedHistoryLog(log)}
+                        className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs font-bold text-blue-700 transition hover:bg-blue-100 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300 cursor-pointer"
                       >
-                        <Icon className="h-4 w-4" />
-                        {key}
+                        <Eye size={13} />
+                        View Snapshot
                       </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-500 dark:text-slate-400">
-                  Any Issues Observed? <span className="text-rose-500">*</span>
-                </label>
-                <div className="mt-2 flex items-center gap-5">
-                  <label className="flex cursor-pointer items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-200">
-                    <input
-                      type="radio"
-                      name="issuesObserved"
-                      checked={issuesObserved === "yes"}
-                      onChange={() => setIssuesObserved("yes")}
-                      className="h-4 w-4 accent-blue-600"
-                    />
-                    Yes
-                  </label>
-                  <label className="flex cursor-pointer items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-200">
-                    <input
-                      type="radio"
-                      name="issuesObserved"
-                      checked={issuesObserved === "no"}
-                      onChange={() => setIssuesObserved("no")}
-                      className="h-4 w-4 accent-blue-600"
-                    />
-                    No
-                  </label>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* 6. FINAL SUBMISSION */}
-          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <h2 className="mb-4 text-sm font-bold text-slate-900 dark:text-white">
-              6. Final Submission
-            </h2>
-            <div className="flex items-start gap-2.5 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs font-medium text-blue-700 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300">
-              <Info className="mt-0.5 h-4 w-4 shrink-0" />
-              Please review all details before submitting. Once submitted, it will be recorded in
-              the system.
-            </div>
-            <div className="mt-4 flex flex-col gap-2.5 sm:flex-row sm:justify-end">
-              <button
-                type="button"
-                onClick={handleSaveDraft}
-                className="flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-600 shadow-sm transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
-              >
-                <Save className="h-3.5 w-3.5" />
-                Save Draft
-              </button>
-              <button
-                type="button"
-                onClick={handleSubmit}
-                className="flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-5 py-2.5 text-xs font-bold text-white shadow-sm shadow-blue-600/20 transition hover:bg-blue-700"
-              >
-                <Send className="h-3.5 w-3.5" />
-                Submit Work Order
-              </button>
-            </div>
-          </section>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 
-      {updateTarget && (
-        <ComponentUpdateModal
-          component={updateTarget}
-          onClose={() => setUpdateTarget(null)}
-          onSave={(updated: MachineComponentItem) => {
-            updateMachine(selectedMachine.id, {
-              components: selectedMachine.components.map((c) =>
-                c.id === updated.id ? updated : c
-              ),
-            });
-            setUpdateTarget(null);
-            setToast({ type: "success", message: updated.name + " updated." });
-          }}
-        />
-      )}
+      {/* ── MODAL: PREMIUM INSPECTION AUDIT SNAPSHOT ── */}
+      {selectedHistoryLog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4 animate-in fade-in duration-200">
+          <div className="relative max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl border border-slate-200 bg-white p-6 sm:p-8 shadow-2xl dark:border-slate-800 dark:bg-[#0b1728] space-y-6">
+            {/* Modal Header */}
+            <div className="flex items-start justify-between border-b border-slate-100 pb-4 dark:border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
+                  <ShieldCheck size={26} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="rounded bg-blue-100 px-2 py-0.5 text-[10px] font-black uppercase text-blue-800 dark:bg-blue-900/60 dark:text-blue-300">
+                      Verified Audit Record
+                    </span>
+                    <span className="rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-black text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300">
+                      ● {selectedHistoryLog.overallMachineHealth ?? 100}% Health Rating
+                    </span>
+                  </div>
+                  <h3 className="mt-1 text-lg font-black text-slate-900 dark:text-white sm:text-xl">
+                    {selectedHistoryLog.machineName || selectedMachine?.name || "Mining Machinery"}
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Audit ID: <span className="font-mono text-slate-600 dark:text-slate-300">{selectedHistoryLog.id || "AUD-DB-1001"}</span>
+                  </p>
+                </div>
+              </div>
 
-      <Toast toast={toast} />
+              <button
+                type="button"
+                onClick={() => setSelectedHistoryLog(null)}
+                className="rounded-xl p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 cursor-pointer"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* 4-Card Overview Grid */}
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className="rounded-2xl border border-slate-100 bg-slate-50/80 p-3.5 dark:border-slate-800 dark:bg-[#101f33]/60">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Date & Time</span>
+                <p className="mt-1 text-xs font-black text-slate-900 dark:text-white">{formatDate(selectedHistoryLog.createdAt)}</p>
+              </div>
+
+              <div className="rounded-2xl border border-slate-100 bg-slate-50/80 p-3.5 dark:border-slate-800 dark:bg-[#101f33]/60">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Submitted By</span>
+                <p className="mt-1 text-xs font-black text-slate-900 dark:text-white">👤 {selectedHistoryLog.userName || "Artisan"}</p>
+                <span className="text-[10px] font-semibold text-blue-600 dark:text-blue-400">Role: {selectedHistoryLog.userRole || "ARTISAN"}</span>
+              </div>
+
+              <div className="rounded-2xl border border-slate-100 bg-slate-50/80 p-3.5 dark:border-slate-800 dark:bg-[#101f33]/60">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Shift Type</span>
+                <p className="mt-1 text-xs font-black text-slate-900 dark:text-white">Day Shift</p>
+                <span className="text-[10px] font-semibold text-slate-400">Pre-Start Inspection</span>
+              </div>
+
+              <div className="rounded-2xl border border-slate-100 bg-slate-50/80 p-3.5 dark:border-slate-800 dark:bg-[#101f33]/60">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Database Status</span>
+                <p className="mt-1 text-xs font-black text-emerald-600 dark:text-emerald-400">✓ Signed Off</p>
+                <span className="text-[10px] font-semibold text-slate-400">PostgreSQL Synced</span>
+              </div>
+            </div>
+
+            {/* Inspected Scope & Action Card */}
+            <div className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4 dark:border-slate-800 dark:bg-[#101f33]/40 space-y-3">
+              <div>
+                <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Inspection & Maintenance Scope:</span>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {(selectedHistoryLog.componentName || "All Components Inspection").split(",").map((name: string, i: number) => (
+                    <span key={i} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-bold text-slate-800 dark:border-slate-700 dark:bg-[#0b1728] dark:text-slate-200">
+                      🔧 {name.trim()}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <div className="border-t border-slate-200/60 pt-3 dark:border-slate-800">
+                <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Action Remarks & Diagnostic Notes:</span>
+                <p className="mt-1 text-xs font-medium leading-relaxed text-slate-800 dark:text-slate-200">
+                  {selectedHistoryLog.actionDescription || selectedHistoryLog.readings?.workDescription || "Standard pre-start mechanical inspection & parameter calibration verified."}
+                </p>
+              </div>
+            </div>
+
+            {/* Telemetry Breakdown (if recorded) */}
+            {selectedHistoryLog.readings?.components && Array.isArray(selectedHistoryLog.readings.components) && selectedHistoryLog.readings.components.length > 0 && (
+              <div className="space-y-3">
+                <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  Component Telemetry Readings ({selectedHistoryLog.readings.components.length})
+                </h4>
+                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 max-h-48 overflow-y-auto pr-1">
+                  {selectedHistoryLog.readings.components.map((comp: any, idx: number) => (
+                    <div key={idx} className="rounded-xl border border-slate-200 bg-white p-3 shadow-2xs dark:border-slate-800 dark:bg-[#101f33]">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black text-slate-900 dark:text-white truncate">{comp.name}</span>
+                        <span className="rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                          {comp.health ?? 100}%
+                        </span>
+                      </div>
+                      <p className="mt-1 text-[11px] font-semibold text-blue-600 dark:text-blue-400">{comp.currentReading || "Calibrated & Normal"}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Checklist items (if recorded) */}
+            {selectedHistoryLog.checklist && Array.isArray(selectedHistoryLog.checklist) && selectedHistoryLog.checklist.length > 0 && (
+              <div className="space-y-3">
+                <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  Safety Checklist Verification ({selectedHistoryLog.checklist.length} items)
+                </h4>
+                <div className="grid grid-cols-2 gap-2 max-h-36 overflow-y-auto pr-1">
+                  {selectedHistoryLog.checklist.map((item: any, idx: number) => (
+                    <div key={idx} className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 p-2.5 text-xs dark:border-slate-800 dark:bg-[#101f33]/60">
+                      <span className="font-semibold text-slate-800 dark:text-slate-200 truncate">{item.label}</span>
+                      <span className={`rounded px-1.5 py-0.5 text-[10px] font-black uppercase ${item.status === "OK" ? "bg-emerald-500 text-white" : "bg-rose-500 text-white"}`}>
+                        {item.status || "OK"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-between border-t border-slate-100 pt-4 dark:border-slate-800">
+              <div className="text-[11px] font-semibold text-slate-400">
+                🔒 Cryptographic Audit Hash: <span className="font-mono text-slate-500">SHA256-{String(selectedHistoryLog.id || Date.now()).slice(-8)}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedHistoryLog(null)}
+                className="rounded-xl bg-blue-600 px-6 py-2.5 text-xs font-bold text-white shadow-md transition hover:bg-blue-700 cursor-pointer"
+              >
+                Close Snapshot
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

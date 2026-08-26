@@ -105,29 +105,16 @@ export default function SupervisorOperators() {
       }
 
       const mapped: OperatorMachineRow[] = apiMachines.map((f, index) => {
-          let storedTask: any = null;
-          try {
-            const storedTasks = JSON.parse(localStorage.getItem("hme_supervisor_task_assignments") || "[]");
-            storedTask = storedTasks.find((t: any) => {
-              if (!t) return false;
-              if (t.machineId && (t.machineId === f.id || t.machineId === f.machineId)) return true;
-              if (t.machineName && f.name && (t.machineName.includes(f.name) || f.name.includes(t.machineName.split(" (")[0]))) return true;
-              if (t.machineName && f.serialNumber && t.machineName.includes(f.serialNumber)) return true;
-              return false;
-            });
-          } catch {}
-
           let opName =
             f.assignedOperatorName ||
             f.assigned_operator_name ||
             f.operatorName ||
             f.operator_name ||
-            storedTask?.operatorName ||
             (f.operator?.name && f.operator.name !== "N/A" && !f.operator.name.includes("Assigned Operator") ? f.operator.name : "") ||
             "";
 
           // Fallback to user resolution if opName is empty or an ID
-          const targetOpId = f.assignedOperatorId || f.assigned_operator_id || storedTask?.operatorId;
+          const targetOpId = f.assignedOperatorId || f.assigned_operator_id;
           if (!opName && targetOpId && userList.length > 0) {
             const foundUser = userList.find(
               (u: any) => u.id === targetOpId || u.userId === targetOpId || u.code === targetOpId

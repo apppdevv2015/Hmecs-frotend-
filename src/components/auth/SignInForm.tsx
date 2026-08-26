@@ -119,11 +119,15 @@ const getRedirectPathByRole = (role?: string | number | null) => {
   const roleRoutes: Record<string, string> = {
     super_admin: "/super-admin/dashboard",
     superadmin: "/super-admin/dashboard",
+    sub_super_admin: "/sub-super-admin/dashboard",
+    subsuperadmin: "/sub-super-admin/dashboard",
     system_admin: "/super-admin/dashboard",
 
     admin: "/company-admin/dashboard",
     company_admin: "/company-admin/dashboard",
     companyadmin: "/company-admin/dashboard",
+    sub_admin: "/sub-admin/dashboard",
+    subadmin: "/sub-admin/dashboard",
 
     operator: "/operator/dashboard",
     planner: "/operator/dashboard",
@@ -462,7 +466,12 @@ export default function SignInForm() {
 
       let finalRedirect = redirectPath;
 
-      if (normalizedRole === "company_admin" || normalizedRole === "admin") {
+      if (
+        normalizedRole === "company_admin" ||
+        normalizedRole === "admin" ||
+        normalizedRole === "sub_admin" ||
+        normalizedRole === "subadmin"
+      ) {
         try {
           const subscription = await userService.getActiveSubscription();
 

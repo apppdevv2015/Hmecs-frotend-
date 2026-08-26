@@ -79,7 +79,23 @@ export const machineService = {
     });
   },
 
+  async getCompanyFleetMachines(companyId?: string) {
+    const cid = companyId || getCompanyId();
+    const endpoint = cid
+      ? `/machines/company-fleet?companyId=${encodeURIComponent(cid)}`
+      : `/machines/company-fleet`;
+
+    return apiCall(endpoint, {
+      method: "GET",
+    });
+  },
+
   async getCompanyMachines() {
+    try {
+      const res: any = await this.getCompanyFleetMachines();
+      const list = Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
+      if (list.length > 0) return res;
+    } catch {}
     return this.getMachines();
   },
 
@@ -130,6 +146,12 @@ export const machineService = {
     );
   },
 
+  async getConditions() {
+    return apiCall<any[]>("/machines/conditions", {
+      method: "GET",
+    });
+  },
+
   async assignOperatorToMachine(
     machineId: string,
     assignment: {
@@ -152,10 +174,11 @@ export const machineService = {
       method: "GET",
     });
   },
-  async getAllAssignedMachines(params?: { companyId?: string; operatorId?: string }) {
+  async getAllAssignedMachines(params?: { companyId?: string; operatorId?: string; supervisorId?: string }) {
     const queryParts: string[] = [];
     if (params?.companyId) queryParts.push(`companyId=${encodeURIComponent(params.companyId)}`);
     if (params?.operatorId) queryParts.push(`operatorId=${encodeURIComponent(params.operatorId)}`);
+    if (params?.supervisorId) queryParts.push(`supervisorId=${encodeURIComponent(params.supervisorId)}`);
     const queryString = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
 
     return apiCall(`/machines/assignments${queryString}`, {
@@ -186,7 +209,8 @@ export const machineService = {
     });
   },
 
-  async getManualInspectionData(machineId: string) {
+  async getManualInspectionData(machineId?: string) {
+    if (!machineId) return null;
     return apiCall(`/machines/${machineId}/manual-data`, {
       method: "GET",
     });

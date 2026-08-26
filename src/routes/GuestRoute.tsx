@@ -43,11 +43,15 @@ export const getDashboardPathForRole = (role?: any): string => {
   const roleMap: Record<string, string> = {
     super_admin: "/super-admin/dashboard",
     superadmin: "/super-admin/dashboard",
+    sub_super_admin: "/sub-super-admin/dashboard",
+    subsuperadmin: "/sub-super-admin/dashboard",
     system_admin: "/super-admin/dashboard",
 
     admin: "/company-admin/dashboard",
     company_admin: "/company-admin/dashboard",
     companyadmin: "/company-admin/dashboard",
+    sub_admin: "/sub-admin/dashboard",
+    subadmin: "/sub-admin/dashboard",
 
     supervisor: "/supervisor/dashboard",
 

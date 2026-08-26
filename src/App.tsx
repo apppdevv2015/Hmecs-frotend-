@@ -128,6 +128,10 @@ const InvoicePreviewPage = lazy(
   () => import("./pages/SuperAdmin/Invoices/InvoicePreviewPage"),
 );
 
+const MachineHealth = lazy(
+  () => import("./pages/SuperAdmin/Asset Managment/MachineHealth"),
+);
+
 const SuperAdminComponents = lazy(
   () => import("./pages/SuperAdmin/Asset Managment/Components"),
 );
@@ -496,7 +500,13 @@ export default function App() {
             <Route
               element={
                 <RoleProtectedRoute
-                  allowedRoles={["super_admin", "superadmin", "system_admin"]}
+                  allowedRoles={[
+                    "super_admin",
+                    "superadmin",
+                    "system_admin",
+                    "sub_super_admin",
+                    "subsuperadmin",
+                  ]}
                 />
               }
             >
@@ -573,6 +583,15 @@ export default function App() {
                 />
 
                 <Route
+                  path="/super-admin/machine-health"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <MachineHealth />
+                    </Suspense>
+                  }
+                />
+
+                <Route
                   path="/super-admin/machines"
                   element={<SuperAdminMachinesPage />}
                 />
@@ -623,6 +642,111 @@ export default function App() {
               </Route>
             </Route>
 
+            {/* Sub Super Admin Routes */}
+            <Route
+              element={
+                <RoleProtectedRoute
+                  allowedRoles={[
+                    "sub_super_admin",
+                    "subsuperadmin",
+                    "super_admin",
+                    "superadmin",
+                  ]}
+                />
+              }
+            >
+              <Route element={<AppLayout role="sub_super_admin" />}>
+                <Route
+                  path="/sub-super-admin"
+                  element={<Navigate to="/sub-super-admin/dashboard" replace />}
+                />
+
+                <Route
+                  path="/sub-super-admin/dashboard"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <Home />
+                    </Suspense>
+                  }
+                />
+
+                <Route
+                  path="/sub-super-admin/technical-support"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <TechnicalSupportManagement />
+                    </Suspense>
+                  }
+                />
+
+                <Route path="/sub-super-admin/profile" element={<UserProfiles />} />
+
+                <Route
+                  path="/sub-super-admin/intelligence"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <FleetIntelligence />
+                    </Suspense>
+                  }
+                />
+
+                <Route
+                  path="/sub-super-admin/company-admins"
+                  element={<CompanyAdminsPage />}
+                />
+
+                <Route path="/sub-super-admin/operators" element={<Operators />} />
+                <Route path="/sub-super-admin/mechanics" element={<Mechanics />} />
+
+                <Route
+                  path="/sub-super-admin/plans-billing"
+                  element={<PlanAndBilling />}
+                />
+
+                <Route
+                  path="/sub-super-admin/invoice/:id"
+                  element={<InvoicePreviewPage />}
+                />
+
+                <Route
+                  path="/sub-super-admin/machines"
+                  element={<SuperAdminMachinesPage />}
+                />
+
+                <Route
+                  path="/sub-super-admin/fleet"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <FleetMonitoring />
+                    </Suspense>
+                  }
+                />
+
+                <Route
+                  path="/sub-super-admin/components"
+                  element={<SuperAdminComponents />}
+                />
+
+                <Route
+                  path="/sub-super-admin/notifications"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <NotificationsPage />
+                    </Suspense>
+                  }
+                />
+
+                <Route
+                  path="/sub-super-admin/service-logs"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <ServiceLog1 />
+                    </Suspense>
+                  }
+                />
+              </Route>
+            </Route>
+
             {/* Company Admin Routes */}
             <Route
               element={
@@ -631,8 +755,12 @@ export default function App() {
                     "company_admin",
                     "admin",
                     "companyadmin",
+                    "sub_admin",
+                    "subadmin",
                     "super_admin",
                     "superadmin",
+                    "sub_super_admin",
+                    "subsuperadmin",
                   ]}
                 />
               }
@@ -660,27 +788,26 @@ export default function App() {
                   </Suspense>
                 }
               />
+              <Route
+                path="/company-admin/category-management"
+                element={
+                  <Suspense fallback={<PageSkeleton />}>
+                    <CategoryManagement />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="/admin/categories"
+                element={
+                  <Suspense fallback={<PageSkeleton />}>
+                    <CategoryManagement />
+                  </Suspense>
+                }
+              />
 
                 <Route
                   path="/company-admin/profile"
                   element={<UserProfiles />}
-                />
-
-                <Route
-                  path="/company-admin/job-cards"
-                  element={
-                    <Suspense fallback={<PageSkeleton />}>
-                      <JobCardManagement />
-                    </Suspense>
-                  }
-                />
-                <Route
-                  path="/company_admin/job-cards"
-                  element={
-                    <Suspense fallback={<PageSkeleton />}>
-                      <JobCardManagement />
-                    </Suspense>
-                  }
                 />
 
               <Route
@@ -829,6 +956,106 @@ export default function App() {
                   element={
                     <Suspense fallback={<PageSkeleton />}>
                       <TicketManagementPage />
+                    </Suspense>
+                  }
+                />
+              </Route>
+            </Route>
+
+            {/* Sub Admin Routes */}
+            <Route
+              element={
+                <RoleProtectedRoute
+                  allowedRoles={[
+                    "sub_admin",
+                    "subadmin",
+                    "company_admin",
+                    "admin",
+                    "companyadmin",
+                    "super_admin",
+                    "superadmin",
+                  ]}
+                />
+              }
+            >
+              <Route element={<AppLayout role="sub_admin" />}>
+                <Route
+                  path="/sub-admin"
+                  element={<Navigate to="/sub-admin/dashboard" replace />}
+                />
+                <Route
+                  path="/sub-admin/dashboard"
+                  element={<CompanyAdminDashboard />}
+                />
+                <Route
+                  path="/sub-admin/components"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <ComponentRegister />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/sub-admin/categories"
+                  element={<CategoryManagement />}
+                />
+                <Route
+                  path="/sub-admin/heatmap"
+                  element={<FleetHeatMap />}
+                />
+                <Route
+                  path="/sub-admin/heat-map"
+                  element={<Navigate to="/sub-admin/heatmap" replace />}
+                />
+                <Route
+                  path="/sub-admin/inspection-entry"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <InspectionDataEntry />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/sub-admin/service-log"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <ServiceLog />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/sub-admin/staff"
+                  element={<StaffManagement />}
+                />
+                <Route
+                  path="/sub-admin/machines"
+                  element={<MachineManagement />}
+                />
+                <Route
+                  path="/sub-admin/subscriptions"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <SubscriptionHistory />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/sub-admin/reporting"
+                  element={<ReportingManagement />}
+                />
+                <Route
+                  path="/sub-admin/profile"
+                  element={<UserProfiles />}
+                />
+                <Route
+                  path="/sub-admin/alerts"
+                  element={<AlertsPage />}
+                />
+                <Route
+                  path="/sub-admin/notifications"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <NotificationsPage />
                     </Suspense>
                   }
                 />

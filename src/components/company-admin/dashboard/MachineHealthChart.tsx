@@ -105,39 +105,77 @@ export default function MachineHealthChart({
   loading = false,
   className = "",
 }: MachineHealthChartProps) {
+  const [selectedMachineId, setSelectedMachineId] = React.useState<string>("all");
+
   const machineSummary = useMemo(() => {
     const criticalMachines = new Set<string>();
     const warningMachines = new Set<string>();
     const healthyMachines = new Set<string>();
     const offlineMachines = new Set<string>();
 
-    machines.forEach((machine) => {
-      const machineId = machine.machineId || machine.id;
+    const targetList =
+      selectedMachineId === "all"
+        ? machines
+        : machines.filter(
+            (m) =>
+              String(m.id || m.machineId || "").toLowerCase() ===
+              selectedMachineId.toLowerCase(),
+          );
 
-      const machineComponents = components.filter(
-        (component) => component.machineId === machineId,
-      );
+    targetList.forEach((machine) => {
+      const mId = String(machine.machineId || machine.id || "");
+
+      const machineComponents = components.filter((component) => {
+        const cMachId = String(component.machineId || component.machine_id || component.machine?.id || "");
+        return cMachId && mId && (cMachId === mId || cMachId.toLowerCase() === mId.toLowerCase());
+      });
 
       const isOffline = machine.status?.toLowerCase() === "offline";
 
-      const hasCritical = machineComponents.some(
-        (component) => component.intelligence?.riskStatus === "Critical",
-      );
+      const healthScore = typeof machine.healthScore === "number"
+        ? machine.healthScore
+        : typeof machine.healthPercent === "number"
+        ? machine.healthPercent
+        : null;
 
-      const hasWarning = machineComponents.some(
-        (component) =>
-          component.intelligence?.riskStatus === "Warning" ||
-          component.intelligence?.riskStatus === "Monitor",
-      );
+      const mStatus = String(machine.status || "").toLowerCase();
+
+      const hasCritical =
+        mStatus === "critical" ||
+        (healthScore !== null && healthScore < 50) ||
+        machineComponents.some((c) => {
+          const rStatus = String(c.intelligence?.riskStatus || c.status || "").toLowerCase();
+          const cScore = typeof c.healthScore === "number" ? c.healthScore : null;
+          return (
+            rStatus.includes("crit") ||
+            (cScore !== null && cScore > 0 && cScore < 50) ||
+            (c.condition >= 5 && ["engine", "transmission", "hydraulics", "pump"].some((k) => String(c.category || c.name || "").toLowerCase().includes(k)))
+          );
+        });
+
+      const hasWarning =
+        mStatus === "warning" ||
+        mStatus === "monitor" ||
+        (healthScore !== null && healthScore >= 50 && healthScore < 85) ||
+        machineComponents.some((c) => {
+          const rStatus = String(c.intelligence?.riskStatus || c.status || "").toLowerCase();
+          const cScore = typeof c.healthScore === "number" ? c.healthScore : null;
+          return (
+            rStatus.includes("warn") ||
+            rStatus.includes("monitor") ||
+            (cScore !== null && cScore >= 50 && cScore < 85) ||
+            c.condition === 4
+          );
+        });
 
       if (isOffline) {
-        offlineMachines.add(machineId);
+        offlineMachines.add(mId);
       } else if (hasCritical) {
-        criticalMachines.add(machineId);
+        criticalMachines.add(mId);
       } else if (hasWarning) {
-        warningMachines.add(machineId);
+        warningMachines.add(mId);
       } else {
-        healthyMachines.add(machineId);
+        healthyMachines.add(mId);
       }
     });
 
@@ -151,7 +189,7 @@ export default function MachineHealthChart({
       healthy: healthyMachines.size,
       offline: offlineMachines.size,
     };
-  }, [machines, components]);
+  }, [machines, components, selectedMachineId]);
 
   const chartData = useMemo<MachineHealthItem[]>(
     () => [
@@ -202,9 +240,9 @@ export default function MachineHealthChart({
     <section
       className={`overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 ${className}`}
     >
-      <div className="flex flex-col justify-between gap-4 border-b border-slate-200 px-5 py-4 dark:border-slate-800 md:flex-row md:items-center">
+      <div className="flex flex-col justify-between gap-4 border-b border-slate-200 px-5 py-4 dark:border-slate-800 sm:flex-row sm:items-center">
         <div>
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+          <h2 className="text-lg font-bold tracking-tight text-slate-900 dark:text-slate-100">
             Machine Health Overview
           </h2>
 
@@ -213,14 +251,36 @@ export default function MachineHealthChart({
           </p>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 dark:border-slate-700 dark:bg-slate-800/70">
-          <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-            Total Machines
-          </p>
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Machine Filter Dropdown */}
+          <div className="relative">
+            <select
+              value={selectedMachineId}
+              onChange={(e) => setSelectedMachineId(e.target.value)}
+              className="h-11 rounded-xl border border-slate-200 bg-slate-50 px-4 text-xs font-bold text-slate-700 outline-none transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 cursor-pointer"
+            >
+              <option value="all">All Machines ({machines.length})</option>
+              {machines.map((m: any) => {
+                const mId = String(m.id || m.machineId || m.machine_id || "");
+                const mName = m.name || m.machineName || m.model || "Machine";
+                return (
+                  <option key={mId} value={mId}>
+                    {mName}
+                  </option>
+                );
+              })}
+            </select>
+          </div>
 
-          <h3 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
-            {totalMachines}
-          </h3>
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 dark:border-slate-700 dark:bg-slate-800/70">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              Total Machines
+            </p>
+
+            <h3 className="text-xl font-black text-slate-900 dark:text-slate-100">
+              {totalMachines}
+            </h3>
+          </div>
         </div>
       </div>
 

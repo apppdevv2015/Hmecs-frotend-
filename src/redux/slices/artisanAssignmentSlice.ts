@@ -310,7 +310,7 @@ export const fetchArtisanAssignments =
           .map(normalizeAssignment)
           .filter(
             (assignment) =>
-              assignment.artisanId !== "",
+              Boolean(assignment.artisanId) || Boolean(assignment.artisanName),
           );
       } catch (error: any) {
         return rejectWithValue(
@@ -489,6 +489,7 @@ export const unassignArtisanFromMachine =
 
         await machineService.unassignMachine(
           payload.machineId,
+          "artisan",
         );
 
         return payload.machineId;
