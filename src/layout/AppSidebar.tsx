@@ -2,8 +2,8 @@ import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useSidebar } from "../context/SidebarContext";
 import { sidebarConfig } from "../config/sidebar.config";
-import type { UserRole, NavLinkItem } from "../config/sidebar.config";
-import { X, ChevronRight, LogOut } from "lucide-react";
+import type { UserRole, NavLinkItem, NavGroup } from "../config/sidebar.config";
+import { ChevronRight, LogOut } from "lucide-react";
 import StorageService, { STORAGE_KEYS } from "../services/storage.service";
 
 import logo1 from "../assets/images/landingpageimages/logo1.webp";
@@ -17,17 +17,18 @@ const COMING_SOON_ROUTE = "/coming-soon";
 const getStoredUserInfo = () => {
   try {
     const user = StorageService.get<any>(STORAGE_KEYS.USER) || {};
+
     const name =
       user?.name ||
-      `${user?.firstName || user?.first_name || ""} ${user?.lastName || user?.last_name || ""}`.trim() ||
+      `${user?.firstName || user?.first_name || ""} ${
+        user?.lastName || user?.last_name || ""
+      }`.trim() ||
       StorageService.get<string>(STORAGE_KEYS.NAME) ||
       StorageService.get<string>(STORAGE_KEYS.USER_NAME) ||
       "";
 
     const email =
-      user?.email ||
-      StorageService.get<string>(STORAGE_KEYS.EMAIL) ||
-      "";
+      user?.email || StorageService.get<string>(STORAGE_KEYS.EMAIL) || "";
 
     const initials = name
       ? name
@@ -41,38 +42,163 @@ const getStoredUserInfo = () => {
 
     return { name, email, initials };
   } catch {
-    return { name: "", email: "", initials: "" };
+    return {
+      name: "",
+      email: "",
+      initials: "",
+    };
   }
 };
 
+// sidebar.config.tsx se import ke just niche, ya AppSidebar.tsx ke top-level me:
+function mergeNavGroups(
+  primaryGroups: NavGroup[],
+  extraGroups: NavGroup[],
+): NavGroup[] {
+  const merged: NavGroup[] = primaryGroups.map((group) => ({
+    ...group,
+    items: [...group.items],
+  }));
+
+  extraGroups.forEach((extraGroup) => {
+    const existingGroup = merged.find(
+      (group) => group.title === extraGroup.title,
+    );
+
+    if (existingGroup) {
+      // Same title group mila -> usi group me missing items push karo (path se dedupe)
+      extraGroup.items.forEach((item) => {
+        const alreadyExists = existingGroup.items.some(
+          (existing) => existing.path === item.path,
+        );
+        if (!alreadyExists) {
+          existingGroup.items.push(item);
+        }
+      });
+    } else {
+      // Naya title -> naya group as-is push kar do
+      merged.push({ ...extraGroup, items: [...extraGroup.items] });
+    }
+  });
+
+  return merged;
+}
+
 export default function AppSidebar({ role = "super_admin" }: AppSidebarProps) {
   const location = useLocation();
+  const navigate = useNavigate();
 
-  const activeRoleKey = (role && sidebarConfig[role]) ? role : "super_admin";
+  /*
+   * --------------------------------------------------
+   * SIDEBAR CONFIG
+   * --------------------------------------------------
+   */
+
+  const activeRoleKey = role && sidebarConfig[role] ? role : "super_admin";
+
   const sidebarData = sidebarConfig[activeRoleKey] || sidebarConfig.super_admin;
+
   const dashboardItem = sidebarData?.dashboardItem;
+
   const navGroups = sidebarData?.navGroups || [];
+
   const profile = sidebarData?.profile;
 
-  const isSuperAdmin = role === "super_admin";
+  /*
+   * --------------------------------------------------
+   * COMPANY ADMIN ACCESS
+   * --------------------------------------------------
+   *
+   * Company Admin:
+   *
+   * isActive === false
+   *     -> Limited Sidebar
+   *
+   * isActive === true
+   *     -> Full Sidebar
+   *
+   * Other roles:
+   *     -> Existing sidebar behavior
+   */
+
+  const storedCompanyUser = StorageService.get<any>(STORAGE_KEYS.USER) || {};
+
+  const isCompanyAdmin = activeRoleKey === "company_admin";
+
+  const isCompanyAdminActive = storedCompanyUser?.isActive === true;
+
+  /*
+   * --------------------------------------------------
+   * VISIBLE NAVIGATION GROUPS
+   * --------------------------------------------------
+   *
+   * Limited pages are already defined in:
+   *
+   * sidebar.config.tsx
+   *
+   * under:
+   *
+   * limitedNavGroups
+   */
+
+  const visibleNavGroups = isCompanyAdmin
+    ? isCompanyAdminActive
+      ? mergeNavGroups(navGroups, sidebarData?.limitedNavGroups ?? [])
+      : (sidebarData?.limitedNavGroups ?? [])
+    : navGroups;
+
+  /*
+   * --------------------------------------------------
+   * USER / PROFILE DATA
+   * --------------------------------------------------
+   */
 
   const storedUserInfo = getStoredUserInfo();
+
   const displayTitle = storedUserInfo.name || profile?.title || "User";
+
   const profileEmail =
     storedUserInfo.email ||
     profile?.email ||
     profile?.subtitle ||
     "admin@gmail.com";
+
   const displayShortName =
     storedUserInfo.initials || profile?.shortName || "US";
 
+  /*
+   * --------------------------------------------------
+   * GROUP HANDLING
+   * --------------------------------------------------
+   */
+
+  const groupsForRole = visibleNavGroups;
+
+  /*
+   * Keep existing Settings behavior.
+   *
+   * Super Admin:
+   * Settings is rendered normally.
+   *
+   * Other roles:
+   * Settings is rendered in the bottom section.
+   */
+
+  const isSuperAdmin = role === "super_admin";
+
   const mainGroups = isSuperAdmin
-    ? navGroups
-    : navGroups.filter((group) => group.title !== "Settings");
+    ? groupsForRole
+    : groupsForRole.filter((group) => group.title !== "Settings");
 
   const settingsGroup = isSuperAdmin
     ? null
-    : navGroups.find((group) => group.title === "Settings");
+    : groupsForRole.find((group) => group.title === "Settings");
+
+  /*
+   * --------------------------------------------------
+   * STATE
+   * --------------------------------------------------
+   */
 
   const [openGroup, setOpenGroup] = useState<string | null>(null);
 
@@ -80,7 +206,11 @@ export default function AppSidebar({ role = "super_admin" }: AppSidebarProps) {
 
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
-  const navigate = useNavigate();
+  /*
+   * --------------------------------------------------
+   * LOGOUT
+   * --------------------------------------------------
+   */
 
   const handleLogout = () => {
     [
@@ -102,6 +232,12 @@ export default function AppSidebar({ role = "super_admin" }: AppSidebarProps) {
     });
   };
 
+  /*
+   * --------------------------------------------------
+   * SIDEBAR CONTEXT
+   * --------------------------------------------------
+   */
+
   const {
     isMobileOpen,
     isExpanded,
@@ -111,11 +247,20 @@ export default function AppSidebar({ role = "super_admin" }: AppSidebarProps) {
   } = useSidebar();
 
   const isDesktopOpen = isExpanded || isHovered;
+
   const showText = isMobileOpen || isDesktopOpen;
 
   const closeSidebar = () => {
-    if (isMobileOpen) toggleMobileSidebar();
+    if (isMobileOpen) {
+      toggleMobileSidebar();
+    }
   };
+
+  /*
+   * --------------------------------------------------
+   * GROUP TOGGLE
+   * --------------------------------------------------
+   */
 
   const toggleGroup = (title: string) => {
     setOpenGroup((prev) => (prev === title ? null : title));
@@ -125,6 +270,12 @@ export default function AppSidebar({ role = "super_admin" }: AppSidebarProps) {
     setOpenSubMenu((prev) => (prev === name ? null : name));
   };
 
+  /*
+   * --------------------------------------------------
+   * ROLE NORMALIZATION
+   * --------------------------------------------------
+   */
+
   function normalizeRole(role?: string | null) {
     return String(role || "")
       .toLowerCase()
@@ -133,49 +284,42 @@ export default function AppSidebar({ role = "super_admin" }: AppSidebarProps) {
       .replace(/-/g, "_");
   }
 
+  /*
+   * --------------------------------------------------
+   * PROFILE ROUTE
+   * --------------------------------------------------
+   */
+
   const getProfilePath = () => {
     const userData = StorageService.get<any>(STORAGE_KEYS.USER) || {};
 
-    const role = normalizeRole(
+    const userRole = normalizeRole(
       userData?.role ||
         userData?.role_name ||
         StorageService.get(STORAGE_KEYS.ROLE) ||
+        role ||
         "",
     );
-    if (
-      role === "super_admin" ||
-      role === "superadmin"
-    ) {
+
+    if (userRole === "super_admin" || userRole === "superadmin") {
       return "/super-admin/profile";
     }
-    if (
-      role === "sub_super_admin" ||
-      role === "subsuperadmin"
-    ) {
+    if (userRole === "sub_super_admin" || userRole === "subsuperadmin") {
       return "/sub-super-admin/profile";
     }
-    if (
-      role === "company_admin" ||
-      role === "admin"
-    ) {
+    if (userRole === "company_admin" || userRole === "admin") {
       return "/company-admin/profile";
     }
-    if (
-      role === "sub_admin" ||
-      role === "subadmin"
-    ) {
+    if (userRole === "sub_admin" || userRole === "subadmin") {
       return "/sub-admin/profile";
     }
-
-    if (role === "artisans") {
+    if (userRole === "artisans") {
       return "/artisans/profile";
     }
-
-    if (role === "supervisor") {
+    if (userRole === "supervisor") {
       return "/supervisor/profile";
     }
-
-    if (role === "operator" || role === "planner") {
+    if (userRole === "operator" || userRole === "planner") {
       return "/operator/profile";
     }
 
@@ -186,8 +330,16 @@ export default function AppSidebar({ role = "super_admin" }: AppSidebarProps) {
     navigate(getProfilePath());
   };
 
+  /*
+   * --------------------------------------------------
+   * ROUTE HELPERS
+   * --------------------------------------------------
+   */
+
   const getItemPath = (item: NavLinkItem) => {
-    if (item.isComingSoon) return COMING_SOON_ROUTE;
+    if (item.isComingSoon) {
+      return COMING_SOON_ROUTE;
+    }
 
     if (!item.path || item.path.trim() === "" || item.path === "#") {
       return COMING_SOON_ROUTE;
@@ -199,6 +351,12 @@ export default function AppSidebar({ role = "super_admin" }: AppSidebarProps) {
   const isValidRouteItem = (item: NavLinkItem) => {
     return Boolean(item.path && item.path.trim() !== "" && item.path !== "#");
   };
+
+  /*
+   * --------------------------------------------------
+   * ACTIVE ITEM
+   * --------------------------------------------------
+   */
 
   const isItemActive = (item: NavLinkItem) => {
     const itemPath = getItemPath(item);
@@ -222,6 +380,12 @@ export default function AppSidebar({ role = "super_admin" }: AppSidebarProps) {
     return location.pathname === itemPath;
   };
 
+  /*
+   * --------------------------------------------------
+   * RENDER LINK
+   * --------------------------------------------------
+   */
+
   const renderLink = (item: NavLinkItem, isChild = false) => {
     const isActive = isItemActive(item);
 
@@ -231,6 +395,9 @@ export default function AppSidebar({ role = "super_admin" }: AppSidebarProps) {
       item.path.trim() === "" ||
       item.path === "#";
 
+    /*
+     * Parent item with children
+     */
     if (item.children && !item.isComingSoon) {
       const isOpen = openSubMenu === item.name;
 
@@ -281,6 +448,9 @@ export default function AppSidebar({ role = "super_admin" }: AppSidebarProps) {
       );
     }
 
+    /*
+     * Normal link
+     */
     return (
       <Link
         key={item.name}
@@ -325,6 +495,12 @@ export default function AppSidebar({ role = "super_admin" }: AppSidebarProps) {
     );
   };
 
+  /*
+   * --------------------------------------------------
+   * UI
+   * --------------------------------------------------
+   */
+
   return (
     <>
       {isMobileOpen && (
@@ -346,17 +522,18 @@ export default function AppSidebar({ role = "super_admin" }: AppSidebarProps) {
           ${isDesktopOpen ? "lg:w-[280px]" : "lg:w-[92px]"}
           lg:translate-x-0`}
       >
+        {/* Logo */}
         <div className="shrink-0 flex items-center justify-center">
           <div
             className="
-      flex items-center justify-center
-      w-12 h-12
-      sm:w-14 sm:h-14
-      md:w-16 md:h-16
-      lg:w-20 lg:h-20
-      xl:w-24 xl:h-24
-      shrink-0
-    "
+              flex items-center justify-center
+              w-12 h-12
+              sm:w-14 sm:h-14
+              md:w-16 md:h-16
+              lg:w-20 lg:h-20
+              xl:w-24 xl:h-24
+              shrink-0
+            "
           >
             <img
               src={logo1}
@@ -366,11 +543,20 @@ export default function AppSidebar({ role = "super_admin" }: AppSidebarProps) {
           </div>
         </div>
 
+        {/* Navigation */}
         <nav className="mt-7 flex-1 space-y-5 overflow-y-auto overflow-x-hidden px-4 pb-5 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-          <div className="space-y-1.5">{renderLink(dashboardItem)}</div>
+          {/* Dashboard - always visible */}
+          {/* Dashboard - only visible after Company Admin is activated */}
+          {(!isCompanyAdmin || isCompanyAdminActive) && (
+            <div className="space-y-1.5">
+              {dashboardItem && renderLink(dashboardItem)}
+            </div>
+          )}
 
+          {/* Navigation Groups */}
           {mainGroups.map((group, index) => {
             const isOpen = openGroup === group.title;
+
             const hasTitle = group.title.trim() !== "";
 
             return (
@@ -399,13 +585,13 @@ export default function AppSidebar({ role = "super_admin" }: AppSidebarProps) {
 
                     <div
                       className={`
-                         overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)]
-                           ${
-                             isOpen || !showText
-                               ? "max-h-[500px] opacity-100 translate-y-0"
-                               : "max-h-0 opacity-0 -translate-y-2"
-                           }
-                            `}
+                          overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)]
+                          ${
+                            isOpen || !showText
+                              ? "max-h-[500px] opacity-100 translate-y-0"
+                              : "max-h-0 opacity-0 -translate-y-2"
+                          }
+                        `}
                     >
                       <div className="space-y-1.5 pt-1">
                         {group.items.map((item) => renderLink(item))}
@@ -422,13 +608,16 @@ export default function AppSidebar({ role = "super_admin" }: AppSidebarProps) {
           })}
         </nav>
 
+        {/* Bottom Section */}
         <div className="shrink-0 border-t border-white/10 bg-transparent p-4">
+          {/* Settings */}
           {settingsGroup && (
             <div className="mb-3 space-y-1.5">
               {settingsGroup.items.map((item) => renderLink(item))}
             </div>
           )}
 
+          {/* Profile + Logout */}
           {showText ? (
             <div className="flex items-center gap-3 rounded-2xl bg-white/8 p-3">
               <button
@@ -468,6 +657,8 @@ export default function AppSidebar({ role = "super_admin" }: AppSidebarProps) {
           )}
         </div>
       </aside>
+
+      {/* Logout Modal */}
       {showLogoutModal && (
         <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/50 px-4 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-3xl border border-gray-200 bg-white p-6 shadow-2xl dark:border-gray-800 dark:bg-gray-900">

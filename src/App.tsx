@@ -1,5 +1,6 @@
 import { useNotifications } from "./context/NotificationContext";
 import { PageSkeleton } from "./components/common/Skeleton";
+import { authService } from "./services/Auth/authService";
 
 import {
   BrowserRouter as Router,
@@ -158,6 +159,10 @@ const ServiceLog1 = lazy(
 
 // ---------------- Company Admin ----------------
 
+const CompanyProfile = lazy(
+  () => import("./pages/CompanyAdmin/CompanyProfile"),
+);
+
 const CompanyAdminDashboard = lazy(
   () => import("./pages/CompanyAdmin/CompanyAdminDashboard"),
 );
@@ -189,6 +194,34 @@ const SubscriptionHistory = lazy(
 const CategoryManagement = lazy(
   () => import("./pages/CompanyAdmin/CategoryManagement"),
 );
+
+////////////////
+
+const QuotationRequest = lazy(
+  () => import("./pages/CompanyAdmin/QuotationContract"),
+);
+const QuotationStatus = lazy(
+  () => import("./pages/CompanyAdmin/QuotationStatus"),
+);
+
+const Messages = lazy(() => import("./pages/CompanyAdmin/quotationInvoices"));
+
+// NEW
+const QuotationDetails = lazy(
+  () => import("./pages/CompanyAdmin/QuotationDetailsPage"),
+);
+
+const QuotationAction = lazy(
+  () => import("./pages/CompanyAdmin/QuotationActionPage"),
+);
+
+const QuotationManagement = lazy(
+  () => import("./pages/CompanyAdmin/QuotationManagement"),
+);
+
+//////////
+
+const Documents = lazy(() => import("./pages/CompanyAdmin/Documents"));
 
 const InspectionDataEntry = lazy(
   () => import("./pages/CompanyAdmin/InspectionDataEntry"),
@@ -359,18 +392,39 @@ export default function App() {
   const { addNotification } = useNotifications();
 
   useEffect(() => {
-    const token = StorageService.get<string>(STORAGE_KEYS.TOKEN);
+    const refreshUser = async () => {
+      const token = StorageService.get<string>(STORAGE_KEYS.TOKEN);
 
-    const role = StorageService.get<string>(STORAGE_KEYS.ROLE);
+      if (!token) {
+        return;
+      }
 
-    const user = StorageService.get<any>(STORAGE_KEYS.USER);
+      try {
+        // Get latest user data from backend
+        const response = await authService.getMe();
 
-    if (!token || !user) {
-      return;
-    }
+        const latestUser = response?.user ?? response?.admin ?? response?.data;
 
-    // Connect WebSocket
-    socketService.connect(user.id || user.userId, role || user.role, token);
+        if (latestUser) {
+          // Update latest user data in localStorage
+          StorageService.set(STORAGE_KEYS.USER, latestUser);
+        }
+
+        // Read fresh user data
+        const user = latestUser || StorageService.get<any>(STORAGE_KEYS.USER);
+
+        const role =
+          StorageService.get<string>(STORAGE_KEYS.ROLE) || user?.role;
+
+        // Connect WebSocket
+        if (user) {
+          socketService.connect(user.id || user.userId, role, token);
+        }
+      } catch (error) {
+        console.error("[App] Failed to refresh user", error);
+      }
+    };
+    refreshUser();
   }, []);
 
   return (
@@ -780,56 +834,147 @@ export default function App() {
                   }
                 />
 
-              <Route
-                path="/company-admin/categories"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <CategoryManagement />
-                  </Suspense>
-                }
-              />
-              <Route
-                path="/company-admin/category-management"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <CategoryManagement />
-                  </Suspense>
-                }
-              />
-              <Route
-                path="/admin/categories"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <CategoryManagement />
-                  </Suspense>
-                }
-              />
+                <Route
+                  path="/company-admin/quotation"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <QuotationManagement />
+                    </Suspense>
+                  }
+                />
+
+                <Route
+                  path="/company-admin/quotation-request"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <QuotationRequest />
+                    </Suspense>
+                  }
+                />
+
+                <Route
+                  path="/company-admin/quotation-status"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <QuotationStatus />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/company-admin/messages"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <Messages />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/company-admin/quotation-invoices"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <Messages />
+                    </Suspense>
+                  }
+                />
+
+                <Route
+                  path="/company-admin/quotation-details"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <QuotationDetails />
+                    </Suspense>
+                  }
+                />
+
+                <Route
+                  path="/company-admin/quotation-action"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <QuotationAction />
+                    </Suspense>
+                  }
+                />
+
+                <Route
+                  path="/company-admin/documents"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <Documents />
+                    </Suspense>
+                  }
+                />
+
+                <Route
+                  path="/company-admin/categories"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <CategoryManagement />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/company-admin/category-management"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <CategoryManagement />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/admin/categories"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <CategoryManagement />
+                    </Suspense>
+                  }
+                />
 
                 <Route
                   path="/company-admin/profile"
-                  element={<UserProfiles />}
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <CompanyProfile />
+                    </Suspense>
+                  }
                 />
 
-              <Route
-                path="/company-admin/register"
-                element={<ComponentRegister />}
-              />
-              <Route
-                path="/company-admin/components"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <ComponentRegister />
-                  </Suspense>
-                }
-              />
-              <Route
-                path="/company_admin/components"
-                element={
-                  <Suspense fallback={<PageSkeleton />}>
-                    <ComponentRegister />
-                  </Suspense>
-                }
-              />
+                <Route
+                  path="/company-admin/job-cards"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <JobCardManagement />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/company_admin/job-cards"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <JobCardManagement />
+                    </Suspense>
+                  }
+                />
+
+                <Route
+                  path="/company-admin/register"
+                  element={<ComponentRegister />}
+                />
+                <Route
+                  path="/company-admin/components"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <ComponentRegister />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/company_admin/components"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <ComponentRegister />
+                    </Suspense>
+                  }
+                />
 
                 <Route
                   path="/company-admin/heatmap"

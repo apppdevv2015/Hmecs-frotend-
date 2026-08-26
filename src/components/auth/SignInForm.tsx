@@ -52,6 +52,8 @@ type LoginUser = {
 
   companyId?: string;
   company_id?: string;
+  isActive?: boolean; 
+  
 };
 
 type LoginResponse = {
@@ -419,6 +421,7 @@ export default function SignInForm() {
         role_id: apiUser?.role_id,
 
         companyId,
+          isActive: apiUser?.isActive,
 
         email:
           decodedToken?.email ||
