@@ -14,6 +14,7 @@ import {
   Save,
   Gauge,
   Sliders,
+  ChevronLeft,
   ChevronRight,
   ChevronDown,
   Info,

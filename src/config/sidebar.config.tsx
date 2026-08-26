@@ -15,7 +15,6 @@ import {
   Map,
   FileBarChart,
   CreditCard,
-  Receipt,
   Settings,
   ShieldCheck,
   Users,
@@ -184,11 +183,6 @@ export const sidebarConfig: Record<
             path: "/super-admin/components",
             icon: <Cpu className={sidebarIconClass} />,
           },
-          {
-            name: "Service Logs",
-            path: "/super-admin/service-logs",
-            icon: <FileClock className={sidebarIconClass} />,
-          },
         ],
       },
 
@@ -282,6 +276,7 @@ export const sidebarConfig: Record<
             name: "Reports",
             path: "/company-admin/reporting",
             icon: <FileBarChart className={sidebarIconClass} />,
+            isComingSoon: true,
           },
           {
             name: "Service Log",
