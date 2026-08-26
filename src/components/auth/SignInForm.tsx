@@ -421,7 +421,12 @@ export default function SignInForm() {
         role_id: apiUser?.role_id,
 
         companyId,
-          isActive: apiUser?.isActive,
+        isActive:
+          apiUser?.isActive !== undefined
+            ? Boolean(apiUser.isActive)
+            : decodedToken?.isActive !== undefined
+            ? Boolean(decodedToken.isActive)
+            : false,
 
         email:
           decodedToken?.email ||
@@ -475,14 +480,18 @@ export default function SignInForm() {
         normalizedRole === "sub_admin" ||
         normalizedRole === "subadmin"
       ) {
-        try {
-          const subscription = await userService.getActiveSubscription();
+        if (finalUser.isActive === false) {
+          finalRedirect = "/company-admin/quotation";
+        } else {
+          try {
+            const subscription = await userService.getActiveSubscription();
 
-          if (!subscription) {
-            finalRedirect = "/plans";
+            if (!subscription) {
+              finalRedirect = "/plans";
+            }
+          } catch (subscriptionError) {
+            console.error("Subscription check error:", subscriptionError);
           }
-        } catch (subscriptionError) {
-          console.error("Subscription check error:", subscriptionError);
         }
       }
 
