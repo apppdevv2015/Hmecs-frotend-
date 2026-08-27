@@ -16,51 +16,47 @@ import {
 import toast from "react-hot-toast";
 
 import CustomSelect from "../../components/ui/dropdown/AppSelect";
-import Pagination from "../../components/common/Pagination"; 
+import Pagination from "../../components/common/Pagination";
 import {
   getOptionalServices,
   createOptionalService,
   updateOptionalService,
   deleteOptionalService,
   toggleOptionalServiceStatus,
+  type OptionalService,
+  type OptionalServicePayload,
 } from "../../services/SuperAdmin/optionalService";
 
 // ----------------------------------------------------
-// Types
+// Local types
 // ----------------------------------------------------
 
-type OptionalServiceStatus = "ACTIVE" | "INACTIVE";
-type StatusFilter = OptionalServiceStatus | "ALL";
-
-interface OptionalService {
-  id: number;
-  name: string;
-  description: string;
-  status: OptionalServiceStatus;
-  displayOrder: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface OptionalServicePayload {
-  name: string;
-  description: string;
-  status: OptionalServiceStatus;
-  displayOrder: number;
-}
+type StatusFilter = "ACTIVE" | "INACTIVE" | "ALL";
 
 interface FormErrors {
   name?: string;
   description?: string;
-  displayOrder?: string;
+  sortOrder?: string;
 }
 
 // ----------------------------------------------------
-// Validation (agar tumhari common validation file hai to
-// yeh function wahan se import kar lena, yahan se hata dena)
+// Helpers
 // ----------------------------------------------------
 
-function validateOptionalServiceForm(payload: OptionalServicePayload): FormErrors {
+function formatDate(iso: string): string {
+  if (!iso) return "-";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function validateOptionalServiceForm(
+  payload: OptionalServicePayload,
+): FormErrors {
   const errors: FormErrors = {};
 
   const name = payload.name?.trim() ?? "";
@@ -80,8 +76,8 @@ function validateOptionalServiceForm(payload: OptionalServicePayload): FormError
     errors.description = "Description cannot exceed 500 characters.";
   }
 
-  if (!Number.isFinite(payload.displayOrder) || payload.displayOrder < 1) {
-    errors.displayOrder = "Display order must be a positive number.";
+  if (!Number.isFinite(payload.sortOrder) || payload.sortOrder < 1) {
+    errors.sortOrder = "Display order must be a positive number.";
   }
 
   return errors;
@@ -107,12 +103,16 @@ export default function OptionalServicePage() {
   const [itemsPerPage, setItemsPerPage] = useState<number | "all">(10);
 
   const [formModalOpen, setFormModalOpen] = useState(false);
-  const [editingService, setEditingService] = useState<OptionalService | null>(null);
+  const [editingService, setEditingService] = useState<OptionalService | null>(
+    null,
+  );
 
-  const [deleteTarget, setDeleteTarget] = useState<OptionalService | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<OptionalService | null>(
+    null,
+  );
   const [deleting, setDeleting] = useState(false);
 
-  const [togglingId, setTogglingId] = useState<number | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   const fetchServices = useCallback(async () => {
     setLoading(true);
@@ -122,9 +122,11 @@ export default function OptionalServicePage() {
       setServices(data);
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Failed to load optional services.";
+        error instanceof Error
+          ? error.message
+          : "Failed to load optional services.";
       setFetchError(message);
-      toast.error(message);
+      // error toast already shown by apiCall
     } finally {
       setLoading(false);
     }
@@ -147,7 +149,9 @@ export default function OptionalServicePage() {
         service.name.toLowerCase().includes(term) ||
         service.description.toLowerCase().includes(term);
 
-      const matchesStatus = statusFilter === "ALL" || service.status === statusFilter;
+      const matchesStatus =
+        statusFilter === "ALL" ||
+        (statusFilter === "ACTIVE" ? service.isActive : !service.isActive);
 
       return matchesSearch && matchesStatus;
     });
@@ -155,7 +159,9 @@ export default function OptionalServicePage() {
 
   const totalItems = filteredServices.length;
   const isShowAll = itemsPerPage === "all";
-  const totalPages = isShowAll ? 1 : Math.max(1, Math.ceil(totalItems / (itemsPerPage as number)));
+  const totalPages = isShowAll
+    ? 1
+    : Math.max(1, Math.ceil(totalItems / (itemsPerPage as number)));
 
   const paginatedServices = useMemo(() => {
     if (isShowAll) return filteredServices;
@@ -164,22 +170,26 @@ export default function OptionalServicePage() {
     return filteredServices.slice(start, end);
   }, [filteredServices, currentPage, itemsPerPage, isShowAll]);
 
-  const startItem = totalItems === 0 ? 0 : (currentPage - 1) * (itemsPerPage as number) + 1;
-  const endItem = Math.min(currentPage * (itemsPerPage as number), totalItems);
+  const startItem =
+    totalItems === 0 ? 0 : (currentPage - 1) * (itemsPerPage as number) + 1;
+  const endItem = Math.min(
+    currentPage * (itemsPerPage as number),
+    totalItems,
+  );
 
   const stats = useMemo(() => {
     const total = services.length;
-    const active = services.filter((s) => s.status === "ACTIVE").length;
+    const active = services.filter((s) => s.isActive).length;
     const inactive = total - active;
-    const orders = services.map((s) => s.displayOrder);
+    const orders = services.map((s) => s.sortOrder);
     const minOrder = orders.length ? Math.min(...orders) : 0;
     const maxOrder = orders.length ? Math.max(...orders) : 0;
     return { total, active, inactive, minOrder, maxOrder };
   }, [services]);
 
-  const nextDisplayOrder = useMemo(() => {
+  const nextSortOrder = useMemo(() => {
     if (services.length === 0) return 1;
-    return Math.max(...services.map((s) => s.displayOrder)) + 1;
+    return Math.max(...services.map((s) => s.sortOrder)) + 1;
   }, [services]);
 
   const handleAddClick = () => {
@@ -207,11 +217,9 @@ export default function OptionalServicePage() {
     try {
       await deleteOptionalService(deleteTarget.id);
       setServices((prev) => prev.filter((s) => s.id !== deleteTarget.id));
-      toast.success("Optional service deleted successfully.");
       setDeleteTarget(null);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to delete service.";
-      toast.error(message);
+      // error toast already shown by apiCall
     } finally {
       setDeleting(false);
     }
@@ -221,11 +229,14 @@ export default function OptionalServicePage() {
     setTogglingId(service.id);
     try {
       const updated = await toggleOptionalServiceStatus(service.id);
-      setServices((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
-      toast.success(`Service marked as ${updated.status === "ACTIVE" ? "Active" : "Inactive"}.`);
+      setServices((prev) =>
+        prev.map((s) => (s.id === updated.id ? updated : s)),
+      );
+      toast.success(
+        `Service marked as ${updated.isActive ? "Active" : "Inactive"}.`,
+      );
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to update status.";
-      toast.error(message);
+      // error toast already shown by apiCall
     } finally {
       setTogglingId(null);
     }
@@ -242,10 +253,12 @@ export default function OptionalServicePage() {
       {/* ---------------- Header ---------------- */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800 dark:text-white">Optional Services</h1>
+          <h1 className="text-2xl font-bold text-slate-800 dark:text-white">
+            Optional Services
+          </h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            Manage additional integrations and value-added services that can be included in customer
-            quotations.
+            Manage additional integrations and value-added services that can
+            be included in customer quotations.
           </p>
         </div>
         <button
@@ -285,7 +298,9 @@ export default function OptionalServicePage() {
           icon={<ArrowUpDown className="h-5 w-5 text-blue-600" />}
           iconBg="bg-blue-50 dark:bg-blue-900/30"
           label="Display Orders"
-          value={stats.total === 0 ? "—" : `${stats.minOrder} - ${stats.maxOrder}`}
+          value={
+            stats.total === 0 ? "—" : `${stats.minOrder} - ${stats.maxOrder}`
+          }
           hint="Service order range"
         />
       </div>
@@ -345,14 +360,19 @@ export default function OptionalServicePage() {
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-10 text-center text-sm text-slate-400">
+                  <td
+                    colSpan={7}
+                    className="px-6 py-10 text-center text-sm text-slate-400"
+                  >
                     Loading optional services...
                   </td>
                 </tr>
               ) : fetchError ? (
                 <tr>
                   <td colSpan={7} className="px-6 py-10 text-center">
-                    <p className="text-sm font-medium text-red-500">{fetchError}</p>
+                    <p className="text-sm font-medium text-red-500">
+                      {fetchError}
+                    </p>
                     <button
                       type="button"
                       onClick={fetchServices}
@@ -364,7 +384,10 @@ export default function OptionalServicePage() {
                 </tr>
               ) : paginatedServices.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-10 text-center text-sm text-slate-400">
+                  <td
+                    colSpan={7}
+                    className="px-6 py-10 text-center text-sm text-slate-400"
+                  >
                     No optional services found.
                   </td>
                 </tr>
@@ -377,20 +400,24 @@ export default function OptionalServicePage() {
                     <td className="px-6 py-4 text-slate-400">
                       {isShowAll
                         ? index + 1
-                        : (currentPage - 1) * (itemsPerPage as number) + index + 1}
+                        : (currentPage - 1) * (itemsPerPage as number) +
+                          index +
+                          1}
                     </td>
-                    <td className="px-6 py-4 font-semibold">{service.name}</td>
+                    <td className="px-6 py-4 font-semibold">
+                      {service.name}
+                    </td>
                     <td className="max-w-xs px-6 py-4 text-slate-500 dark:text-slate-400">
                       <p className="line-clamp-1">{service.description}</p>
                     </td>
-                    <td className="px-6 py-4">{service.displayOrder}</td>
+                    <td className="px-6 py-4">{service.sortOrder}</td>
                     <td className="px-6 py-4">
                       <button
                         type="button"
                         onClick={() => handleToggleStatus(service)}
                         disabled={togglingId === service.id}
                         className={`rounded-full px-2.5 py-1 text-xs font-bold transition disabled:opacity-50 ${
-                          service.status === "ACTIVE"
+                          service.isActive
                             ? "bg-emerald-50 text-emerald-600 hover:bg-emerald-100 dark:bg-emerald-900/30"
                             : "bg-red-50 text-red-500 hover:bg-red-100 dark:bg-red-900/30"
                         }`}
@@ -398,12 +425,14 @@ export default function OptionalServicePage() {
                       >
                         {togglingId === service.id
                           ? "Updating..."
-                          : service.status === "ACTIVE"
+                          : service.isActive
                           ? "Active"
                           : "Inactive"}
                       </button>
                     </td>
-                    <td className="px-6 py-4 text-slate-500 dark:text-slate-400">{service.createdAt}</td>
+                    <td className="px-6 py-4 text-slate-500 dark:text-slate-400">
+                      {formatDate(service.createdAt)}
+                    </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center justify-end gap-2">
                         <button
@@ -457,7 +486,7 @@ export default function OptionalServicePage() {
             setFormModalOpen(false);
           }}
           editingService={editingService}
-          nextDisplayOrder={nextDisplayOrder}
+          nextSortOrder={nextSortOrder}
         />
       )}
 
@@ -493,12 +522,18 @@ function StatCard({
 }) {
   return (
     <div className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-[#0b1728]">
-      <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${iconBg}`}>
+      <div
+        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${iconBg}`}
+      >
         {icon}
       </div>
       <div>
-        <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">{label}</p>
-        <p className="text-xl font-bold text-slate-800 dark:text-white">{value}</p>
+        <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+          {label}
+        </p>
+        <p className="text-xl font-bold text-slate-800 dark:text-white">
+          {value}
+        </p>
         <p className="text-[11px] text-slate-400">{hint}</p>
       </div>
     </div>
@@ -513,12 +548,12 @@ function OptionalServiceFormModal({
   onClose,
   onSuccess,
   editingService,
-  nextDisplayOrder,
+  nextSortOrder,
 }: {
   onClose: () => void;
   onSuccess: (service: OptionalService) => void;
   editingService: OptionalService | null;
-  nextDisplayOrder: number;
+  nextSortOrder: number;
 }) {
   const isEditMode = editingService !== null;
 
@@ -527,15 +562,15 @@ function OptionalServiceFormModal({
       ? {
           name: editingService.name,
           description: editingService.description,
-          status: editingService.status,
-          displayOrder: editingService.displayOrder,
+          isActive: editingService.isActive,
+          sortOrder: editingService.sortOrder,
         }
       : {
           name: "",
           description: "",
-          status: "ACTIVE",
-          displayOrder: nextDisplayOrder,
-        }
+          isActive: true,
+          sortOrder: nextSortOrder,
+        },
   );
   const [errors, setErrors] = useState<FormErrors>({});
   const [submitting, setSubmitting] = useState(false);
@@ -554,13 +589,9 @@ function OptionalServiceFormModal({
           ? await updateOptionalService(editingService.id, formData)
           : await createOptionalService(formData);
 
-      toast.success(
-        isEditMode ? "Optional service updated successfully." : "Optional service created successfully."
-      );
       onSuccess(result);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Something went wrong.";
-      toast.error(message);
+      // error toast already shown by apiCall
     } finally {
       setSubmitting(false);
     }
@@ -591,7 +622,9 @@ function OptionalServiceFormModal({
             <input
               type="text"
               value={formData.name}
-              onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+              onChange={(e) =>
+                setFormData((prev) => ({ ...prev, name: e.target.value }))
+              }
               disabled={submitting}
               className={`w-full rounded-lg border px-3 py-2.5 text-sm outline-none transition focus:ring-2 dark:bg-gray-900 dark:text-white ${
                 errors.name
@@ -600,7 +633,9 @@ function OptionalServiceFormModal({
               }`}
               placeholder="e.g. Telematics / ECU Integration"
             />
-            {errors.name && <p className="mt-1 text-xs text-red-500">{errors.name}</p>}
+            {errors.name && (
+              <p className="mt-1 text-xs text-red-500">{errors.name}</p>
+            )}
           </div>
 
           <div>
@@ -610,7 +645,12 @@ function OptionalServiceFormModal({
             <textarea
               rows={3}
               value={formData.description}
-              onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  description: e.target.value,
+                }))
+              }
               disabled={submitting}
               className={`w-full resize-none rounded-lg border px-3 py-2.5 text-sm outline-none transition focus:ring-2 dark:bg-gray-900 dark:text-white ${
                 errors.description
@@ -619,7 +659,11 @@ function OptionalServiceFormModal({
               }`}
               placeholder="Short description of this service"
             />
-            {errors.description && <p className="mt-1 text-xs text-red-500">{errors.description}</p>}
+            {errors.description && (
+              <p className="mt-1 text-xs text-red-500">
+                {errors.description}
+              </p>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -630,27 +674,37 @@ function OptionalServiceFormModal({
               <input
                 type="number"
                 min={1}
-                value={formData.displayOrder}
+                value={formData.sortOrder}
                 onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, displayOrder: Number(e.target.value) }))
+                  setFormData((prev) => ({
+                    ...prev,
+                    sortOrder: Number(e.target.value),
+                  }))
                 }
                 disabled={submitting}
                 className={`w-full rounded-lg border px-3 py-2.5 text-sm outline-none transition focus:ring-2 dark:bg-gray-900 dark:text-white ${
-                  errors.displayOrder
+                  errors.sortOrder
                     ? "border-red-400 focus:ring-red-500"
                     : "border-slate-300 focus:ring-blue-500 dark:border-slate-700"
                 }`}
               />
-              {errors.displayOrder && <p className="mt-1 text-xs text-red-500">{errors.displayOrder}</p>}
+              {errors.sortOrder && (
+                <p className="mt-1 text-xs text-red-500">
+                  {errors.sortOrder}
+                </p>
+              )}
             </div>
 
             <div>
               <CustomSelect
                 label="Status"
                 required
-                value={formData.status}
+                value={formData.isActive ? "ACTIVE" : "INACTIVE"}
                 onChange={(val) =>
-                  setFormData((prev) => ({ ...prev, status: val as OptionalServiceStatus }))
+                  setFormData((prev) => ({
+                    ...prev,
+                    isActive: val === "ACTIVE",
+                  }))
                 }
                 options={[
                   { label: "Active", value: "ACTIVE" },
@@ -722,8 +776,10 @@ function DeleteConfirmModal({
         </h3>
         <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">
           Are you sure you want to delete{" "}
-          <span className="font-semibold text-slate-700 dark:text-slate-200">{serviceName}</span>? This
-          action cannot be undone.
+          <span className="font-semibold text-slate-700 dark:text-slate-200">
+            {serviceName}
+          </span>
+          ? This action cannot be undone.
         </p>
 
         <div className="mt-6 flex justify-end gap-3">
