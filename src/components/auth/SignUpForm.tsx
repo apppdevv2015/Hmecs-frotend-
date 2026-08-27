@@ -71,6 +71,41 @@ const EQUIPMENT_TYPE_OPTIONS: SelectOption[] = [
   { value: "other", label: "Other" },
 ];
 
+const OPTIONAL_SERVICE_OPTIONS: SelectOption[] = [
+  {
+    value: "telematics_ecu_integration",
+    label: "Telematics / ECU Integration",
+  },
+  {
+    value: "historical_data_migration_cleaning",
+    label: "Historical Data Migration & Cleaning",
+  },
+  {
+    value: "custom_api_development",
+    label: "Custom API Development",
+  },
+  {
+    value: "sap_erp_integration",
+    label: "SAP / ERP Integration",
+  },
+  {
+    value: "additional_training",
+    label: "Additional Training",
+  },
+  {
+    value: "sms_whatsapp_notifications",
+    label: "SMS / WhatsApp Notifications",
+  },
+  {
+    value: "custom_reports",
+    label: "Custom Reports",
+  },
+  {
+    value: "on_site_technical_support",
+    label: "On-site Technical Support",
+  },
+];
+
 const CONTRACT_DURATION_OPTIONS: SelectOption[] = [
   { value: "6", label: "6 Months" },
   { value: "12", label: "12 Months" },
@@ -90,10 +125,7 @@ const MAX_ATTACHMENT_SIZE_MB = 10;
 // ---------------------------------------------------------------------------
 
 const companyDetailsSchema = z.object({
-  companyName: z
-    .string()
-    .trim()
-    .min(1, "Company name is required"),
+  companyName: z.string().trim().min(1, "Company name is required"),
 
   contactPerson: z
     .string()
@@ -111,15 +143,9 @@ const companyDetailsSchema = z.object({
     .string()
     .trim()
     .min(1, "Phone number is required")
-    .regex(
-      /^[6-9]\d{9}$/,
-      "Please enter a valid 10 digit phone number",
-    ),
+    .regex(/^[6-9]\d{9}$/, "Please enter a valid 10 digit phone number"),
 
-  siteLocation: z
-    .string()
-    .trim()
-    .min(1, "Site / Location is required"),
+  siteLocation: z.string().trim().min(1, "Site / Location is required"),
 
   password: z
     .string()
@@ -157,6 +183,7 @@ const quotationSchema = z.object({
     .min(1, "Select at least one equipment type"),
 
   contractDuration: z.string().min(1, "Please select contract duration"),
+  optionalServices: z.array(z.string()).optional(),
 
   implementationRequirements: z.string().trim().optional(),
 
@@ -224,9 +251,7 @@ const getApiErrorMessage = (error: unknown) => {
     "violates",
   ];
 
-  const isBackendError = blockedWords.some((word) =>
-    message.includes(word),
-  );
+  const isBackendError = blockedWords.some((word) => message.includes(word));
 
   return isBackendError ? defaultMessage : error.message;
 };
@@ -382,8 +407,8 @@ function AppMultiSelect({
     selectedLabels.length === 0
       ? placeholder
       : selectedLabels.length <= 2
-      ? selectedLabels.join(", ")
-      : `${selectedLabels.length} types selected`;
+        ? selectedLabels.join(", ")
+        : `${selectedLabels.length} types selected`;
 
   return (
     <div>
@@ -626,6 +651,7 @@ export default function SignUpForm() {
       equipmentTypes: [],
       contractDuration: "",
       implementationRequirements: "",
+      optionalServices: [],
       additionalRequirements: "",
       attachment: undefined,
     },
@@ -643,8 +669,9 @@ export default function SignUpForm() {
     name: "siteNames",
   });
 
-  const siteNameArrayError = (errors.siteNames as { message?: string } | undefined)
-    ?.message;
+  const siteNameArrayError = (
+    errors.siteNames as { message?: string } | undefined
+  )?.message;
 
   const handleNext = async () => {
     const isStepValid = await trigger(STEP_ONE_FIELDS);
@@ -697,8 +724,7 @@ export default function SignUpForm() {
       const contactParts = data.contactPerson.trim().split(/\s+/);
 
       const firstName = contactParts[0] || "";
-      const lastName =
-        contactParts.slice(1).join(" ") || firstName;
+      const lastName = contactParts.slice(1).join(" ") || firstName;
 
       const response = await authService.register({
         company_name: data.companyName.trim(),
@@ -749,15 +775,7 @@ export default function SignUpForm() {
         StorageService.set(STORAGE_KEYS.USER, user);
       }
 
-      updateToast(
-        toastId,
-        "Account created successfully",
-        "success",
-      );
-
-      setTimeout(() => {
-        navigate("/signin", { replace: true });
-      }, 700);
+      updateToast(toastId, "Account created successfully", "success");
     } catch (error) {
       console.error("Signup API Error:", error);
 
@@ -851,8 +869,8 @@ export default function SignUpForm() {
                   HME Component Intelligence
                 </p>
                 <p className="mt-1 text-sm leading-5 text-slate-600 dark:text-slate-300">
-                  Start with your company details and continue to
-                  the limited company portal.
+                  Start with your company details and continue to the limited
+                  company portal.
                 </p>
               </div>
             </section>
@@ -1209,9 +1227,12 @@ export default function SignUpForm() {
                                     ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
                                     : ""
                                 }`}
-                                {...register(`siteNames.${index}.name` as const, {
-                                  setValueAs: (value) => value.trim(),
-                                })}
+                                {...register(
+                                  `siteNames.${index}.name` as const,
+                                  {
+                                    setValueAs: (value) => value.trim(),
+                                  },
+                                )}
                               />
 
                               {siteNameFields.length > 1 && (
@@ -1234,7 +1255,9 @@ export default function SignUpForm() {
                             siteNameFields.length < MAX_SITE_NAME_FIELDS &&
                             appendSiteName({ name: "" })
                           }
-                          disabled={siteNameFields.length >= MAX_SITE_NAME_FIELDS}
+                          disabled={
+                            siteNameFields.length >= MAX_SITE_NAME_FIELDS
+                          }
                           className="mt-2.5 inline-flex w-fit items-center gap-1.5 text-sm font-bold text-blue-600 transition hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-blue-400"
                         >
                           <Plus className="h-4 w-4" />
@@ -1356,6 +1379,26 @@ export default function SignUpForm() {
                         <div className="min-h-[10px] pt-1" />
                       </div>
 
+                      {/* Optional Services */}
+                      <div className="flex min-w-0 flex-col">
+                        <Label>Optional Services</Label>
+
+                        <div className="mt-1">
+                          <Controller
+                            name="optionalServices"
+                            control={control}
+                            render={({ field }) => (
+                              <AppMultiSelect
+                                values={field.value || []}
+                                onChange={(values) => field.onChange(values)}
+                                options={OPTIONAL_SERVICE_OPTIONS}
+                                placeholder="Select optional services"
+                              />
+                            )}
+                          />
+                        </div>
+                      </div>
+
                       {/* Additional Requirements (+ optional PDF attachment) */}
                       <div className="flex min-w-0 flex-col">
                         <Label>8. Additional Requirements</Label>
@@ -1413,7 +1456,9 @@ export default function SignUpForm() {
                         disabled={isSubmitting}
                         className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 text-sm font-bold text-white shadow-lg shadow-blue-600/25 transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto"
                       >
-                        {isSubmitting ? "Submitting..." : "Submit Quotation Request"}
+                        {isSubmitting
+                          ? "Submitting..."
+                          : "Submit Quotation Request"}
                         <Send className="h-4 w-4" />
                       </button>
                     </div>

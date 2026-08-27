@@ -7,7 +7,6 @@ import {
 } from "lucide-react";
 
 import QuotationInquiry from "./QuotationInquiry";
-import SendQuotation from "./SendQuotation";
 import QuotationResponses from "./QuotationResponses";
 
 /* ============================================================
@@ -37,18 +36,6 @@ const QUOTATION_TABS: readonly QuotationTabConfig[] = [
     description: "Review and manage quotation inquiries",
     icon: (
       <ClipboardList
-        size={21}
-        strokeWidth={2}
-        aria-hidden="true"
-      />
-    ),
-  },
-  {
-    id: "send-quotation",
-    label: "Send Quotation",
-    description: "Prepare and send quotations",
-    icon: (
-      <Send
         size={21}
         strokeWidth={2}
         aria-hidden="true"
@@ -136,8 +123,6 @@ const Quotation: FC = () => {
       case "inquiry":
         return <QuotationInquiry />;
 
-      case "send-quotation":
-        return <SendQuotation />;
 
       case "responses":
         return <QuotationResponses />;

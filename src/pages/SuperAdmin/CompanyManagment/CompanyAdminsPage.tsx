@@ -4,7 +4,9 @@ import autoTable from "jspdf-autotable";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { Plus } from "lucide-react";
 
+import SignupCard from "../../../components/common/SignupCard";
 import { showSuccessToast, showErrorToast } from "../../../utils/toastUtils";
 
 import {
@@ -212,6 +214,8 @@ export default function CompanyAdminsPage() {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const [togglingStatusId, setTogglingStatusId] = useState<string | null>(null);
+
+  const [showAddUser, setShowAddUser] = useState(false);
 
   const {
     register: registerEdit,
@@ -474,7 +478,7 @@ export default function CompanyAdminsPage() {
       );
     } catch (error: any) {
       console.error("Status toggle failed:", error);
-      
+
       setCompanies(previousCompanies);
       showErrorToast(error?.message || "Failed to update company status");
     } finally {
@@ -684,18 +688,20 @@ export default function CompanyAdminsPage() {
           <button
             onClick={(event) => {
               event.stopPropagation();
-              fetchCompanyAdmins();
+              setShowAddUser(true);
             }}
-            disabled={adminsLoading}
-            className="flex h-12 items-center justify-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-5 text-sm font-semibold text-white backdrop-blur-sm transition-all duration-200 hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex h-12 items-center justify-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-5 text-sm font-semibold text-white backdrop-blur-sm transition-all duration-200 hover:bg-white/20"
           >
-            {adminsLoading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4" />
-            )}
-            Refresh
+            <Plus className="h-4 w-4" />
+            Add User
           </button>
+          {showAddUser && (
+            <div className="fixed inset-0 z-99999 flex items-center justify-center bg-black/50">
+              <div className="relative max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white shadow-xl">
+                <SignupCard onClose={() => setShowAddUser(false)} />
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

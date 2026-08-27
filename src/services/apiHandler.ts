@@ -25,7 +25,7 @@ export async function apiCall<T>(
 
     if (showSuccess) {
       const msg =
-        successMessage || (response as any)?.message || "Done successfully";
+        successMessage || (response as any)?.message 
 
       showSuccessToast(msg);
     }
