@@ -162,6 +162,12 @@ export const sidebarConfig: Record<
         title: "Asset Management",
         items: [
           {
+            name: "Machine Health",
+            path: "/super-admin/machine-health",
+            icon: <Activity className={sidebarIconClass} />,
+          },
+
+          {
             name: "Machines",
             path: "/super-admin/machines",
             icon: <Truck className={sidebarIconClass} />,
@@ -177,11 +183,6 @@ export const sidebarConfig: Record<
             name: "Components",
             path: "/super-admin/components",
             icon: <Cpu className={sidebarIconClass} />,
-          },
-          {
-            name: "Service Logs",
-            path: "/super-admin/service-logs",
-            icon: <FileClock className={sidebarIconClass} />,
           },
         ],
       }, {
@@ -280,6 +281,7 @@ export const sidebarConfig: Record<
             name: "Reports",
             path: "/company-admin/reporting",
             icon: <FileBarChart className={sidebarIconClass} />,
+            isComingSoon: true,
           },
           {
             name: "Service Log",
@@ -416,14 +418,10 @@ export const sidebarConfig: Record<
             icon: <Map className={artisansIconClass} />,
           },
           {
-            name: "Update Data",
-            path: "/artisans/data-update",
-            icon: <RefreshCcw className={artisansIconClass} />,
-          },
-          {
             name: "Report",
             path: "/artisans/machines",
             icon: <Truck className={artisansIconClass} />,
+            isComingSoon: true,
           },
         ],
       },
@@ -435,6 +433,7 @@ export const sidebarConfig: Record<
             name: "Predictive Alerts",
             path: "/artisans/alerts",
             icon: <AlertTriangle className={artisansIconClass} />,
+            isComingSoon: true,
           },
           {
             name: "Maintenance",
@@ -503,20 +502,9 @@ export const sidebarConfig: Record<
             icon: <Map className={operatorIconClass} />,
           },
           {
-            name: "Components",
-            path: "/operator/checklist",
-            icon: <ListChecks className={operatorIconClass} />,
-          },
-          {
             name: "Work Order Capture",
             path: "/operator/work-order-capture",
             icon: <ClipboardList className={operatorIconClass} />,
-          },
-
-          {
-            name: "Shift Summary",
-            path: "/operator/shift-summary",
-            icon: <FileText className={operatorIconClass} />,
           },
         ],
       },
@@ -528,17 +516,11 @@ export const sidebarConfig: Record<
             path: "/operator/issue-reports",
             icon: <AlertCircle className={operatorIconClass} />,
           },
-
-          {
-            name: "Update Data",
-            path: "/operator/data-update",
-            icon: <RefreshCcw className={operatorIconClass} />,
-          },
-
           {
             name: "Alerts",
             path: "/operator/alerts",
             icon: <AlertTriangle className={operatorIconClass} />,
+            isComingSoon: true,
           },
           {
             name: "Active Task",
@@ -584,21 +566,6 @@ export const sidebarConfig: Record<
             icon: <Truck className={supervisorIconClass} />,
           },
           {
-            name: "Components",
-            path: "/supervisor/components",
-            icon: <Cpu className={supervisorIconClass} />,
-          },
-          {
-            name: "Operators",
-            path: "/supervisor/operators",
-            icon: <UsersRound className={supervisorIconClass} />,
-          },
-          {
-            name: "Task Review",
-            path: "/supervisor/task-review",
-            icon: <CheckSquare className={supervisorIconClass} />,
-          },
-          {
             name: "Supervisor Services",
             path: "/supervisor/services",
             icon: <ClipboardList className={supervisorIconClass} />,
@@ -617,11 +584,6 @@ export const sidebarConfig: Record<
             name: "Fleet Health",
             path: "/supervisor/fleet",
             icon: <Activity className={supervisorIconClass} />,
-          },
-          {
-            name: "Service Logs",
-            path: "/supervisor/service-log",
-            icon: <FileClock className={operatorIconClass} />,
           },
         ],
       },
@@ -732,4 +694,199 @@ export const sidebarConfig: Record<
       email: "support@hme.com",
     },
   },
+
+  sub_admin: {
+    dashboardItem: {
+      icon: <LayoutDashboard className={sidebarIconClass} />,
+      name: "Dashboard",
+      path: "/sub-admin/dashboard",
+    },
+
+    navGroups: [
+      {
+        title: "Company",
+        items: [
+          {
+            name: "Staff",
+            path: "/sub-admin/staff",
+            icon: <UsersRound className={sidebarIconClass} />,
+          },
+          {
+            name: "Machines",
+            path: "/sub-admin/machines",
+            icon: <Truck className={sidebarIconClass} />,
+          },
+          {
+            name: "Components",
+            path: "/sub-admin/components",
+            icon: <PackageSearch className={sidebarIconClass} />,
+          },
+          {
+            name: "Heat Map",
+            path: "/sub-admin/heatmap",
+            icon: <Map className={sidebarIconClass} />,
+          },
+          {
+            name: "Category Master",
+            path: "/sub-admin/categories",
+            icon: <ListChecks className={sidebarIconClass} />,
+          },
+          {
+            name: "Machine Health",
+            path: "/sub-admin/inspection-entry",
+            icon: <ClipboardCheck className={sidebarIconClass} />,
+          },
+        ],
+      },
+
+      {
+        title: "Monitoring",
+        items: [
+          {
+            name: "Alerts",
+            path: "/sub-admin/alerts",
+            icon: <AlertTriangle className={sidebarIconClass} />,
+          },
+          {
+            name: "Reports",
+            path: "/sub-admin/reporting",
+            icon: <FileBarChart className={sidebarIconClass} />,
+          },
+          {
+            name: "Service Log",
+            path: "/sub-admin/service-log",
+            icon: <FileText className={sidebarIconClass} />,
+          },
+        ],
+      },
+
+      {
+        title: "Account",
+        items: [
+          {
+            name: "Billing",
+            path: "/sub-admin/subscriptions",
+            icon: <Receipt className={sidebarIconClass} />,
+          },
+        ],
+      },
+
+      {
+        title: "Settings",
+        items: [
+          {
+            name: "Profile",
+            path: "/sub-admin/profile",
+            icon: <UserCog className={sidebarIconClass} />,
+          },
+        ],
+      },
+    ],
+
+    profile: {
+      shortName: "SA",
+      title: "Sub Admin",
+      subtitle: "admin@gmail.com",
+      email: "admin@gmail.com",
+    },
+  },
+  sub_super_admin: {
+    dashboardItem: {
+      icon: <LayoutDashboard className={sidebarIconClass} />,
+      name: "Dashboard",
+      path: "/sub-super-admin/dashboard",
+    },
+
+    navGroups: [
+      {
+        title: "User Management",
+        items: [
+          {
+            name: "Users",
+            path: "/admin-management/users",
+            icon: <Users className={sidebarIconClass} />,
+          },
+          {
+            name: "Roles",
+            path: "/admin-management/roles",
+            icon: <UserRoundCog className={sidebarIconClass} />,
+          },
+          {
+            name: "Plans",
+            path: "/admin-management/plans",
+            icon: <BadgeCheck className={sidebarIconClass} />,
+          },
+          {
+            name: "Technical Support",
+            path: "/sub-super-admin/technical-support",
+            icon: <UserCheck className={sidebarIconClass} />,
+          },
+        ],
+      },
+
+      {
+        title: "Company Management",
+        items: [
+          {
+            name: "Company Admins",
+            path: "/sub-super-admin/company-admins",
+            icon: <Building2 className={sidebarIconClass} />,
+          },
+        ],
+      },
+
+      {
+        title: "Asset Management",
+        items: [
+          {
+            name: "Machines",
+            path: "/sub-super-admin/machines",
+            icon: <Truck className={sidebarIconClass} />,
+          },
+          {
+            name: "Fleet",
+            path: "/sub-super-admin/fleet",
+            icon: <Truck className={sidebarIconClass} />,
+          },
+          {
+            name: "Components",
+            path: "/sub-super-admin/components",
+            icon: <Cpu className={sidebarIconClass} />,
+          },
+          {
+            name: "Service Logs",
+            path: "/sub-super-admin/service-logs",
+            icon: <FileClock className={sidebarIconClass} />,
+          },
+        ],
+      },
+
+      {
+        title: "Settings",
+        items: [
+          {
+            name: "Plans & Billing",
+            path: "/sub-super-admin/plans-billing",
+            icon: <CreditCard className={sidebarIconClass} />,
+          },
+          {
+            name: "System Settings",
+            path: "/sub-super-admin/settings",
+            icon: <Settings className={sidebarIconClass} />,
+            isComingSoon: true,
+          },
+        ],
+      },
+    ],
+
+    profile: {
+      shortName: "SSA",
+      title: "Sub Super Admin",
+      subtitle: "subsuperadmin@hme.com",
+      email: "subsuperadmin@hme.com",
+    },
+  },
 };
+
+(sidebarConfig as any).subadmin = (sidebarConfig as any).sub_admin;
+(sidebarConfig as any).subsuperadmin = (sidebarConfig as any).sub_super_admin;

@@ -53,9 +53,7 @@ export type ComponentPayload = {
 
 export const componentService = {
   getCategories: () => {
-    return apiCall<any[]>("/components/categories", {
-      method: "GET",
-    });
+    return Promise.resolve({ success: true, data: [] });
   },
 
   getComponents: (machineId?: string) => {
@@ -73,19 +71,21 @@ export const componentService = {
 
     return apiCall<any[]>(`/components/register?${queryParts.join("&")}`, {
       method: "GET",
-    });
+    }).catch(() => []);
   },
 
   getComponentsByMachineId: (machineId: string) => {
-    return apiCall<any[]>(`/components/machine/${machineId}`, {
+    if (!machineId) return Promise.resolve([]);
+    return apiCall<any[]>(`/machines/${encodeURIComponent(machineId)}/components`, {
       method: "GET",
-    });
+    }).catch(() => apiCall<any[]>(`/components/register?machineId=${encodeURIComponent(machineId)}`, { method: "GET" })).catch(() => []);
   },
 
   getMachineComponents: (machineId: string) => {
-    return apiCall<any[]>(`/machines/${machineId}/components`, {
+    if (!machineId) return Promise.resolve([]);
+    return apiCall<any[]>(`/machines/${encodeURIComponent(machineId)}/components`, {
       method: "GET",
-    });
+    }).catch(() => []);
   },
 
   createComponent: (payload: ComponentPayload) => {

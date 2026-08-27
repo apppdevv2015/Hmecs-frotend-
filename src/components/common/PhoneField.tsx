@@ -81,7 +81,7 @@ export default function PhoneField({
   required = false,
   disabled = false,
   placeholder = "Enter phone number",
-  defaultCountry = "ZA",
+  defaultCountry = "IN",
 }: PhoneFieldProps) {
   const countries = useMemo(() => buildCountries(), []);
 
@@ -101,6 +101,11 @@ export default function PhoneField({
   const derivedError = useMemo(() => {
     if (!value?.trim()) {
       return isTouched ? "Phone number is required" : undefined;
+    }
+
+    const digitsOnly = value.replace(/\D/g, "");
+    if (digitsOnly.length > 0 && (digitsOnly.length < 7 || digitsOnly.length > 15)) {
+      return "Phone number must contain between 7 and 15 digits";
     }
 
     const phoneNumber = parsePhoneNumberFromString(
@@ -184,13 +189,15 @@ export default function PhoneField({
   };
 
   const handlePhoneChange = (phone?: string) => {
-    const phoneValue = phone?.trim() || "";
+    const rawValue = phone || "";
+    // Allow only digits, +, space, and hyphen. Strip text/alphabets!
+    const sanitized = rawValue.replace(/[^\d+\s-]/g, "");
 
-    if (phoneValue === value) {
+    if (sanitized === value) {
       return;
     }
 
-    onChange(phoneValue);
+    onChange(sanitized);
   };
 
   const handleBlur = () => {

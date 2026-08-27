@@ -6,6 +6,8 @@ import { apiCall } from "../apiHandler";
 
 import machineService from "../Operator/machineService";
 
+import { apiRequest } from "../api";
+
 export type ShiftType = "Morning" | "Evening" | "Night";
 export type OperatorStatus = "Active" | "Inactive" | "On Leave";
 
@@ -36,6 +38,8 @@ export type DynamicEngineer = {
 export type DynamicMachine = {
   id: string;
   machineName: string;
+  brand?: string;
+  category?: string;
   model?: string;
   serialNumber?: string;
   site?: string;
@@ -54,22 +58,15 @@ type StoredShiftEntry = {
   shift: ShiftType;
 };
 
-const SUPERVISOR_SHIFTS_KEY = "hme_supervisor_operator_shifts";
+// In-memory shift state for session
+let memoryShifts: StoredShiftEntry[] = [];
 
 const getStoredShifts = (): StoredShiftEntry[] => {
-  try {
-    return StorageService.get<StoredShiftEntry[]>(SUPERVISOR_SHIFTS_KEY) || [];
-  } catch {
-    return [];
-  }
+  return memoryShifts;
 };
 
 const saveStoredShifts = (entries: StoredShiftEntry[]): void => {
-  try {
-    StorageService.set(SUPERVISOR_SHIFTS_KEY, entries);
-  } catch (err) {
-    console.warn("Failed to persist supervisor shift selections:", err);
-  }
+  memoryShifts = entries;
 };
 
 const setStoredShift = (operatorId: string, shift: ShiftType): void => {
@@ -114,13 +111,17 @@ export const supervisorTaskService = {
     operators: DynamicOperator[];
     engineers: DynamicEngineer[];
     machines: DynamicMachine[];
-    
+    catalogMachines: DynamicMachine[];
   }> {
     try {
-      // 1. Fetch Users and Machines concurrently from backend
-      const [usersRes, machinesRes] = await Promise.allSettled([
+      // 1. Fetch Users and Company Fleet Machines concurrently from backend
+      const currentUser = StorageService.getUser();
+      const compId = currentUser?.companyId || currentUser?.company_id || StorageService.getCompanyId() || "";
+      const fleetQuery = compId ? `?companyId=${encodeURIComponent(compId)}` : "";
+
+      const [usersRes, fleetRes] = await Promise.allSettled([
         userService.getUsers({ limit: 100 }),
-        companyMachineService.getCompanyMachines(),
+        apiRequest(`/machines/company-fleet${fleetQuery}`),
       ]);
 
       // Normalize Users list
@@ -129,33 +130,37 @@ export const supervisorTaskService = {
         userList = normalizeUsersResponse(usersRes.value as any);
       }
 
-      // Normalize Machines list (raw, keeps assignment fields for lookup below)
+      // Normalize Machines list from Company Fleet
       let rawMachines: any[] = [];
-      if (machinesRes.status === "fulfilled") {
-        const val: any = machinesRes.value;
+      if (fleetRes.status === "fulfilled") {
+        const val: any = fleetRes.value;
         rawMachines = Array.isArray(val)
           ? val
           : Array.isArray(val?.data)
             ? val.data
-            : Array.isArray(val?.machines)
-              ? val.machines
-              : [];
+            : [];
       }
 
-      // Map Machines (for dropdown options etc. — no assignment fields exposed here)
-      const machines: DynamicMachine[] = rawMachines.map((m: any, idx: number) => {
+      // Map company fleet machine records
+      const companyMachines: DynamicMachine[] = rawMachines.map((m: any, idx: number) => {
         const id = String(m.id || m._id || m.machineId || `m-${idx + 1}`);
-        const rawName = m.name || m.machineName || m.model || `Machine ${idx + 1}`;
-        const serial = m.serialNumber || m.code || "";
-        const machineName = serial ? `${rawName} (${serial})` : rawName;
+        const brand = m.brand || m.manufacturer || "General";
+        const model = m.model || m.name || "Equipment Model";
+        const cat = m.category || m.equipmentType || "Heavy Equipment";
+        const serial = m.serialNumber || `SN-${id.substring(0, 6)}`;
         return {
           id,
-          machineName,
-          model: m.model || "",
+          machineName: model.toLowerCase().startsWith(brand.toLowerCase()) ? model : `${brand} ${model}`,
+          brand,
+          category: cat,
+          model,
           serialNumber: serial,
-          site: m.site || m.location || "",
+          site: m.site || m.location || "Active Operations",
         };
       });
+
+      const catalogMachines = companyMachines;
+      const machines = companyMachines;
 
       // Build a lookup: operatorId -> raw machine record currently assigned to them
       const machineByOperatorId = new Map<string, any>();
@@ -165,7 +170,7 @@ export const supervisorTaskService = {
         ).trim();
 
         if (assignedOperatorId) {
-          machineByOperatorId.set(assignedOperatorId, m);
+          machineByOperatorId.set(assignedOperatorId.toLowerCase(), m);
         }
       });
 
@@ -241,7 +246,16 @@ export const supervisorTaskService = {
             ? "Inactive"
             : (u.status as OperatorStatus) || "Active";
 
-        const assignedMachineRaw = machineByOperatorId.get(userId);
+        let assignedMachineRaw = machineByOperatorId.get(userId.toLowerCase());
+        if (!assignedMachineRaw && code) {
+          assignedMachineRaw = machineByOperatorId.get(code.toLowerCase());
+        }
+        if (!assignedMachineRaw && name) {
+          assignedMachineRaw = rawMachines.find((m: any) => {
+            const opName = (m.assignedOperatorName || m.assigned_operator_name || "").toLowerCase().trim();
+            return opName && (opName === name.toLowerCase().trim() || opName.includes(name.toLowerCase().trim()) || name.toLowerCase().trim().includes(opName));
+          });
+        }
 
         let assignedMachine = "";
         let assignedMachineId = "";
@@ -314,10 +328,11 @@ export const supervisorTaskService = {
         operators,
         engineers,
         machines,
+        catalogMachines,
       };
     } catch (err) {
       console.error("Failed to load supervisor task data:", err);
-      return { operators: [], engineers: [], machines: [] };
+      return { operators: [], engineers: [], machines: [], catalogMachines: [] };
     }
   },
 
@@ -415,7 +430,7 @@ export const supervisorTaskService = {
       // Unassign on the backend — this is the only source of truth now,
       // so once this succeeds every dashboard reading Machine data
       // (Operator Dashboard, this page, etc.) will reflect it immediately.
-      await machineService.unassignMachine(machineId);
+      await machineService.unassignMachine(machineId, "operator");
 
       // Clear the locally-stored shift for this operator
       clearStoredShift(operatorId);

@@ -15,7 +15,9 @@ export type CreateRolePayload = {
 };
 
 export type UpdateRolePayload = {
-  name: string;
+  name?: string;
+  is_active?: boolean;
+  status?: string;
 };
 
 export const getRoles = async (page = 1, limit = 10) => {

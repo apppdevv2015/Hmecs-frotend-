@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import StorageService, { STORAGE_KEYS } from "../../services/storage.service";
+import { fleetService } from "../../services/Fleet/fleetService";
 import { machineService } from "../../services/companyadmin/machineService";
 
 type Machine = {
@@ -145,13 +146,32 @@ const OperatorMachines: React.FC = () => {
     setLoading(true);
 
     try {
-      const response = await machineService.getMachines();
-      const apiMachines = getMachineArrayFromResponse(response);
+      const [res1, res2] = await Promise.allSettled([
+        machineService.getMachines(),
+        fleetService.getFleetMachines(),
+      ]);
 
-      setMachines(apiMachines.map(normalizeMachine));
+      let api1: any[] = [];
+      if (res1.status === "fulfilled") api1 = getMachineArrayFromResponse(res1.value);
+
+      let api2: any[] = [];
+      if (res2.status === "fulfilled") api2 = getMachineArrayFromResponse(res2.value);
+
+      const map = new Map<string, Machine>();
+
+      api1.map(normalizeMachine).forEach((m) => {
+        const k = (m.id || m.name).toLowerCase();
+        if (k) map.set(k, m);
+      });
+
+      api2.map(normalizeMachine).forEach((m) => {
+        const k = (m.id || m.name).toLowerCase();
+        if (!map.has(k)) map.set(k, m);
+      });
+
+      setMachines(Array.from(map.values()));
     } catch (error: any) {
       console.error("Failed to fetch operator machines:", error);
-      setMachines([]);
       toast.error(error?.message || "Failed to load assigned machines");
     } finally {
       setLoading(false);
