@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useRef, useState } from "react";
 import mine from "../../assets/images/pricingpage.jpg";
 
 import { useNavigate } from "react-router";
@@ -14,7 +14,6 @@ import {
   Truck,
   Settings,
   Puzzle,
-  ChevronDown,
   type LucideIcon,
 } from "lucide-react";
 import Header from "../../components/landing/Navbar";
@@ -22,14 +21,14 @@ import Footer from "../../components/landing/Footer";
 import { userService } from "../../services/Auth/userService";
 import StorageService, { STORAGE_KEYS } from "../../services/storage.service";
 
-type RequestType = "trial" | "quotation";
+interface QuotationPlan {
+  id: "implementation_fee" | "monthly_licence";
+  label: string;
+}
 
 interface SubscriptionStatus {
   activePlan: string | null;
-  hasUsedDemo: boolean;
 }
-
-const SELECTED_REQUEST_STORAGE_KEY = "hme_selected_request";
 
 const HOW_IT_WORKS_STEPS: {
   icon: LucideIcon;
@@ -63,12 +62,6 @@ const COMMON_SERVICES_ITEMS = [
   "On-site Technical Support",
   "Custom API Development",
   "SMS / WhatsApp Notifications",
-];
-
-const ADDITIONAL_MACHINE_ITEMS = [
-  "Additional Active Machine",
-  "Fixed Monthly Fee",
-  "Beyond Contracted Fleet Allowance",
 ];
 
 const SITE_LICENCE_TIERS: {
@@ -263,7 +256,7 @@ function SiteLicenceCard({ onSelectFleetSize }: { onSelectFleetSize: () => void 
         </table>
       </div>
 
-    
+
       <div className="mt-4 border-t border-slate-100 pt-4 dark:border-slate-800">
         <div className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
           <Truck className="h-4 w-4 text-violet-500" />
@@ -330,7 +323,7 @@ function CommonServicesCard() {
 function CommercialStructureSection({
   onRequestQuote,
 }: {
-  onRequestQuote: () => void;
+  onRequestQuote: (plan: QuotationPlan) => void;
 }) {
   return (
     <section className="relative bg-slate-50 px-6 py-16 lg:px-10 dark:bg-[#071322]">
@@ -355,8 +348,22 @@ function CommercialStructureSection({
         opening it never breaks the equal-height alignment.
       */}
       <div className="mx-auto mt-12 grid max-w-6xl grid-cols-1 items-stretch gap-8 lg:grid-cols-2">
-        <ImplementationFeeCard onRequestQuote={onRequestQuote} />
-        <SiteLicenceCard onSelectFleetSize={onRequestQuote} />
+        <ImplementationFeeCard
+          onRequestQuote={() =>
+            onRequestQuote({
+              id: "implementation_fee",
+              label: "Once-Off Implementation Fee",
+            })
+          }
+        />
+        <SiteLicenceCard
+          onSelectFleetSize={() =>
+            onRequestQuote({
+              id: "monthly_licence",
+              label: "Fixed Monthly Site Licence",
+            })
+          }
+        />
       </div>
 
       <div className="mx-auto mt-8 max-w-6xl">
@@ -364,27 +371,6 @@ function CommercialStructureSection({
       </div>
     </section>
   );
-}
-
-function RequestSummarySection({
-  type,
-  isLoggedIn,
-  isSubmitting,
-  onSubmit,
-  onChangeSelection,
-  containerRef,
-}: {
-  type: RequestType;
-  isLoggedIn: boolean;
-  isSubmitting: boolean;
-  onSubmit: () => void;
-  onChangeSelection: () => void;
-  containerRef: RefObject<HTMLElement | null>;
-}) {
-  const navigate = useNavigate();
-  const isTrial = type === "trial";
-
-  return <></>;
 }
 
 function HowItWorks() {
@@ -434,14 +420,8 @@ export default function PricingPage() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [status, setStatus] = useState<SubscriptionStatus>({
     activePlan: null,
-    hasUsedDemo: false,
   });
   const [checkingStatus, setCheckingStatus] = useState(true);
-
-  const [selectedType, setSelectedType] = useState<RequestType | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const summaryRef = useRef<HTMLElement>(null);
 
   const getToken = () =>
     StorageService.get<string>(STORAGE_KEYS.TOKEN) ||
@@ -452,18 +432,8 @@ export default function PricingPage() {
     setIsLoggedIn(Boolean(getToken()));
   };
 
-  // Restore login status + any pending selection (e.g. user just came back
-  // from /signup or /signin after clicking a card).
   useEffect(() => {
     refreshLoginStatus();
-
-    const savedType = StorageService.get<RequestType>(
-      SELECTED_REQUEST_STORAGE_KEY,
-    );
-
-    if (savedType) {
-      setSelectedType(savedType);
-    }
   }, []);
 
   useEffect(() => {
@@ -481,7 +451,7 @@ export default function PricingPage() {
   useEffect(() => {
     const fetchStatus = async () => {
       if (!getToken()) {
-        setStatus({ activePlan: null, hasUsedDemo: false });
+        setStatus({ activePlan: null });
         setCheckingStatus(false);
         return;
       }
@@ -489,24 +459,12 @@ export default function PricingPage() {
       try {
         setCheckingStatus(true);
 
-        const [activeSub, history] = await Promise.all([
-          userService.getActiveSubscription(),
-          userService.getSubscriptionHistory(),
-        ]);
+        const activeSub = await userService.getActiveSubscription();
 
         const activePlan =
           activeSub?.plan_name || activeSub?.planName || activeSub?.name || null;
 
-        const hasUsedDemo =
-          Array.isArray(history) &&
-          history.some((sub: any) => {
-            const name = String(
-              sub?.plan_name || sub?.planName || sub?.name || "",
-            ).toLowerCase();
-            return name.includes("demo") || name.includes("free");
-          });
-
-        setStatus({ activePlan, hasUsedDemo });
+        setStatus({ activePlan });
       } catch (error) {
         console.error("Failed to fetch subscription status", error);
       } finally {
@@ -517,13 +475,7 @@ export default function PricingPage() {
     fetchStatus();
   }, [isLoggedIn]);
 
-  useEffect(() => {
-    if (selectedType) {
-      summaryRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  }, [selectedType, isLoggedIn]);
-
-  const handleSelect = (type: RequestType) => {
+  const handleSelect = (plan: QuotationPlan) => {
     if (checkingStatus) return;
 
     if (status.activePlan) {
@@ -533,50 +485,12 @@ export default function PricingPage() {
       return;
     }
 
-    if (type === "trial" && status.hasUsedDemo) {
-      toast.dismiss();
-      toast.error(
-        "You have already used the 14-day trial. Please request a quotation instead.",
-      );
-      return;
-    }
-
-    StorageService.set(SELECTED_REQUEST_STORAGE_KEY, type);
-    setSelectedType(type);
-
-    if (!getToken()) {
-      navigate("/signup?redirect=/pricing");
-      return;
-    }
-  };
-
-  const handleChangeSelection = () => {
-    setSelectedType(null);
-  };
-
-  const handleSubmitRequest = async () => {
-    if (!selectedType) return;
-
-    try {
-      setIsSubmitting(true);
-
-      // BACKEND TODO: wire this to the actual trial/quotation request submission API
-      // await companyRequestService.submitRequest({ type: selectedType });
-
-      toast.success(
-        selectedType === "trial"
-          ? "Trial request submitted. Our team will activate your account shortly."
-          : "Quotation request submitted. Our team will get back to you shortly.",
-      );
-
-      setSelectedType(null);
-      navigate("/company-admin/dashboard");
-    } catch (error) {
-      console.error("Failed to submit request", error);
-      toast.error("Failed to submit your request. Please try again.");
-    } finally {
-      setIsSubmitting(false);
-    }
+    navigate("/signup", {
+      state: {
+        quotationType: plan.id,
+        quotationTypeLabel: plan.label,
+      },
+    });
   };
 
   return (
@@ -586,20 +500,7 @@ export default function PricingPage() {
       <main className="overflow-x-hidden">
         <HeroSection />
 
-        {selectedType && (
-          <RequestSummarySection
-            containerRef={summaryRef}
-            type={selectedType}
-            isLoggedIn={isLoggedIn}
-            isSubmitting={isSubmitting}
-            onSubmit={handleSubmitRequest}
-            onChangeSelection={handleChangeSelection}
-          />
-        )}
-
-        <CommercialStructureSection
-          onRequestQuote={() => handleSelect("quotation")}
-        />
+        <CommercialStructureSection onRequestQuote={handleSelect} />
 
         <HowItWorks />
       </main>

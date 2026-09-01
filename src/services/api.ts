@@ -133,7 +133,7 @@ export async function apiRequest<T>(
         });
 
         const error: any = new Error(
-          data?.message || data?.error || "Something went wrong",
+          data?.message || data?.error,
         );
 
         error.errors = data?.errors || {};

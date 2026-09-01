@@ -219,7 +219,6 @@ export default function OptionalServicePage() {
       setServices((prev) => prev.filter((s) => s.id !== deleteTarget.id));
       setDeleteTarget(null);
     } catch (error) {
-      // error toast already shown by apiCall
     } finally {
       setDeleting(false);
     }
@@ -236,7 +235,6 @@ export default function OptionalServicePage() {
         `Service marked as ${updated.isActive ? "Active" : "Inactive"}.`,
       );
     } catch (error) {
-      // error toast already shown by apiCall
     } finally {
       setTogglingId(null);
     }
@@ -591,7 +589,6 @@ function OptionalServiceFormModal({
 
       onSuccess(result);
     } catch (error) {
-      // error toast already shown by apiCall
     } finally {
       setSubmitting(false);
     }

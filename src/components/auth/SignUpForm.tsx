@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Controller, useFieldArray, useForm } from "react-hook-form";
 import PhoneField from "../common/PhoneField";
-import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 
 import { EyeCloseIcon, EyeIcon } from "../../icons";
@@ -10,7 +9,18 @@ import Label from "../form/Label";
 import Input from "../form/input/InputField";
 import { authService } from "../../services/Auth/authService";
 import StorageService, { STORAGE_KEYS } from "../../services/storage.service";
-import { showLoadingToast, updateToast } from "../../utils/toastUtils";
+import { createQuotationRequest } from "../../services/Quotation/quotationService";
+import {
+  getOptionalServices,
+  type OptionalService,
+} from "../../services/SuperAdmin/optionalService";
+
+import {
+  signUpSchema,
+  STEP_ONE_FIELDS,
+  type SignUpFormData,
+} from "../../components/common/FormValidation";
+import PdfAttachment from "../../components/common/PdfAttachment";
 
 import Navbar from "../../components/landing/Navbar";
 import Footer from "../../components/landing/Footer";
@@ -29,8 +39,6 @@ import {
   ArrowLeft,
   Send,
   ShieldCheck,
-  Paperclip,
-  FileText,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -45,17 +53,8 @@ interface SelectOption {
 }
 
 const QUOTATION_TYPE_OPTIONS: SelectOption[] = [
-  { value: "trial", label: "Free Trial (14 Days)" },
-  { value: "quotation", label: "Commercial Quotation" },
-  { value: "enterprise", label: "Custom / Enterprise Quotation" },
-];
-
-const SITE_COUNT_OPTIONS: SelectOption[] = [
-  { value: "1", label: "1 Site" },
-  { value: "2-5", label: "2 – 5 Sites" },
-  { value: "6-10", label: "6 – 10 Sites" },
-  { value: "11-25", label: "11 – 25 Sites" },
-  { value: "25+", label: "25+ Sites" },
+  { value: "implementation_fee", label: "Once-Off Implementation Fee" },
+  { value: "monthly_licence", label: "Fixed Monthly Site Licence" },
 ];
 
 const EQUIPMENT_TYPE_OPTIONS: SelectOption[] = [
@@ -71,41 +70,6 @@ const EQUIPMENT_TYPE_OPTIONS: SelectOption[] = [
   { value: "other", label: "Other" },
 ];
 
-const OPTIONAL_SERVICE_OPTIONS: SelectOption[] = [
-  {
-    value: "telematics_ecu_integration",
-    label: "Telematics / ECU Integration",
-  },
-  {
-    value: "historical_data_migration_cleaning",
-    label: "Historical Data Migration & Cleaning",
-  },
-  {
-    value: "custom_api_development",
-    label: "Custom API Development",
-  },
-  {
-    value: "sap_erp_integration",
-    label: "SAP / ERP Integration",
-  },
-  {
-    value: "additional_training",
-    label: "Additional Training",
-  },
-  {
-    value: "sms_whatsapp_notifications",
-    label: "SMS / WhatsApp Notifications",
-  },
-  {
-    value: "custom_reports",
-    label: "Custom Reports",
-  },
-  {
-    value: "on_site_technical_support",
-    label: "On-site Technical Support",
-  },
-];
-
 const CONTRACT_DURATION_OPTIONS: SelectOption[] = [
   { value: "6", label: "6 Months" },
   { value: "12", label: "12 Months" },
@@ -118,144 +82,6 @@ const MAX_SITE_NAME_FIELDS = 8;
 
 // BACKEND TODO: confirm max upload size allowed by the quotation API once it
 // exists — kept generous for now since there is no endpoint to validate against.
-const MAX_ATTACHMENT_SIZE_MB = 10;
-
-// ---------------------------------------------------------------------------
-// Validation
-// ---------------------------------------------------------------------------
-
-const companyDetailsSchema = z.object({
-  companyName: z.string().trim().min(1, "Company name is required"),
-
-  contactPerson: z
-    .string()
-    .trim()
-    .min(1, "Contact person is required")
-    .min(2, "Contact person must be at least 2 characters"),
-
-  email: z
-    .string()
-    .trim()
-    .min(1, "Company email is required")
-    .email("Please enter a valid email address"),
-
-  phone: z
-    .string()
-    .trim()
-    .min(1, "Phone number is required")
-    .regex(/^[6-9]\d{9}$/, "Please enter a valid 10 digit phone number"),
-
-  siteLocation: z.string().trim().min(1, "Site / Location is required"),
-
-  password: z
-    .string()
-    .trim()
-    .min(1, "Password is required")
-    .min(8, "Password must be at least 8 characters")
-    .regex(
-      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/,
-      "Password must contain uppercase, lowercase, number and special character",
-    ),
-});
-
-const quotationSchema = z.object({
-  quotationType: z.string().min(1, "Please select a quotation type"),
-
-  numberOfSites: z.string().min(1, "Please select number of sites"),
-
-  siteNames: z
-    .array(
-      z.object({
-        name: z.string().trim().min(1, "Site name is required"),
-      }),
-    )
-    .min(1, "Add at least one site"),
-
-  activeMachines: z
-    .string()
-    .trim()
-    .min(1, "Number of active machines is required")
-    .regex(/^\d+$/, "Enter a valid whole number")
-    .refine((value) => Number(value) > 0, "Must be at least 1"),
-
-  equipmentTypes: z
-    .array(z.string())
-    .min(1, "Select at least one equipment type"),
-
-  contractDuration: z.string().min(1, "Please select contract duration"),
-  optionalServices: z.array(z.string()).optional(),
-
-  implementationRequirements: z.string().trim().optional(),
-
-  additionalRequirements: z.string().trim().optional(),
-
-  attachment: z
-    .instanceof(File)
-    .optional()
-    .refine(
-      (file) => !file || file.type === "application/pdf",
-      "Only PDF files are allowed",
-    )
-    .refine(
-      (file) => !file || file.size <= MAX_ATTACHMENT_SIZE_MB * 1024 * 1024,
-      `File must be under ${MAX_ATTACHMENT_SIZE_MB}MB`,
-    ),
-});
-
-const signUpSchema = companyDetailsSchema.merge(quotationSchema);
-
-type SignUpFormData = z.infer<typeof signUpSchema>;
-
-const STEP_ONE_FIELDS = [
-  "companyName",
-  "contactPerson",
-  "email",
-  "phone",
-  "siteLocation",
-  "password",
-] as const;
-
-const STEP_TWO_FIELDS = [
-  "quotationType",
-  "numberOfSites",
-  "siteNames",
-  "activeMachines",
-  "equipmentTypes",
-  "contractDuration",
-] as const;
-
-const getApiErrorMessage = (error: unknown) => {
-  const defaultMessage = "Signup failed. Please try again.";
-
-  if (!(error instanceof Error) || !error.message) {
-    return defaultMessage;
-  }
-
-  const message = error.message.toLowerCase();
-
-  const blockedWords = [
-    "select",
-    "insert",
-    "update",
-    "delete",
-    "relation",
-    "sql",
-    "database",
-    "users",
-    "roles",
-    "companies",
-    "join",
-    "where",
-    "limit",
-    "constraint",
-    "violates",
-  ];
-
-  const isBackendError = blockedWords.some((word) => message.includes(word));
-
-  return isBackendError ? defaultMessage : error.message;
-};
-
 // ---------------------------------------------------------------------------
 // Reusable custom dropdowns (NOT native <select> elements) — styled to match
 // the rest of the form and used for every dropdown field on this page.
@@ -477,79 +303,6 @@ function AppMultiSelect({
           </ul>
         )}
       </div>
-
-      <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
-        You can select multiple options
-      </p>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Compact inline file-attach control — lives inside the Additional
-// Requirements box (as a small footer row under the textarea) instead of
-// being its own separate field, so the PDF attach option and the
-// description sit together in one box.
-// ---------------------------------------------------------------------------
-
-function AppInlineFileAttach({
-  file,
-  onChange,
-  accept = "application/pdf",
-}: {
-  file: File | null | undefined;
-  onChange: (file: File | null) => void;
-  accept?: string;
-}) {
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  return (
-    <div className="flex w-full items-center justify-between gap-2">
-      <input
-        ref={inputRef}
-        type="file"
-        accept={accept}
-        className="hidden"
-        onChange={(event) => {
-          const selected = event.target.files?.[0] || null;
-          onChange(selected);
-        }}
-      />
-
-      {!file ? (
-        <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 transition hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400"
-        >
-          <Paperclip className="h-3.5 w-3.5" />
-          Attach PDF
-        </button>
-      ) : (
-        <div className="flex min-w-0 items-center gap-1.5 text-xs">
-          <FileText className="h-3.5 w-3.5 shrink-0 text-blue-600" />
-          <span className="truncate font-medium text-slate-700 dark:text-slate-200">
-            {file.name}
-          </span>
-          <button
-            type="button"
-            aria-label="Remove attachment"
-            onClick={() => {
-              onChange(null);
-              if (inputRef.current) {
-                inputRef.current.value = "";
-              }
-            }}
-            className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-slate-400 transition hover:text-slate-700 dark:hover:text-slate-200"
-          >
-            <X className="h-3 w-3" />
-          </button>
-        </div>
-      )}
-
-      <span className="shrink-0 text-[11px] text-slate-400 dark:text-slate-500">
-        Optional
-      </span>
     </div>
   );
 }
@@ -616,26 +369,63 @@ export default function SignUpForm() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const redirectTo =
-    new URLSearchParams(location.search).get("redirect") || "/cart";
+  const routerState = location.state as {
+    quotationType?: string;
+    quotationTypeLabel?: string;
+  } | null;
 
-  const signinRedirectPath = `/signin?redirect=${encodeURIComponent(
-    redirectTo,
-  )}`;
+  const preselectedQuotationType = routerState?.quotationType;
+  const preselectedQuotationTypeLabel = routerState?.quotationTypeLabel;
 
   const [active, setActive] = useState("");
+
+
   const [showPassword, setShowPassword] = useState(false);
+
   const [step, setStep] = useState<1 | 2>(1);
 
-  const {
+  const [optionalServices, setOptionalServices] = useState<OptionalService[]>(
+    [],
+  );
+  const [optionalServicesLoading, setOptionalServicesLoading] = useState(false);
+
+  useEffect(() => {
+    const loadOptionalServices = async () => {
+      setOptionalServicesLoading(true);
+
+      try {
+        const data = await getOptionalServices();
+
+        console.log("OPTIONAL SERVICES:", data);
+
+        setOptionalServices(data);
+      } catch (error) {
+        console.error("Failed to load optional services:", error);
+        setOptionalServices([]);
+      } finally {
+        setOptionalServicesLoading(false);
+      }
+    };
+
+    loadOptionalServices();
+  }, []);
+  const optionalServiceOptions: SelectOption[] = optionalServices.map(
+    (service) => ({
+      value: service.name,
+      label: service.name,
+    }),
+  );
+
+    const {
     control,
     register,
     handleSubmit,
     trigger,
-    setError,
     clearErrors,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<SignUpFormData>({
+
     resolver: zodResolver(signUpSchema),
     defaultValues: {
       companyName: "",
@@ -643,13 +433,15 @@ export default function SignUpForm() {
       email: "",
       phone: "",
       siteLocation: "",
+      
       password: "",
-      quotationType: "",
+      quotationType: preselectedQuotationType ?? "",
       numberOfSites: "",
       siteNames: [{ name: "" }],
       activeMachines: "",
       equipmentTypes: [],
       contractDuration: "",
+      customContractDuration: "",
       implementationRequirements: "",
       optionalServices: [],
       additionalRequirements: "",
@@ -670,8 +462,10 @@ export default function SignUpForm() {
   });
 
   const siteNameArrayError = (
-    errors.siteNames as { message?: string } | undefined
+    errors.siteNames as { message?: string }
   )?.message;
+
+  const contractDurationValue = watch("contractDuration");
 
   const handleNext = async () => {
     const isStepValid = await trigger(STEP_ONE_FIELDS);
@@ -693,40 +487,22 @@ export default function SignUpForm() {
   };
 
   const onSubmit = async (data: SignUpFormData) => {
-    // Safety net: the real submit button only exists on Step 2, but guard
-    // here too in case a native Enter-submit ever slips through Step 1.
+    // The final submit action is available only on Step 2.
     if (step !== 2) {
-      handleNext();
+      await handleNext();
       return;
     }
 
-    const toastId = "signup-loading";
-
-    showLoadingToast("Creating account...", {
-      id: toastId,
-    });
-
     try {
-      /*
-       * Backend contract is intentionally unchanged for now.
-       * Contact Person from the new UI is split into fname/lname.
-       * siteLocation is collected by the frontend but is NOT sent yet
-       * because backend changes are being handled separately.
-       *
-       * Step 2 (Request a Quotation) fields — quotationType, numberOfSites,
-       * siteNames, activeMachines, equipmentTypes, contractDuration,
-       * implementationRequirements, additionalRequirements, attachment —
-       * are likewise collected here but NOT sent to the backend yet: there
-       * is no quotation API to wire this up to at the moment (attachment
-       * upload will need a multipart/form-data submission once that
-       * endpoint exists). Hook these up once that endpoint exists.
-       */
-      const contactParts = data.contactPerson.trim().split(/\s+/);
+      // --------------------------------------------------
+      // 1. Register the company/user
+      // --------------------------------------------------
 
+      const contactParts = data.contactPerson.trim().split(/\\s+/);
       const firstName = contactParts[0] || "";
       const lastName = contactParts.slice(1).join(" ") || firstName;
 
-      const response = await authService.register({
+      const registerResponse = await authService.register({
         company_name: data.companyName.trim(),
         fname: firstName,
         lname: lastName,
@@ -735,96 +511,53 @@ export default function SignUpForm() {
         mobile_number: data.phone.trim(),
       });
 
-      const registerResponse = response as any;
+      // --------------------------------------------------
+      // 2. Persist authentication data returned by backend
+      // --------------------------------------------------
 
-      const token =
-        registerResponse?.token ||
-        registerResponse?.accessToken ||
-        registerResponse?.access_token ||
-        registerResponse?.data?.token ||
-        registerResponse?.data?.accessToken ||
-        registerResponse?.data?.access_token ||
-        registerResponse?.admin?.token ||
-        registerResponse?.data?.admin?.token ||
-        registerResponse?.company?.token ||
-        registerResponse?.data?.company?.token;
-
-      const user =
-        registerResponse?.user ||
-        registerResponse?.data?.user ||
-        registerResponse?.data;
-
-      const role =
-        user?.role ||
-        user?.role_name ||
-        user?.roleName ||
-        registerResponse?.role ||
-        registerResponse?.role_name ||
-        registerResponse?.data?.role ||
-        registerResponse?.data?.role_name;
+      const token = registerResponse.token;
 
       if (token) {
         StorageService.set(STORAGE_KEYS.TOKEN, token);
       }
 
-      if (role) {
-        StorageService.set(STORAGE_KEYS.ROLE, String(role));
-      }
+      // --------------------------------------------------
+      // 3. Build quotation request payload
+      // --------------------------------------------------
 
-      if (user) {
-        StorageService.set(STORAGE_KEYS.USER, user);
-      }
+      const quotationPayload = {
+        quotationType: data.quotationType.trim(),
+        numberOfSites: Number.parseInt(data.numberOfSites, 10),
+        siteNames: data.siteNames
+          .map((site) => site.name.trim())
+          .filter(Boolean),
+        activeMachines: Number(data.activeMachines),
+        equipmentTypes: data.equipmentTypes,
+               contractDuration:
+          data.contractDuration === "custom"
+            ? data.customContractDuration?.trim() || ""
+            : data.contractDuration,
+        optionalServices: data.optionalServices ?? [],
+        implementationRequirements:
+          data.implementationRequirements?.trim() || "",
+        additionalRequirements: data.additionalRequirements?.trim() || "",
+      };
 
-      updateToast(toastId, "Account created successfully", "success");
+      // --------------------------------------------------
+      // 4. Submit quotation request
+      // --------------------------------------------------
+
+      await createQuotationRequest(quotationPayload);
+
+      navigate("/signin", { replace: true });
     } catch (error) {
-      console.error("Signup API Error:", error);
-
-      const message = getApiErrorMessage(error);
-
-      if (message.toLowerCase().includes("password")) {
-        setError("password", {
-          type: "server",
-          message,
-        });
-      } else {
-        setError("email", {
-          type: "server",
-          message,
-        });
-      }
-
-      updateToast(toastId, message, "error");
+      console.error("Signup/Quotation API Error:", error);
+      throw error;
     }
   };
 
   return (
     <div className="min-h-screen bg-slate-50 pt-[90px] text-slate-900 dark:bg-slate-950 dark:text-white">
-      <style>
-        {`
-          input:-webkit-autofill,
-          input:-webkit-autofill:hover,
-          input:-webkit-autofill:focus,
-          input:-webkit-autofill:active {
-            -webkit-background-clip: text !important;
-            -webkit-text-fill-color: #0f172a !important;
-            transition: background-color 999999s ease-in-out 0s !important;
-            box-shadow: inset 0 0 0 1000px #ffffff !important;
-            caret-color: #0f172a !important;
-          }
-
-          .dark input:-webkit-autofill,
-          .dark input:-webkit-autofill:hover,
-          .dark input:-webkit-autofill:focus,
-          .dark input:-webkit-autofill:active {
-            -webkit-background-clip: text !important;
-            -webkit-text-fill-color: #ffffff !important;
-            transition: background-color 999999s ease-in-out 0s !important;
-            box-shadow: inset 0 0 0 1000px #0f172a !important;
-            caret-color: #ffffff !important;
-          }
-        `}
-      </style>
-
       <Navbar active={active} setActive={setActive} />
 
       <main
@@ -1146,29 +879,55 @@ export default function SignUpForm() {
                 {step === 2 && (
                   <div>
                     <div className="grid min-w-0 grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
-                      {/* Quotation Type */}
-                      <div className="flex min-w-0 flex-col">
+
+
+                                          {/* Quotation Type */}
+                      <div className="flex min-w-0 flex-col sm:col-span-2">
                         <Label>1. Quotation Type *</Label>
-                        <div className="mt-1">
-                          <Controller
-                            name="quotationType"
-                            control={control}
-                            render={({ field }) => (
-                              <AppSelect
-                                value={field.value}
-                                onChange={(value) => {
-                                  field.onChange(value);
-                                  if (errors.quotationType) {
-                                    clearErrors("quotationType");
-                                  }
-                                }}
-                                options={QUOTATION_TYPE_OPTIONS}
-                                placeholder="Select quotation type"
-                                error={Boolean(errors.quotationType)}
-                              />
-                            )}
-                          />
-                        </div>
+
+                        {preselectedQuotationTypeLabel ? (
+                          <div className="mt-1 flex items-center justify-between rounded-lg border border-blue-100 bg-blue-50/70 px-3.5 py-2.5 dark:border-blue-500/20 dark:bg-blue-500/10">
+                            <div>
+                              <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
+                                Selected Plan
+                              </p>
+                              <p className="text-sm font-bold text-slate-900 dark:text-white">
+                                {preselectedQuotationTypeLabel}
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                navigate("/signup", { replace: true, state: null })
+                              }
+                              className="text-xs font-bold text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                            >
+                              Change
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="mt-1">
+                            <Controller
+                              name="quotationType"
+                              control={control}
+                              render={({ field }) => (
+                                <AppSelect
+                                  value={field.value}
+                                  onChange={(value) => {
+                                    field.onChange(value);
+                                    if (errors.quotationType) {
+                                      clearErrors("quotationType");
+                                    }
+                                  }}
+                                  options={QUOTATION_TYPE_OPTIONS}
+                                  placeholder="Select quotation type"
+                                  error={Boolean(errors.quotationType)}
+                                />
+                              )}
+                            />
+                          </div>
+                        )}
+
                         <div className="min-h-[34px] pt-1">
                           {errors.quotationType?.message && (
                             <p className="text-xs leading-5 text-red-500">
@@ -1181,26 +940,24 @@ export default function SignUpForm() {
                       {/* Number of Sites */}
                       <div className="flex min-w-0 flex-col">
                         <Label>2. Number of Sites *</Label>
-                        <div className="mt-1">
-                          <Controller
-                            name="numberOfSites"
-                            control={control}
-                            render={({ field }) => (
-                              <AppSelect
-                                value={field.value}
-                                onChange={(value) => {
-                                  field.onChange(value);
-                                  if (errors.numberOfSites) {
-                                    clearErrors("numberOfSites");
-                                  }
-                                }}
-                                options={SITE_COUNT_OPTIONS}
-                                placeholder="Select number of sites"
-                                error={Boolean(errors.numberOfSites)}
-                              />
-                            )}
-                          />
-                        </div>
+                        <Input
+                          type="text"
+                          inputMode="numeric"
+                          placeholder="Enter number of sites"
+                          className={`mt-1 w-full ${
+                            errors.numberOfSites
+                              ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
+                              : ""
+                          }`}
+                          {...register("numberOfSites", {
+                            setValueAs: (value) => value.trim(),
+                            onChange: () => {
+                              if (errors.numberOfSites) {
+                                clearErrors("numberOfSites");
+                              }
+                            },
+                          })}
+                        />
                         <div className="min-h-[34px] pt-1">
                           {errors.numberOfSites?.message && (
                             <p className="text-xs leading-5 text-red-500">
@@ -1312,16 +1069,10 @@ export default function SignUpForm() {
                             control={control}
                             render={({ field }) => (
                               <AppMultiSelect
-                                values={field.value}
-                                onChange={(values) => {
-                                  field.onChange(values);
-                                  if (errors.equipmentTypes) {
-                                    clearErrors("equipmentTypes");
-                                  }
-                                }}
-                                options={EQUIPMENT_TYPE_OPTIONS}
-                                placeholder="Select equipment types"
-                                error={Boolean(errors.equipmentTypes)}
+                                values={field.value || []}
+                                onChange={(values) => field.onChange(values)}
+                                options={optionalServiceOptions}
+                                placeholder="Select optional services"
                               />
                             )}
                           />
@@ -1335,7 +1086,7 @@ export default function SignUpForm() {
                         </div>
                       </div>
 
-                      {/* Preferred Contract Duration */}
+                                           {/* Preferred Contract Duration */}
                       <div className="flex min-w-0 flex-col">
                         <Label>6. Preferred Contract Duration *</Label>
                         <div className="mt-1">
@@ -1358,10 +1109,39 @@ export default function SignUpForm() {
                             )}
                           />
                         </div>
+
+                        {contractDurationValue === "custom" && (
+                          <div className="mt-2">
+                            <Input
+                              type="text"
+                              inputMode="numeric"
+                              placeholder="Enter number of months"
+                              className={`w-full ${
+                                errors.customContractDuration
+                                  ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
+                                  : ""
+                              }`}
+                              {...register("customContractDuration", {
+                                setValueAs: (value) => value.trim(),
+                                onChange: () => {
+                                  if (errors.customContractDuration) {
+                                    clearErrors("customContractDuration");
+                                  }
+                                },
+                              })}
+                            />
+                          </div>
+                        )}
+
                         <div className="min-h-[34px] pt-1">
                           {errors.contractDuration?.message && (
                             <p className="text-xs leading-5 text-red-500">
                               {errors.contractDuration.message}
+                            </p>
+                          )}
+                          {errors.customContractDuration?.message && (
+                            <p className="text-xs leading-5 text-red-500">
+                              {errors.customContractDuration.message}
                             </p>
                           )}
                         </div>
@@ -1391,7 +1171,7 @@ export default function SignUpForm() {
                               <AppMultiSelect
                                 values={field.value || []}
                                 onChange={(values) => field.onChange(values)}
-                                options={OPTIONAL_SERVICE_OPTIONS}
+                                options={optionalServiceOptions}
                                 placeholder="Select optional services"
                               />
                             )}
@@ -1421,7 +1201,7 @@ export default function SignUpForm() {
                               name="attachment"
                               control={control}
                               render={({ field }) => (
-                                <AppInlineFileAttach
+                                <PdfAttachment
                                   file={field.value}
                                   onChange={(file) =>
                                     field.onChange(file ?? undefined)
@@ -1470,7 +1250,7 @@ export default function SignUpForm() {
                 <p className="text-sm text-slate-600 dark:text-slate-400">
                   Already have an account?{" "}
                   <Link
-                    to={signinRedirectPath}
+                    to="/signin"
                     className="font-bold text-blue-600 transition hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
                   >
                     Sign In
