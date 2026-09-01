@@ -33,6 +33,7 @@ interface ApiEnvelope<T> {
 const BASE_ENDPOINT = "/optional-services";
 
 // ----------------------------------------------------
+
 // GET PUBLIC (Active Optional Services for quotation/signup)
 // ----------------------------------------------------
 
@@ -78,11 +79,14 @@ export const getEquipmentTypes = async (): Promise<string[]> => {
 
 // ----------------------------------------------------
 // GET ALL (Super Admin - includes inactive)
+=======
+// GET ALL
+
 // ----------------------------------------------------
 
 export const getOptionalServices = async (): Promise<OptionalService[]> => {
   const response = await apiCall<ApiEnvelope<OptionalService[]>>(
-    `${BASE_ENDPOINT}/admin/all`,
+    BASE_ENDPOINT,
     { method: "GET" },
     { showError: true },
   );
@@ -108,6 +112,7 @@ export const getOptionalServiceById = async (
 
 // ----------------------------------------------------
 // CREATE
+// Backend response message is used by apiCall.
 // ----------------------------------------------------
 
 export const createOptionalService = async (
@@ -122,7 +127,6 @@ export const createOptionalService = async (
     {
       showSuccess: true,
       showError: true,
-      successMessage: "Optional service created successfully.",
     },
   );
 
@@ -131,6 +135,7 @@ export const createOptionalService = async (
 
 // ----------------------------------------------------
 // UPDATE
+// Backend response message is used by apiCall.
 // ----------------------------------------------------
 
 export const updateOptionalService = async (
@@ -146,7 +151,6 @@ export const updateOptionalService = async (
     {
       showSuccess: true,
       showError: true,
-      successMessage: "Optional service updated successfully.",
     },
   );
 
@@ -155,9 +159,7 @@ export const updateOptionalService = async (
 
 // ----------------------------------------------------
 // TOGGLE STATUS
-// (success message is dynamic based on new state, so no
-// fixed successMessage here — component shows it after
-// reading the returned service's isActive value)
+// Backend response message is used by apiCall.
 // ----------------------------------------------------
 
 export const toggleOptionalServiceStatus = async (
@@ -166,7 +168,10 @@ export const toggleOptionalServiceStatus = async (
   const response = await apiCall<ApiEnvelope<OptionalService>>(
     `${BASE_ENDPOINT}/${id}/toggle`,
     { method: "PATCH" },
-    { showError: true },
+    {
+      showSuccess: true,
+      showError: true,
+    },
   );
 
   return response.data;
@@ -174,16 +179,18 @@ export const toggleOptionalServiceStatus = async (
 
 // ----------------------------------------------------
 // DELETE
+// Backend response message is used by apiCall.
 // ----------------------------------------------------
 
-export const deleteOptionalService = async (id: string): Promise<void> => {
+export const deleteOptionalService = async (
+  id: string,
+): Promise<void> => {
   await apiCall<ApiEnvelope<null>>(
     `${BASE_ENDPOINT}/${id}`,
     { method: "DELETE" },
     {
       showSuccess: true,
       showError: true,
-      successMessage: "Optional service deleted successfully.",
     },
   );
 };
