@@ -33,6 +33,7 @@ import {
   AlertCircle,
   CheckSquare,
   CheckCircle,
+  PackagePlus,
   User,
   FileSignature,
 
@@ -96,7 +97,7 @@ export const sidebarConfig: Record<
 
     navGroups: [
       {
-        title: "quotation",
+        title: "Quotation",
         items: [
           {
             name: "Quotation",
@@ -184,16 +185,20 @@ export const sidebarConfig: Record<
             icon: <Cpu className={sidebarIconClass} />,
           },
         ],
+      }, {
+        title: "Optional Service",
+        items: [
+          {
+            name: "Optional Service",
+            path: "/super-admin/optional-services",
+            icon: <PackagePlus className={sidebarIconClass} />,
+          },
+        ],
       },
 
       {
         title: "Settings",
         items: [
-          {
-            name: "Plans & Billing",
-            path: "/super-admin/plans-billing",
-            icon: <CreditCard className={sidebarIconClass} />,
-          },
           {
             name: "System Settings",
             path: "/super-admin/settings",

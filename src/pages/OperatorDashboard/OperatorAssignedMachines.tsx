@@ -1,5 +1,8 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import machineService from "../../services/Operator/machineService";
+import { componentService } from "../../services/companyadmin/componentService";
+import StorageService from "../../services/storage.service";
+import { apiCall } from "../../services/apiHandler";
 
 import { useDispatch, useSelector } from "react-redux";
 
@@ -42,12 +45,16 @@ type AssignmentDetails = AssignmentHistoryItem & {
   location: string;
 };
 
-const getOverallHealth = (components: MachineComponent[]) => {
-  if (!components.length) return 0;
+const getOverallHealth = (components: MachineComponent[], fallbackHealth?: number) => {
+  if (!components.length) return fallbackHealth ?? 100;
 
-  const total = components.reduce((sum, component) => {
-    const condition = Number(component.condition || 0);
-    return sum + Math.min(Math.max(condition, 0), 5) * 20;
+  const total = components.reduce((sum, component: any) => {
+    const health = typeof component?.healthScore === "number"
+      ? component.healthScore
+      : typeof component?.health === "number"
+      ? component.health
+      : Math.min(Math.max(Number(component.condition || 0), 0), 5) * 20;
+    return sum + health;
   }, 0);
 
   return Math.round(total / components.length);
@@ -160,12 +167,120 @@ const OperatorAssignedMachines: React.FC = () => {
     dispatch(fetchOperatorAssignments());
   }, [dispatch]);
 
+  const [localComponents, setLocalComponents] = useState<any[]>([]);
+
+  const loadAssignedMachineComponents = useCallback(async (mId: string, machineObj?: any) => {
+    if (!mId) return;
+
+    let rawComponents: any[] = [];
+    try {
+      const typeStr =
+        machineObj?.equipmentType ||
+        machineObj?.fuelType ||
+        machineObj?.category ||
+        machineObj?.machineType ||
+        "All Terrain Crane";
+      const modelStr =
+        machineObj?.model ||
+        machineObj?.modelYear ||
+        machineObj?.modelName ||
+        machineObj?.name ||
+        machineObj?.machineName ||
+        "";
+      const opUser = StorageService.getUser();
+      const opCompanyId = opUser?.companyId || opUser?.company_id || machineObj?.companyId || "";
+      const tplRes: any = await apiCall(
+        `/machines/spec-template?equipmentType=${encodeURIComponent(typeStr)}&modelName=${encodeURIComponent(modelStr)}&companyId=${encodeURIComponent(opCompanyId)}&machineId=${encodeURIComponent(mId)}`,
+        { method: "GET" },
+        { showError: false }
+      ).catch(() => null);
+      const tplData = tplRes?.data || tplRes;
+      if (tplData && Array.isArray(tplData.components) && tplData.components.length > 0) {
+        rawComponents.push(...tplData.components);
+      }
+    } catch {
+      // Spec template notice
+    }
+
+    try {
+      const compRes: any = await componentService.getComponents(mId).catch(() => null);
+      let compList: any[] = [];
+      if (Array.isArray(compRes)) compList = compRes;
+      else if (Array.isArray(compRes?.data)) compList = compRes.data;
+      else if (Array.isArray(compRes?.components)) compList = compRes.components;
+
+      if (Array.isArray(compList) && compList.length > 0) {
+        compList.forEach((dc: any) => {
+          const dcName = (dc.name || dc.description || "").toLowerCase().trim();
+          if (!rawComponents.some((rc: any) => (rc.name || rc.description || "").toLowerCase().trim() === dcName)) {
+            rawComponents.push(dc);
+          }
+        });
+      }
+    } catch {
+      // DB components notice
+    }
+
+    // Fetch PostgreSQL Live Inspection & Telemetry (manual-data)
+    try {
+      const manualDataRes: any = await apiCall(
+        `/machines/${encodeURIComponent(mId)}/manual-data`,
+        { method: "GET" },
+        { showError: false }
+      ).catch(() => null);
+      const manualPayload = manualDataRes?.data || manualDataRes;
+      const savedHealthRecords = manualPayload?.records || [];
+
+      if (Array.isArray(savedHealthRecords) && savedHealthRecords.length > 0) {
+        rawComponents.forEach((comp: any) => {
+          const compNameLower = (comp.name || comp.description || "").toLowerCase().trim();
+          const matchedRecord = savedHealthRecords.find((r: any) => {
+            const rNameLower = (r.componentName || "").toLowerCase().trim();
+            return rNameLower === compNameLower || (r.componentId && r.componentId === comp.id);
+          });
+
+          if (matchedRecord) {
+            if (matchedRecord.healthScore !== undefined && matchedRecord.healthScore !== null) {
+              comp.healthScore = Number(matchedRecord.healthScore);
+              comp.health = Number(matchedRecord.healthScore);
+              comp.condition = Math.round(Number(matchedRecord.healthScore) / 20);
+              comp.status = matchedRecord.status || (comp.healthScore >= 80 ? "Healthy" : comp.healthScore >= 60 ? "Warning" : "Critical");
+            }
+            if (Array.isArray(matchedRecord.parameters) && matchedRecord.parameters.length > 0) {
+              comp.parameters = matchedRecord.parameters;
+            }
+          }
+        });
+      }
+    } catch {
+      // Manual data sync notice
+    }
+
+    const normalized = rawComponents.map((raw: any) => {
+      const health = typeof raw?.healthScore === "number"
+        ? raw.healthScore
+        : typeof raw?.health === "number"
+        ? raw.health
+        : Math.round(Math.min(Math.max(Number(raw?.condition || 5), 0), 5) * 20);
+      const status = raw?.status || (health >= 80 ? "Healthy" : health >= 60 ? "Warning" : "Critical");
+      return {
+        ...raw,
+        health,
+        healthScore: health,
+        status,
+      };
+    });
+
+    setLocalComponents(normalized);
+  }, []);
+
   // Step 2: current machine mil jaane ke baad uske components fetch karo
   useEffect(() => {
     if (currentMachine?.machineId) {
       dispatch(fetchMachineComponents(currentMachine.machineId));
+      loadAssignedMachineComponents(currentMachine.machineId, currentMachine);
     }
-  }, [dispatch, currentMachine?.machineId]);
+  }, [dispatch, currentMachine, loadAssignedMachineComponents]);
 
   useEffect(() => {
     if (error) {
@@ -180,9 +295,18 @@ const OperatorAssignedMachines: React.FC = () => {
     };
   }, [selectedDetails]);
 
-  const overallHealth = getOverallHealth(components);
+  const effectiveComponents = localComponents.length > 0 ? localComponents : components;
 
-  const totalCurrentHours = components.reduce(
+  const overallHealth = effectiveComponents.length > 0
+    ? Math.round(
+        effectiveComponents.reduce(
+          (sum, c) => sum + Number(c.healthScore ?? c.health ?? (Number(c.condition || 5) * 20)),
+          0
+        ) / effectiveComponents.length
+      )
+    : (currentMachine?.overallHealth || 100);
+
+  const totalCurrentHours = effectiveComponents.reduce(
     (sum, component) => sum + Number(component.currentHours || 0),
     0,
   );

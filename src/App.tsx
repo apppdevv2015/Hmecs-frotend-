@@ -173,6 +173,10 @@ const SuperAdminAccessManagement = lazy(
   () => import("./pages/SuperAdmin/Quotation/AccessManagement"),
 );
 
+const OptionalServices = lazy(
+  () => import("./pages/SuperAdmin/OptionalServices"),
+);
+
 // ---------------- Company Admin ----------------
 
 const CompanyProfile = lazy(
@@ -640,6 +644,15 @@ export default function App() {
                 />
 
                 <Route
+                  path="/super-admin/optional-services"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <OptionalServices />
+                    </Suspense>
+                  }
+                />
+
+                <Route
                   path="/super-admin/technical-support"
                   element={
                     <Suspense fallback={<PageSkeleton />}>
@@ -793,7 +806,10 @@ export default function App() {
                   }
                 />
 
-                <Route path="/sub-super-admin/profile" element={<UserProfiles />} />
+                <Route
+                  path="/sub-super-admin/profile"
+                  element={<UserProfiles />}
+                />
 
                 <Route
                   path="/sub-super-admin/intelligence"
@@ -809,8 +825,14 @@ export default function App() {
                   element={<CompanyAdminsPage />}
                 />
 
-                <Route path="/sub-super-admin/operators" element={<Operators />} />
-                <Route path="/sub-super-admin/mechanics" element={<Mechanics />} />
+                <Route
+                  path="/sub-super-admin/operators"
+                  element={<Operators />}
+                />
+                <Route
+                  path="/sub-super-admin/mechanics"
+                  element={<Mechanics />}
+                />
 
                 <Route
                   path="/sub-super-admin/plans-billing"

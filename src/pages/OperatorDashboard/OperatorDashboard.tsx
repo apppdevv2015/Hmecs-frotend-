@@ -132,7 +132,35 @@ export default function OperatorDashboard() {
         };
         setMachine(machineObj);
 
-        // 2. Fetch Components for this Machine
+        // 2. Fetch Components for this Machine (including Spec Template + DB + Live Inspection Health)
+        let rawComponents: any[] = [];
+        try {
+          const typeStr =
+            matched.equipmentType ||
+            matched.category ||
+            matched.machineType ||
+            "All Terrain Crane";
+          const modelStr =
+            matched.model ||
+            matched.modelName ||
+            matched.name ||
+            matched.machineName ||
+            "";
+          const opUser = StorageService.getUser();
+          const opCompanyId = opUser?.companyId || opUser?.company_id || matched.companyId || "";
+          const tplRes: any = await apiCall(
+            `/machines/spec-template?equipmentType=${encodeURIComponent(typeStr)}&modelName=${encodeURIComponent(modelStr)}&companyId=${encodeURIComponent(opCompanyId)}&machineId=${encodeURIComponent(mId)}`,
+            { method: "GET" },
+            { showError: false }
+          ).catch(() => null);
+          const tplData = tplRes?.data || tplRes;
+          if (tplData && Array.isArray(tplData.components) && tplData.components.length > 0) {
+            rawComponents.push(...tplData.components);
+          }
+        } catch {
+          // Spec template notice
+        }
+
         try {
           const compRes = await componentService.getComponentsByMachineId(mId);
           let compList: any[] = [];
@@ -140,10 +168,69 @@ export default function OperatorDashboard() {
           else if (Array.isArray(compRes?.data)) compList = compRes.data;
           else if (Array.isArray(compRes?.components)) compList = compRes.components;
 
-          setComponents(compList);
+          if (Array.isArray(compList) && compList.length > 0) {
+            compList.forEach((dc: any) => {
+              const dcName = (dc.name || dc.description || "").toLowerCase().trim();
+              if (!rawComponents.some((rc: any) => (rc.name || rc.description || "").toLowerCase().trim() === dcName)) {
+                rawComponents.push(dc);
+              }
+            });
+          }
         } catch {
-          setComponents([]);
+          // DB components notice
         }
+
+        // Fetch PostgreSQL Live Inspection & Telemetry (manual-data)
+        try {
+          const manualDataRes: any = await apiCall(
+            `/machines/${encodeURIComponent(mId)}/manual-data`,
+            { method: "GET" },
+            { showError: false }
+          ).catch(() => null);
+          const manualPayload = manualDataRes?.data || manualDataRes;
+          const savedHealthRecords = manualPayload?.records || [];
+
+          if (Array.isArray(savedHealthRecords) && savedHealthRecords.length > 0) {
+            rawComponents.forEach((comp: any) => {
+              const compNameLower = (comp.name || comp.description || "").toLowerCase().trim();
+              const matchedRecord = savedHealthRecords.find((r: any) => {
+                const rNameLower = (r.componentName || "").toLowerCase().trim();
+                return rNameLower === compNameLower || (r.componentId && r.componentId === comp.id);
+              });
+
+              if (matchedRecord) {
+                if (matchedRecord.healthScore !== undefined && matchedRecord.healthScore !== null) {
+                  comp.healthScore = Number(matchedRecord.healthScore);
+                  comp.health = Number(matchedRecord.healthScore);
+                  comp.condition = Math.round(Number(matchedRecord.healthScore) / 20);
+                  comp.status = matchedRecord.status || (comp.healthScore >= 80 ? "Healthy" : comp.healthScore >= 60 ? "Warning" : "Critical");
+                }
+                if (Array.isArray(matchedRecord.parameters) && matchedRecord.parameters.length > 0) {
+                  comp.parameters = matchedRecord.parameters;
+                }
+              }
+            });
+          }
+        } catch {
+          // Manual data sync notice
+        }
+
+        const normalizedComponents = rawComponents.map((raw: any) => {
+          const health = typeof raw?.healthScore === "number"
+            ? raw.healthScore
+            : typeof raw?.health === "number"
+            ? raw.health
+            : Math.round(Math.min(Math.max(Number(raw?.condition || 5), 0), 5) * 20);
+          const status = raw?.status || (health >= 80 ? "Healthy" : health >= 60 ? "Warning" : "Critical");
+          return {
+            ...raw,
+            health,
+            healthScore: health,
+            status,
+          };
+        });
+
+        setComponents(normalizedComponents);
 
         // 3. Fetch PostgreSQL Audit / Inspection History
         try {
@@ -179,20 +266,29 @@ export default function OperatorDashboard() {
 
   // Derived stats
   const healthyCount = components.filter(
-    (c) => (Number(c.condition) >= 4) || c.status === "Healthy" || c.status === "Good"
+    (c) => (Number(c.healthScore ?? c.health ?? (Number(c.condition || 5) * 20)) >= 80) || c.status === "Healthy" || c.status === "Good"
   ).length;
 
   const warningCount = components.filter(
-    (c) => Number(c.condition) === 3 || c.status === "Warning"
+    (c) =>
+      ((Number(c.healthScore ?? c.health ?? (Number(c.condition || 5) * 20)) >= 60 &&
+        Number(c.healthScore ?? c.health ?? (Number(c.condition || 5) * 20)) < 80) ||
+        c.status === "Warning")
   ).length;
 
   const criticalCount = components.filter(
-    (c) => (Number(c.condition) <= 2 && Number(c.condition) > 0) || c.status === "Critical"
+    (c) =>
+      (Number(c.healthScore ?? c.health ?? (Number(c.condition || 5) * 20)) < 60 &&
+        Number(c.healthScore ?? c.health ?? (Number(c.condition || 5) * 20)) >= 0) ||
+      c.status === "Critical"
   ).length;
 
   const overallHealth = components.length > 0
     ? Math.round(
-        components.reduce((acc, c) => acc + (Number(c.condition || 4) * 20), 0) / components.length
+        components.reduce(
+          (acc, c) => acc + Number(c.healthScore ?? c.health ?? (Number(c.condition || 5) * 20)),
+          0
+        ) / components.length
       )
     : machine?.healthScore ?? 100;
 
