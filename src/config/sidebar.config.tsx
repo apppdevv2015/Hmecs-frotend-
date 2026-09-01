@@ -1,6 +1,7 @@
 import React from "react";
 import {
   LayoutDashboard,
+  Layers,
   Receipt,
   ClipboardCheck,
   Truck,
@@ -103,6 +104,11 @@ export const sidebarConfig: Record<
             name: "Quotation",
             path: "/super-admin/quotation",
             icon: <FileText className={sidebarIconClass} />,
+          },
+          {
+            name: "Quotation Plans",
+            path: "/super-admin/quotation-plans",
+            icon: <Layers className={sidebarIconClass} />,
           },
           {
             name: "Contract",

@@ -30,12 +30,15 @@ import {
   XCircle,
   CheckCircle2,
   Save,
+  LogIn,
 } from "lucide-react";
 
 import {
   superAdminMachineService,
   type SuperAdminCompany,
 } from "../../../services/SuperAdmin/machineService";
+import { authService } from "../../../services/Auth/authService";
+import StorageService, { STORAGE_KEYS } from "../../../services/storage.service";
 
 import Pagination from "../../../components/common/Pagination";
 
@@ -214,6 +217,7 @@ export default function CompanyAdminsPage() {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const [togglingStatusId, setTogglingStatusId] = useState<string | null>(null);
+  const [loggingInCompanyId, setLoggingInCompanyId] = useState<string | null>(null);
 
   const [showAddUser, setShowAddUser] = useState(false);
 
@@ -430,6 +434,71 @@ export default function CompanyAdminsPage() {
   const handleCloseViewModal = () => {
     setIsViewModalOpen(false);
     setViewCompany(null);
+  };
+
+  const handleLoginAsCompany = async (company: Company) => {
+    try {
+      setLoggingInCompanyId(company.id);
+
+      const response: any = await authService.impersonate({
+        companyId: company.id,
+        userId: company.adminId,
+        email:
+          company.admin.email && !company.admin.email.includes("Not available")
+            ? company.admin.email
+            : undefined,
+      });
+
+      const loginData = response?.data || response;
+      const token = loginData?.token || loginData?.accessToken;
+      const targetUser = loginData?.user;
+
+      if (!token || !targetUser) {
+        throw new Error(
+          response?.message || "Failed to generate company login session.",
+        );
+      }
+
+      // Set new company admin session
+      const normalizedRole = "company_admin";
+      const finalUser = {
+        id: targetUser.id,
+        role: normalizedRole,
+        role_name: "Admin",
+        companyId: targetUser.companyId || company.id,
+        isActive: targetUser.isActive !== false,
+        email: targetUser.email || company.admin.email,
+        name: targetUser.name || company.admin.name || "Company Admin",
+        companyName: targetUser.companyName || company.name,
+        company: targetUser.companyName || company.name,
+      };
+
+      StorageService.set(STORAGE_KEYS.TOKEN, token);
+      StorageService.set(STORAGE_KEYS.USER, finalUser);
+      StorageService.set(STORAGE_KEYS.ROLE, normalizedRole);
+      StorageService.set(STORAGE_KEYS.EMAIL, finalUser.email || "");
+      StorageService.set(STORAGE_KEYS.NAME, finalUser.name || "");
+      if (finalUser.companyId) {
+        StorageService.set(STORAGE_KEYS.COMPANY_ID, finalUser.companyId);
+      }
+
+      showSuccessToast(
+        `Logged in as ${company.admin.name || company.name} successfully!`,
+        {
+          duration: 3000,
+        },
+      );
+
+      // 3. Navigate directly to company dashboard
+      setTimeout(() => {
+        window.location.href = "/company-admin/dashboard";
+      }, 500);
+    } catch (err: any) {
+      console.error("Login as company admin failed:", err);
+      showErrorToast(err?.message || "Failed to log in as this company.");
+    } finally {
+      setLoggingInCompanyId(null);
+    }
   };
 
   // ---------- Status toggle (checkbox) handler ----------
@@ -1008,6 +1077,20 @@ export default function CompanyAdminsPage() {
                             className="flex items-center justify-end gap-2"
                             onClick={(event) => event.stopPropagation()}
                           >
+                            <button
+                              onClick={() => handleLoginAsCompany(company)}
+                              disabled={loggingInCompanyId === company.id}
+                              title={`Login as ${company.admin.name || company.name}`}
+                              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 text-xs font-semibold text-blue-700 shadow-xs transition hover:bg-blue-100 hover:border-blue-300 disabled:opacity-50 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-300 dark:hover:bg-blue-500/20"
+                            >
+                              {loggingInCompanyId === company.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-600 dark:text-blue-300" />
+                              ) : (
+                                <LogIn className="h-3.5 w-3.5" />
+                              )}
+                              <span>Login</span>
+                            </button>
+
                             <button
                               onClick={() => handleEditCompany(company)}
                               title="Edit company"

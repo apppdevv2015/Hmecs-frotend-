@@ -16,9 +16,13 @@ import {
   Building2,
   TrendingUp,
   Lock,
+  LogIn,
+  Loader2,
 } from "lucide-react";
 import Pagination from "../../common/Pagination";
 import { userService } from "../../../services/Auth/userService";
+import { authService } from "../../../services/Auth/authService";
+import StorageService, { STORAGE_KEYS } from "../../../services/storage.service";
 import { superAdminMachineService } from "../../../services/SuperAdmin/machineService";
 import { useNavigate } from "react-router";
 
@@ -531,6 +535,86 @@ export default function AdminManagementTable() {
     setCurrentPage(1);
   };
 
+  const handleLoginAsAdmin = async (admin: Admin) => {
+    try {
+      const response: any = await authService.impersonate({
+        userId: String(admin.id),
+        email: admin.email,
+      });
+
+      const loginData = response?.data || response;
+      const token = loginData?.token || loginData?.accessToken;
+      const targetUser = loginData?.user;
+
+      if (!token || !targetUser) {
+        throw new Error(response?.message || "Failed to generate login session.");
+      }
+
+      const normalizedRole = "company_admin";
+      const finalUser = {
+        id: targetUser.id,
+        role: normalizedRole,
+        role_name: "Admin",
+        companyId: targetUser.companyId || (admin as any).companyId,
+        isActive: targetUser.isActive !== false,
+        email: targetUser.email || admin.email,
+        name: targetUser.name || admin.name || "Company Admin",
+        companyName: targetUser.companyName || admin.companyName,
+        company: targetUser.companyName || admin.companyName,
+      };
+
+      StorageService.set(STORAGE_KEYS.TOKEN, token);
+      StorageService.set(STORAGE_KEYS.USER, finalUser);
+      StorageService.set(STORAGE_KEYS.ROLE, normalizedRole);
+      StorageService.set(STORAGE_KEYS.EMAIL, finalUser.email || "");
+      StorageService.set(STORAGE_KEYS.NAME, finalUser.name || "");
+      if (finalUser.companyId) {
+        StorageService.set(STORAGE_KEYS.COMPANY_ID, finalUser.companyId);
+      }
+
+      toast.success(`Logged in as ${admin.name || admin.companyName} successfully!`);
+      setTimeout(() => {
+        window.location.href = "/company-admin/dashboard";
+      }, 500);
+    } catch (err: any) {
+      console.error("Login as admin failed:", err);
+      toast.error(err?.message || "Failed to log in as this user.");
+    }
+  };
+
+  const [togglingStatusId, setTogglingStatusId] = useState<string | null>(null);
+
+  const handleToggleStatus = async (admin: Admin) => {
+    if (togglingStatusId) return;
+
+    const nextIsActive = admin.status !== "Active";
+    const nextStatus = nextIsActive ? "Active" : "Inactive";
+
+    try {
+      setTogglingStatusId(String(admin.id));
+
+      await userService.updateUser(admin.id, {
+        is_active: nextIsActive,
+        status: nextStatus,
+      });
+
+      setAdmins((prev) =>
+        prev.map((item) =>
+          String(item.id) === String(admin.id)
+            ? { ...item, status: nextStatus }
+            : item,
+        ),
+      );
+
+      toast.success(`${admin.name || "User"} marked as ${nextStatus}`);
+    } catch (err: any) {
+      console.error("Status update failed:", err);
+      toast.error(err?.message || "Failed to update status");
+    } finally {
+      setTogglingStatusId(null);
+    }
+  };
+
   return (
     <>
       <div className="flex h-full min-h-[620px] flex-col rounded-2xl border border-slate-200 bg-white shadow-sm transition-all duration-300 dark:border-slate-800 dark:bg-slate-900">
@@ -742,7 +826,7 @@ export default function AdminManagementTable() {
                       {admin.companyName || "-"}
                     </td>
 
-                    <td className="px-4 py-4">
+                    <td className="px-4 py-4 align-middle">
                       {(admin.roleName || "").toLowerCase().includes("sub_super") ||
                       (admin.roleName || "").toLowerCase().includes("sub super") ||
                       (admin.roleName || "").toLowerCase().includes("super_admin") ? (
@@ -750,15 +834,56 @@ export default function AdminManagementTable() {
                           Platform Admin (No Plan)
                         </span>
                       ) : (
-                        <span
-                          className={`rounded-lg px-3 py-1 text-xs font-semibold ${
-                            admin.status === "Active"
-                              ? "bg-green-50 text-green-700 dark:bg-green-500/15 dark:text-green-400"
-                              : "bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-400"
-                          }`}
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          className="flex items-center gap-2"
                         >
-                          ● {admin.status}
-                        </span>
+                          <label
+                            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+                              admin.status === "Active"
+                                ? "bg-emerald-500"
+                                : "bg-slate-300 dark:bg-slate-700"
+                            } ${
+                              togglingStatusId === String(admin.id)
+                                ? "cursor-not-allowed opacity-60"
+                                : "cursor-pointer"
+                            }`}
+                            title={
+                              admin.status === "Active"
+                                ? "Click to mark Inactive"
+                                : "Click to mark Active"
+                            }
+                          >
+                            <input
+                              type="checkbox"
+                              className="peer sr-only"
+                              checked={admin.status === "Active"}
+                              disabled={togglingStatusId === String(admin.id)}
+                              onChange={() => handleToggleStatus(admin)}
+                            />
+                            <span
+                              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                                admin.status === "Active"
+                                  ? "translate-x-6"
+                                  : "translate-x-1"
+                              }`}
+                            />
+                          </label>
+
+                          <span
+                            className={`text-xs font-semibold ${
+                              admin.status === "Active"
+                                ? "text-emerald-700 dark:text-emerald-300"
+                                : "text-red-700 dark:text-red-300"
+                            }`}
+                          >
+                            {admin.status}
+                          </span>
+
+                          {togglingStatusId === String(admin.id) && (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />
+                          )}
+                        </div>
                       )}
                     </td>
 
@@ -778,7 +903,35 @@ export default function AdminManagementTable() {
                       </button>
 
                       {openMenu === String(admin.id) && (
-                        <div className="absolute right-6 top-12 z-50 w-36 rounded-xl border border-slate-200 bg-white py-2 shadow-lg dark:border-slate-800 dark:bg-slate-950">
+                        <div className="absolute right-6 top-12 z-50 w-40 rounded-xl border border-slate-200 bg-white py-2 shadow-lg dark:border-slate-800 dark:bg-slate-950">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOpenMenu(null);
+                              handleLoginAsAdmin(admin);
+                            }}
+                            className="flex w-full items-center gap-2 px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-white/10 font-medium"
+                          >
+                            <LogIn size={15} />
+                            Login As
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOpenMenu(null);
+                              handleToggleStatus(admin);
+                            }}
+                            className={`flex w-full items-center gap-2 px-4 py-2 text-sm font-medium ${
+                              admin.status === "Active"
+                                ? "text-amber-600 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-white/10"
+                                : "text-emerald-600 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-white/10"
+                            }`}
+                          >
+                            <Shield size={15} />
+                            {admin.status === "Active" ? "Set Inactive" : "Set Active"}
+                          </button>
+
                           <button
                             type="button"
                             onClick={() => {
