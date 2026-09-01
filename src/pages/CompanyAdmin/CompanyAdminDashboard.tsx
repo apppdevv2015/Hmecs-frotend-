@@ -50,6 +50,8 @@ import { userService } from "../../services/Auth/userService";
 import { componentService } from "../../services/companyadmin/componentService";
 import { machineService } from "../../services/companyadmin/machineService";
 import { CompanyAdminNav } from "../../components/company-admin/CompanyAdminNav";
+import CompanyPendingApprovalView from "../../components/company-admin/CompanyPendingApprovalView";
+import StorageService from "../../services/storage.service";
 import socketService from "../../services/socketService";
 
 const getArrayData = <T,>(response: any): T[] => {
@@ -175,13 +177,8 @@ export default function CompanyAdminDashboard() {
           componentService.getComponents(),
         ]);
 
-      if (!sub && (!subHistory || subHistory.length === 0)) {
-        navigate("/plans");
-        return;
-      }
-
       setSubscription(sub);
-      setHistory(subHistory);
+      setHistory(subHistory || []);
 
       const rawMachines = getArrayData<any>(machinesList);
       const normalizedMachines = rawMachines.map((m: any) => ({
@@ -805,6 +802,29 @@ export default function CompanyAdminDashboard() {
         <TableSkeleton rows={8} />
 
         <TableSkeleton rows={5} />
+      </div>
+    );
+  }
+
+  const currentUser = StorageService.getUser();
+  const isInactiveOrPending =
+    currentUser?.isActive === false ||
+    currentUser?.is_active === false ||
+    !subscription ||
+    subscription?.status === "pending" ||
+    subscription?.status === "PENDING";
+
+  if (
+    !loading &&
+    isInactiveOrPending &&
+    (!subscription ||
+      subscription?.status === "pending" ||
+      subscription?.status === "PENDING" ||
+      !subscription?.plan)
+  ) {
+    return (
+      <div className="min-h-[calc(100vh-120px)] w-full py-4">
+        <CompanyPendingApprovalView onRefresh={fetchDashboardData} />
       </div>
     );
   }

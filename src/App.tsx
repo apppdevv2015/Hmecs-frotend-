@@ -161,6 +161,10 @@ const SuperAdminQuotation = lazy(
   () => import("./pages/SuperAdmin/Quotation/Quotation"),
 );
 
+const SuperAdminQuotationPlans = lazy(
+  () => import("./pages/SuperAdmin/Quotation/QuotationPlanManagement"),
+);
+
 const SuperAdminContractManagement = lazy(
   () => import("./pages/SuperAdmin/Quotation/ContractManagement"),
 );
@@ -612,6 +616,15 @@ export default function App() {
                   element={
                     <Suspense fallback={<PageSkeleton />}>
                       <SuperAdminQuotation />
+                    </Suspense>
+                  }
+                />
+
+                <Route
+                  path="/super-admin/quotation-plans"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <SuperAdminQuotationPlans />
                     </Suspense>
                   }
                 />

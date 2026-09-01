@@ -11,6 +11,10 @@ import { createPortal } from "react-dom";
 
 import AppSelect from "../../../components/ui/dropdown/AppSelect";
 import CommonPagination from "../../../components/common/Pagination";
+import {
+  getQuotationRequests,
+  type ApiQuotationRequest,
+} from "../../../services/SuperAdmin/quotationInquiryService";
 
 /* ============================================================================
  * 1. TYPES — must match the real API contract. Extend, don't loosen.
@@ -509,10 +513,96 @@ const quotationService = {
   async getInquiries(
     params: InquiryListParams,
   ): Promise<ApiResponse<QuotationInquiry[]>> {
-    await wait(NETWORK_DELAY_MS);
-    maybeThrowSimulatedError();
+    let apiInquiries: QuotationInquiry[] = [];
 
-    let rows = [...mockInquiries];
+    try {
+      const apiReqs = await getQuotationRequests({
+        search: params.search,
+        status: params.status,
+      });
+
+      if (Array.isArray(apiReqs) && apiReqs.length > 0) {
+        apiInquiries = apiReqs.map((req: ApiQuotationRequest) => {
+          const isTrial = (req.quotationType || "")
+            .toLowerCase()
+            .includes("trial");
+
+          const siteNamesList = Array.isArray(req.siteNames)
+            ? req.siteNames
+            : typeof req.siteNames === "string"
+              ? [req.siteNames]
+              : [];
+
+          const equipmentTypesList = Array.isArray(req.equipmentTypes)
+            ? req.equipmentTypes
+            : typeof req.equipmentTypes === "string"
+              ? [req.equipmentTypes]
+              : [];
+
+          const optionalServicesList = Array.isArray(req.optionalServices)
+            ? req.optionalServices
+            : typeof req.optionalServices === "string"
+              ? [req.optionalServices]
+              : [];
+
+          return {
+            inquiryId:
+              req.requestId ||
+              `QIN-${(req.id || "").substring(0, 8).toUpperCase()}`,
+            status: (req.status === "INACTIVE"
+              ? "INACTIVE"
+              : "ACTIVE") as InquiryStatus,
+            inquiryDate: req.createdAt || new Date().toISOString(),
+            company: {
+              companyId: req.companyId || req.id,
+              name: req.companyName || "Registered Company",
+              contactPerson: req.contactPerson || "Contact Person",
+              email: req.email || "-",
+              phone: req.phone || "-",
+              location: req.siteLocation || "Main Mining Site",
+            },
+            requirement: {
+              quotationType: req.quotationType || "Commercial Quotation",
+              numberOfSites: Number(req.numberOfSites) || 1,
+              siteNames:
+                siteNamesList.length > 0 ? siteNamesList : ["Main Site"],
+              activeMachines: Number(req.activeMachines) || 1,
+              equipmentTypes:
+                equipmentTypesList.length > 0
+                  ? equipmentTypesList
+                  : ["Excavators"],
+              requestedServiceIds: optionalServicesList,
+              requirementDescription:
+                req.implementationRequirements ||
+                "Customer submitted quotation inquiry via portal.",
+              otherRequirements: req.additionalRequirements || null,
+            },
+            trial: {
+              requested: isTrial,
+              duration: isTrial
+                ? req.contractDuration || DEFAULT_TRIAL_DURATION
+                : null,
+              machines: isTrial
+                ? Number(req.activeMachines) || DEFAULT_TRIAL_MACHINES
+                : null,
+              description: isTrial ? "Evaluation requested." : null,
+            },
+            quotationStatus: (req.quotationStatus as QuotationStatus) || null,
+          };
+        });
+      }
+    } catch (apiErr) {
+      console.warn("Notice: Fetching quotation requests:", apiErr);
+    }
+
+    const combinedInquiries = [
+      ...apiInquiries,
+      ...mockInquiries.filter(
+        (m) => !apiInquiries.some((a) => a.inquiryId === m.inquiryId),
+      ),
+    ];
+
+    let rows = [...combinedInquiries];
 
     if (params.search) {
       const q = params.search.toLowerCase();
@@ -549,11 +639,12 @@ const quotationService = {
     const pageRows = rows.slice(start, start + params.limit);
 
     const summary: InquirySummary = {
-      totalInquiries: mockInquiries.length,
-      pending: mockInquiries.filter((i) => i.quotationStatus === null).length,
-      readyToQuote: mockInquiries.filter((i) => i.quotationStatus === "DRAFT")
-        .length,
-      sent: mockInquiries.filter(
+      totalInquiries: combinedInquiries.length,
+      pending: combinedInquiries.filter((i) => i.quotationStatus === null).length,
+      readyToQuote: combinedInquiries.filter(
+        (i) => i.quotationStatus === "DRAFT",
+      ).length,
+      sent: combinedInquiries.filter(
         (i) => i.quotationStatus !== null && i.quotationStatus !== "DRAFT",
       ).length,
     };

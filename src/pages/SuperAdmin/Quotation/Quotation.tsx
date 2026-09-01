@@ -2,7 +2,6 @@ import { type FC, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   ClipboardList,
-  Send,
   MessageSquareCheck,
 } from "lucide-react";
 
@@ -15,7 +14,6 @@ import QuotationResponses from "./QuotationResponses";
 
 type QuotationTabId =
   | "inquiry"
-  | "send-quotation"
   | "responses";
 
 interface QuotationTabConfig {
@@ -33,7 +31,7 @@ const QUOTATION_TABS: readonly QuotationTabConfig[] = [
   {
     id: "inquiry",
     label: "Quotation Inquiry",
-    description: "Review and manage quotation inquiries",
+    description: "Review and manage customer quotation inquiries",
     icon: (
       <ClipboardList
         size={21}
@@ -45,7 +43,7 @@ const QUOTATION_TABS: readonly QuotationTabConfig[] = [
   {
     id: "responses",
     label: "Quotation Responses",
-    description: "Track quotation responses",
+    description: "Track official quotation responses & proposals",
     icon: (
       <MessageSquareCheck
         size={21}
@@ -65,7 +63,6 @@ const isQuotationTab = (
 ): value is QuotationTabId => {
   return (
     value === "inquiry" ||
-    value === "send-quotation" ||
     value === "responses"
   );
 };
@@ -122,7 +119,6 @@ const Quotation: FC = () => {
     switch (activeTab) {
       case "inquiry":
         return <QuotationInquiry />;
-
 
       case "responses":
         return <QuotationResponses />;
