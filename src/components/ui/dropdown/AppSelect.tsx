@@ -22,7 +22,7 @@ export interface SelectOption {
 
 export interface CustomSelectProps {
   
-  options: SelectOption[];
+  options: readonly SelectOption[];
 
   value?: string;
  

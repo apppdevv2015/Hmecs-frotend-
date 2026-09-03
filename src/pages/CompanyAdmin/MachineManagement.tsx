@@ -24,6 +24,10 @@ import {
 } from "../../services/companyadmin/machineService";
 import { componentService } from "../../services/companyadmin/componentService";
 import AppSelect from "../../components/ui/dropdown/AppSelect";
+
+import StorageService from "../../services/storage.service";
+import { isReadOnlyRole } from "../../components/common/permissions";
+
 import Pagination from "../../components/common/Pagination";
 
 type Machine = {
@@ -56,6 +60,22 @@ type MachineFormData = {
 
 type FormErrors = Partial<Record<keyof MachineFormData, string>>;
 
+
+type PaginationProps = {
+  currentPage: number;
+  totalPages: number;
+  startItem: number;
+  endItem: number;
+  totalItems: number;
+  itemsPerPage: number | "all";
+  itemLabel?: string;
+  pageSizeOptions?: number[];
+  onPrev: () => void;
+  onNext: () => void;
+  onPageChange?: (page: number) => void;
+  onItemsPerPageChange?: (value: number | "all") => void;
+};
+
 const ROWS_PER_PAGE = 100;
 
 const emptyForm: MachineFormData = {
@@ -85,7 +105,12 @@ const resolveImageUrl = (rawUrl?: string): string => {
 };
 
 const getMachineHealthScore = (m: any): number | null => {
-  const val = m?.healthScore ?? m?.health_score ?? m?.intelligence?.healthScore ?? m?.health?.healthScore ?? m?.score;
+  const val =
+    m?.healthScore ??
+    m?.health_score ??
+    m?.intelligence?.healthScore ??
+    m?.health?.healthScore ??
+    m?.score;
   if (val !== undefined && val !== null && !isNaN(Number(val))) {
     return Math.max(0, Math.min(100, Math.round(Number(val))));
   }
@@ -101,7 +126,9 @@ const getConditionBadge = (rawCondition?: string | number) => {
     );
   }
 
-  const condStr = String(rawCondition || "").toLowerCase().trim();
+  const condStr = String(rawCondition || "")
+    .toLowerCase()
+    .trim();
   if (!condStr) {
     return (
       <span className="text-sm font-semibold text-slate-400 dark:text-slate-500">
@@ -110,7 +137,12 @@ const getConditionBadge = (rawCondition?: string | number) => {
     );
   }
 
-  if (condStr.includes("5") || condStr.includes("critical") || condStr.includes("poor") || condStr.includes("grade d")) {
+  if (
+    condStr.includes("5") ||
+    condStr.includes("critical") ||
+    condStr.includes("poor") ||
+    condStr.includes("grade d")
+  ) {
     return (
       <span className="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
         CRITICAL
@@ -124,21 +156,34 @@ const getConditionBadge = (rawCondition?: string | number) => {
       </span>
     );
   }
-  if (condStr.includes("3") || condStr.includes("monitor") || condStr.includes("fair") || condStr.includes("grade c")) {
+  if (
+    condStr.includes("3") ||
+    condStr.includes("monitor") ||
+    condStr.includes("fair") ||
+    condStr.includes("grade c")
+  ) {
     return (
       <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
         MONITOR
       </span>
     );
   }
-  if (condStr.includes("2") || condStr.includes("good") || condStr.includes("grade b")) {
+  if (
+    condStr.includes("2") ||
+    condStr.includes("good") ||
+    condStr.includes("grade b")
+  ) {
     return (
       <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300">
         GOOD
       </span>
     );
   }
-  if (condStr.includes("1") || condStr.includes("new") || condStr.includes("grade a")) {
+  if (
+    condStr.includes("1") ||
+    condStr.includes("new") ||
+    condStr.includes("grade a")
+  ) {
     return (
       <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
         NEW
@@ -167,12 +212,12 @@ const normalizeMachine = (item: any, index: number): Machine => {
   const compCount = Array.isArray(item?.components)
     ? item.components.length
     : typeof item?.componentsCount === "number"
-    ? item.componentsCount
-    : typeof item?.componentCount === "number"
-    ? item.componentCount
-    : typeof item?.totalComponents === "number"
-    ? item.totalComponents
-    : 0;
+      ? item.componentsCount
+      : typeof item?.componentCount === "number"
+        ? item.componentCount
+        : typeof item?.totalComponents === "number"
+          ? item.totalComponents
+          : 0;
 
   const rawName = String(
     item?.name ?? item?.machineName ?? item?.machine_name ?? "N/A",
@@ -198,9 +243,14 @@ const normalizeMachine = (item: any, index: number): Machine => {
         item?.category ??
         "N/A",
     ),
-    condition: item?.condition || item?.grade ? String(item?.condition || item?.grade) : "",
+    condition:
+      item?.condition || item?.grade
+        ? String(item?.condition || item?.grade)
+        : "",
     componentsCount: compCount,
-    imageUrl: resolveImageUrl(item?.imageUrl || item?.image_url || item?.image || item?.photo || ""),
+    imageUrl: resolveImageUrl(
+      item?.imageUrl || item?.image_url || item?.image || item?.photo || "",
+    ),
     companyId: item?.companyId ?? item?.company_id,
     site: item?.site || item?.location,
     status: item?.status,
@@ -351,7 +401,10 @@ const MachineTypesOverviewSection: React.FC<{ machines?: Machine[] }> = ({
 
   // Merge created Equipment Types with any unique equipmentType from machines array
   const allCategoryCards = React.useMemo(() => {
-    const map = new Map<string, { name: string; icon?: string; description?: string }>();
+    const map = new Map<
+      string,
+      { name: string; icon?: string; description?: string }
+    >();
 
     eqCategories.forEach((cat) => {
       if (cat.name) {
@@ -364,14 +417,19 @@ const MachineTypesOverviewSection: React.FC<{ machines?: Machine[] }> = ({
     });
 
     safeList.forEach((m) => {
-      const typeName = (m.equipmentType || (m as any).equipment_type || m.category || "").trim();
+      const typeName = (m.equipmentType || (m as any).equipment_type).trim();
       if (typeName && !map.has(typeName)) {
         map.set(typeName, { name: typeName, icon: "Truck" });
       }
     });
 
     if (map.size === 0) {
-      ["Dump Truck", "Excavator (JCB)", "Dozer (Bulldozer)", "Wheel Loader / Grader"].forEach((name) => {
+      [
+        "Dump Truck",
+        "Excavator (JCB)",
+        "Dozer (Bulldozer)",
+        "Wheel Loader / Grader",
+      ].forEach((name) => {
         map.set(name, { name, icon: "Truck" });
       });
     }
@@ -381,42 +439,72 @@ const MachineTypesOverviewSection: React.FC<{ machines?: Machine[] }> = ({
       const lower = typeName.toLowerCase();
 
       const matchingMachines = safeList.filter((m) => {
-        const mType = String(m.equipmentType || (m as any).equipment_type || m.category || "").toLowerCase();
+        const mType = String(
+          m.equipmentType || (m as any).equipment_type  || "",
+        ).toLowerCase();
         const mName = String(m.name || "").toLowerCase();
-        return mType.includes(lower) || lower.includes(mType) || (mType === "" && mName.includes(lower));
+        return (
+          mType.includes(lower) ||
+          lower.includes(mType) ||
+          (mType === "" && mName.includes(lower))
+        );
       });
 
       let img = null;
       let iconComp = Activity;
-      let badgeColor = "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300";
+      let badgeColor =
+        "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300";
       let borderColor = "border-blue-200 dark:border-blue-900/50";
 
-      if (lower.includes("truck") || lower.includes("dump") || lower.includes("haul")) {
+      if (
+        lower.includes("truck") ||
+        lower.includes("dump") ||
+        lower.includes("haul")
+      ) {
         img = dumpTruckImg;
         iconComp = Truck;
-        badgeColor = "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300";
+        badgeColor =
+          "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300";
         borderColor = "border-blue-200 dark:border-blue-900/50";
-      } else if (lower.includes("excavator") || lower.includes("jcb") || lower.includes("dig")) {
+      } else if (
+        lower.includes("excavator") ||
+        lower.includes("jcb") ||
+        lower.includes("dig")
+      ) {
         img = excavatorImg;
         iconComp = Wrench;
-        badgeColor = "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300";
+        badgeColor =
+          "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300";
         borderColor = "border-amber-200 dark:border-amber-900/50";
-      } else if (lower.includes("dozer") || lower.includes("bulldozer") || lower.includes("tractor")) {
+      } else if (
+        lower.includes("dozer") ||
+        lower.includes("bulldozer") ||
+        lower.includes("tractor")
+      ) {
         img = dozerImg;
         iconComp = ShieldCheck;
-        badgeColor = "bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300";
+        badgeColor =
+          "bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300";
         borderColor = "border-purple-200 dark:border-purple-900/50";
       } else if (lower.includes("loader") || lower.includes("grader")) {
         img = loaderImg;
         iconComp = Activity;
-        badgeColor = "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300";
+        badgeColor =
+          "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300";
         borderColor = "border-emerald-200 dark:border-emerald-900/50";
       }
 
       const uniqueModels = Array.from(
-        new Set(matchingMachines.map((m) => m.model || m.name || m.serialNumber).filter(Boolean))
+        new Set(
+          matchingMachines
+            .map((m) => m.model || m.name || m.serialNumber)
+            .filter(Boolean),
+        ),
       );
-      const modelsText = uniqueModels.length > 0 ? uniqueModels.join(", ") : "No machines registered yet";
+      const modelsText =
+        uniqueModels.length > 0
+          ? uniqueModels.join(", ")
+          : "No machines registered yet";
 
       return {
         title: typeName,
@@ -434,7 +522,9 @@ const MachineTypesOverviewSection: React.FC<{ machines?: Machine[] }> = ({
   const totalSlides = Math.ceil(allCategoryCards.length / CARDS_PER_VIEW);
 
   const handlePrevSlide = () => {
-    setSlideIndex((prev) => (prev > 0 ? prev - 1 : Math.max(0, totalSlides - 1)));
+    setSlideIndex((prev) =>
+      prev > 0 ? prev - 1 : Math.max(0, totalSlides - 1),
+    );
   };
 
   const handleNextSlide = () => {
@@ -444,7 +534,7 @@ const MachineTypesOverviewSection: React.FC<{ machines?: Machine[] }> = ({
   // Slice visible 4 cards for current slide
   const visibleCards = allCategoryCards.slice(
     slideIndex * CARDS_PER_VIEW,
-    (slideIndex + 1) * CARDS_PER_VIEW
+    (slideIndex + 1) * CARDS_PER_VIEW,
   );
 
   return (
@@ -460,7 +550,8 @@ const MachineTypesOverviewSection: React.FC<{ machines?: Machine[] }> = ({
             Fleet Equipment Categories
           </h3>
           <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
-            All equipment types created in Category Master with real-time fleet machine counts
+            All equipment types created in Category Master with real-time fleet
+            machine counts
           </p>
         </div>
 
@@ -501,7 +592,8 @@ const MachineTypesOverviewSection: React.FC<{ machines?: Machine[] }> = ({
 
       {loadingCats ? (
         <div className="flex items-center justify-center py-8 text-sm font-bold text-slate-500">
-          <Loader2 size={16} className="mr-2 animate-spin" /> Loading Equipment Categories from API...
+          <Loader2 size={16} className="mr-2 animate-spin" /> Loading Equipment
+          Categories from API...
         </div>
       ) : (
         <div>
@@ -570,7 +662,10 @@ const MachineTypesOverviewSection: React.FC<{ machines?: Machine[] }> = ({
                         {cat.count === 1 ? "Machine" : "Machines"}
                       </span>
                     </div>
-                    <p className="mt-1 truncate text-[11px] font-medium text-slate-400" title={cat.models}>
+                    <p
+                      className="mt-1 truncate text-[11px] font-medium text-slate-400"
+                      title={cat.models}
+                    >
                       Models: {cat.models}
                     </p>
                   </div>
@@ -605,6 +700,8 @@ const MachineTypesOverviewSection: React.FC<{ machines?: Machine[] }> = ({
 
 const MachineManagement: React.FC = () => {
   const [machines, setMachines] = useState<Machine[]>([]);
+  const readOnly = isReadOnlyRole(StorageService.getRole());
+
   const [loading, setLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -711,8 +808,10 @@ const MachineManagement: React.FC = () => {
     if (selectedEqFilter && selectedEqFilter !== "All") {
       result = result.filter(
         (m) =>
-          m.equipmentType?.toLowerCase().includes(selectedEqFilter.toLowerCase()) ||
-          m.name?.toLowerCase().includes(selectedEqFilter.toLowerCase())
+          m.equipmentType
+            ?.toLowerCase()
+            .includes(selectedEqFilter.toLowerCase()) ||
+          m.name?.toLowerCase().includes(selectedEqFilter.toLowerCase()),
       );
     }
 
@@ -748,13 +847,25 @@ const MachineManagement: React.FC = () => {
 
   const isShowAll = rowsPerPage === "all";
 
-  const numericRowsPerPage = typeof rowsPerPage === "number" ? rowsPerPage : filteredMachines.length || 1;
+  const numericRowsPerPage =
+    typeof rowsPerPage === "number"
+      ? rowsPerPage
+      : filteredMachines.length || 1;
 
-  const totalPages = isShowAll ? 1 : Math.ceil(filteredMachines.length / numericRowsPerPage);
+  const totalPages = isShowAll
+    ? 1
+    : Math.ceil(filteredMachines.length / numericRowsPerPage);
 
-  const startItem = filteredMachines.length === 0 ? 0 : isShowAll ? 1 : (currentPage - 1) * numericRowsPerPage + 1;
+  const startItem =
+    filteredMachines.length === 0
+      ? 0
+      : isShowAll
+        ? 1
+        : (currentPage - 1) * numericRowsPerPage + 1;
 
-  const endItem = isShowAll ? filteredMachines.length : Math.min(currentPage * numericRowsPerPage, filteredMachines.length);
+  const endItem = isShowAll
+    ? filteredMachines.length
+    : Math.min(currentPage * numericRowsPerPage, filteredMachines.length);
 
   const paginatedMachines = useMemo(() => {
     if (isShowAll) return filteredMachines;
@@ -817,17 +928,12 @@ const MachineManagement: React.FC = () => {
 
     setFormData(updatedData);
 
-    const result = machineSchema.safeParse(updatedData);
-    const newErrors: FormErrors = {};
-
-    if (!result.success) {
-      result.error.issues.forEach((err) => {
-        const key = err.path[0] as keyof MachineFormData;
-        if (!newErrors[key]) {
-          newErrors[key] = err.message;
-        }
-      });
-    }
+    const { errors: validationErrors } = validateMachineForm(
+      updatedData,
+      machines,
+      editMachine?.id,
+    );
+    const newErrors: FormErrors = { ...validationErrors };
 
     // Duplicate Serial Number Validation check within company fleet
     if (updatedData.serialNumber.trim()) {
@@ -835,7 +941,7 @@ const MachineManagement: React.FC = () => {
       const isDuplicate = machines.some(
         (m) =>
           m.serialNumber.toLowerCase() === trimmedSerial &&
-          (!editMachine || m.id !== editMachine.id)
+          (!editMachine || m.id !== editMachine.id),
       );
       if (isDuplicate) {
         newErrors.serialNumber = "Serial number already exists in your fleet.";
@@ -852,13 +958,28 @@ const MachineManagement: React.FC = () => {
       model: formData.model.trim(),
       serialNumber: formData.serialNumber.trim(),
       equipmentType: formData.equipmentType.trim(),
+
+      condition:
+        formData.condition && formData.condition.trim()
+          ? formData.condition
+          : null,
+      imageUrl:
+        formData.imageUrl && formData.imageUrl.trim()
+          ? formData.imageUrl
+          : null,
+
       condition: formData.condition ? Number(formData.condition) || 1 : 1,
       imageUrl: formData.imageUrl && formData.imageUrl.trim() ? formData.imageUrl : null,
+
     };
   };
 
   const validateForm = () => {
-    const { isValid, errors } = validateMachineForm(formData, machines, editMachine?.id);
+    const { isValid, errors } = validateMachineForm(
+      formData,
+      machines,
+      editMachine?.id,
+    );
     setFormErrors(errors as FormErrors);
     return isValid;
   };
@@ -900,6 +1021,7 @@ const MachineManagement: React.FC = () => {
             {
               id: `offline-${Date.now()}`,
               name: payload.name,
+              manufacturer: payload.manufacturer || "Komatsu",
               model: payload.model,
               serialNumber: payload.serialNumber,
               equipmentType: payload.equipmentType || "N/A",
@@ -954,7 +1076,14 @@ const MachineManagement: React.FC = () => {
 
   const equipmentOptions = useMemo(() => {
     const list = eqCategoriesList
-      .map((cat: any) => (cat?.name || cat?.title || cat?.equipmentType || String(cat || "")).trim())
+      .map((cat: any) =>
+        (
+          cat?.name ||
+          cat?.title ||
+          cat?.equipmentType ||
+          String(cat || "")
+        ).trim(),
+      )
       .filter(Boolean);
 
     const uniqueList = Array.from(new Set(list));
@@ -1006,13 +1135,16 @@ const MachineManagement: React.FC = () => {
               </div>
 
               {/* Action */}
-              <button
-                onClick={openAddModal}
-                className="inline-flex h-11 w-full shrink-0 items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/95 px-5 text-sm font-bold text-[#3730D9] shadow-lg shadow-black/10 transition-all duration-200 hover:-translate-y-0.5 hover:bg-white sm:w-fit"
-              >
-                <Plus size={18} strokeWidth={2.4} />
-                Add Machine
-              </button>
+              {/* Action */}
+              {!readOnly && (
+                <button
+                  onClick={openAddModal}
+                  className="inline-flex h-11 w-full shrink-0 items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/95 px-5 text-sm font-bold text-[#3730D9] shadow-lg shadow-black/10 transition-all duration-200 hover:-translate-y-0.5 hover:bg-white sm:w-fit"
+                >
+                  <Plus size={18} strokeWidth={2.4} />
+                  Add Machine
+                </button>
+              )}
             </div>
           </div>
 
@@ -1022,10 +1154,7 @@ const MachineManagement: React.FC = () => {
               title="Equipment Types"
               value={`${eqCategoriesCount || uniqueEquipmentTypes || 0}`}
             />
-            <MetricCard
-              title="Models Registered"
-              value={`${uniqueModels}`}
-            />
+            <MetricCard title="Models Registered" value={`${uniqueModels}`} />
           </div>
         </div>
 
@@ -1101,6 +1230,32 @@ const MachineManagement: React.FC = () => {
               All Equipment ({machines.length})
             </button>
 
+
+            {dynamicEquipmentTypes.map((type) => {
+              const count = machines.filter(
+                (m) =>
+                  m.equipmentType?.toLowerCase().includes(type.toLowerCase()) ||
+                  m.name?.toLowerCase().includes(type.toLowerCase()),
+              ).length;
+              const isActive =
+                selectedEqFilter.toLowerCase() === type.toLowerCase();
+
+              return (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => setSelectedEqFilter(type)}
+                  className={`shrink-0 rounded-xl px-4 py-2 text-xs font-extrabold transition-all ${
+                    isActive
+                      ? "bg-blue-600 text-white shadow-md"
+                      : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-[#101f33] dark:text-slate-300 dark:hover:bg-[#15273f]"
+                  }`}
+                >
+                  {type} ({count})
+                </button>
+              );
+            })}
+
             {dynamicEquipmentTypes
               .filter((type) => {
                 const count = machines.filter(
@@ -1133,6 +1288,7 @@ const MachineManagement: React.FC = () => {
                   </button>
                 );
               })}
+
           </div>
 
           <div className="w-full overflow-x-auto hme-hide-scrollbar">
@@ -1153,7 +1309,11 @@ const MachineManagement: React.FC = () => {
               <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
                 {loading ? (
                   <tr>
+
+                    <td colSpan={9} className="px-6 py-16 text-center">
+
                     <td colSpan={8} className="px-6 py-16 text-center">
+
                       <div className="flex flex-col items-center justify-center gap-3">
                         <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 text-blue-600 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300">
                           <Loader2 className="animate-spin" size={24} />
@@ -1177,36 +1337,58 @@ const MachineManagement: React.FC = () => {
                       }`}
                     >
                       <td className="px-6 py-4 text-sm font-extrabold text-slate-500 dark:text-slate-400">
-                        {(currentPage - 1) * ROWS_PER_PAGE + index + 1}
+                        {(currentPage - 1) * numericRowsPerPage + index + 1}
                       </td>
 
                       <td className="px-6 py-4">
-                          <div className="flex items-center gap-3">
-                            <MachineAvatar machine={machine} />
+                        <div className="flex items-center gap-3">
+                          <MachineAvatar machine={machine} />
 
-                            <div className="flex min-w-0 flex-col gap-1">
-                              <span className="truncate text-sm font-extrabold tracking-tight text-slate-950 dark:text-white">
-                                {machine.name}
+                          <div className="flex min-w-0 flex-col gap-1">
+                            <span className="truncate text-sm font-extrabold tracking-tight text-slate-950 dark:text-white">
+                              {machine.name}
+                            </span>
+
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="w-fit rounded-md border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300">
+                                {machine.equipmentType || "Machine Record"}
                               </span>
 
-                              <div className="flex flex-wrap items-center gap-1.5">
-                                <span className="w-fit rounded-md border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300">
-                                  {machine.equipmentType || "Machine Record"}
-                                </span>
-
-                                <span className="w-fit rounded-md border border-slate-200 bg-slate-100 px-2 py-0.5 text-[10px] font-extrabold tracking-wide text-slate-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
-                                  {machine.componentsCount ?? 0} {machine.componentsCount === 1 ? "Component" : "Components"}
-                                </span>
-                              </div>
+                              <span className="w-fit rounded-md border border-slate-200 bg-slate-100 px-2 py-0.5 text-[10px] font-extrabold tracking-wide text-slate-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
+                                {machine.componentsCount ?? 0}{" "}
+                                {machine.componentsCount === 1
+                                  ? "Component"
+                                  : "Components"}
+                              </span>
                             </div>
                           </div>
-                        </td>
+                        </div>
+                      </td>
 
-                        <td className="px-6 py-4">
-                          <span className="inline-flex items-center rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-extrabold text-slate-800 dark:bg-slate-800 dark:text-slate-200">
-                            {machine.manufacturer || "Komatsu"}
-                          </span>
-                        </td>
+                      <td className="px-6 py-4">
+                        <span className="inline-flex items-center rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-extrabold text-slate-800 dark:bg-slate-800 dark:text-slate-200">
+                          {machine.manufacturer || "Komatsu"}
+                        </span>
+                      </td>
+
+
+                      <td className="px-6 py-4">
+                        <span className="text-sm font-bold text-slate-700 dark:text-slate-200">
+                          {machine.model}
+                        </span>
+                      </td>
+
+                      <td className="px-6 py-4">
+                        <span className="text-sm font-semibold text-slate-500 dark:text-slate-400">
+                          {machine.serialNumber}
+                        </span>
+                      </td>
+
+                      <td className="px-6 py-4">
+                        <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300">
+                          {machine.equipmentType}
+                        </span>
+                      </td>
 
                         <td className="px-6 py-4">
                           <span className="text-sm font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap">
@@ -1244,36 +1426,75 @@ const MachineManagement: React.FC = () => {
                               );
                             }
 
-                            const isCritical = score < 50 || machine.status === "Critical";
-                            const isWarning = (score >= 50 && score < 85) || machine.status === "Warning";
-                            const barColor = isCritical
-                              ? "bg-red-500"
-                              : isWarning
-                              ? "bg-amber-500"
-                              : "bg-emerald-500";
-                            const textColor = isCritical
-                              ? "text-red-700 dark:text-red-400"
-                              : isWarning
-                              ? "text-amber-700 dark:text-amber-400"
-                              : "text-emerald-700 dark:text-emerald-400";
-                            const label = isCritical ? "Critical" : isWarning ? "Warning" : "Optimal";
 
+                      <td className="px-6 py-4">
+                        {getConditionBadge(machine.condition)}
+                      </td>
+
+                      <td className="px-6 py-4">
+                        {(() => {
+                          const score =
+                            machine.healthScore !== undefined
+                              ? machine.healthScore
+                              : getMachineHealthScore(machine);
+
+                          if (score === null || score === undefined) {
                             return (
                               <div className="flex flex-col gap-1.5 min-w-[130px] max-w-[150px]">
                                 <div className="flex items-center justify-between text-xs font-black">
-                                  <span className={textColor}>{label}</span>
-                                  <span className="text-[11px] font-bold text-slate-500">{score}%</span>
+                                  <span className="text-slate-400 dark:text-slate-500">
+                                    Uncalculated
+                                  </span>
+                                  <span className="text-[11px] font-bold text-slate-400">
+                                    0%
+                                  </span>
                                 </div>
-                                <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200/80 dark:bg-slate-800">
-                                  <div
-                                    className={`h-full rounded-full transition-all duration-500 ${barColor}`}
-                                    style={{ width: `${score}%` }}
-                                  />
+                                <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+                                  <div className="h-full rounded-full bg-slate-300 dark:bg-slate-700 w-0" />
                                 </div>
                               </div>
                             );
-                          })()}
-                        </td>
+                          }
+
+                          const isCritical =
+                            score < 50 || machine.status === "Critical";
+                          const isWarning =
+                            (score >= 50 && score < 85) ||
+                            machine.status === "Warning";
+                          const barColor = isCritical
+                            ? "bg-red-500"
+                            : isWarning
+                              ? "bg-amber-500"
+                              : "bg-emerald-500";
+                          const textColor = isCritical
+                            ? "text-red-700 dark:text-red-400"
+                            : isWarning
+                              ? "text-amber-700 dark:text-amber-400"
+                              : "text-emerald-700 dark:text-emerald-400";
+                          const label = isCritical
+                            ? "Critical"
+                            : isWarning
+                              ? "Warning"
+                              : "Optimal";
+
+                          return (
+                            <div className="flex flex-col gap-1.5 min-w-[130px] max-w-[150px]">
+                              <div className="flex items-center justify-between text-xs font-black">
+                                <span className={textColor}>{label}</span>
+                                <span className="text-[11px] font-bold text-slate-500">
+                                  {score}%
+                                </span>
+                              </div>
+                              <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200/80 dark:bg-slate-800">
+                                <div
+                                  className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+                                  style={{ width: `${score}%` }}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </td>
 
                       <td className="px-6 py-4 text-center">
                         <div className="flex items-center justify-center gap-2">
@@ -1286,30 +1507,34 @@ const MachineManagement: React.FC = () => {
                             <Eye size={15} strokeWidth={2.4} />
                           </button>
 
-                          <button
-                            type="button"
-                            onClick={() => openEditModal(machine)}
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-orange-200 bg-white text-orange-700 transition hover:bg-orange-50 dark:border-orange-500/30 dark:bg-orange-500/10 dark:text-orange-300 dark:hover:bg-orange-500/20"
-                            title="Edit Machine"
-                          >
-                            <Pencil size={15} strokeWidth={2.4} />
-                          </button>
+                          {!readOnly && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => openEditModal(machine)}
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-orange-200 bg-white text-orange-700 transition hover:bg-orange-50 dark:border-orange-500/30 dark:bg-orange-500/10 dark:text-orange-300 dark:hover:bg-orange-500/20"
+                                title="Edit Machine"
+                              >
+                                <Pencil size={15} strokeWidth={2.4} />
+                              </button>
 
-                          <button
-                            type="button"
-                            onClick={() => setDeleteMachine(machine)}
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-red-200 bg-white text-red-700 transition hover:bg-red-50 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300 dark:hover:bg-red-500/20"
-                            title="Delete Machine"
-                          >
-                            <Trash2 size={15} strokeWidth={2.4} />
-                          </button>
+                              <button
+                                type="button"
+                                onClick={() => setDeleteMachine(machine)}
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-red-200 bg-white text-red-700 transition hover:bg-red-50 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300 dark:hover:bg-red-500/20"
+                                title="Delete Machine"
+                              >
+                                <Trash2 size={15} strokeWidth={2.4} />
+                              </button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={7} className="px-6 py-16 text-center">
+                    <td colSpan={9} className="px-6 py-16 text-center">
                       <div className="flex flex-col items-center justify-center">
                         <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 text-blue-600 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300">
                           <AlertTriangle size={24} strokeWidth={2.4} />
@@ -1461,6 +1686,23 @@ const MachineManagement: React.FC = () => {
                     className="h-11 w-full rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-700 dark:bg-[#101f33] dark:text-white"
                   >
                     <option value="">Select Condition Grade (Optional)</option>
+
+                    <option value="1 - NEW">
+                      1 - NEW (Pristine / Brand New)
+                    </option>
+                    <option value="2 - GOOD">
+                      2 - GOOD (Normal Operational)
+                    </option>
+                    <option value="3 - MONITOR">
+                      3 - MONITOR (Fair / Minor Wear)
+                    </option>
+                    <option value="4 - WARNING">
+                      4 - WARNING (High Wear / Service Needed)
+                    </option>
+                    <option value="5 - CRITICAL">
+                      5 - CRITICAL (Major Damage / Immediate Repair)
+                    </option>
+
                     {conditionsList.length > 0 ? (
                       conditionsList.map((cond: any) => (
                         <option key={cond.id || cond.rating} value={cond.rating}>
@@ -1476,6 +1718,7 @@ const MachineManagement: React.FC = () => {
                         <option value="5">5 - CRITICAL (Critical / Down)</option>
                       </>
                     )}
+
                   </select>
 
                   <div className="mt-1 min-h-[20px]" />
@@ -1496,7 +1739,9 @@ const MachineManagement: React.FC = () => {
                           />
                           <button
                             type="button"
-                            onClick={() => setFormData((prev) => ({ ...prev, imageUrl: "" }))}
+                            onClick={() =>
+                              setFormData((prev) => ({ ...prev, imageUrl: "" }))
+                            }
                             className="absolute bottom-1 right-1 rounded-full bg-red-600 p-1 text-white shadow transition hover:bg-red-700"
                             title="Remove uploaded image"
                           >
@@ -1505,15 +1750,23 @@ const MachineManagement: React.FC = () => {
                         </>
                       ) : (
                         <div className="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500">
-                          <MachineTypeIcon equipmentType={formData.equipmentType || "Machine"} />
-                          <span className="mt-0.5 text-[9px] font-extrabold uppercase tracking-wider text-slate-400">No Image</span>
+                          <MachineTypeIcon
+                            equipmentType={formData.equipmentType || "Machine"}
+                          />
+                          <span className="mt-0.5 text-[9px] font-extrabold uppercase tracking-wider text-slate-400">
+                            No Image
+                          </span>
                         </div>
                       )}
                     </div>
 
                     <label className="flex h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 text-xs font-bold text-blue-700 transition hover:bg-blue-100 dark:border-blue-900/50 dark:bg-blue-900/20 dark:text-blue-300 dark:hover:bg-blue-900/40">
                       <Plus size={16} />
-                      <span>{formData.imageUrl ? "Change Custom Photo" : "Upload Custom Photo"}</span>
+                      <span>
+                        {formData.imageUrl
+                          ? "Change Custom Photo"
+                          : "Upload Custom Photo"}
+                      </span>
                       <input
                         type="file"
                         accept="image/*"
@@ -1522,7 +1775,8 @@ const MachineManagement: React.FC = () => {
                           const file = e.target.files?.[0];
                           if (file) {
                             try {
-                              const compressedDataUrl = await compressImageFile(file);
+                              const compressedDataUrl =
+                                await compressImageFile(file);
                               if (compressedDataUrl) {
                                 updateField("imageUrl", compressedDataUrl);
                               }
@@ -1607,7 +1861,9 @@ function MachineDetailsModal({
     const fetchMachineComponents = async () => {
       try {
         setLoadingComps(true);
-        const res: any = await componentService.getComponentsByMachineId(machine.id);
+        const res: any = await componentService.getComponentsByMachineId(
+          machine.id,
+        );
         let list: any[] = [];
         if (Array.isArray(res)) list = res;
         else if (res && Array.isArray(res.data)) list = res.data;
@@ -1624,9 +1880,15 @@ function MachineDetailsModal({
     }
   }, [machine.id]);
 
-  const score = machine.healthScore !== undefined && machine.healthScore !== null ? Number(machine.healthScore) : null;
-  const isCritical = (score !== null && score < 50) || machine.status === "Critical";
-  const isWarning = (score !== null && score >= 50 && score < 85) || machine.status === "Warning";
+  const score =
+    machine.healthScore !== undefined && machine.healthScore !== null
+      ? Number(machine.healthScore)
+      : null;
+  const isCritical =
+    (score !== null && score < 50) || machine.status === "Critical";
+  const isWarning =
+    (score !== null && score >= 50 && score < 85) ||
+    machine.status === "Warning";
 
   return (
     <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-950/85 p-4 backdrop-blur-sm">
@@ -1638,7 +1900,8 @@ function MachineDetailsModal({
               Machine Health & Component Inspector
             </h2>
             <p className="mt-0.5 text-xs font-medium text-blue-100">
-              Live components health metrics & operational summary for {machine.name}
+              Live components health metrics & operational summary for{" "}
+              {machine.name}
             </p>
           </div>
           <button
@@ -1663,7 +1926,8 @@ function MachineDetailsModal({
                   {machine.name}
                 </h3>
                 <p className="mt-0.5 text-xs font-bold text-slate-500 dark:text-slate-400">
-                  {machine.manufacturer || "Komatsu"} • Model: {machine.model} • S/N: {machine.serialNumber}
+                  {machine.manufacturer || "Komatsu"} • Model: {machine.model} •
+                  S/N: {machine.serialNumber}
                 </p>
               </div>
 
@@ -1677,11 +1941,15 @@ function MachineDetailsModal({
                       isCritical
                         ? "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400"
                         : isWarning
-                        ? "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400"
-                        : "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400"
+                          ? "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400"
+                          : "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400"
                     }`}
                   >
-                    {isCritical ? "Critical" : isWarning ? "Warning" : "Optimal"}
+                    {isCritical
+                      ? "Critical"
+                      : isWarning
+                        ? "Warning"
+                        : "Optimal"}
                   </span>
                   <span className="text-2xl font-black text-slate-900 dark:text-white">
                     {score !== null ? `${score}%` : "100%"}
@@ -1699,29 +1967,45 @@ function MachineDetailsModal({
                   Assigned Machine Components ({components.length})
                 </h4>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Live calculated health score for each component belonging to {machine.name}.
+                  Live calculated health score for each component belonging to{" "}
+                  {machine.name}.
                 </p>
               </div>
             </div>
 
             {loadingComps ? (
               <div className="flex items-center justify-center py-12 text-sm text-slate-500">
-                <Loader2 size={20} className="mr-2 animate-spin text-blue-600" />
+                <Loader2
+                  size={20}
+                  className="mr-2 animate-spin text-blue-600"
+                />
                 Fetching live component health data...
               </div>
             ) : components.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-slate-300 py-10 text-center dark:border-slate-700">
-                <p className="text-xs font-bold text-slate-500">No components registered to this machine yet.</p>
+                <p className="text-xs font-bold text-slate-500">
+                  No components registered to this machine yet.
+                </p>
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {components.map((comp) => {
-                  const compName = comp.name || (comp.description ? comp.description.split(" - ")[0] : "Component");
+                  const compName =
+                    comp.name ||
+                    (comp.description
+                      ? comp.description.split(" - ")[0]
+                      : "Component");
                   const currentHours = Number(comp.currentHours || 0);
                   const installHours = Number(comp.installHours || 0);
-                  const plannedLife = Number(comp.plannedLife || 8000) <= 0 ? 8000 : Number(comp.plannedLife);
+                  const plannedLife =
+                    Number(comp.plannedLife || 8000) <= 0
+                      ? 8000
+                      : Number(comp.plannedLife);
                   const hoursRun = Math.max(0, currentHours - installHours);
-                  const lifeUsed = Math.min(100, Math.round((hoursRun / plannedLife) * 100));
+                  const lifeUsed = Math.min(
+                    100,
+                    Math.round((hoursRun / plannedLife) * 100),
+                  );
                   const healthPercent = Math.max(0, 100 - lifeUsed);
                   const cond = Number(comp.condition || 3);
 
@@ -1729,16 +2013,28 @@ function MachineDetailsModal({
                   const isCompWarn = cond >= 4 || lifeUsed >= 85;
                   const isCompMon = cond >= 3 || lifeUsed >= 70;
 
-                  const statusLabel = isCompCrit ? "Critical" : isCompWarn ? "Warning" : isCompMon ? "Monitor" : "Healthy";
+                  const statusLabel = isCompCrit
+                    ? "Critical"
+                    : isCompWarn
+                      ? "Warning"
+                      : isCompMon
+                        ? "Monitor"
+                        : "Healthy";
                   const badgeColor = isCompCrit
                     ? "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400"
                     : isCompWarn
-                    ? "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400"
-                    : isCompMon
-                    ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-300"
-                    : "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400";
+                      ? "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400"
+                      : isCompMon
+                        ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-300"
+                        : "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400";
 
-                  const barColor = isCompCrit ? "bg-red-500" : isCompWarn ? "bg-amber-500" : isCompMon ? "bg-yellow-500" : "bg-emerald-500";
+                  const barColor = isCompCrit
+                    ? "bg-red-500"
+                    : isCompWarn
+                      ? "bg-amber-500"
+                      : isCompMon
+                        ? "bg-yellow-500"
+                        : "bg-emerald-500";
 
                   return (
                     <div
@@ -1747,22 +2043,31 @@ function MachineDetailsModal({
                     >
                       <div className="flex items-start justify-between">
                         <div className="max-w-[70%]">
-                          <h5 className="truncate text-sm font-extrabold text-slate-900 dark:text-white" title={compName}>
+                          <h5
+                            className="truncate text-sm font-extrabold text-slate-900 dark:text-white"
+                            title={compName}
+                          >
                             {compName}
                           </h5>
                           <p className="mt-0.5 text-[11px] font-bold text-slate-400">
                             S/N: {comp.serialNumber || "N/A"}
                           </p>
                         </div>
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${badgeColor}`}>
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${badgeColor}`}
+                        >
                           {statusLabel}
                         </span>
                       </div>
 
                       <div className="mt-4">
                         <div className="flex items-center justify-between text-xs font-bold">
-                          <span className="text-slate-500 dark:text-slate-400">Health Score</span>
-                          <span className="text-slate-900 dark:text-white">{healthPercent}%</span>
+                          <span className="text-slate-500 dark:text-slate-400">
+                            Health Score
+                          </span>
+                          <span className="text-slate-900 dark:text-white">
+                            {healthPercent}%
+                          </span>
                         </div>
                         <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
                           <div
@@ -1897,8 +2202,8 @@ const FormInput: React.FC<FormInputProps> = ({
               value.length > maxLength
                 ? "text-red-500 font-bold"
                 : value.length === maxLength
-                ? "text-amber-500 font-bold"
-                : "text-slate-400"
+                  ? "text-amber-500 font-bold"
+                  : "text-slate-400"
             }`}
           >
             {value.length} / {maxLength}
@@ -1926,6 +2231,54 @@ const FormInput: React.FC<FormInputProps> = ({
     </label>
   );
 };
+
+
+function Pagination({
+  currentPage,
+  totalPages,
+  startItem,
+  endItem,
+  totalItems,
+  itemsPerPage,
+  itemLabel = "items",
+  pageSizeOptions = [10, 25, 50, 100],
+  onPrev,
+  onNext,
+  onPageChange,
+  onItemsPerPageChange,
+}: PaginationProps) {
+  if (totalItems === 0) return null;
+
+  return (
+    <div className="flex shrink-0 flex-col gap-3 border-t border-slate-200 px-5 py-4 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
+        Showing {startItem}-{endItem} of {totalItems}
+      </p>
+
+      <div className="flex items-center justify-between gap-2 sm:justify-end">
+        <button
+          disabled={currentPage === 1}
+          onClick={onPrev}
+          className="h-9 rounded-lg border border-slate-300 bg-white px-4 text-xs font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700 dark:bg-[#101f33] dark:text-slate-300 dark:hover:bg-[#12243b]"
+        >
+          Previous
+        </button>
+
+        <span className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-600 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-300">
+          Page {currentPage} of {totalPages || 1}
+        </span>
+
+        <button
+          disabled={currentPage === totalPages || totalPages === 0}
+          onClick={onNext}
+          className="h-9 rounded-lg border border-slate-300 bg-white px-4 text-xs font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700 dark:bg-[#101f33] dark:text-slate-300 dark:hover:bg-[#12243b]"
+        >
+          Next
+        </button>
+      </div>
+    </div>
+  );
+}
 
 type DetailItemProps = {
   label: string;

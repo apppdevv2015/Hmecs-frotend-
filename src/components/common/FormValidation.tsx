@@ -101,6 +101,11 @@ numberOfSites: z
     .string()
     .min(1, "Please select contract duration"),
 
+  customContractDuration: z
+    .string()
+    .trim()
+    .optional(),
+
   optionalServices: z
     .array(z.string())
     .optional(),

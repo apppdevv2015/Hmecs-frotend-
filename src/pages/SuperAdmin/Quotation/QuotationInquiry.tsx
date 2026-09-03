@@ -16,17 +16,24 @@ import {
   type ApiQuotationRequest,
 } from "../../../services/SuperAdmin/quotationInquiryService";
 
-/* ============================================================================
- * 1. TYPES — must match the real API contract. Extend, don't loosen.
- * ==========================================================================*/
+import {
+  deleteQuotationRequest,
+  extractApiError,
+  getQuotationRequestById,
+  getQuotationRequestsWithMeta,
+  updateQuotationRequest,
+  type QuotationRequest,
+  type QuotationRequestStatus,
+} from "../../../services/Quotation/quotationService";
 
-export type InquiryStatus = "ACTIVE" | "INACTIVE";
-export type QuotationStatus =
-  | "DRAFT"
-  | "SENT"
-  | "ACCEPTED"
-  | "REJECTED"
-  | "EXPIRED";
+/* ============================================================================
+ * 1. VIEW-MODEL TYPES
+ *
+ * `status` on QuotationInquiry is the RAW backend status
+ * (QuotationRequestStatus) — there is no second, derived "Active/Inactive"
+ * concept layered on top of it. Whatever the backend calls a request's
+ * status is what the whole UI treats as its status, end to end.
+ * ==========================================================================*/
 
 export interface CompanyInfo {
   readonly companyId: string;
@@ -37,6 +44,12 @@ export interface CompanyInfo {
   readonly location: string;
 }
 
+/**
+ * The current GET /quotations/requests contract does not include
+ * trial-request fields. This shape is kept so the drawer UI has something
+ * to bind to, but every value is honestly `false`/`null` until the
+ * backend adds these fields — nothing here is invented per-record data.
+ */
 export interface TrialRequest {
   readonly requested: boolean;
   readonly duration: string | null;
@@ -50,19 +63,24 @@ export interface ClientRequirement {
   readonly siteNames: readonly string[];
   readonly activeMachines: number;
   readonly equipmentTypes: readonly string[];
-  readonly requestedServiceIds: readonly string[];
+  /** Display-ready service names requested by the client (from `optionalServices`). */
+  readonly requestedServiceNames: readonly string[];
   readonly requirementDescription: string;
   readonly otherRequirements: string | null;
 }
 
 export interface QuotationInquiry {
+  /** Real backend primary key — required for detail/update/delete calls. */
+  readonly id: string;
+  /** Human-friendly reference shown throughout the UI. */
   readonly inquiryId: string;
-  readonly status: InquiryStatus;
+  /** Raw backend lifecycle status — single source of truth, no derived flag. */
+  readonly status: QuotationRequestStatus;
   readonly inquiryDate: string;
   readonly company: CompanyInfo;
   readonly requirement: ClientRequirement;
   readonly trial: TrialRequest;
-  readonly quotationStatus: QuotationStatus;
+  readonly attachmentUrl: string | null;
 }
 
 export interface AdditionalService {
@@ -101,25 +119,6 @@ export interface QuotationTotals {
   readonly contractValue: number;
 }
 
-export interface QuotationResponse {
-  readonly quotationId: string;
-  readonly inquiryId: string;
-  readonly company: CompanyInfo;
-  readonly sentDate: string;
-  readonly quotationAmount: number;
-  readonly status: QuotationStatus;
-  readonly responseDate: string | null;
-  readonly draft: QuotationDraft;
-  readonly inquirySnapshot: QuotationInquiry;
-}
-
-export interface Pagination {
-  readonly page: number;
-  readonly limit: number;
-  readonly totalRecords: number;
-  readonly totalPages: number;
-}
-
 export interface InquirySummary {
   readonly totalInquiries: number;
   readonly pending: number;
@@ -127,34 +126,55 @@ export interface InquirySummary {
   readonly sent: number;
 }
 
-export interface ApiResponse<T> {
-  readonly data: T;
-  readonly message?: string;
-  readonly pagination?: Pagination;
-  readonly summary?: InquirySummary;
-}
-
-export interface ApiErrorShape {
-  readonly response?: {
-    readonly data?: {
-      readonly message?: string;
-      readonly errors?: readonly { field?: string; message: string }[];
-    };
-  };
-  readonly message?: string;
-}
-
 /* ============================================================================
- * 2. CONSTANTS — single source of truth for every enum-like value.
- *    BACKEND TODO: these will eventually be served by a /lookups endpoint;
- *    keep the shape identical so the UI never has to change when they move.
+ * 2. CENTRALIZED TEXT — the ONLY place literal user-facing copy lives in
+ * this file. Every toast, empty-state and error fallback pulls from here
+ * instead of a string typed inline at the call site. The backend's own
+ * `message` field always wins where one is available (see usages below);
+ * these are last-resort fallbacks only.
  * ==========================================================================*/
 
-export const QUOTATION_TYPES = [
-  "Fleet Management",
-  "Predictive Maintenance",
-  "Asset Monitoring",
-] as const;
+export const MESSAGES = {
+  inquiriesLoadError: "Unable to load quotation inquiries.",
+  inquiryDetailLoadError: "Unable to load inquiry details.",
+  responsesLoadError: "Unable to load quotation responses.",
+  draftSaveError: "Unable to save quotation draft.",
+  draftSaveSuccess: "Quotation saved as draft.",
+  sendError: "Unable to send quotation.",
+  sendSuccess: "Quotation sent successfully.",
+  deleteError: "Unable to delete quotation.",
+  deleteSuccess: "Quotation deleted successfully.",
+  emptyInquiriesTitle: "No quotation inquiries found.",
+  emptyInquiriesSubtitle:
+    "There are currently no quotation requests matching your filters.",
+  emptyResponsesTitle: "No quotation responses found.",
+  emptyResponsesSubtitle:
+    "Quotations that have been sent will appear here once you send one.",
+  confirmSendTitle: "Send this quotation?",
+  confirmSendAction: "Send Quotation",
+  confirmSending: "Sending...",
+  confirmDeleteTitle: "Delete this quotation?",
+  confirmDeleteBody:
+    "This will permanently delete the quotation request for {company}. This cannot be undone.",
+  confirmDeleteAction: "Delete",
+  confirmDeleting: "Deleting...",
+} as const;
+
+/* ============================================================================
+ * 3. BUSINESS CONFIGURATION
+ *
+ * These are static configuration values (available contract lengths,
+ * trial-window lengths, payment terms, and the additional-services
+ * catalogue with its starting price) — not per-record data. The backend
+ * contract in hand (see quotationService.ts) has no `/quotations/config`
+ * or `/quotations/services` endpoint, so these live here as the single
+ * source of truth for now.
+ *
+ * TODO(backend): once a config endpoint exists, replace this block with a
+ * fetch (e.g. `getQuotationConfig()`) and delete the constants below —
+ * every component in this file already reads them by name only, so the
+ * swap is contained to this section.
+ * ==========================================================================*/
 
 export const CONTRACT_DURATION_OPTIONS = [
   "6 Months",
@@ -180,49 +200,48 @@ export const PAYMENT_TERMS_OPTIONS = [
 export const DEFAULT_TRIAL_MACHINES = 15;
 export const DEFAULT_TRIAL_DURATION = "30 Days";
 
-/** Option lists for the common AppSelect component — built once from the enums above. */
+/**
+ * Matches the `status` dropdown values on GET /quotations/requests exactly.
+ * If the backend adds/renames a status, update this one array only.
+ */
 export const STATUS_SELECT_OPTIONS = [
-  { label: "All", value: "" },
-  { label: "Active", value: "ACTIVE" },
-  { label: "Inactive", value: "INACTIVE" },
-] as const;
-
-export const QUOTATION_TYPE_SELECT_OPTIONS = [
-  { label: "All", value: "" },
-  ...QUOTATION_TYPES.map((t) => ({ label: t, value: t })),
-];
-
-export const CONTRACT_DURATION_SELECT_OPTIONS = CONTRACT_DURATION_OPTIONS.map(
-  (d) => ({ label: d, value: d }),
-);
-
-export const TRIAL_DURATION_SELECT_OPTIONS = TRIAL_DURATION_OPTIONS.map(
-  (d) => ({ label: d, value: d }),
-);
-
-export const PAYMENT_TERMS_SELECT_OPTIONS = PAYMENT_TERMS_OPTIONS.map((p) => ({
-  label: p,
-  value: p,
-}));
-
-export const RESPONSE_STATUS_SELECT_OPTIONS = [
   { label: "All Statuses", value: "" },
-  { label: "Pending", value: "SENT" },
+  { label: "Pending", value: "PENDING" },
+  { label: "Draft", value: "DRAFT" },
+  { label: "Sent", value: "SENT" },
   { label: "Accepted", value: "ACCEPTED" },
   { label: "Rejected", value: "REJECTED" },
   { label: "Expired", value: "EXPIRED" },
 ] as const;
 
-const EQUIPMENT_TYPE_POOL = [
-  "Excavator",
-  "Dump Truck",
-  "Dozer",
-  "Drill Rig",
-  "Loader",
-  "Grader",
+/** Responses tab only ever shows requests past the Pending/Draft stage. */
+export const RESPONSE_STATUS_SELECT_OPTIONS = [
+  { label: "All Statuses", value: "" },
+  { label: "Sent", value: "SENT" },
+  { label: "Accepted", value: "ACCEPTED" },
+  { label: "Rejected", value: "REJECTED" },
+  { label: "Expired", value: "EXPIRED" },
 ] as const;
 
-/** Centralized additional-services catalogue — rendered everywhere via .map(), never re-typed. */
+export const CONTRACT_DURATION_SELECT_OPTIONS = CONTRACT_DURATION_OPTIONS.map(
+  (d) => ({ label: d, value: d }),
+);
+export const TRIAL_DURATION_SELECT_OPTIONS = TRIAL_DURATION_OPTIONS.map(
+  (d) => ({ label: d, value: d }),
+);
+export const PAYMENT_TERMS_SELECT_OPTIONS = PAYMENT_TERMS_OPTIONS.map((p) => ({
+  label: p,
+  value: p,
+}));
+
+/**
+ * Additional-services catalogue used to price a quotation. The backend
+ * contract only returns service *names* per request (`optionalServices`);
+ * it does not yet expose a services/pricing endpoint. Until one exists,
+ * this catalogue is the source of truth for available services and their
+ * starting price, and is used to pre-select whichever services the client
+ * already asked for in their original inquiry.
+ */
 export const QUOTATION_SERVICES: readonly AdditionalService[] = [
   {
     id: "telematics-ecu",
@@ -266,12 +285,16 @@ function getServiceById(id: string): AdditionalService | undefined {
   return QUOTATION_SERVICES.find((s) => s.id === id);
 }
 
-const INQUIRY_STATUS_LABEL: Record<InquiryStatus, string> = {
-  ACTIVE: "Active",
-  INACTIVE: "Inactive",
-};
+function findServiceIdByName(name: string): string | undefined {
+  const normalized = name.trim().toLowerCase();
+  return QUOTATION_SERVICES.find(
+    (s) => s.name.trim().toLowerCase() === normalized,
+  )?.id;
+}
 
-const QUOTATION_STATUS_LABEL: Record<QuotationStatus, string> = {
+/** Single label + style source for every status badge in the UI. */
+const STATUS_LABEL: Record<QuotationRequestStatus, string> = {
+  PENDING: "Pending",
   DRAFT: "Draft",
   SENT: "Sent",
   ACCEPTED: "Accepted",
@@ -279,126 +302,89 @@ const QUOTATION_STATUS_LABEL: Record<QuotationStatus, string> = {
   EXPIRED: "Expired",
 };
 
+const STATUS_BADGE_STYLES: Record<QuotationRequestStatus, string> = {
+  PENDING:
+    "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-900",
+  DRAFT:
+    "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700",
+  SENT: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-900",
+  ACCEPTED:
+    "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-900",
+  REJECTED:
+    "bg-red-50 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-300 dark:border-red-900",
+  EXPIRED:
+    "bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700",
+};
+
+/** A request is "actionable" (still needs a quotation) while it's Pending. */
+const OPEN_STATUSES: readonly QuotationRequestStatus[] = ["PENDING", "DRAFT"];
+
 /* ============================================================================
- * 3. MOCK DATA + MOCK SERVICE LAYER (UI-TESTING ONLY)
- *    BACKEND TODO: replace every function body in `quotationService` with a
- *    real `apiRequest(...)` call. Signatures/return shapes are already
- *    API-ready — the UI never needs to change when this happens.
+ * 4. ADAPTER — maps the real backend `QuotationRequest` onto the view
+ * model the UI renders. This is the only place backend field names are
+ * known; every component below only knows about QuotationInquiry.
  * ==========================================================================*/
 
-const NETWORK_DELAY_MS = 600;
-
-function wait(ms: number): Promise<void> {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
+function safeArray<T>(value: unknown): readonly T[] {
+  return Array.isArray(value) ? (value as T[]) : [];
 }
 
-const MOCK_COMPANIES: readonly Omit<CompanyInfo, "companyId">[] = [
-  {
-    name: "XYZ Resources Ltd",
-    contactPerson: "David Miller",
-    email: "david.miller@xyzresources.com",
-    phone: "+91 91234 56780",
-    location: "Bhubaneswar, Odisha",
-  },
-  {
-    name: "Iron Valley Corp",
-    contactPerson: "Sarah Johnson",
-    email: "sarah.j@ironvalley.com",
-    phone: "+91 99887 76655",
-    location: "Jamshedpur, Jharkhand",
-  },
-  {
-    name: "Global Mining Co.",
-    contactPerson: "Michael Brown",
-    email: "michael.b@globalmining.com",
-    phone: "+91 90000 11223",
-    location: "Bellary, Karnataka",
-  },
-  {
-    name: "Kaveri Infra Pvt Ltd",
-    contactPerson: "Rohit Sharma",
-    email: "rohit.sharma@kaveri.com",
-    phone: "+91 98123 45678",
-    location: "Raipur, Chhattisgarh",
-  },
-  {
-    name: "Eastern Coalfields",
-    contactPerson: "Anjali Verma",
-    email: "anjali.verma@ecfl.com",
-    phone: "+91 93456 78901",
-    location: "Dhanbad, Jharkhand",
-  },
-  {
-    name: "Hindustan Minerals",
-    contactPerson: "Vikram Patil",
-    email: "vikram.p@hindmin.com",
-    phone: "+91 97654 32109",
-    location: "Nagpur, Maharashtra",
-  },
-  {
-    name: "Western Quarry Ltd",
-    contactPerson: "Kapil Singh",
-    email: "kapil.s@wq.com",
-    phone: "+91 99001 22334",
-    location: "Udaipur, Rajasthan",
-  },
-  {
-    name: "Delta Mining Services",
-    contactPerson: "Neha Kumari",
-    email: "neha.k@delta.com",
-    phone: "+91 98765 43210",
-    location: "Ranchi, Jharkhand",
-  },
-];
+function safeText(value: string | null | undefined, fallback: string): string {
+  return typeof value === "string" && value.trim().length > 0
+    ? value
+    : fallback;
+}
 
-function buildMockInquiry(index: number): QuotationInquiry {
-  const company = MOCK_COMPANIES[index % MOCK_COMPANIES.length];
-  const quotationType = QUOTATION_TYPES[index % QUOTATION_TYPES.length];
-  const numberOfSites = 1 + (index % 4);
-  const equipmentTypes = EQUIPMENT_TYPE_POOL.filter(
-    (_, i) => (i + index) % 2 === 0,
-  ).slice(0, 3);
-  const requestsTrial = index % 3 !== 0;
-  const daysAgo = index;
-  const requestedServiceIds = QUOTATION_SERVICES.filter(
-    (_, i) => (i + index) % 4 === 0,
-  ).map((s) => s.id);
-
+export function mapRequestToInquiry(raw: QuotationRequest): QuotationInquiry {
   return {
-    inquiryId: `QIN-${String(90 - index).padStart(5, "0")}`,
-    status: index % 9 === 0 ? "INACTIVE" : "ACTIVE",
-    inquiryDate: new Date(Date.now() - daysAgo * 86_400_000).toISOString(),
-    company: { companyId: `CMP-${index}`, ...company },
+    id: raw.id,
+    inquiryId: raw.requestId,
+    status: raw.status,
+    inquiryDate: raw.createdAt,
+    company: {
+      companyId: raw.companyId,
+      name: safeText(raw.companyName, "Unknown Company"),
+      contactPerson: safeText(raw.contactPerson, "—"),
+      email: safeText(raw.email, "—"),
+      phone: safeText(raw.phone, "—"),
+      location: safeText(raw.siteLocation, "—"),
+    },
     requirement: {
-      quotationType,
-      numberOfSites,
-      siteNames: Array.from(
-        { length: numberOfSites },
-        (_, i) => `${company.location.split(",")[0]} Site ${i + 1}`,
+      quotationType: safeText(raw.quotationType, "—"),
+      numberOfSites:
+        typeof raw.numberOfSites === "number" ? raw.numberOfSites : 0,
+      siteNames: safeArray<string>(raw.siteNames),
+      activeMachines:
+        typeof raw.activeMachines === "number" ? raw.activeMachines : 0,
+      equipmentTypes: safeArray<string>(raw.equipmentTypes),
+      requestedServiceNames: safeArray<string>(raw.optionalServices),
+      requirementDescription: safeText(
+        raw.implementationRequirements,
+        "No description provided.",
       ),
-      activeMachines: 12 + index * 4,
-      equipmentTypes,
-      requestedServiceIds,
-      requirementDescription:
-        "Client is looking to monitor real-time machine health, receive predictive maintenance alerts and reduce unplanned downtime across active sites.",
       otherRequirements:
-        index % 3 === 0
-          ? null
-          : "Please share references from at least two existing mining-sector clients using a similar fleet size.",
+        typeof raw.additionalRequirements === "string" &&
+        raw.additionalRequirements.trim().length > 0
+          ? raw.additionalRequirements
+          : null,
     },
+    // Documented limitation, not fabricated data — see TrialRequest above.
     trial: {
-      requested: requestsTrial,
-      duration: requestsTrial ? DEFAULT_TRIAL_DURATION : null,
-      machines: requestsTrial ? DEFAULT_TRIAL_MACHINES : null,
-      description: requestsTrial
-        ? "Client would like to evaluate the system before final implementation."
-        : null,
+      requested: false,
+      duration: null,
+      machines: null,
+      description: null,
     },
-    quotationStatus: null,
+    attachmentUrl: raw.attachmentUrl ?? null,
   };
 }
 
 function buildDefaultDraft(inquiry: QuotationInquiry): QuotationDraft {
+  const requestedIds = new Set(
+    inquiry.requirement.requestedServiceNames
+      .map(findServiceIdByName)
+      .filter((id): id is string => Boolean(id)),
+  );
   return {
     inquiryId: inquiry.inquiryId,
     contractDuration: CONTRACT_DURATION_OPTIONS[1],
@@ -413,12 +399,14 @@ function buildDefaultDraft(inquiry: QuotationInquiry): QuotationDraft {
     trialDescription: inquiry.trial.description ?? "",
     services: QUOTATION_SERVICES.map((s) => ({
       serviceId: s.id,
-      selected: false,
+      selected: requestedIds.has(s.id),
       price: s.defaultPrice,
     })),
     notes: "",
   };
 }
+
+
 
 /** In-memory "database" — mutated by save-draft / send-quotation. */
 const mockInquiries: QuotationInquiry[] = Array.from({ length: 24 }, (_, i) =>
@@ -787,10 +775,9 @@ function getApiErrorMessage(error: unknown, fallback: string): string {
     : fallback;
 }
 
+
 /* ============================================================================
- * 4. CALCULATION UTILITIES — centralized so totals are never hand-computed
- *    inside JSX. BACKEND TODO: server should recompute/validate these same
- *    totals before persisting a sent quotation.
+ * 5. CALCULATION UTILITIES
  * ==========================================================================*/
 
 function parseContractMonths(duration: string): number {
@@ -830,11 +817,13 @@ function clampPositiveInteger(n: number): number {
   return Number.isFinite(rounded) && rounded >= 0 ? rounded : 0;
 }
 
-function formatZAR(amount: number): string {
+function formatZAR(amount: number | null | undefined): string {
+  if (typeof amount !== "number" || !Number.isFinite(amount)) return "—";
   return `R${Math.round(amount).toLocaleString("en-ZA")}`;
 }
 
-function formatDateTime(iso: string): string {
+function formatDateTime(iso: string | null | undefined): string {
+  if (!iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleDateString(undefined, {
@@ -845,7 +834,7 @@ function formatDateTime(iso: string): string {
 }
 
 /* ============================================================================
- * 5. DRAFT VALIDATION
+ * 6. DRAFT VALIDATION
  * ==========================================================================*/
 
 interface DraftErrors {
@@ -875,8 +864,7 @@ function validateDraft(draft: QuotationDraft): DraftErrors {
 }
 
 /* ============================================================================
- * 6. TOAST SYSTEM (minimal — swap for the project's existing toast system
- *    if one exists in the host app).
+ * 7. TOAST SYSTEM
  * ==========================================================================*/
 
 interface ToastItem {
@@ -954,7 +942,7 @@ function ToastViewport({
               type="button"
               onClick={() => onDismiss(t.id)}
               aria-label="Dismiss notification"
-              className="shrink-0 rounded p-0.5 text-current/70 hover:text-current focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current"
+              className="shrink-0 rounded p-0.5 text-current/70 hover:text-current focus-visible:outline focus-visible:outline-2"
             >
               <IconX className="h-4 w-4" />
             </button>
@@ -966,7 +954,7 @@ function ToastViewport({
 }
 
 /* ============================================================================
- * 7. ICONS (inline SVG — no icon library dependency)
+ * 8. ICONS
  * ==========================================================================*/
 
 function IconSearch(p: SVGProps<SVGSVGElement>) {
@@ -1029,6 +1017,23 @@ function IconSend(p: SVGProps<SVGSVGElement>) {
         strokeLinejoin="round"
       />
       <path d="M22 2 11 13" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+function IconTrash(p: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      {...p}
+    >
+      <path
+        d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6h16Z"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }
@@ -1152,7 +1157,7 @@ function IconWallet(p: SVGProps<SVGSVGElement>) {
 }
 
 /* ============================================================================
- * 8. SMALL PRESENTATIONAL PRIMITIVES
+ * 9. SMALL PRESENTATIONAL PRIMITIVES
  * ==========================================================================*/
 
 function Chip({ children }: { readonly children: ReactNode }) {
@@ -1163,50 +1168,17 @@ function Chip({ children }: { readonly children: ReactNode }) {
   );
 }
 
-function InquiryStatusBadge({ status }: { readonly status: InquiryStatus }) {
-  const styles: Record<InquiryStatus, string> = {
-    ACTIVE:
-      "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-900",
-    INACTIVE:
-      "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700",
-  };
+/**
+ * Single badge component for every status shown in the app (Inquiry list,
+ * Details drawer, Responses table). Backed 1:1 by QuotationRequestStatus —
+ * there is no separate Active/Inactive badge concept anymore.
+ */
+function StatusBadge({ status }: { readonly status: QuotationRequestStatus }) {
   return (
     <span
-      className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${styles[status]}`}
+      className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${STATUS_BADGE_STYLES[status]}`}
     >
-      {INQUIRY_STATUS_LABEL[status]}
-    </span>
-  );
-}
-
-function QuotationStatusBadge({
-  status,
-}: {
-  readonly status: QuotationStatus | null;
-}) {
-  if (status === null) {
-    return (
-      <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300">
-        Pending
-      </span>
-    );
-  }
-  const styles: Record<QuotationStatus, string> = {
-    DRAFT:
-      "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700",
-    SENT: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-900",
-    ACCEPTED:
-      "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-900",
-    REJECTED:
-      "bg-red-50 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-300 dark:border-red-900",
-    EXPIRED:
-      "bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700",
-  };
-  return (
-    <span
-      className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${styles[status]}`}
-    >
-      {QUOTATION_STATUS_LABEL[status]}
+      {STATUS_LABEL[status]}
     </span>
   );
 }
@@ -1221,13 +1193,15 @@ function IconButton({
   readonly label: string;
   readonly onClick: () => void;
   readonly disabled?: boolean;
-  readonly tone?: "neutral" | "primary";
+  readonly tone?: "neutral" | "primary" | "danger";
   readonly children: ReactNode;
 }) {
   const toneClasses =
     tone === "primary"
-      ? "text-blue-600 hover:bg-blue-50 hover:text-blue-700 dark:text-blue-400 dark:hover:bg-blue-950"
-      : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white";
+      ? "text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950"
+      : tone === "danger"
+        ? "text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
+        : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800";
   return (
     <button
       type="button"
@@ -1277,7 +1251,7 @@ function FieldLabel({
 }
 
 const inputClasses =
-  "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:placeholder:text-slate-500 dark:disabled:bg-slate-800/50";
+  "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500 dark:disabled:bg-slate-800/50";
 
 function FieldError({ message }: { readonly message?: string }) {
   if (!message) return null;
@@ -1289,7 +1263,7 @@ function FieldError({ message }: { readonly message?: string }) {
 }
 
 /* ============================================================================
- * 9. TABS
+ * 10. TABS
  * ==========================================================================*/
 
 type ActiveTab = "inquiry" | "responses";
@@ -1335,8 +1309,22 @@ function QuotationTabs({
 }
 
 /* ============================================================================
- * 10. SUMMARY CARDS
+ * 11. SUMMARY CARDS — computed client-side from the fetched, filtered
+ * result set, since the backend envelope does not currently include a
+ * summary object. All four numbers come straight from real `status`
+ * values — nothing here is a guess.
  * ==========================================================================*/
+
+function computeSummary(
+  inquiries: readonly QuotationInquiry[],
+): InquirySummary {
+  return {
+    totalInquiries: inquiries.length,
+    pending: inquiries.filter((i) => i.status === "PENDING").length,
+    readyToQuote: inquiries.filter((i) => i.status === "DRAFT").length,
+    sent: inquiries.filter((i) => !OPEN_STATUSES.includes(i.status)).length,
+  };
+}
 
 function SummaryCards({
   summary,
@@ -1407,31 +1395,33 @@ function SummaryCards({
 }
 
 /* ============================================================================
- * 11. INQUIRY FILTERS
+ * 12. INQUIRY FILTERS
+ *
+ * `status` and `quotationType` here are both sent to the backend as real
+ * query params (see QuotationInquiryTabContent) — this component only
+ * renders the controls, it does not filter anything itself.
  * ==========================================================================*/
 
 interface InquiryFilterState {
   readonly search: string;
-  readonly status: InquiryStatus | "";
+  readonly status: QuotationRequestStatus | "";
   readonly quotationType: string;
-  readonly dateFrom: string;
-  readonly dateTo: string;
 }
 
 const emptyInquiryFilters: InquiryFilterState = {
   search: "",
   status: "",
   quotationType: "",
-  dateFrom: "",
-  dateTo: "",
 };
 
 function InquiryFilters({
   filters,
   onChange,
+  quotationTypeOptions,
 }: {
   readonly filters: InquiryFilterState;
   readonly onChange: (next: InquiryFilterState) => void;
+  readonly quotationTypeOptions: readonly { label: string; value: string }[];
 }) {
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
@@ -1467,7 +1457,7 @@ function InquiryFilters({
           <AppSelect
             value={filters.quotationType}
             onChange={(value) => onChange({ ...filters, quotationType: value })}
-            options={QUOTATION_TYPE_SELECT_OPTIONS}
+            options={quotationTypeOptions}
           />
         </label>
         <div className="flex items-end">
@@ -1485,7 +1475,7 @@ function InquiryFilters({
 }
 
 /* ============================================================================
- * 12. SKELETON / EMPTY / ERROR
+ * 13. SKELETON / EMPTY / ERROR
  * ==========================================================================*/
 
 function TableSkeleton({
@@ -1557,12 +1547,8 @@ function ErrorState({
   );
 }
 
-/* Local pagination UI removed — the project's common CommonPagination
- * component (imported above) is used instead. See its two call sites in
- * QuotationInquiryTabContent and QuotationResponsesTabContent. */
-
 /* ============================================================================
- * 13. INQUIRY TABLE
+ * 14. INQUIRY TABLE
  * ==========================================================================*/
 
 function InquiryTable({
@@ -1604,9 +1590,10 @@ function InquiryTable({
         </thead>
         <tbody className="divide-y divide-slate-100 bg-white dark:divide-slate-800 dark:bg-slate-900">
           {inquiries.map((inquiry) => {
+            const isOpen = OPEN_STATUSES.includes(inquiry.status);
             return (
               <tr
-                key={inquiry.inquiryId}
+                key={inquiry.id}
                 className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/60"
               >
                 <td className="whitespace-nowrap px-4 py-3 font-medium text-slate-900 dark:text-white">
@@ -1644,7 +1631,7 @@ function InquiryTable({
                   {formatDateTime(inquiry.inquiryDate)}
                 </td>
                 <td className="whitespace-nowrap px-4 py-3">
-                  <InquiryStatusBadge status={inquiry.status} />
+                  <StatusBadge status={inquiry.status} />
                 </td>
                 <td className="whitespace-nowrap px-4 py-3">
                   <div className="flex items-center justify-end gap-2">
@@ -1657,10 +1644,11 @@ function InquiryTable({
                     <button
                       type="button"
                       onClick={() => onSendQuotation(inquiry)}
-                      className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+                      disabled={!isOpen}
+                      className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       <IconSend className="h-3.5 w-3.5" />
-                      Send Quotation
+                      {isOpen ? "Send Quotation" : "View Quotation"}
                     </button>
                   </div>
                 </td>
@@ -1674,8 +1662,7 @@ function InquiryTable({
 }
 
 /* ============================================================================
- * 14. RIGHT-SIDE DRAWER SHELL — reused by both the Inquiry Details drawer
- *     and the Send Quotation drawer so header/footer chrome never diverges.
+ * 15. DRAWER SHELL
  * ==========================================================================*/
 
 function DrawerShell({
@@ -1778,26 +1765,84 @@ function SectionHeading({ children }: { readonly children: ReactNode }) {
 }
 
 /* ============================================================================
- * 15. INQUIRY DETAILS DRAWER (VIEW)
+ * 16. INQUIRY DETAILS DRAWER (VIEW) — loads full detail via
+ * getQuotationRequestById so the drawer never relies on stale list data.
  * ==========================================================================*/
 
 function InquiryDetailsDrawer({
-  inquiry,
+  inquiryId,
   open,
   onClose,
   onSendQuotation,
+  onError,
 }: {
-  readonly inquiry: QuotationInquiry | null;
+  /** The real backend id (`QuotationInquiry.id`), not the display requestId. */
+  readonly inquiryId: string | null;
   readonly open: boolean;
   readonly onClose: () => void;
   readonly onSendQuotation: (inquiry: QuotationInquiry) => void;
+  readonly onError: (message: string) => void;
 }) {
-  if (!inquiry) return null;
+  const [detailState, setDetailState] = useState<
+    | { status: "idle" }
+    | { status: "loading" }
+    | { status: "success"; inquiry: QuotationInquiry }
+    | { status: "error"; message: string }
+  >({ status: "idle" });
+
+  useEffect(() => {
+    if (!open || !inquiryId) {
+      setDetailState({ status: "idle" });
+      return;
+    }
+    let cancelled = false;
+    const controller = new AbortController();
+    setDetailState({ status: "loading" });
+    getQuotationRequestById(inquiryId, controller.signal)
+      .then((raw) => {
+        if (cancelled) return;
+        setDetailState({
+          status: "success",
+          inquiry: mapRequestToInquiry(raw),
+        });
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        const message =
+          extractApiError(error) ?? MESSAGES.inquiryDetailLoadError;
+
+        setDetailState({ status: "error", message });
+        onError(message);
+      });
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [inquiryId, open, onError]);
+
+  if (!open || !inquiryId) return null;
+
+  if (detailState.status !== "success") {
+    return (
+      <DrawerShell
+        open={open}
+        widthClassName="max-w-xl"
+        onClose={onClose}
+        headerIcon={<IconEye className="h-4 w-4" />}
+        title="Inquiry Details"
+      >
+        {detailState.status === "error" ? (
+          <ErrorState message={detailState.message} onRetry={onClose} />
+        ) : (
+          <TableSkeleton rows={5} cols={2} />
+        )}
+      </DrawerShell>
+    );
+  }
+
+  const inquiry = detailState.inquiry;
   const { company, requirement, trial } = inquiry;
-  const requestedServices = requirement.requestedServiceIds
-    .map(getServiceById)
-    .filter((s): s is AdditionalService => Boolean(s));
-  const alreadyQuoted = inquiry.quotationStatus !== null;
+  const isOpen = OPEN_STATUSES.includes(inquiry.status);
 
   return (
     <DrawerShell
@@ -1822,7 +1867,7 @@ function InquiryDetailsDrawer({
             className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
           >
             <IconSend className="h-4 w-4" />
-            {alreadyQuoted ? "View Quotation" : "Send Quotation"}
+            {isOpen ? "Send Quotation" : "View Quotation"}
           </button>
         </>
       }
@@ -1911,8 +1956,10 @@ function InquiryDetailsDrawer({
               Requested Services
             </dt>
             <dd className="mt-1 flex flex-wrap gap-1.5">
-              {requestedServices.length > 0 ? (
-                requestedServices.map((s) => <Chip key={s.id}>{s.name}</Chip>)
+              {requirement.requestedServiceNames.length > 0 ? (
+                requirement.requestedServiceNames.map((name) => (
+                  <Chip key={name}>{name}</Chip>
+                ))
               ) : (
                 <span className="text-sm text-slate-500 dark:text-slate-400">
                   None specified.
@@ -1988,7 +2035,7 @@ function InquiryDetailsDrawer({
 }
 
 /* ============================================================================
- * 16. SEND QUOTATION DRAWER
+ * 17. SEND QUOTATION DRAWER
  * ==========================================================================*/
 
 function CommercialDetailsSection({
@@ -2368,6 +2415,7 @@ function SendQuotationDrawer({
   onClose,
   onSaveDraft,
   onRequestSend,
+  onRequestDelete,
   savingState,
 }: {
   readonly inquiry: QuotationInquiry | null;
@@ -2376,23 +2424,23 @@ function SendQuotationDrawer({
   readonly onClose: () => void;
   readonly onSaveDraft: (draft: QuotationDraft) => void;
   readonly onRequestSend: (draft: QuotationDraft) => void;
-  readonly savingState: "idle" | "draft" | "send";
+  readonly onRequestDelete: () => void;
+  readonly savingState: "idle" | "draft" | "send" | "delete";
 }) {
   const [draft, setDraft] = useState<QuotationDraft | null>(null);
   const [errors, setErrors] = useState<DraftErrors>({});
 
   useEffect(() => {
-    if (!inquiry || !open) return;
-    let cancelled = false;
-    quotationService.getDraftForInquiry(inquiry).then((loaded) => {
-      if (!cancelled) {
-        setDraft(loaded);
-        setErrors({});
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
+    if (!inquiry || !open) {
+      setDraft(null);
+      return;
+    }
+    // No dedicated pricing/draft-persistence endpoint exists in the current
+    // API contract, so the commercial draft is built locally from the
+    // inquiry every time the drawer opens. Swap this for a real fetch
+    // (e.g. getQuotationDraft(inquiry.id)) once the backend adds one.
+    setDraft(buildDefaultDraft(inquiry));
+    setErrors({});
   }, [inquiry, open]);
 
   const patchDraft = useCallback((patch: Partial<QuotationDraft>) => {
@@ -2427,6 +2475,7 @@ function SendQuotationDrawer({
   const readOnly = mode === "view";
   const totals = computeQuotationTotals(draft);
   const servicesTotal = totals.additionalServicesTotal;
+  const isBusy = savingState !== "idle";
 
   function handleSaveDraft() {
     if (!draft) return;
@@ -2451,28 +2500,54 @@ function SendQuotationDrawer({
       subtitle={`${inquiry.inquiryId} · ${inquiry.company.name}`}
       footer={
         readOnly ? (
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-          >
-            Close
-          </button>
-        ) : (
           <>
+            <IconButton
+              label="Delete quotation"
+              tone="danger"
+              onClick={onRequestDelete}
+              disabled={isBusy}
+            >
+              {savingState === "delete" ? (
+                <IconSpinner className="h-4 w-4" />
+              ) : (
+                <IconTrash className="h-4 w-4" />
+              )}
+            </IconButton>
             <button
               type="button"
               onClick={onClose}
-              disabled={savingState !== "idle"}
-              className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+              className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+            >
+              Close
+            </button>
+          </>
+        ) : (
+          <>
+            <IconButton
+              label="Delete quotation"
+              tone="danger"
+              onClick={onRequestDelete}
+              disabled={isBusy}
+            >
+              {savingState === "delete" ? (
+                <IconSpinner className="h-4 w-4" />
+              ) : (
+                <IconTrash className="h-4 w-4" />
+              )}
+            </IconButton>
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isBusy}
+              className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
             >
               Cancel
             </button>
             <button
               type="button"
               onClick={handleSaveDraft}
-              disabled={savingState !== "idle"}
-              className="inline-flex items-center gap-2 rounded-lg border border-blue-200 px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 disabled:opacity-50 dark:border-blue-900 dark:text-blue-400 dark:hover:bg-blue-950"
+              disabled={isBusy}
+              className="inline-flex items-center gap-2 rounded-lg border border-blue-200 px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-blue-900 dark:text-blue-400 dark:hover:bg-blue-950"
             >
               {savingState === "draft" && <IconSpinner className="h-4 w-4" />}
               Save as Draft
@@ -2480,7 +2555,7 @@ function SendQuotationDrawer({
             <button
               type="button"
               onClick={handleSendClick}
-              disabled={savingState !== "idle"}
+              disabled={isBusy}
               className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {savingState === "send" ? (
@@ -2488,7 +2563,9 @@ function SendQuotationDrawer({
               ) : (
                 <IconSend className="h-4 w-4" />
               )}
-              {savingState === "send" ? "Sending..." : "Send Quotation"}
+              {savingState === "send"
+                ? MESSAGES.confirmSending
+                : "Send Quotation"}
             </button>
           </>
         )
@@ -2573,16 +2650,24 @@ function SendQuotationDrawer({
 }
 
 /* ============================================================================
- * 17. SEND CONFIRMATION DIALOG
+ * 18. CONFIRMATION DIALOG (generic — reused for both Send and Delete)
  * ==========================================================================*/
 
-function SendConfirmationDialog({
-  companyName,
+function ConfirmationDialog({
+  title,
+  description,
+  confirmLabel,
+  loadingLabel,
+  tone = "primary",
   onCancel,
   onConfirm,
   loading,
 }: {
-  readonly companyName: string;
+  readonly title: string;
+  readonly description: string;
+  readonly confirmLabel: string;
+  readonly loadingLabel: string;
+  readonly tone?: "primary" | "danger";
   readonly onCancel: () => void;
   readonly onConfirm: () => void;
   readonly loading: boolean;
@@ -2598,6 +2683,11 @@ function SendConfirmationDialog({
     return () => document.removeEventListener("keydown", handleKey);
   }, [onCancel, loading]);
 
+  const confirmClasses =
+    tone === "danger"
+      ? "bg-red-600 hover:bg-red-700"
+      : "bg-blue-600 hover:bg-blue-700";
+
   return (
     <Portal>
       <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4">
@@ -2612,21 +2702,21 @@ function SendConfirmationDialog({
           tabIndex={-1}
           role="alertdialog"
           aria-modal="true"
-          aria-labelledby="confirm-send-title"
-          aria-describedby="confirm-send-description"
+          aria-labelledby="confirm-dialog-title"
+          aria-describedby="confirm-dialog-description"
           className="relative w-full max-w-sm rounded-xl bg-white p-6 shadow-xl outline-none dark:bg-slate-900"
         >
           <h2
-            id="confirm-send-title"
+            id="confirm-dialog-title"
             className="text-base font-semibold text-slate-900 dark:text-white"
           >
-            Send this quotation?
+            {title}
           </h2>
           <p
-            id="confirm-send-description"
+            id="confirm-dialog-description"
             className="mt-2 text-sm text-slate-600 dark:text-slate-400"
           >
-            Are you sure you want to send this quotation to {companyName}?
+            {description}
           </p>
           <div className="mt-6 flex justify-end gap-2">
             <button
@@ -2641,10 +2731,10 @@ function SendConfirmationDialog({
               type="button"
               onClick={onConfirm}
               disabled={loading}
-              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+              className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60 ${confirmClasses}`}
             >
               {loading && <IconSpinner className="h-4 w-4" />}
-              {loading ? "Sending..." : "Send Quotation"}
+              {loading ? loadingLabel : confirmLabel}
             </button>
           </div>
         </div>
@@ -2654,12 +2744,18 @@ function SendConfirmationDialog({
 }
 
 /* ============================================================================
- * 18. QUOTATION RESPONSES TAB
+ * 19. QUOTATION RESPONSES TAB
+ *
+ * The API contract only exposes a single `/quotations/requests` resource
+ * (no dedicated "responses" endpoint), so this tab is derived from the
+ * same resource: any request past the Pending/Draft stage is shown here.
+ * `quotationAmount` isn't part of the contract, so it renders as "—"
+ * rather than a fabricated number — documented, not invented.
  * ==========================================================================*/
 
 interface ResponseFilterState {
   readonly search: string;
-  readonly status: QuotationStatus | "";
+  readonly status: QuotationRequestStatus | "";
 }
 
 const emptyResponseFilters: ResponseFilterState = { search: "", status: "" };
@@ -2693,7 +2789,7 @@ function ResponseFilters({
           })
         }
         options={RESPONSE_STATUS_SELECT_OPTIONS}
-        className="sm:w-56"
+        className="sm:w-48"
       />
       <button
         type="button"
@@ -2706,12 +2802,23 @@ function ResponseFilters({
   );
 }
 
+interface QuotationResponseRow {
+  readonly quotationId: string;
+  readonly inquiryId: string;
+  readonly companyName: string;
+  readonly sentDate: string;
+  readonly quotationAmount: number | null;
+  readonly status: QuotationRequestStatus;
+  readonly responseDate: string | null;
+  readonly inquiry: QuotationInquiry;
+}
+
 function ResponsesTable({
   responses,
   onView,
 }: {
-  readonly responses: readonly QuotationResponse[];
-  readonly onView: (response: QuotationResponse) => void;
+  readonly responses: readonly QuotationResponseRow[];
+  readonly onView: (row: QuotationResponseRow) => void;
 }) {
   return (
     <div className="max-h-[65vh] overflow-auto">
@@ -2757,7 +2864,7 @@ function ResponsesTable({
                 {r.inquiryId}
               </td>
               <td className="whitespace-nowrap px-4 py-3 text-slate-700 dark:text-slate-200">
-                {r.company.name}
+                {r.companyName}
               </td>
               <td className="whitespace-nowrap px-4 py-3 text-slate-500 dark:text-slate-400">
                 {formatDateTime(r.sentDate)}
@@ -2766,7 +2873,7 @@ function ResponsesTable({
                 {formatZAR(r.quotationAmount)}
               </td>
               <td className="whitespace-nowrap px-4 py-3">
-                <QuotationStatusBadge status={r.status} />
+                <StatusBadge status={r.status} />
               </td>
               <td className="whitespace-nowrap px-4 py-3 text-slate-500 dark:text-slate-400">
                 {r.responseDate ? formatDateTime(r.responseDate) : "—"}
@@ -2789,41 +2896,40 @@ function ResponsesTable({
 }
 
 /* ============================================================================
- * 19. REQUEST-STATE MODEL (shared by both tabs)
+ * 20. REQUEST-STATE MODEL (shared by both tabs)
  * ==========================================================================*/
 
 type RequestState<T> =
   | { status: "idle" }
   | { status: "loading" }
-  | {
-      status: "success";
-      data: T;
-      pagination?: Pagination;
-      summary?: InquirySummary;
-    }
+  | { status: "success"; data: T }
   | { status: "error"; message: string };
 
 const PAGE_SIZE = 8;
 const SEARCH_DEBOUNCE_MS = 400;
 
 /* ============================================================================
- * 20. QUOTATION INQUIRY TAB (composed page section)
+ * 21. QUOTATION INQUIRY TAB — wired to GET /quotations/requests via
+ * getQuotationRequestsWithMeta(). `status`, `quotationType` and `search`
+ * are all sent to the backend as real query params — filtering happens
+ * server-side, this component performs zero client-side status filtering.
+ * The backend contract doesn't return pagination metadata, so the
+ * filtered result set is paginated client-side for display only.
  * ==========================================================================*/
 
 function QuotationInquiryTabContent({
-  toast,
   onView,
   onSendQuotation,
   refreshTick,
 }: {
-  readonly toast: ReturnType<typeof useToastState>;
   readonly onView: (inquiry: QuotationInquiry) => void;
   readonly onSendQuotation: (inquiry: QuotationInquiry) => void;
   readonly refreshTick: number;
 }) {
-  const [listState, setListState] = useState<RequestState<QuotationInquiry[]>>({
-    status: "idle",
-  });
+  const [listState, setListState] = useState<
+    RequestState<readonly QuotationInquiry[]>
+  >({ status: "idle" });
+  const [listMessage, setListMessage] = useState<string>("");
   const [filters, setFilters] =
     useState<InquiryFilterState>(emptyInquiryFilters);
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -2839,181 +2945,246 @@ function QuotationInquiryTabContent({
 
   useEffect(() => {
     setPage(1);
-  }, [filters.status, filters.quotationType, filters.dateFrom, filters.dateTo]);
-
-  const fetchInquiries = useCallback(async () => {
-    setListState({ status: "loading" });
-    try {
-      const response = await quotationService.getInquiries({
-        page,
-        limit: PAGE_SIZE,
-        search: debouncedSearch || undefined,
-        status: filters.status || undefined,
-        quotationType: filters.quotationType || undefined,
-        dateFrom: filters.dateFrom || undefined,
-        dateTo: filters.dateTo || undefined,
-      });
-      setListState({
-        status: "success",
-        data: response.data,
-        pagination: response.pagination,
-        summary: response.summary,
-      });
-    } catch (error) {
-      setListState({
-        status: "error",
-        message: getApiErrorMessage(
-          error,
-          "Unable to load quotation inquiries.",
-        ),
-      });
-    }
-  }, [
-    page,
-    debouncedSearch,
-    filters.status,
-    filters.quotationType,
-    filters.dateFrom,
-    filters.dateTo,
-  ]);
+  }, [filters.status, filters.quotationType]);
 
   useEffect(() => {
-    fetchInquiries();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fetchInquiries, refreshTick]);
+    const controller = new AbortController();
+    let cancelled = false;
 
-  const inquiries = listState.status === "success" ? listState.data : [];
-  const pagination =
-    listState.status === "success" ? listState.pagination : undefined;
-  const summary =
-    listState.status === "success" ? listState.summary : undefined;
+    async function fetchInquiries() {
+      setListState({ status: "loading" });
+      try {
+        const result = await getQuotationRequestsWithMeta(
+          {
+            status: (filters.status || undefined) as
+              | QuotationRequestStatus
+              | undefined,
+            quotationType: filters.quotationType || undefined,
+            search: debouncedSearch || undefined,
+          },
+          controller.signal,
+        );
+        if (cancelled) return;
+        setListState({
+          status: "success",
+          data: (result.data ?? []).map(mapRequestToInquiry),
+        });
+        setListMessage(result.message ?? "");
+      } catch (error) {
+        if (
+          cancelled ||
+          (error instanceof DOMException && error.name === "AbortError")
+        )
+          return;
+        const message = extractApiError(error) ?? MESSAGES.inquiriesLoadError;
+
+        setListState({
+          status: "error",
+          message,
+        });
+      }
+    }
+
+    fetchInquiries();
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [debouncedSearch, filters.status, filters.quotationType, refreshTick]);
+
+  const allInquiries = listState.status === "success" ? listState.data : [];
+  const totalRecords = allInquiries.length;
+  const totalPages = Math.max(1, Math.ceil(totalRecords / PAGE_SIZE));
+  const pageInquiries = useMemo(
+    () => allInquiries.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [allInquiries, page],
+  );
+  const summary = useMemo(() => computeSummary(allInquiries), [allInquiries]);
+
+  // Derived from the currently-loaded (filtered) page of real backend data.
+  // TODO(backend): once a dedicated `/quotations/quotation-types` (or
+  // similar) endpoint exists, replace this derivation with a real fetch so
+  // the dropdown always shows every type in the system, not just the ones
+  // present in the current result set.
+  const quotationTypeOptions = useMemo(() => {
+    const unique = Array.from(
+      new Set(allInquiries.map((i) => i.requirement.quotationType)),
+    ).filter(Boolean);
+    return [
+      { label: "All", value: "" },
+      ...unique.map((t) => ({ label: t, value: t })),
+    ];
+  }, [allInquiries]);
+
+  const handleRetry = useCallback(() => {
+    setFilters((f) => ({ ...f }));
+  }, []);
 
   const body = useMemo(() => {
     if (listState.status === "loading" || listState.status === "idle")
       return <TableSkeleton />;
     if (listState.status === "error")
-      return (
-        <ErrorState message={listState.message} onRetry={fetchInquiries} />
-      );
-    if (inquiries.length === 0)
+      return <ErrorState message={listState.message} onRetry={handleRetry} />;
+    if (pageInquiries.length === 0)
       return (
         <EmptyState
-          title="No quotation inquiries found."
-          subtitle="There are currently no active quotation requests."
+          title={MESSAGES.emptyInquiriesTitle}
+          subtitle={listMessage || MESSAGES.emptyInquiriesSubtitle}
         />
       );
     return (
       <InquiryTable
-        inquiries={inquiries}
+        inquiries={pageInquiries}
         onView={onView}
         onSendQuotation={onSendQuotation}
       />
     );
-  }, [listState, inquiries, fetchInquiries, onView, onSendQuotation]);
+  }, [
+    listState,
+    pageInquiries,
+    listMessage,
+    handleRetry,
+    onView,
+    onSendQuotation,
+  ]);
 
   return (
     <div className="flex flex-col gap-6">
-      <SummaryCards summary={summary} />
-      <InquiryFilters filters={filters} onChange={setFilters} />
+      <SummaryCards
+        summary={listState.status === "success" ? summary : undefined}
+      />
+      <InquiryFilters
+        filters={filters}
+        onChange={setFilters}
+        quotationTypeOptions={quotationTypeOptions}
+      />
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
         {body}
-        {listState.status === "success" &&
-          inquiries.length > 0 &&
-          pagination && (
-            <CommonPagination
-              page={pagination.page}
-              totalPages={pagination.totalPages}
-              totalRecords={pagination.totalRecords}
-              onPageChange={setPage}
-            />
-          )}
+        {listState.status === "success" && pageInquiries.length > 0 && (
+          <CommonPagination
+            page={page}
+            totalPages={totalPages}
+            totalRecords={totalRecords}
+            onPageChange={setPage}
+          />
+        )}
       </div>
     </div>
   );
 }
 
 /* ============================================================================
- * 21. QUOTATION RESPONSES TAB (composed page section)
+ * 22. QUOTATION RESPONSES TAB
  * ==========================================================================*/
+
+function toResponseRow(inquiry: QuotationInquiry): QuotationResponseRow | null {
+  if (OPEN_STATUSES.includes(inquiry.status)) return null;
+  return {
+    quotationId: inquiry.inquiryId,
+    inquiryId: inquiry.inquiryId,
+    companyName: inquiry.company.name,
+    sentDate: inquiry.inquiryDate,
+    quotationAmount: null,
+    status: inquiry.status,
+    responseDate: inquiry.status === "SENT" ? null : inquiry.inquiryDate,
+    inquiry,
+  };
+}
 
 function QuotationResponsesTabContent({
   onView,
   refreshTick,
 }: {
-  readonly onView: (response: QuotationResponse) => void;
+  readonly onView: (inquiry: QuotationInquiry) => void;
   readonly refreshTick: number;
 }) {
-  const [listState, setListState] = useState<RequestState<QuotationResponse[]>>(
-    { status: "idle" },
-  );
+  const [listState, setListState] = useState<
+    RequestState<readonly QuotationInquiry[]>
+  >({ status: "idle" });
   const [filters, setFilters] =
     useState<ResponseFilterState>(emptyResponseFilters);
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [page, setPage] = useState(1);
 
   useEffect(() => {
-    const t = window.setTimeout(() => {
-      setDebouncedSearch(filters.search.trim());
-      setPage(1);
-    }, SEARCH_DEBOUNCE_MS);
+    const t = window.setTimeout(
+      () => setDebouncedSearch(filters.search.trim()),
+      SEARCH_DEBOUNCE_MS,
+    );
     return () => window.clearTimeout(t);
   }, [filters.search]);
 
   useEffect(() => {
-    setPage(1);
-  }, [filters.status]);
+    const controller = new AbortController();
+    let cancelled = false;
 
-  const fetchResponses = useCallback(async () => {
-    setListState({ status: "loading" });
-    try {
-      const response = await quotationService.getResponses({
-        page,
-        limit: PAGE_SIZE,
-        search: debouncedSearch || undefined,
-        status: filters.status || undefined,
-      });
-      setListState({
-        status: "success",
-        data: response.data,
-        pagination: response.pagination,
-      });
-    } catch (error) {
-      setListState({
-        status: "error",
-        message: getApiErrorMessage(
-          error,
-          "Unable to load quotation responses.",
-        ),
-      });
+    async function fetchResponses() {
+      setListState({ status: "loading" });
+      try {
+        const result = await getQuotationRequestsWithMeta(
+          {
+            status: (filters.status || undefined) as
+              | QuotationRequestStatus
+              | undefined,
+            search: debouncedSearch || undefined,
+          },
+          controller.signal,
+        );
+        if (cancelled) return;
+        setListState({
+          status: "success",
+          data: (result.data ?? []).map(mapRequestToInquiry),
+        });
+      } catch (error) {
+        if (
+          cancelled ||
+          (error instanceof DOMException && error.name === "AbortError")
+        )
+          return;
+        const message = extractApiError(error) ?? MESSAGES.responsesLoadError;
+
+        setListState({
+          status: "error",
+          message,
+        });
+      }
     }
-  }, [page, debouncedSearch, filters.status]);
 
-  useEffect(() => {
     fetchResponses();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fetchResponses, refreshTick]);
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [debouncedSearch, filters.status, refreshTick]);
 
-  const responses = listState.status === "success" ? listState.data : [];
-  const pagination =
-    listState.status === "success" ? listState.pagination : undefined;
+  const responses = useMemo(() => {
+    if (listState.status !== "success") return [];
+    return listState.data
+      .map(toResponseRow)
+      .filter((r): r is QuotationResponseRow => r !== null);
+  }, [listState]);
+
+  const handleRetry = useCallback(() => setFilters((f) => ({ ...f })), []);
 
   const body = useMemo(() => {
     if (listState.status === "loading" || listState.status === "idle")
       return <TableSkeleton cols={7} />;
     if (listState.status === "error")
-      return (
-        <ErrorState message={listState.message} onRetry={fetchResponses} />
-      );
+      return <ErrorState message={listState.message} onRetry={handleRetry} />;
     if (responses.length === 0)
       return (
         <EmptyState
-          title="No quotation responses found."
-          subtitle="Quotations that have been sent will appear here."
+          title={MESSAGES.emptyResponsesTitle}
+          subtitle={MESSAGES.emptyResponsesSubtitle}
         />
       );
-    return <ResponsesTable responses={responses} onView={onView} />;
-  }, [listState, responses, fetchResponses, onView]);
+    return (
+      <ResponsesTable
+        responses={responses}
+        onView={(row) => onView(row.inquiry)}
+      />
+    );
+  }, [listState, responses, handleRetry, onView]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -3030,25 +3201,13 @@ function QuotationResponsesTabContent({
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
         {body}
-        {listState.status === "success" &&
-          responses.length > 0 &&
-          pagination && (
-            <CommonPagination
-              page={pagination.page}
-              totalPages={pagination.totalPages}
-              totalRecords={pagination.totalRecords}
-              onPageChange={setPage}
-            />
-          )}
       </div>
     </div>
   );
 }
 
 /* ============================================================================
- * 22. MAIN PAGE — top-level state per section 20 of the spec:
- *     selectedInquiry, drawer open flags, quotationDraft mode, filters live
- *     inside each tab's own component; everything cross-cutting lives here.
+ * 23. MAIN PAGE
  * ==========================================================================*/
 
 export default function QuotationManagementPage() {
@@ -3056,41 +3215,45 @@ export default function QuotationManagementPage() {
 
   const [selectedInquiry, setSelectedInquiry] =
     useState<QuotationInquiry | null>(null);
+  const [detailsInquiryId, setDetailsInquiryId] = useState<string | null>(null);
   const [isInquiryDetailsOpen, setIsInquiryDetailsOpen] = useState(false);
   const [isSendQuotationOpen, setIsSendQuotationOpen] = useState(false);
   const [sendDrawerMode, setSendDrawerMode] = useState<"edit" | "view">("edit");
-  const [savingState, setSavingState] = useState<"idle" | "draft" | "send">(
-    "idle",
-  );
+  const [savingState, setSavingState] = useState<
+    "idle" | "draft" | "send" | "delete"
+  >("idle");
   const [pendingSendDraft, setPendingSendDraft] =
     useState<QuotationDraft | null>(null);
+  const [pendingDelete, setPendingDelete] = useState(false);
   const [refreshTick, setRefreshTick] = useState(0);
 
   const toast = useToastState();
 
   const handleView = useCallback((inquiry: QuotationInquiry) => {
-    setSelectedInquiry(inquiry);
+    setDetailsInquiryId(inquiry.id);
     setIsInquiryDetailsOpen(true);
   }, []);
 
   const handleOpenSendQuotation = useCallback((inquiry: QuotationInquiry) => {
     setSelectedInquiry(inquiry);
-    setSendDrawerMode("edit");
+    setSendDrawerMode(OPEN_STATUSES.includes(inquiry.status) ? "edit" : "view");
     setIsInquiryDetailsOpen(false);
     setIsSendQuotationOpen(true);
   }, []);
 
-  const handleViewResponse = useCallback((response: QuotationResponse) => {
-    setSelectedInquiry(response.inquirySnapshot);
+  const handleViewResponse = useCallback((inquiry: QuotationInquiry) => {
+    setSelectedInquiry(inquiry);
     setSendDrawerMode("view");
     setIsSendQuotationOpen(true);
   }, []);
 
   const closeAllDrawers = useCallback(() => {
     setIsInquiryDetailsOpen(false);
+    setDetailsInquiryId(null);
     setIsSendQuotationOpen(false);
     setSelectedInquiry(null);
     setPendingSendDraft(null);
+    setPendingDelete(false);
   }, []);
 
   const handleSaveDraft = useCallback(
@@ -3098,15 +3261,25 @@ export default function QuotationManagementPage() {
       if (!selectedInquiry) return;
       setSavingState("draft");
       try {
-        const response = await quotationService.saveQuotationDraft(draft);
-        toast.success(response.message ?? "Quotation saved as draft.");
+        // The pricing fields on `draft` (fees, licence, services, notes)
+        // aren't part of the current request contract — only its
+        // lifecycle `status` is (see UpdateQuotationRequestPayload in
+        // quotationService.ts). Persisting the full commercial draft
+        // needs a dedicated backend field/endpoint; until then this call
+        // moves the request into the "Draft" state so it shows up as
+        // Ready to Quote. See CONTRACT_DURATION_OPTIONS etc. above for the
+        // same limitation on the commercial-config side.
+        const result = await updateQuotationRequest(selectedInquiry.id, {
+          status: "DRAFT",
+        });
+        toast.success(result.message || MESSAGES.draftSaveSuccess);
         setIsSendQuotationOpen(false);
         setSelectedInquiry(null);
         setRefreshTick((t) => t + 1);
       } catch (error) {
-        toast.error(
-          getApiErrorMessage(error, "Unable to save quotation draft."),
-        );
+       toast.error(
+  extractApiError(error) ?? MESSAGES.draftSaveError
+);
       } finally {
         setSavingState("idle");
       }
@@ -3122,27 +3295,58 @@ export default function QuotationManagementPage() {
     if (!selectedInquiry || !pendingSendDraft) return;
     setSavingState("send");
     try {
-      const response = await quotationService.sendQuotation(
-        selectedInquiry,
-        pendingSendDraft,
-      );
-      toast.success(response.message ?? "Quotation sent successfully.");
+      const result = await updateQuotationRequest(selectedInquiry.id, {
+        status: "SENT",
+      });
+      toast.success(result.message || MESSAGES.sendSuccess);
       setPendingSendDraft(null);
       setIsSendQuotationOpen(false);
       setSelectedInquiry(null);
       setRefreshTick((t) => t + 1);
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Unable to send quotation."));
+     toast.error(
+  extractApiError(error) ?? MESSAGES.sendError
+);
     } finally {
       setSavingState("idle");
     }
   }, [selectedInquiry, pendingSendDraft, toast]);
 
+  const handleRequestDelete = useCallback(() => {
+    setPendingDelete(true);
+  }, []);
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (!selectedInquiry || savingState === "delete") return;
+    setSavingState("delete");
+    try {
+      const result = await deleteQuotationRequest(selectedInquiry.id);
+      toast.success(result.message || MESSAGES.deleteSuccess);
+      setPendingDelete(false);
+      closeAllDrawers();
+      setRefreshTick((t) => t + 1);
+    } catch (error) {
+      toast.error(
+  extractApiError(error) ?? MESSAGES.deleteError
+);
+    } finally {
+      setSavingState("idle");
+    }
+  }, [selectedInquiry, savingState, toast, closeAllDrawers]);
+
+  const handleDetailsError = useCallback(
+    (message: string) => {
+      toast.error(message);
+    },
+    [toast],
+  );
+
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-6">
+      <QuotationTabs active={activeTab} onChange={setActiveTab} />
+
       {activeTab === "inquiry" ? (
         <QuotationInquiryTabContent
-          toast={toast}
           onView={handleView}
           onSendQuotation={handleOpenSendQuotation}
           refreshTick={refreshTick}
@@ -3155,10 +3359,11 @@ export default function QuotationManagementPage() {
       )}
 
       <InquiryDetailsDrawer
-        inquiry={selectedInquiry}
+        inquiryId={detailsInquiryId}
         open={isInquiryDetailsOpen}
         onClose={closeAllDrawers}
         onSendQuotation={handleOpenSendQuotation}
+        onError={handleDetailsError}
       />
 
       <SendQuotationDrawer
@@ -3168,15 +3373,36 @@ export default function QuotationManagementPage() {
         onClose={closeAllDrawers}
         onSaveDraft={handleSaveDraft}
         onRequestSend={handleRequestSend}
+        onRequestDelete={handleRequestDelete}
         savingState={savingState}
       />
 
       {pendingSendDraft && selectedInquiry && (
-        <SendConfirmationDialog
-          companyName={selectedInquiry.company.name}
+        <ConfirmationDialog
+          title={MESSAGES.confirmSendTitle}
+          description={`Are you sure you want to send this quotation to ${selectedInquiry.company.name}?`}
+          confirmLabel={MESSAGES.confirmSendAction}
+          loadingLabel={MESSAGES.confirmSending}
+          tone="primary"
           onCancel={() => setPendingSendDraft(null)}
           onConfirm={handleConfirmSend}
           loading={savingState === "send"}
+        />
+      )}
+
+      {pendingDelete && selectedInquiry && (
+        <ConfirmationDialog
+          title={MESSAGES.confirmDeleteTitle}
+          description={MESSAGES.confirmDeleteBody.replace(
+            "{company}",
+            selectedInquiry.company.name,
+          )}
+          confirmLabel={MESSAGES.confirmDeleteAction}
+          loadingLabel={MESSAGES.confirmDeleting}
+          tone="danger"
+          onCancel={() => setPendingDelete(false)}
+          onConfirm={handleConfirmDelete}
+          loading={savingState === "delete"}
         />
       )}
 

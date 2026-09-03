@@ -323,6 +323,10 @@ export default function AppSidebar({ role = "super_admin" }: AppSidebarProps) {
       return "/operator/profile";
     }
 
+    if (userRole === "engineers") {
+      return "/engineers/profile";
+    }
+
     return "/signin";
   };
 

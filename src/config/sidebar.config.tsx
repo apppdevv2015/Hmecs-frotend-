@@ -50,7 +50,8 @@ export type UserRole =
   | "artisans"
   | "operator"
   | "supervisor"
-  | "technical_support";
+  | "technical_support"
+  | "engineers"; 
 
 export type NavLinkItem = {
   name: string;
@@ -79,6 +80,110 @@ const artisansIconClass = "h-5 w-5 stroke-[2.2] text-current";
 const operatorIconClass = "h-5 w-5 stroke-[2.2] text-current";
 
 const supervisorIconClass = "h-5 w-5 stroke-[2.2] text-current";
+
+const engineersIconClass = "h-5 w-5 stroke-[2.2] text-current";
+
+const companyAdminNavGroups: NavGroup[] = [
+  {
+    title: "Company",
+    items: [
+      {
+        name: "Staff",
+        path: "/company-admin/staff",
+        icon: <UsersRound className={sidebarIconClass} />,
+      },
+      {
+        name: "Machines",
+        path: "/company-admin/machines",
+        icon: <Truck className={sidebarIconClass} />,
+      },
+      {
+        name: "Components",
+        path: "/company-admin/components",
+        icon: <PackageSearch className={sidebarIconClass} />,
+      },
+      {
+        name: "Heat Map",
+        path: "/company-admin/heatmap",
+        icon: <Map className={sidebarIconClass} />,
+      },
+      {
+        name: "Category Master",
+        path: "/company-admin/categories",
+        icon: <ListChecks className={sidebarIconClass} />,
+      },
+      {
+        name: "Machine Health",
+        path: "/company-admin/inspection-entry",
+        icon: <ClipboardCheck className={sidebarIconClass} />,
+      },
+    ],
+  },
+  {
+    title: "Monitoring",
+    items: [
+      {
+        name: "Alerts",
+        path: "/company-admin/alerts",
+        icon: <AlertTriangle className={sidebarIconClass} />,
+      },
+      {
+        name: "Reports",
+        path: "/company-admin/reporting",
+        icon: <FileBarChart className={sidebarIconClass} />,
+      },
+      {
+        name: "Service Log",
+        path: "/company-admin/service-log",
+        icon: <FileText className={sidebarIconClass} />,
+      },
+    ],
+  },
+  {
+    title: "Commercial",
+    items: [
+      {
+        name: "Quotation",
+        path: "/company-admin/quotation",
+        icon: <FileText className={sidebarIconClass} />,
+      },
+      {
+        name: "Contract",
+        path: "/company-admin/contracts",
+        icon: <FileSignature className={sidebarIconClass} />,
+      },
+      {
+        name: "Invoices",
+        path: "/company-admin/invoices",
+        icon: <Receipt className={sidebarIconClass} />,
+      },
+    ],
+  },
+  {
+    title: "Account",
+    items: [
+      {
+        name: "Subscriptions",
+        path: "/company-admin/subscriptions",
+        icon: <CreditCard className={sidebarIconClass} />,
+      },
+      {
+        name: "Settings",
+        path: "/company-admin/coming-soon/settings",
+        icon: <Settings className={sidebarIconClass} />,
+        isComingSoon: true,
+      },
+    ],
+  },
+];
+
+const engineerNavGroups: NavGroup[] = companyAdminNavGroups.map((group) => ({
+  ...group,
+  items: group.items.map((item) => ({
+    ...item,
+    path: item.path?.replace(/^\/company-admin\//, "/engineers/"),
+  })),
+}));
 
 export const sidebarConfig: Record<
   UserRole,
@@ -700,6 +805,41 @@ export const sidebarConfig: Record<
       email: "support@hme.com",
     },
   },
+
+
+   // Engineer sidebar 
+
+  
+engineers: {
+  dashboardItem: {
+    icon: <LayoutDashboard className={engineersIconClass} />,
+    name: "Dashboard",
+    path: "/engineers/dashboard",
+  },
+
+  navGroups: [
+    ...engineerNavGroups,
+    {
+      title: "Account",
+      items: [
+        {
+          name: "Profile",
+          path: "/engineers/profile",
+          icon: <UserCog className={engineersIconClass} />,
+        },
+      ],
+    },
+  ],
+
+  profile: {
+    shortName: "EN",
+    title: "Engineer",
+    subtitle: "engineer@hme.com",
+    email: "engineer@hme.com",
+  },
+},
+
+};
 
   sub_admin: {
     dashboardItem: {

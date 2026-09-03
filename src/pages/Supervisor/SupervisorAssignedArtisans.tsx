@@ -370,6 +370,45 @@ export default function SupervisorAssignedArtisans() {
         startDate: modalStartDate,
         dueDate: modalDueDate,
       })
+
+    const newEntry: ComponentArtisanAssignment = {
+      id: `ASGN-${Date.now()}`,
+      taskId: generatedTaskId,
+      machineId: modalMachineId,
+      machineName: mName,
+      componentId: `comp-${Date.now()}`,
+      componentName: modalComponentName,
+      artisanId: modalArtisanId,
+      artisanName: selectedArtisan?.name || "Assigned Artisan",
+      artisanSpecialization: selectedArtisan?.specialization || "Maintenance Specialist",
+      supervisorName: (() => {
+        try {
+          const user = StorageService.getUser();
+          if (user) {
+            const n = user.name || user.fullName || `${user.firstName || user.first_name || ""} ${user.lastName || user.last_name || ""}`.trim();
+            if (n) return n;
+          }
+        } catch {}
+        return StorageService.get<string>(STORAGE_KEYS.USER_NAME) || "Supervisor";
+      })(),
+      workScope: modalWorkScope || "General component maintenance inspection & diagnostic.",
+      priority: modalPriority,
+      startDate: modalStartDate,
+      dueDate: modalDueDate,
+      assignedAt: new Date().toLocaleString("en-GB", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      status: "Active",
+    };
+
+    const existingIndex = assignments.findIndex(
+      (a) => a.machineId === modalMachineId && a.componentName === modalComponentName
+
+
     );
 
     if (assignArtisanToMachine.fulfilled.match(result)) {

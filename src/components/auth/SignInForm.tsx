@@ -146,6 +146,8 @@ const getRedirectPathByRole = (role?: string | number | null) => {
     artisan: "/artisans/dashboard",
     artisans: "/artisans/dashboard",
 
+    engineers: "/engineers/dashboard", 
+
     viewer: "/viewer/dashboard",
   };
 
@@ -268,6 +270,7 @@ const showLoginSuccessToast = (role?: string | number | null) => {
     mechanic: "Mechanic login successfully",
     artisuns: "Artisuns login successfully",
     viewer: "Viewer login successfully",
+     engineers: "Engineer login successfully",
   };
 
   showSuccessToast(messages[normalizedRole] || "Login successfully", {

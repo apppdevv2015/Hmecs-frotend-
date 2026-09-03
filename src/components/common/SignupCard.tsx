@@ -923,6 +923,16 @@ export default function SignupCard({ onClose, onSuccess }: SignupCardProps) {
 
       const { company, user } = response.data;
 
+
+      // IMPORTANT: a new account is not immediately an active session.
+      // Clear any stale auth state before redirecting to sign in so the
+      // user does not land on a protected route or access-denied page.
+      // StorageService.remove(STORAGE_KEYS.TOKEN);
+      // StorageService.remove(STORAGE_KEYS.USER);
+      // StorageService.remove(STORAGE_KEYS.ROLE);
+      // StorageService.remove(STORAGE_KEYS.EMAIL);
+      // StorageService.remove(STORAGE_KEYS.NAME);
+      // StorageService.remove(STORAGE_KEYS.COMPANY_ID);
       // Submit Quotation Request Details to Backend Database
       try {
         await submitQuotationRequest({
@@ -973,6 +983,7 @@ export default function SignupCard({ onClose, onSuccess }: SignupCardProps) {
       if (company?.id) {
         StorageService.set(STORAGE_KEYS.COMPANY_ID, company.id);
       }
+
 
       updateToast(
         toastId,
