@@ -19,13 +19,10 @@ import { showLoadingToast, updateToast } from "../../utils/toastUtils";
 import {
   getPublicOptionalServices,
   getEquipmentTypes,
-} from "../../services/SuperAdmin/optionalService";
-import { submitQuotationRequest } from "../../services/SuperAdmin/quotationInquiryService";
-import { createQuotationRequest } from "../../services/Quotation/quotationService";
-import {
   getOptionalServices,
   type OptionalService,
 } from "../../services/SuperAdmin/optionalService";
+import { submitQuotationRequest } from "../../services/SuperAdmin/quotationInquiryService";
 
 import {
   signUpSchema,
@@ -81,6 +78,41 @@ const EQUIPMENT_TYPE_OPTIONS: SelectOption[] = [
   { value: "conveyors", label: "Conveyors" },
   { value: "cranes", label: "Cranes" },
   { value: "other", label: "Other" },
+];
+
+const OPTIONAL_SERVICE_OPTIONS: SelectOption[] = [
+  {
+    value: "telematics_ecu_integration",
+    label: "Telematics / ECU Integration",
+  },
+  {
+    value: "historical_data_migration_cleaning",
+    label: "Historical Data Migration & Cleaning",
+  },
+  {
+    value: "custom_api_development",
+    label: "Custom API Development",
+  },
+  {
+    value: "sap_erp_integration",
+    label: "SAP / ERP Integration",
+  },
+  {
+    value: "additional_training",
+    label: "Additional Training",
+  },
+  {
+    value: "sms_whatsapp_notifications",
+    label: "SMS / WhatsApp Notifications",
+  },
+  {
+    value: "custom_reports",
+    label: "Custom Reports",
+  },
+  {
+    value: "on_site_technical_support",
+    label: "On-site Technical Support",
+  },
 ];
 
 const CONTRACT_DURATION_OPTIONS: SelectOption[] = [
@@ -469,41 +501,6 @@ export default function SignUpForm() {
   }, []);
 
   const {
-
-  const [optionalServices, setOptionalServices] = useState<OptionalService[]>(
-    [],
-  );
-  const [optionalServicesLoading, setOptionalServicesLoading] = useState(false);
-
-  useEffect(() => {
-    const loadOptionalServices = async () => {
-      setOptionalServicesLoading(true);
-
-      try {
-        const data = await getOptionalServices();
-
-        console.log("OPTIONAL SERVICES:", data);
-
-        setOptionalServices(data);
-      } catch (error) {
-        console.error("Failed to load optional services:", error);
-        setOptionalServices([]);
-      } finally {
-        setOptionalServicesLoading(false);
-      }
-    };
-
-    loadOptionalServices();
-  }, []);
-  const optionalServiceOptions: SelectOption[] = optionalServices.map(
-    (service) => ({
-      value: service.name,
-      label: service.name,
-    }),
-  );
-
-    const {
-
     control,
     register,
     handleSubmit,
