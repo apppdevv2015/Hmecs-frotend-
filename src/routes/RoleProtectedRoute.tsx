@@ -2,6 +2,7 @@ import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 
 import StorageService, { STORAGE_KEYS } from "../services/storage.service";
+import { getDashboardPathForRole } from "./GuestRoute";
 
 type RoleProtectedRouteProps = {
   allowedRoles: string[];
@@ -158,9 +159,9 @@ export default function RoleProtectedRoute({
   const hasAccess =
     normalizedAllowedRoles.includes(normalizedUserRole) ||
     (normalizedAllowedRoles.includes("super_admin") &&
-      ["superadmin", "system_admin"].includes(normalizedUserRole)) ||
+      ["superadmin", "system_admin", "sub_super_admin", "subsuperadmin"].includes(normalizedUserRole)) ||
     (normalizedAllowedRoles.includes("company_admin") &&
-      ["admin", "companyadmin"].includes(normalizedUserRole)) ||
+      ["admin", "companyadmin", "sub_admin", "subadmin"].includes(normalizedUserRole)) ||
     (normalizedAllowedRoles.includes("artisans") &&
       ["artisan", "engineer", "mechanic"].includes(normalizedUserRole)) ||
     (normalizedAllowedRoles.includes("operator") &&
@@ -179,9 +180,10 @@ export default function RoleProtectedRoute({
     );
   }
 
-  // No role access → redirect access denied
+  // No role access → redirect to fallback role dashboard
   if (!hasAccess) {
-    return <Navigate to="/access-denied" replace />;
+    const fallbackPath = getDashboardPathForRole(normalizedUserRole);
+    return <Navigate to={fallbackPath || "/signin"} replace />;
   }
 
   // Valid access

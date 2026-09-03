@@ -12,7 +12,7 @@ export const getApiBaseUrl = () => {
 };
  
 import StorageService, { STORAGE_KEYS } from "./storage.service";
- 
+
 // Strict localStorage Cleanup: Keep ONLY authentication session keys & theme
 if (typeof window !== "undefined" && window.localStorage) {
   try {
@@ -27,7 +27,6 @@ if (typeof window !== "undefined" && window.localStorage) {
     keysToRemove.forEach((k) => localStorage.removeItem(k));
   } catch { }
 }
- 
 const parseRequestBody = (body: any) => {
   if (!body) return undefined;
  
@@ -77,11 +76,17 @@ export async function apiRequest<T>(
     endpoint.includes("/logout") ||
     endpoint.includes("/checkout") ||
     endpoint.includes("/payment");
+
  
  
  
   if (isMutationMethod && !shouldSkipOfflineQueue && !navigator.onLine) {
  
+
+
+
+  if (isMutationMethod && !shouldSkipOfflineQueue && !navigator.onLine) {
+
     console.warn(`[Offline Queue] Saved: ${endpoint}`);
     console.log("OFFLINE QUEUE HIT");
     await offlineQueueService.saveRequest({
@@ -117,17 +122,24 @@ export async function apiRequest<T>(
       const rawBody = (options as any).data !== undefined ? (options as any).data : options.body;
       const isBodyObject = rawBody && typeof rawBody === "object" && !(rawBody instanceof FormData) && !(rawBody instanceof Blob);
       const serializedBody = isBodyObject ? JSON.stringify(rawBody) : rawBody;
- 
+
       const fetchHeaders: Record<string, string> = {
         "ngrok-skip-browser-warning": "true",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...((options.headers as Record<string, string>) || {}),
       };
+
  
       if (serializedBody !== undefined && serializedBody !== null && !(rawBody instanceof FormData)) {
         fetchHeaders["Content-Type"] = "application/json";
       }
  
+
+      if (serializedBody !== undefined && serializedBody !== null && !(rawBody instanceof FormData)) {
+        fetchHeaders["Content-Type"] = "application/json";
+      }
+
+
       const response = await fetch(finalUrl, {
         ...options,
         body: isMutationMethod ? serializedBody : undefined,
@@ -185,7 +197,7 @@ export async function apiRequest<T>(
       throw error;
     }
   };
- 
+
   /**
    * Always execute direct API request without storing API responses in localStorage
    */

@@ -26,15 +26,11 @@ import AppSelect from "../../components/ui/dropdown/AppSelect";
 import StorageService, { STORAGE_KEYS } from "../../services/storage.service";
 import Pagination from "../../components/common/Pagination";
 import { machineService } from "../../services/companyadmin/machineService";
+import { componentService } from "../../services/companyadmin/componentService";
 import { userService, normalizeUsersResponse } from "../../services/Auth/userService";
 import SupervisorUserDetailModal, { type UserDetailData } from "../../components/supervisor/SupervisorUserDetailModal";
 
-// Confirmed from store.ts: artisanAssignmentReducer lives at
-// "./slices/artisanAssignmentSlice" relative to the store folder,
-// and is registered under the "artisanAssignment" key — matches
-// the selectors below. If this component doesn't sit exactly two
-// folders under src/ (same depth as its other "../../services/..."
-// imports), adjust this path accordingly.
+
 import {
   fetchArtisanAssignments,
   assignArtisanToMachine,
@@ -87,11 +83,46 @@ export default function SupervisorAssignedArtisans() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMachineId, setModalMachineId] = useState("");
   const [modalComponentName, setModalComponentName] = useState("");
+  const [modalComponents, setModalComponents] = useState<any[]>([]);
+  const [loadingModalComponents, setLoadingModalComponents] = useState(false);
   const [modalArtisanId, setModalArtisanId] = useState("");
   const [modalWorkScope, setModalWorkScope] = useState("");
   const [modalPriority, setModalPriority] = useState<"High" | "Medium" | "Low">("Medium");
   const [modalStartDate, setModalStartDate] = useState(new Date().toISOString().split("T")[0]);
   const [modalDueDate, setModalDueDate] = useState(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]);
+
+  // Dynamic Component Fetch GET API for Selected Machine
+  useEffect(() => {
+    const fetchComponentsForModal = async () => {
+      if (!modalMachineId) return;
+      try {
+        setLoadingModalComponents(true);
+        const res = await componentService.getComponentsByMachineId(modalMachineId);
+        const list = Array.isArray(res) ? res : res?.data || res?.components || [];
+        if (list.length > 0) {
+          const formatted = list.map((c: any) => ({
+            label: c.displayName || c.name || c.category || "Component",
+            value: c.displayName || c.name || c.category || "Component",
+          }));
+          setModalComponents(formatted);
+          if (formatted[0]) {
+            setModalComponentName(formatted[0].value);
+          }
+        } else {
+          setModalComponents(DEFAULT_COMPONENTS.map((c) => ({ label: c, value: c })));
+        }
+      } catch (err) {
+        console.warn("Failed to fetch machine components:", err);
+        setModalComponents(DEFAULT_COMPONENTS.map((c) => ({ label: c, value: c })));
+      } finally {
+        setLoadingModalComponents(false);
+      }
+    };
+
+    if (isModalOpen) {
+      fetchComponentsForModal();
+    }
+  }, [modalMachineId, isModalOpen]);
 
   const [selectedUserDetail, setSelectedUserDetail] = useState<UserDetailData | null>(null);
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
@@ -99,17 +130,8 @@ export default function SupervisorAssignedArtisans() {
   const loading = directoryLoading || assignmentsLoading;
 
   const getOperatorForMachine = (machineId: string, machineName = "") => {
-    try {
-      const storedTasks = JSON.parse(localStorage.getItem("hme_supervisor_task_assignments") || "[]");
-      const found = storedTasks.find((t: any) => {
-        if (!t) return false;
-        if (t.machineId && t.machineId === machineId) return true;
-        if (t.machineName && machineName && (t.machineName.includes(machineName) || machineName.includes(t.machineName.split(" (")[0]))) return true;
-        return false;
-      });
-      if (found?.operatorName) return found.operatorName;
-    } catch {}
-    return "Operator Assigned";
+    const found = machines.find((m) => m.id === machineId || (machineName && m.name && m.name.includes(machineName)));
+    return (found as any)?.assignedOperatorName || (found as any)?.operatorName || "Operator Assigned";
   };
 
   const getTaskDurationText = (assignedAt: string) => {
@@ -301,7 +323,7 @@ export default function SupervisorAssignedArtisans() {
   // Submit Modal — goes through the redux assignArtisanToMachine thunk,
   // which is what actually calls the backend assign API.
   const handleSaveAssignment = async () => {
-    if (!modalMachineId || !modalComponentName || !modalArtisanId) return;
+    if (!modalMachineId || !modalArtisanId) return;
 
     const selectedM = machines.find((m) => m.id === modalMachineId);
     const mName = selectedM?.name || selectedM?.model || "Equipment Unit";
@@ -332,7 +354,6 @@ export default function SupervisorAssignedArtisans() {
 
     const generatedTaskId = `TSK-${Math.floor(100000 + Math.random() * 900000)}`;
 
-<<<<<<< Updated upstream
     const result = await dispatch(
       assignArtisanToMachine({
         machineId: modalMachineId,
@@ -343,13 +364,13 @@ export default function SupervisorAssignedArtisans() {
         supervisorName,
         taskId: generatedTaskId,
         componentId: `comp-${Date.now()}`,
-        componentName: modalComponentName,
-        workScope: modalWorkScope || "General component maintenance inspection & diagnostic.",
+        componentName: modalComponentName || "Full Machine",
+        workScope: modalWorkScope || "General machine maintenance inspection & diagnostic.",
         priority: modalPriority,
         startDate: modalStartDate,
         dueDate: modalDueDate,
       })
-=======
+
     const newEntry: ComponentArtisanAssignment = {
       id: `ASGN-${Date.now()}`,
       taskId: generatedTaskId,
@@ -387,18 +408,20 @@ export default function SupervisorAssignedArtisans() {
     const existingIndex = assignments.findIndex(
       (a) => a.machineId === modalMachineId && a.componentName === modalComponentName
 
+
     );
 
     if (assignArtisanToMachine.fulfilled.match(result)) {
       setIsModalOpen(false);
+      dispatch(fetchArtisanAssignments());
+      loadDirectory();
     }
-    // on rejection, assignError (from the slice) stays populated —
-    // surface it in the modal below instead of closing.
   };
 
   // Delete Assignment — calls the unassign API through the slice.
-  const handleDeleteAssignment = (item: ComponentArtisanAssignment) => {
-    dispatch(unassignArtisanFromMachine({ machineId: item.machineId }));
+  const handleDeleteAssignment = async (item: ComponentArtisanAssignment) => {
+    await dispatch(unassignArtisanFromMachine({ machineId: item.machineId }));
+    dispatch(fetchArtisanAssignments());
   };
 
   // Machine Options for Dropdown (Includes "All Fleet Machines")
@@ -442,22 +465,66 @@ export default function SupervisorAssignedArtisans() {
         !q ||
         item.artisanName.toLowerCase().includes(q) ||
         item.machineName.toLowerCase().includes(q) ||
-        (item.componentName || "").toLowerCase().includes(q) ||
         (item.workScope || "").toLowerCase().includes(q);
 
       const matchesMachine = selectedMachineId === "all" || item.machineId === selectedMachineId;
-      const matchesComponent = selectedComponentFilter === "all" || item.componentName === selectedComponentFilter;
       const matchesArtisan = selectedArtisanFilter === "all" || item.artisanId === selectedArtisanFilter;
 
-      return matchesSearch && matchesMachine && matchesComponent && matchesArtisan;
+      return matchesSearch && matchesMachine && matchesArtisan;
     });
-  }, [assignments, search, selectedMachineId, selectedComponentFilter, selectedArtisanFilter]);
+  }, [assignments, search, selectedMachineId, selectedArtisanFilter]);
+
+  type ArtisanSortField = "machine" | "component" | "artisan" | "supervisor" | "priority" | "status";
+  const [sortField, setSortField] = useState<ArtisanSortField>("machine");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+
+  const handleSort = (field: ArtisanSortField) => {
+    if (sortField === field) {
+      setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortOrder("asc");
+    }
+  };
+
+  const sortedAssignments = useMemo(() => {
+    const list = [...filteredAssignments];
+    return list.sort((a, b) => {
+      let valA: any = "";
+      let valB: any = "";
+
+      if (sortField === "machine") {
+        valA = (a.machineName || a.machineId || "").toLowerCase();
+        valB = (b.machineName || b.machineId || "").toLowerCase();
+      } else if (sortField === "component") {
+        valA = (a.componentName || "").toLowerCase();
+        valB = (b.componentName || "").toLowerCase();
+      } else if (sortField === "artisan") {
+        valA = (a.artisanName || "").toLowerCase();
+        valB = (b.artisanName || "").toLowerCase();
+      } else if (sortField === "supervisor") {
+        valA = (a.supervisorName || "").toLowerCase();
+        valB = (b.supervisorName || "").toLowerCase();
+      } else if (sortField === "priority") {
+        const orderMap: Record<string, number> = { High: 3, Medium: 2, Low: 1 };
+        valA = orderMap[a.priority || "Low"] || 0;
+        valB = orderMap[b.priority || "Low"] || 0;
+      } else if (sortField === "status") {
+        valA = (a.status || "").toLowerCase();
+        valB = (b.status || "").toLowerCase();
+      }
+
+      if (valA < valB) return sortOrder === "asc" ? -1 : 1;
+      if (valA > valB) return sortOrder === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [filteredAssignments, sortField, sortOrder]);
 
   const isShowAll = itemsPerPage === "all";
-  const effectivePageSize = isShowAll ? Math.max(1, filteredAssignments.length) : itemsPerPage;
-  const totalPages = isShowAll ? 1 : Math.max(1, Math.ceil(filteredAssignments.length / effectivePageSize));
+  const effectivePageSize = isShowAll ? Math.max(1, sortedAssignments.length) : itemsPerPage;
+  const totalPages = isShowAll ? 1 : Math.max(1, Math.ceil(sortedAssignments.length / effectivePageSize));
   const startIndex = (currentPage - 1) * effectivePageSize;
-  const paginatedAssignments = isShowAll ? filteredAssignments : filteredAssignments.slice(startIndex, startIndex + effectivePageSize);
+  const paginatedAssignments = isShowAll ? sortedAssignments : sortedAssignments.slice(startIndex, startIndex + effectivePageSize);
   const startItem = filteredAssignments.length === 0 ? 0 : isShowAll ? 1 : startIndex + 1;
   const endItem = isShowAll ? filteredAssignments.length : Math.min(startIndex + effectivePageSize, filteredAssignments.length);
 
@@ -473,15 +540,15 @@ export default function SupervisorAssignedArtisans() {
           <div>
             <div className="mb-3 inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.18em] text-white backdrop-blur-md">
               <Layers size={14} />
-              Fleet & Component Artisan Matrix
+              Fleet Artisan Allocation Matrix
             </div>
 
             <h1 className="text-3xl font-black tracking-tight text-white">
-              Assigned Artisans to Machine Components
+              Assigned Artisans to Machines
             </h1>
 
             <p className="mt-2 max-w-2xl text-sm leading-6 text-blue-100">
-              Select "All Fleet Machines" or a specific machine, choose "All Components" or a specific component type, and view assigned specialized Artisans.
+              Select a machine, assign specialized Artisans, and manage fleet maintenance operations.
             </p>
           </div>
 
@@ -491,7 +558,7 @@ export default function SupervisorAssignedArtisans() {
               className="inline-flex items-center gap-2 rounded-2xl bg-white px-5 py-3 text-xs font-bold text-[#3B37E6] shadow-lg shadow-black/10 transition hover:bg-blue-50 active:scale-95"
             >
               <Plus size={16} />
-              Assign Artisan to Component
+              Assign Artisan to Machine
             </button>
 
             <button
@@ -611,11 +678,11 @@ export default function SupervisorAssignedArtisans() {
         </div>
       </div>
 
-      {/* ── Selection Control Bar: Dropdowns for All Machines & All Components ── */}
+      {/* ── Selection Control Bar: Dropdowns for Machines & Artisans ── */}
       <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xs dark:border-slate-800 dark:bg-slate-900">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           {/* Machine Dropdown (Supports "All Fleet Machines") */}
-          <div className="flex-1 space-y-1.5">
+          <div className="space-y-1.5">
             <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
               <Truck size={16} className="text-blue-600 dark:text-blue-400" />
               1. Select Machine (All or Specific)
@@ -630,27 +697,11 @@ export default function SupervisorAssignedArtisans() {
             />
           </div>
 
-          {/* Component Dropdown (Supports "All Machine Components") */}
-          <div className="flex-1 space-y-1.5">
-            <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-              <Cpu size={16} className="text-indigo-600 dark:text-indigo-400" />
-              2. Filter Component (All or Specific)
-            </label>
-            <AppSelect
-              value={selectedComponentFilter}
-              options={componentDropdownOptions}
-              onChange={(val) => {
-                setSelectedComponentFilter(val);
-                setCurrentPage(1);
-              }}
-            />
-          </div>
-
           {/* Artisan Dropdown (Supports "All Fleet Artisans") */}
-          <div className="flex-1 space-y-1.5">
+          <div className="space-y-1.5">
             <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
               <UserCheck size={16} className="text-emerald-600 dark:text-emerald-400" />
-              3. Filter Artisan (All or Specific)
+              2. Filter Artisan (All or Specific)
             </label>
             <AppSelect
               value={selectedArtisanFilter}
@@ -663,7 +714,7 @@ export default function SupervisorAssignedArtisans() {
           </div>
 
           {/* Search Input */}
-          <div className="flex-1 space-y-1.5">
+          <div className="space-y-1.5">
             <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
               <Search size={16} className="text-slate-400" />
               Search Artisan / Work Scope
@@ -685,7 +736,7 @@ export default function SupervisorAssignedArtisans() {
       <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xs dark:border-slate-800 dark:bg-slate-900">
         <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
           <h3 className="font-bold text-slate-900 dark:text-white text-base">
-            Fleet Component Artisan Assignment Master Log
+            Fleet Machine Artisan Assignment Master Log
           </h3>
           <span className="text-xs text-slate-500">
             Total {filteredAssignments.length} Records
@@ -696,26 +747,38 @@ export default function SupervisorAssignedArtisans() {
           <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-800">
             <thead className="bg-slate-50/80 dark:bg-[#081226]">
               <tr>
-                <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Task ID & Machine
+                <th
+                  className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 cursor-pointer select-none transition hover:text-blue-600 dark:hover:text-blue-400"
+                  onClick={() => handleSort("machine")}
+                >
+                  Task ID & Machine {sortField === "machine" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
                 </th>
-                <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Component Name
+                <th
+                  className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 cursor-pointer select-none transition hover:text-blue-600 dark:hover:text-blue-400"
+                  onClick={() => handleSort("artisan")}
+                >
+                  Assigned Artisan {sortField === "artisan" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
                 </th>
-                <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Assigned Artisan
+                <th
+                  className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 cursor-pointer select-none transition hover:text-blue-600 dark:hover:text-blue-400"
+                  onClick={() => handleSort("supervisor")}
+                >
+                  Assigned By (Supervisor) {sortField === "supervisor" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
                 </th>
-                <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Assigned By (Supervisor)
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Work Scope & Priority
+                <th
+                  className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 cursor-pointer select-none transition hover:text-blue-600 dark:hover:text-blue-400"
+                  onClick={() => handleSort("priority")}
+                >
+                  Work Scope & Priority {sortField === "priority" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                   Schedule (Start ➔ Due)
                 </th>
-                <th className="px-6 py-4 text-center text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Status
+                <th
+                  className="px-6 py-4 text-center text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 cursor-pointer select-none transition hover:text-blue-600 dark:hover:text-blue-400"
+                  onClick={() => handleSort("status")}
+                >
+                  Status {sortField === "status" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
                 </th>
                 <th className="px-6 py-4 text-center text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                   Action
@@ -729,7 +792,7 @@ export default function SupervisorAssignedArtisans() {
                     <div className="flex flex-col items-center justify-center gap-3">
                       <Loader2 className="h-8 w-8 animate-spin text-blue-600 dark:text-blue-400" />
                       <p className="text-sm font-semibold text-slate-600 dark:text-slate-400">
-                        Loading component artisan assignments...
+                        Loading machine artisan assignments...
                       </p>
                     </div>
                   </td>
@@ -737,7 +800,7 @@ export default function SupervisorAssignedArtisans() {
               ) : paginatedAssignments.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-6 py-12 text-center text-sm font-semibold text-slate-500 dark:text-slate-400">
-                    No component artisan assignments found matching your search.
+                    No machine artisan assignments found matching your search.
                   </td>
                 </tr>
               ) : (
@@ -765,13 +828,6 @@ export default function SupervisorAssignedArtisans() {
                       </div>
                     </td>
 
-                    <td className="px-6 py-4">
-                      <div className="inline-flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-bold text-indigo-700 dark:border-indigo-800/60 dark:bg-indigo-950/40 dark:text-indigo-300">
-                        <Cpu size={14} />
-                        {item.componentName || "—"}
-                      </div>
-                    </td>
-
                     <td className="whitespace-nowrap px-6 py-4">
                       <div className="flex items-center gap-2.5">
                         <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 font-bold text-xs dark:bg-emerald-950/50 dark:text-emerald-400 shrink-0">
@@ -792,13 +848,9 @@ export default function SupervisorAssignedArtisans() {
                     <td className="whitespace-nowrap px-6 py-4">
                       <span className="inline-flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700 dark:border-blue-800/60 dark:bg-blue-950/40 dark:text-blue-300">
                         <ShieldCheck size={14} />
-<<<<<<< Updated upstream
-                        {item.supervisorName || "—"}
-=======
                         {item.supervisorName && item.supervisorName !== "Marcus Supervisor"
                           ? item.supervisorName
                           : (StorageService.getUser()?.name || StorageService.getUser()?.fullName || StorageService.get<string>(STORAGE_KEYS.USER_NAME) || "Supervisor")}
->>>>>>> Stashed changes
                       </span>
                     </td>
 
@@ -927,10 +979,10 @@ export default function SupervisorAssignedArtisans() {
             <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 dark:border-slate-800 shrink-0">
               <div>
                 <h2 className="text-lg font-black text-slate-900 dark:text-white">
-                  Assign Artisan to Component
+                  Assign Artisan to Machine
                 </h2>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                  Select machine component and assign specialized artisan.
+                  Select target fleet machine and assign specialized artisan.
                 </p>
               </div>
               <button
@@ -994,35 +1046,19 @@ export default function SupervisorAssignedArtisans() {
                 </div>
               )}
 
-              {/* 2-Column Machine & Component Selectors */}
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div>
-                  <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                    Select Machine
-                  </label>
-                  <AppSelect
-                    value={modalMachineId}
-                    options={machines.map((m) => ({
-                      label: m.name || m.model || `Machine ${m.id}`,
-                      value: m.id,
-                    }))}
-                    onChange={(val) => setModalMachineId(val)}
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                    Machine Component
-                  </label>
-                  <AppSelect
-                    value={modalComponentName}
-                    options={DEFAULT_COMPONENTS.map((c) => ({
-                      label: c,
-                      value: c,
-                    }))}
-                    onChange={(val) => setModalComponentName(val)}
-                  />
-                </div>
+              {/* Machine Selector */}
+              <div>
+                <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                  Select Machine
+                </label>
+                <AppSelect
+                  value={modalMachineId}
+                  options={machines.map((m) => ({
+                    label: `${m.name || m.model || `Machine ${m.id}`} (${m.serialNumber || m.site || "Site A"})`,
+                    value: m.id,
+                  }))}
+                  onChange={(val) => setModalMachineId(val)}
+                />
               </div>
 
               {/* 2-Column Artisan & Priority Selectors */}

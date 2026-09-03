@@ -24,8 +24,11 @@ import {
 } from "../../services/companyadmin/machineService";
 import { componentService } from "../../services/companyadmin/componentService";
 import AppSelect from "../../components/ui/dropdown/AppSelect";
+
 import StorageService from "../../services/storage.service";
 import { isReadOnlyRole } from "../../components/common/permissions";
+
+import Pagination from "../../components/common/Pagination";
 
 type Machine = {
   id: string;
@@ -56,6 +59,7 @@ type MachineFormData = {
 };
 
 type FormErrors = Partial<Record<keyof MachineFormData, string>>;
+
 
 type PaginationProps = {
   currentPage: number;
@@ -194,6 +198,16 @@ const getConditionBadge = (rawCondition?: string | number) => {
   );
 };
 
+const cleanMachineName = (rawName: string): string => {
+  let name = String(rawName || "").trim();
+  const words = name.split(/\s+/);
+  if (words.length >= 2 && words[0].toLowerCase() === words[1].toLowerCase()) {
+    words.shift();
+    name = words.join(" ");
+  }
+  return name;
+};
+
 const normalizeMachine = (item: any, index: number): Machine => {
   const compCount = Array.isArray(item?.components)
     ? item.components.length
@@ -205,17 +219,20 @@ const normalizeMachine = (item: any, index: number): Machine => {
           ? item.totalComponents
           : 0;
 
+  const rawName = String(
+    item?.name ?? item?.machineName ?? item?.machine_name ?? "N/A",
+  );
+  const rawModel = String(
+    item?.model ?? item?.machineModel ?? item?.machine_model ?? "N/A",
+  );
+
   return {
     id: String(item?.id ?? item?._id ?? item?.machineId ?? index + 1),
-    name: String(
-      item?.name ?? item?.machineName ?? item?.machine_name ?? "N/A",
-    ),
+    name: cleanMachineName(rawName),
     manufacturer: String(
       item?.manufacturer ?? item?.make ?? item?.brand ?? "N/A",
     ),
-    model: String(
-      item?.model ?? item?.machineModel ?? item?.machine_model ?? "N/A",
-    ),
+    model: cleanMachineName(rawModel),
     serialNumber: String(
       item?.serialNumber ?? item?.serial_number ?? item?.serialNo ?? "N/A",
     ).replace(/^DEMO-/i, ""),
@@ -717,6 +734,22 @@ const MachineManagement: React.FC = () => {
 
   const [eqCategoriesCount, setEqCategoriesCount] = useState<number>(0);
   const [eqCategoriesList, setEqCategoriesList] = useState<any[]>([]);
+  const [conditionsList, setConditionsList] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchConditions = async () => {
+      try {
+        const response: any = await machineService.getConditions();
+        const list = Array.isArray(response) ? response : response?.data || [];
+        if (list.length > 0) {
+          setConditionsList(list);
+        }
+      } catch (err) {
+        console.error("Failed to fetch machine conditions:", err);
+      }
+    };
+    fetchConditions();
+  }, []);
 
   const fetchMachines = async () => {
     setLoading(true);
@@ -925,6 +958,7 @@ const MachineManagement: React.FC = () => {
       model: formData.model.trim(),
       serialNumber: formData.serialNumber.trim(),
       equipmentType: formData.equipmentType.trim(),
+
       condition:
         formData.condition && formData.condition.trim()
           ? formData.condition
@@ -933,6 +967,10 @@ const MachineManagement: React.FC = () => {
         formData.imageUrl && formData.imageUrl.trim()
           ? formData.imageUrl
           : null,
+
+      condition: formData.condition ? Number(formData.condition) || 1 : 1,
+      imageUrl: formData.imageUrl && formData.imageUrl.trim() ? formData.imageUrl : null,
+
     };
   };
 
@@ -1192,6 +1230,7 @@ const MachineManagement: React.FC = () => {
               All Equipment ({machines.length})
             </button>
 
+
             {dynamicEquipmentTypes.map((type) => {
               const count = machines.filter(
                 (m) =>
@@ -1216,6 +1255,40 @@ const MachineManagement: React.FC = () => {
                 </button>
               );
             })}
+
+            {dynamicEquipmentTypes
+              .filter((type) => {
+                const count = machines.filter(
+                  (m) =>
+                    m.equipmentType?.toLowerCase().includes(type.toLowerCase()) ||
+                    m.name?.toLowerCase().includes(type.toLowerCase())
+                ).length;
+                return count > 0;
+              })
+              .map((type) => {
+                const count = machines.filter(
+                  (m) =>
+                    m.equipmentType?.toLowerCase().includes(type.toLowerCase()) ||
+                    m.name?.toLowerCase().includes(type.toLowerCase())
+                ).length;
+                const isActive = selectedEqFilter.toLowerCase() === type.toLowerCase();
+
+                return (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => setSelectedEqFilter(type)}
+                    className={`shrink-0 rounded-xl px-4 py-2 text-xs font-extrabold transition-all ${
+                      isActive
+                        ? "bg-blue-600 text-white shadow-md"
+                        : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-[#101f33] dark:text-slate-300 dark:hover:bg-[#15273f]"
+                    }`}
+                  >
+                    {type} ({count})
+                  </button>
+                );
+              })}
+
           </div>
 
           <div className="w-full overflow-x-auto hme-hide-scrollbar">
@@ -1228,7 +1301,6 @@ const MachineManagement: React.FC = () => {
                   <th className="px-6 py-4 font-bold">Model</th>
                   <th className="px-6 py-4 font-bold">Serial Number</th>
                   <th className="px-6 py-4 font-bold">Equipment Type</th>
-                  <th className="px-6 py-4 font-bold">Condition</th>
                   <th className="px-6 py-4 font-bold">Health Status</th>
                   <th className="px-6 py-4 text-center font-bold">Actions</th>
                 </tr>
@@ -1237,7 +1309,11 @@ const MachineManagement: React.FC = () => {
               <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
                 {loading ? (
                   <tr>
+
                     <td colSpan={9} className="px-6 py-16 text-center">
+
+                    <td colSpan={8} className="px-6 py-16 text-center">
+
                       <div className="flex flex-col items-center justify-center gap-3">
                         <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 text-blue-600 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300">
                           <Loader2 className="animate-spin" size={24} />
@@ -1295,6 +1371,7 @@ const MachineManagement: React.FC = () => {
                         </span>
                       </td>
 
+
                       <td className="px-6 py-4">
                         <span className="text-sm font-bold text-slate-700 dark:text-slate-200">
                           {machine.model}
@@ -1312,6 +1389,43 @@ const MachineManagement: React.FC = () => {
                           {machine.equipmentType}
                         </span>
                       </td>
+
+                        <td className="px-6 py-4">
+                          <span className="text-sm font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap">
+                            {machine.model}
+                          </span>
+                        </td>
+
+                        <td className="px-6 py-4">
+                          <span className="font-mono text-xs font-bold text-slate-600 dark:text-slate-300 whitespace-nowrap">
+                            {machine.serialNumber}
+                          </span>
+                        </td>
+
+                        <td className="px-6 py-4">
+                          <span className="text-sm font-semibold text-slate-700 dark:text-slate-200 whitespace-nowrap">
+                            {machine.equipmentType || "Mining Equipment"}
+                          </span>
+                        </td>
+
+                        <td className="px-6 py-4">
+                          {(() => {
+                            const score = machine.healthScore !== undefined ? machine.healthScore : getMachineHealthScore(machine);
+
+                            if (score === null || score === undefined) {
+                              return (
+                                <div className="flex flex-col gap-1.5 min-w-[130px] max-w-[150px]">
+                                  <div className="flex items-center justify-between text-xs font-black">
+                                    <span className="text-slate-400 dark:text-slate-500">Uncalculated</span>
+                                    <span className="text-[11px] font-bold text-slate-400">0%</span>
+                                  </div>
+                                  <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+                                    <div className="h-full rounded-full bg-slate-300 dark:bg-slate-700 w-0" />
+                                  </div>
+                                </div>
+                              );
+                            }
+
 
                       <td className="px-6 py-4">
                         {getConditionBadge(machine.condition)}
@@ -1572,6 +1686,7 @@ const MachineManagement: React.FC = () => {
                     className="h-11 w-full rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-700 dark:bg-[#101f33] dark:text-white"
                   >
                     <option value="">Select Condition Grade (Optional)</option>
+
                     <option value="1 - NEW">
                       1 - NEW (Pristine / Brand New)
                     </option>
@@ -1587,6 +1702,23 @@ const MachineManagement: React.FC = () => {
                     <option value="5 - CRITICAL">
                       5 - CRITICAL (Major Damage / Immediate Repair)
                     </option>
+
+                    {conditionsList.length > 0 ? (
+                      conditionsList.map((cond: any) => (
+                        <option key={cond.id || cond.rating} value={cond.rating}>
+                          {cond.rating} - {cond.code || cond.name} ({cond.name})
+                        </option>
+                      ))
+                    ) : (
+                      <>
+                        <option value="1">1 - EXCELLENT (Excellent / Optimal)</option>
+                        <option value="2">2 - GOOD (Good / Operational)</option>
+                        <option value="3">3 - FAIR (Fair / Maintenance Due)</option>
+                        <option value="4">4 - POOR (Poor / Attention Needed)</option>
+                        <option value="5">5 - CRITICAL (Critical / Down)</option>
+                      </>
+                    )}
+
                   </select>
 
                   <div className="mt-1 min-h-[20px]" />
@@ -2099,6 +2231,7 @@ const FormInput: React.FC<FormInputProps> = ({
     </label>
   );
 };
+
 
 function Pagination({
   currentPage,

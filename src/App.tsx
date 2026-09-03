@@ -161,6 +161,10 @@ const SuperAdminQuotation = lazy(
   () => import("./pages/SuperAdmin/Quotation/Quotation"),
 );
 
+const SuperAdminQuotationPlans = lazy(
+  () => import("./pages/SuperAdmin/Quotation/QuotationPlanManagement"),
+);
+
 const SuperAdminContractManagement = lazy(
   () => import("./pages/SuperAdmin/Quotation/ContractManagement"),
 );
@@ -621,6 +625,15 @@ export default function App() {
                   element={
                     <Suspense fallback={<PageSkeleton />}>
                       <SuperAdminQuotation />
+                    </Suspense>
+                  }
+                />
+
+                <Route
+                  path="/super-admin/quotation-plans"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <SuperAdminQuotationPlans />
                     </Suspense>
                   }
                 />
@@ -1220,7 +1233,10 @@ export default function App() {
                   path="/sub-admin/categories"
                   element={<CategoryManagement />}
                 />
-                <Route path="/sub-admin/heatmap" element={<FleetHeatMap />} />
+                <Route
+                  path="/sub-admin/heatmap"
+                  element={<FleetHeatMap />}
+                />
                 <Route
                   path="/sub-admin/heat-map"
                   element={<Navigate to="/sub-admin/heatmap" replace />}
@@ -1241,7 +1257,10 @@ export default function App() {
                     </Suspense>
                   }
                 />
-                <Route path="/sub-admin/staff" element={<StaffManagement />} />
+                <Route
+                  path="/sub-admin/staff"
+                  element={<StaffManagement />}
+                />
                 <Route
                   path="/sub-admin/machines"
                   element={<MachineManagement />}
@@ -1258,8 +1277,14 @@ export default function App() {
                   path="/sub-admin/reporting"
                   element={<ReportingManagement />}
                 />
-                <Route path="/sub-admin/profile" element={<UserProfiles />} />
-                <Route path="/sub-admin/alerts" element={<AlertsPage />} />
+                <Route
+                  path="/sub-admin/profile"
+                  element={<UserProfiles />}
+                />
+                <Route
+                  path="/sub-admin/alerts"
+                  element={<AlertsPage />}
+                />
                 <Route
                   path="/sub-admin/notifications"
                   element={

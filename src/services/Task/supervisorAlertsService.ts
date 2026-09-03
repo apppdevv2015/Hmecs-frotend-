@@ -31,31 +31,15 @@ export interface AlertItem {
   resolutionNotes?: string;
 }
 
-const getCompanyId = (): string => {
-  try {
-    const user = StorageService.get<any>(STORAGE_KEYS.USER) || {};
-    return user.companyId || user.company_id || user.company?.id || "default_company";
-  } catch {
-    return "default_company";
-  }
-};
-
-const getAlertsStorageKey = () => `hme_supervisor_alerts_${getCompanyId()}`;
+// In-memory runtime cache for the session (No localStorage persistence)
+let memoryAlerts: AlertItem[] = [];
 
 const getStoredAlerts = (): AlertItem[] => {
-  try {
-    return StorageService.get<AlertItem[]>(getAlertsStorageKey()) || [];
-  } catch {
-    return [];
-  }
+  return memoryAlerts;
 };
 
 const saveStoredAlerts = (alerts: AlertItem[]): void => {
-  try {
-    StorageService.set(getAlertsStorageKey(), alerts);
-  } catch (err) {
-    console.warn("Failed to persist supervisor alerts:", err);
-  }
+  memoryAlerts = alerts;
 };
 
 export const supervisorAlertsService = {

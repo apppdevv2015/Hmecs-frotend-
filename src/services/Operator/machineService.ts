@@ -71,13 +71,14 @@ export const machineService = {
     );
   },
 
-  unassignMachine: (machineId: string) => {
+  unassignMachine: (machineId: string, role?: "artisan" | "operator") => {
     if (!machineId?.trim()) {
       throw new Error("Machine ID is required");
     }
 
+    const query = role ? `?role=${encodeURIComponent(role)}` : "";
     return apiCall<any>(
-      `/machines/${encodeURIComponent(machineId)}/assign`,
+      `/machines/${encodeURIComponent(machineId)}/assign${query}`,
       {
         method: "DELETE",
       },

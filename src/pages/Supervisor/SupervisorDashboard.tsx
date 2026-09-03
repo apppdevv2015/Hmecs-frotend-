@@ -13,6 +13,7 @@ import {
   ShieldCheck,
   Truck,
   UsersRound,
+  UserCheck,
   Wrench,
   ArrowUpRight,
   BatteryCharging,
@@ -23,6 +24,7 @@ import {
 } from "lucide-react";
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { fetchArtisanAssignments, selectArtisanAssignments } from "../../redux/slices/artisanAssignmentSlice";
 import { fleetService } from "../../services/Fleet/fleetService";
 import { componentService } from "../../services/companyadmin/componentService";
 import { supervisorTaskService } from "../../services/Task/supervisorTaskService";
@@ -30,6 +32,8 @@ import { supervisorAlertsService, type AlertItem } from "../../services/Task/sup
 import { reportApprovalService, type Report, type HistoryEntry } from "../../services/Task/reportApprovalService";
 import SupervisorUserDetailModal, { type UserDetailData } from "../../components/supervisor/SupervisorUserDetailModal";
 import { userService, normalizeUsersResponse } from "../../services/Auth/userService";
+import { apiRequest } from "../../services/api";
+import StorageService from "../../services/storage.service";
 import {
   Area,
   AreaChart,
@@ -225,20 +229,27 @@ export default function SupervisorDashboard() {
   const [reports, setReports] = useState<Report[]>([]);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [taskAssignments, setTaskAssignments] = useState<any[]>([]);
+  const [backendAssignedMachines, setBackendAssignedMachines] = useState<any[]>([]);
   const [userList, setUserList] = useState<any[]>([]);
   const [selectedUserDetail, setSelectedUserDetail] = useState<UserDetailData | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const dispatch = useDispatch<AppDispatch>();
   const { machines } = useSelector((state: RootState) => state.machine);
+  const reduxArtisanAssignments = useSelector(selectArtisanAssignments);
 
   const loadDashboardData = useCallback(async (isSilent = false) => {
     try {
       if (!isSilent) setLoading(true);
       else setRefreshing(true);
 
-      // Trigger Redux machine fetch
+      const currentUser = StorageService.getUser();
+      const companyId = currentUser?.companyId || StorageService.getCompanyId() || "";
+      const queryParam = companyId ? `?companyId=${encodeURIComponent(companyId)}` : "";
+
+      // Trigger Redux machine fetch & artisan assignments
       dispatch(fetchMachines());
+      dispatch(fetchArtisanAssignments());
 
       // Fetch live data from all supervisor services concurrently
       const [
@@ -249,18 +260,36 @@ export default function SupervisorDashboard() {
         historyRes,
         tasksRes,
         usersRes,
+        assignmentsRes,
       ] = await Promise.allSettled([
-        fleetService.getFleetMachines("company_admin"),
+        apiRequest(`/machines/company-fleet${queryParam}`),
         componentService.getComponents(),
         supervisorAlertsService.getAlerts(),
         reportApprovalService.getReports(),
         reportApprovalService.getHistory(),
         supervisorTaskService.getSupervisorTaskData(),
         userService.getUsers({ limit: 100 }),
+        machineService.getAllAssignedMachines({ companyId }),
       ]);
 
-      if (fleetRes.status === "fulfilled" && Array.isArray(fleetRes.value)) {
-        setFleetMachines(fleetRes.value);
+      let loadedFleet: any[] = [];
+      if (fleetRes.status === "fulfilled") {
+        const val: any = fleetRes.value;
+        const list = Array.isArray(val) ? val : (Array.isArray(val?.data) ? val.data : []);
+        if (list.length > 0) loadedFleet = list;
+      }
+
+      if (tasksRes.status === "fulfilled") {
+        const data: any = tasksRes.value;
+        setTaskAssignments(data?.operators || []);
+        if (loadedFleet.length === 0) {
+          if (Array.isArray(data?.machines) && data.machines.length > 0) loadedFleet = data.machines;
+          else if (Array.isArray(data?.catalogMachines) && data.catalogMachines.length > 0) loadedFleet = data.catalogMachines;
+        }
+      }
+
+      if (loadedFleet.length > 0) {
+        setFleetMachines(loadedFleet);
       }
 
       if (componentsRes.status === "fulfilled") {
@@ -287,13 +316,14 @@ export default function SupervisorDashboard() {
         setHistory(historyRes.value);
       }
 
-      if (tasksRes.status === "fulfilled") {
-        const data: any = tasksRes.value;
-        setTaskAssignments(data?.operators || []);
-      }
-
       if (usersRes.status === "fulfilled") {
         setUserList(normalizeUsersResponse(usersRes.value as any));
+      }
+
+      if (assignmentsRes.status === "fulfilled") {
+        const res: any = assignmentsRes.value;
+        const list = Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
+        setBackendAssignedMachines(list);
       }
     } catch (error) {
       console.error("Supervisor Dashboard live fetch error:", error);
@@ -379,162 +409,203 @@ export default function SupervisorDashboard() {
     setIsModalOpen(true);
   };
 
-  // Combine machine list: merge Redux machines and fleet machines
+  // Active company fleet machines list
   const activeMachineList = useMemo(() => {
+    if (fleetMachines && fleetMachines.length > 0) return fleetMachines;
     if (machines && machines.length > 0) return machines;
-    return fleetMachines;
-  }, [machines, fleetMachines]);
+    return [];
+  }, [fleetMachines, machines]);
 
-  // Active assigned operators count
+  // Helper to extract clean health score for any machine
+  const getMachineHealthScore = useCallback((m: any): number => {
+    if (m.healthPercent != null && !isNaN(Number(m.healthPercent))) return Number(m.healthPercent);
+    if (m.healthScore != null && !isNaN(Number(m.healthScore))) return Number(m.healthScore);
+    if (typeof m.health === "number" && !isNaN(m.health)) return m.health;
+    if (typeof m.health === "string") {
+      const parsed = parseInt(m.health.replace("%", "").trim(), 10);
+      if (!isNaN(parsed)) return parsed;
+    }
+    
+    // Match with fleetMachines if available
+    const name = m.name || m.machineName || m.model || m.machine;
+    const fm = fleetMachines.find((f: any) => f.id === m.id || f.machine === name || f.machineName === name || f.fleet === m.serialNumber);
+    if (fm) {
+      if (fm.healthPercent != null && !isNaN(Number(fm.healthPercent))) return Number(fm.healthPercent);
+      if (typeof fm.health === "string") {
+        const p = parseInt(fm.health.replace("%", "").trim(), 10);
+        if (!isNaN(p)) return p;
+      }
+    }
+
+    const status = String(m.status || "").toLowerCase();
+    if (status === "critical") return 35;
+    if (status === "warning" || status === "maintenance") return 65;
+    return 100;
+  }, [fleetMachines]);
+
+  // Dynamic Machine Health List (with assigned operator & artisan matching)
+  const machineHealth = useMemo(() => {
+    return activeMachineList.map((machine: any, idx: number) => {
+      let rawName = machine.name || machine.machineName || machine.model || machine.machine || `Machine ${idx + 1}`;
+      const brand = machine.brand || machine.manufacturer || "";
+      if (brand && rawName.toLowerCase().startsWith(`${brand.toLowerCase()} ${brand.toLowerCase()}`)) {
+        rawName = rawName.slice(brand.length).trim();
+      }
+      const name = rawName;
+      const mId = String(machine.id || machine.machineId || machine._id || "").toLowerCase().trim();
+      const mSn = String(machine.serialNumber || machine.fleet || "").toLowerCase().trim();
+      const mNameLower = name.toLowerCase().trim();
+
+      // 1. Match assigned operator from taskAssignments
+      const matchingTask = taskAssignments.find((op: any) => {
+        const opMachId = String(op.assignedMachineId || "").toLowerCase().trim();
+        const opMachName = String(op.assignedMachine || op.machine || "").toLowerCase().trim();
+        if (mId && opMachId && (mId === opMachId || opMachId.includes(mId) || mId.includes(opMachId))) return true;
+        if (mSn && (opMachId.includes(mSn) || opMachName.includes(mSn))) return true;
+        if (opMachName && (opMachName.includes(mNameLower) || mNameLower.includes(opMachName))) return true;
+        return false;
+      });
+
+      // 2. Match assigned artisan from reduxArtisanAssignments
+      const matchingArtisan = (reduxArtisanAssignments || []).find((a: any) => {
+        if (a.status !== "Active") return false;
+        const aMachId = String(a.machineId || "").toLowerCase().trim();
+        const aMachName = String(a.machineName || "").toLowerCase().trim();
+        if (mId && aMachId && (mId === aMachId || aMachId.includes(mId) || mId.includes(aMachId))) return true;
+        if (mSn && (aMachId.includes(mSn) || aMachName.includes(mSn))) return true;
+        if (aMachName && (aMachName.includes(mNameLower) || mNameLower.includes(aMachName))) return true;
+        return false;
+      });
+
+      // 3. Match from backend assigned machines API (filtered by companyId)
+      const matchingBackend = (backendAssignedMachines || []).find((b: any) => {
+        const bMachId = String(b.machineId || b.id || "").toLowerCase().trim();
+        const bMachName = String(b.machineName || b.name || "").toLowerCase().trim();
+        const bSn = String(b.serialNumber || "").toLowerCase().trim();
+        if (mId && bMachId && (mId === bMachId || bMachId.includes(mId) || mId.includes(bMachId))) return true;
+        if (mSn && (bSn.includes(mSn) || bMachName.includes(mSn))) return true;
+        if (bMachName && (bMachName.includes(mNameLower) || mNameLower.includes(bMachName))) return true;
+        return false;
+      });
+
+      let rawOperator =
+        machine.assignedOperatorName ||
+        machine.assigned_operator_name ||
+        (matchingTask && matchingTask.assignedMachine ? (matchingTask.name || matchingTask.operatorName) : null) ||
+        matchingBackend?.assignedOperatorName ||
+        (typeof machine.operator === "string" ? machine.operator : machine.operator?.name) ||
+        machine.operatorName;
+
+      const operatorName =
+        rawOperator && typeof rawOperator === "string" && rawOperator.trim() !== "" && rawOperator !== "Unassigned" && rawOperator !== "Unassigned Operator" && rawOperator !== "N/A"
+          ? rawOperator.trim()
+          : "Unassigned";
+
+      let rawArtisan =
+        machine.assignedArtisanName ||
+        machine.assigned_artisan_name ||
+        matchingArtisan?.artisanName ||
+        matchingBackend?.assignedArtisanName ||
+        "";
+
+      const artisanName =
+        rawArtisan && typeof rawArtisan === "string" && rawArtisan.trim() !== "" && rawArtisan !== "Unassigned"
+          ? rawArtisan.trim()
+          : "";
+
+      const health = getMachineHealthScore(machine);
+      const status = health >= 80 ? "Healthy" : health >= 50 ? "Warning" : "Critical";
+
+      const isAssigned = (operatorName && operatorName !== "Unassigned") || Boolean(artisanName);
+
+      return {
+        id: machine.id,
+        machine: name,
+        status,
+        health,
+        operator: operatorName,
+        artisan: artisanName,
+        isAssigned,
+      };
+    });
+  }, [activeMachineList, getMachineHealthScore, taskAssignments, reduxArtisanAssignments, backendAssignedMachines]);
+
+  // Active assigned operators count (derived accurately from evaluated machineHealth)
   const activeOperatorsCount = useMemo(() => {
-    const assignedFromTasks = taskAssignments.filter(
-      (op: any) => op.status === "assigned" || (op.assignedMachine && op.assignedMachine !== "Unassigned")
-    ).length;
-    if (assignedFromTasks > 0) return assignedFromTasks;
+    return machineHealth.filter((m) => m.operator && m.operator !== "Unassigned").length;
+  }, [machineHealth]);
 
-    const assignedFromFleet = fleetMachines.filter(
-      (m: any) => m?.operator?.name && m.operator.name !== "Unassigned"
-    ).length;
-    return assignedFromFleet > 0 ? assignedFromFleet : taskAssignments.length;
-  }, [taskAssignments, fleetMachines]);
+  // Active assigned artisans count (derived accurately from evaluated machineHealth)
+  const activeArtisansCount = useMemo(() => {
+    return machineHealth.filter((m) => Boolean(m.artisan)).length;
+  }, [machineHealth]);
 
-  // Pending Tasks count (pending reports + low condition components)
-  const pendingTasksCount = useMemo(() => {
-    const pendingReports = reports.filter((r) => r.status === "pending").length;
-    const criticalComponents = components.filter((c: any) => Number(c?.condition || 1) >= 4).length;
-    return pendingReports + criticalComponents;
-  }, [reports, components]);
+  // Critical Machines count (Exact Critical Machines in fleet)
+  const criticalMachinesCount = useMemo(() => {
+    return activeMachineList.filter((m: any) => {
+      const status = String(m.status || "").toLowerCase();
+      if (status === "critical") return true;
+      const h = getMachineHealthScore(m);
+      return h < 50;
+    }).length;
+  }, [activeMachineList, getMachineHealthScore]);
 
-  // Critical Alerts count
-  const criticalAlertsCount = useMemo(() => {
-    const fromAlerts = alerts.filter(
-      (a) => a.severity === "Critical" && a.status !== "Resolved"
-    ).length;
-    if (fromAlerts > 0) return fromAlerts;
-
-    return fleetMachines.filter((m: any) => m?.status === "Critical").length;
-  }, [alerts, fleetMachines]);
-
-  // Overall Health Percentage
+  // Overall Health Percentage (Fleet Average)
   const overallHealthScore = useMemo(() => {
     if (activeMachineList.length === 0) return 100;
-    let totalScore = 0;
-    activeMachineList.forEach((m: any) => {
-      const comps = m.components || [];
-      if (comps.length > 0) {
-        const avg = comps.reduce((acc: number, c: any) => acc + (5 - Number(c?.condition || 1)) * 25, 0) / comps.length;
-        totalScore += avg;
-      } else {
-        totalScore += m.healthPercent || (m.status === "Critical" ? 45 : m.status === "Warning" ? 72 : 92);
-      }
-    });
-    return Math.round(totalScore / activeMachineList.length) || 100;
-  }, [activeMachineList]);
+    const total = activeMachineList.reduce((acc: number, m: any) => acc + getMachineHealthScore(m), 0);
+    return Math.round(total / activeMachineList.length) || 100;
+  }, [activeMachineList, getMachineHealthScore]);
 
   // Real Operational Uptime Availability %
   const dynamicUptimePercent = useMemo(() => {
     if (activeMachineList.length === 0) return 100;
-    const activeCount = activeMachineList.filter(
-      (m: any) => m.status !== "Critical" && m.status !== "Maintenance Due"
-    ).length;
+    const activeCount = activeMachineList.filter((m: any) => {
+      const status = String(m.status || "").toLowerCase();
+      return status !== "critical" && status !== "maintenance due" && getMachineHealthScore(m) >= 50;
+    }).length;
     return Math.round((activeCount / activeMachineList.length) * 1000) / 10;
-  }, [activeMachineList]);
+  }, [activeMachineList, getMachineHealthScore]);
 
-  // Dynamic Top Stat Cards
+  // Dynamic Top Stat Cards (Assigned Machines, Assigned Operators, Assigned Artisans, Critical Machines)
   const stats: StatCard[] = useMemo(() => [
     {
       title: "Assigned Machines",
       value: activeMachineList.length.toString(),
-      description: "Machines currently under supervisor monitoring.",
+      description: "Total machinery units owned by company.",
       icon: Truck,
-      badge: `${activeMachineList.length} Assigned`,
+      badge: `${activeMachineList.length} Units`,
       tone: "blue",
     },
     {
-      title: "Active Operators",
+      title: "Assigned Operators",
       value: activeOperatorsCount.toString(),
-      description: "Operators actively assigned to field machines.",
+      description: "Operators actively deployed on machines.",
       icon: UsersRound,
-      badge: "Live",
+      badge: `${activeOperatorsCount} Active`,
       tone: "green",
     },
     {
-      title: "Pending Tasks",
-      value: pendingTasksCount.toString(),
-      description: "Maintenance tasks waiting for supervisor action.",
-      icon: Clock,
-      badge: "Needs review",
+      title: "Assigned Artisans",
+      value: activeArtisansCount.toString(),
+      description: "Artisans allocated for machine servicing.",
+      icon: UserCheck,
+      badge: `${activeArtisansCount} Assigned`,
       tone: "amber",
     },
     {
-      title: "Critical Alerts",
-      value: criticalAlertsCount.toString(),
-      description: "High-priority alerts requiring immediate attention.",
+      title: "Critical Machines",
+      value: criticalMachinesCount.toString(),
+      description: "Machines in critical health needing repairs.",
       icon: AlertTriangle,
-      badge: "Urgent",
+      badge: `${criticalMachinesCount} Urgent`,
       tone: "red",
     },
-  ], [activeMachineList.length, activeOperatorsCount, pendingTasksCount, criticalAlertsCount]);
-
-  // Dynamic Machine Health List
-  const machineHealth: MachineHealthItem[] = useMemo(() => {
-    return activeMachineList.map((machine: any, idx: number) => {
-      const name = machine.name || machine.machineName || machine.model || `Machine ${idx + 1}`;
-      const fleetMachine = fleetMachines.find(
-        (f: any) => f.machineName === name || f.id === machine.id || f.machine === name
-      );
-
-      // Find assigned operator
-      const matchingTask = taskAssignments.find(
-        (op: any) => op.assignedMachine === name || op.assignedMachineId === machine.id || op.machine === name
-      );
-      const rawOperator =
-        matchingTask?.name ||
-        matchingTask?.operatorName ||
-        fleetMachine?.operator ||
-        fleetMachine?.operatorName ||
-        machine.operatorName ||
-        machine.operator;
-
-      const operatorName =
-        typeof rawOperator === "object" && rawOperator !== null
-          ? rawOperator.name || rawOperator.operatorName || "Unassigned"
-          : typeof rawOperator === "string" && rawOperator.trim() !== ""
-            ? rawOperator
-            : "Unassigned";
-
-      const comps = machine.components || fleetMachine?.components || [];
-      let health = machine.healthPercent || fleetMachine?.healthPercent || 0;
-      if (comps.length > 0) {
-        const total = comps.reduce((sum: number, c: any) => {
-          const cHealth = c.overallHealthPercent !== undefined 
-            ? c.overallHealthPercent 
-            : c.healthPercent !== undefined 
-              ? c.healthPercent 
-              : Math.max(0, 100 - (c?.intelligence?.lifeUsedPercent ?? 15));
-          return sum + cHealth;
-        }, 0);
-        health = Math.round(total / comps.length);
-      } else if (fleetMachine) {
-        health = fleetMachine.healthPercent || (fleetMachine.status === "Critical" ? 45 : fleetMachine.status === "Warning" ? 68 : 86);
-      } else {
-        health = machine.status === "Critical" ? 45 : machine.status === "Warning" ? 68 : 86;
-      }
-
-      return {
-        machine: name,
-        status: health >= 80 ? "Healthy" : health >= 60 ? "Warning" : "Critical",
-        health,
-        operator: operatorName,
-      };
-    });
-  }, [activeMachineList, fleetMachines, taskAssignments]);
+  ], [activeMachineList.length, activeOperatorsCount, activeArtisansCount, criticalMachinesCount]);
 
   // Filter strictly to machines with an active assigned operator or artisan
   const assignedMachineHealth = useMemo(() => {
-    return machineHealth.filter(
-      (m) => m.operator && m.operator !== "Unassigned" && m.operator !== "Unassigned Operator"
-    );
+    return machineHealth.filter((m) => m.isAssigned);
   }, [machineHealth]);
 
   // Machine pagination
@@ -556,7 +627,7 @@ export default function SupervisorDashboard() {
     }));
   }, [machineHealth]);
 
-  // Dynamic Alert Priority Donut Chart data
+  // Dynamic Alert Priority Donut Chart data (Matches exact company fleet breakdown)
   const alertPriorityData = useMemo(() => {
     const healthyCount = machineHealth.filter((m) => m.status === "Healthy").length;
     const warningCount = machineHealth.filter((m) => m.status === "Warning").length;
@@ -696,7 +767,7 @@ export default function SupervisorDashboard() {
 
                 <div className="flex items-center gap-3">
                   <h1 className="text-3xl font-black tracking-tight text-white">
-                    Operations Overview
+                    Supervisor Dashboard
                   </h1>
                   <button
                     onClick={() => loadDashboardData(true)}
@@ -934,25 +1005,25 @@ export default function SupervisorDashboard() {
                 </PieChart>
               </ResponsiveContainer>
             </div>
-            <div className="mt-3 grid grid-cols-2 gap-2.5">
+            <div className="mt-3 grid grid-cols-3 gap-2">
               {alertPriorityData.map((item, index) => (
                 <div
                   key={item.name}
-                  className="rounded-xl border border-slate-100 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-800/40"
+                  className="rounded-xl border border-slate-100 bg-slate-50 p-2.5 dark:border-slate-800 dark:bg-slate-800/40 text-center"
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-center gap-1.5">
                     <span
-                      className="h-2 w-2 rounded-full"
+                      className="h-2 w-2 rounded-full shrink-0"
                       style={{
                         backgroundColor:
                           alertColors[index % alertColors.length],
                       }}
                     />
-                    <p className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">
+                    <p className="text-[10px] font-bold text-slate-600 dark:text-slate-400">
                       {item.name}
                     </p>
                   </div>
-                  <p className="mt-1 text-xl font-semibold text-slate-900 dark:text-white">
+                  <p className="mt-1 text-lg font-black text-slate-900 dark:text-white">
                     {item.value}
                   </p>
                 </div>
@@ -1091,17 +1162,23 @@ export default function SupervisorDashboard() {
                 return (
                   <div
                     key={`${item.machine}-${index}`}
-                    onClick={() => handleOpenOperatorModal(item.operator, item.machine)}
-                    className="group cursor-pointer rounded-xl border border-slate-100 bg-slate-50 p-4 transition-all hover:-translate-y-0.5 hover:border-blue-300 hover:bg-blue-50/50 hover:shadow-md dark:border-slate-800 dark:bg-slate-800/30 dark:hover:border-blue-500/40 dark:hover:bg-slate-800/60"
+                    className="rounded-xl border border-slate-100 bg-slate-50 p-4 transition-all hover:border-slate-300 dark:border-slate-800 dark:bg-slate-800/30 dark:hover:border-slate-700"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <h4 className="text-[13px] font-bold text-slate-900 group-hover:text-blue-600 dark:text-white dark:group-hover:text-blue-400">
+                        <h4 className="text-[13px] font-bold text-slate-900 dark:text-white">
                           {item.machine}
                         </h4>
-                        <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
-                          Operator: <span className="font-semibold text-slate-800 dark:text-slate-200 underline decoration-slate-300 underline-offset-2 group-hover:text-blue-600">{typeof item.operator === "object" ? ((item.operator as any)?.name || "Unassigned") : String(item.operator || "Unassigned")}</span>
-                        </p>
+                        <div className="mt-1 space-y-0.5 text-[11px]">
+                          <p className="text-slate-500 dark:text-slate-400">
+                            Operator: <span className="font-semibold text-slate-800 dark:text-slate-200">{item.operator !== "Unassigned" ? item.operator : "None"}</span>
+                          </p>
+                          {item.artisan && (
+                            <p className="text-indigo-600 dark:text-indigo-400 font-semibold">
+                              Artisan: {item.artisan}
+                            </p>
+                          )}
+                        </div>
                       </div>
                       <span
                         className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold ${style.badge}`}
@@ -1198,19 +1275,19 @@ export default function SupervisorDashboard() {
                 bg: "bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-400",
               },
               {
-                icon: CheckCircle2,
-                label: "Task Verification",
-                metric: `${pendingTasksCount} Pending Reviews`,
-                desc: "Review inspection logs, approvals, and maintenance progress.",
-                link: "/supervisor/reports",
-                bg: "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400",
+                icon: UserCheck,
+                label: "Artisan Allocation",
+                metric: `${activeArtisansCount} Assigned Artisans`,
+                desc: "Manage specialized artisans and machine servicing allocations.",
+                link: "/supervisor/assigned-artisans",
+                bg: "bg-indigo-50 text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-400",
               },
               {
                 icon: CircleDot,
-                label: "Alert Monitoring",
-                metric: `${criticalAlertsCount} Critical Risks`,
-                desc: "Identify critical risks & telemetry alerts before machine downtime.",
-                link: "/supervisor/alerts",
+                label: "Critical Machines",
+                metric: `${criticalMachinesCount} Critical Units`,
+                desc: "Identify critical risks & machines needing urgent maintenance.",
+                link: "/supervisor/machines",
                 bg: "bg-red-50 text-red-600 dark:bg-red-950/50 dark:text-red-400",
               },
             ].map((card) => (

@@ -33,7 +33,55 @@ interface ApiEnvelope<T> {
 const BASE_ENDPOINT = "/optional-services";
 
 // ----------------------------------------------------
+
+// GET PUBLIC (Active Optional Services for quotation/signup)
+// ----------------------------------------------------
+
+export const getPublicOptionalServices = async (): Promise<OptionalService[]> => {
+  const response = await apiCall<any>(
+    BASE_ENDPOINT,
+    { method: "GET" },
+    { showError: false },
+  );
+
+  const list = Array.isArray(response)
+    ? response
+    : Array.isArray(response?.data)
+      ? response.data
+      : Array.isArray(response?.data?.data)
+        ? response.data.data
+        : [];
+
+  return list;
+};
+
+// ----------------------------------------------------
+// GET PUBLIC EQUIPMENT TYPES (Master Catalog Categories)
+// ----------------------------------------------------
+
+export const getEquipmentTypes = async (): Promise<string[]> => {
+  const response = await apiCall<any>(
+    "/equipment-types",
+    { method: "GET" },
+    { showError: false },
+  );
+
+  const list = Array.isArray(response)
+    ? response
+    : Array.isArray(response?.data)
+      ? response.data
+      : Array.isArray(response?.data?.data)
+        ? response.data.data
+        : [];
+
+  return list;
+};
+
+// ----------------------------------------------------
+// GET ALL (Super Admin - includes inactive)
+=======
 // GET ALL
+
 // ----------------------------------------------------
 
 export const getOptionalServices = async (): Promise<OptionalService[]> => {

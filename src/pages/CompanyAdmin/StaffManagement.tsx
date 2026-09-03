@@ -32,6 +32,8 @@ import {
 } from "lucide-react";
 import PhoneField from "../../components/common/PhoneField";
 import Pagination from "../../components/common/Pagination";
+import { showErrorToast, showSuccessToast } from "../../utils/toastUtils";
+import { addStaffSchema, editStaffSchema } from "../../validations/companyAdminValidation";
 import {
   userService,
   type ApiRole,
@@ -96,13 +98,6 @@ type UserDetailApiResponse =
 
 const perPage = 5;
 
-const roleLabelMap: Record<string, string> = {
-  admin: "Admin",
-  super_admin: "Super Admin",
-  engineer: "Engineer",
-  operator: "Operator",
-};
-
 const emptyForm: StaffFormData = {
   firstName: "",
   lastName: "",
@@ -110,54 +105,8 @@ const emptyForm: StaffFormData = {
   password: "",
   mobileNumber: "",
   roleName: "",
-  companyId: "",
   isActive: true,
 };
-
-const addStaffSchema = z.object({
-  firstName: z
-    .string()
-    .trim()
-    .min(1, "First name is required")
-    .max(50, "First name cannot exceed 50 characters")
-    .regex(/^[A-Za-z\s]+$/, "First name can contain only alphabets"),
-
-  lastName: z
-    .string()
-    .trim()
-    .min(1, "Last name is required")
-    .max(50, "Last name cannot exceed 50 characters")
-    .regex(/^[A-Za-z\s]+$/, "Last name can contain only alphabets"),
-
-  email: z
-    .string()
-    .trim()
-    .min(1, "Email is required")
-    .max(100, "Email cannot exceed 100 characters")
-    .email("Enter a valid email address"),
-
-  password: z
-    .string()
-    .trim()
-    .min(1, "Password is required")
-    .min(8, "Password must be at least 8 characters")
-    .max(30, "Password cannot exceed 30 characters")
-    .regex(
-      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&^#])[A-Za-z\d@$!%*?&^#]{8,30}$/,
-      "Password must contain uppercase, lowercase, number and special character",
-    ),
-
-  mobileNumber: z.string().trim().min(1, "Phone number is required"),
-
-  roleName: z.string().trim().min(1, "Role is required"),
-
-  companyId: z.string().trim().min(1, "Company is required"),
-
-  isActive: z.boolean().optional(),
-});
-const editStaffSchema = addStaffSchema.omit({ password: true }).extend({
-  password: z.string().optional(),
-});
 
 const normalizeRoleName = (role?: string) => {
   return String(role || "")
@@ -183,12 +132,6 @@ const formatDateTime = (date?: string) => {
 };
 
 const formatRole = (role?: string) => {
-  const normalizedRole = normalizeRoleName(role);
-
-  if (roleLabelMap[normalizedRole]) {
-    return roleLabelMap[normalizedRole];
-  }
-
   if (!role) return "Viewer";
 
   return role.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
@@ -396,6 +339,7 @@ export default function StaffManagement() {
   const [formData, setFormData] = useState<StaffFormData>(emptyForm);
   const [formErrors, setFormErrors] = useState<FormErrors>({});
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number | "all">(5);
 
   const [loading, setLoading] = useState(false);
   const [rolesLoading, setRolesLoading] = useState(false);
@@ -540,16 +484,65 @@ export default function StaffManagement() {
     });
   }, [staffList, search, roleFilter]);
 
-  const totalItems = filteredStaff.length;
-  const totalPages = Math.max(Math.ceil(totalItems / perPage), 1);
+  type StaffSortField = "name" | "email" | "phone" | "role" | "status" | "joinedAt";
+  type SortOrder = "asc" | "desc";
 
-  const paginatedStaff = filteredStaff.slice(
-    (currentPage - 1) * perPage,
-    currentPage * perPage,
-  );
+  const [sortField, setSortField] = useState<StaffSortField>("name");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
 
-  const startItem = totalItems === 0 ? 0 : (currentPage - 1) * perPage + 1;
-  const endItem = Math.min(currentPage * perPage, totalItems);
+  const handleSort = (field: StaffSortField) => {
+    if (sortField === field) {
+      setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortOrder("asc");
+    }
+  };
+
+  const sortedStaff = useMemo(() => {
+    const list = [...filteredStaff];
+    return list.sort((a, b) => {
+      let valA: any = "";
+      let valB: any = "";
+
+      if (sortField === "name") {
+        valA = (a.name || "").toLowerCase();
+        valB = (b.name || "").toLowerCase();
+      } else if (sortField === "email") {
+        valA = (a.email || "").toLowerCase();
+        valB = (b.email || "").toLowerCase();
+      } else if (sortField === "phone") {
+        valA = (a.phone || "").toLowerCase();
+        valB = (b.phone || "").toLowerCase();
+      } else if (sortField === "role") {
+        valA = (a.role || "").toLowerCase();
+        valB = (b.role || "").toLowerCase();
+      } else if (sortField === "status") {
+        valA = a.isActive ? 1 : 0;
+        valB = b.isActive ? 1 : 0;
+      } else if (sortField === "joinedAt") {
+        valA = new Date(a.joinedAt || 0).getTime();
+        valB = new Date(b.joinedAt || 0).getTime();
+      }
+
+      if (valA < valB) return sortOrder === "asc" ? -1 : 1;
+      if (valA > valB) return sortOrder === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [filteredStaff, sortField, sortOrder]);
+
+  const totalItems = sortedStaff.length;
+  const isShowAll = pageSize === "all";
+  const numericPageSize = isShowAll ? totalItems || 1 : pageSize;
+  const totalPages = isShowAll ? 1 : Math.max(1, Math.ceil(totalItems / numericPageSize));
+
+  const startIndex = isShowAll ? 0 : (currentPage - 1) * numericPageSize;
+  const endIndex = isShowAll ? totalItems : Math.min(startIndex + numericPageSize, totalItems);
+
+  const paginatedStaff = isShowAll ? sortedStaff : sortedStaff.slice(startIndex, endIndex);
+
+  const startItem = totalItems === 0 ? 0 : startIndex + 1;
+  const endItem = endIndex;
 
   const activeStaffCount = useMemo(() => {
     return staffList.filter((staff) => staff.isActive).length;
@@ -563,6 +556,34 @@ export default function StaffManagement() {
     return new Set(staffList.map((staff) => normalizeRoleName(staff.role)))
       .size;
   }, [staffList]);
+
+  const [togglingStaffId, setTogglingStaffId] = useState<string | number | null>(null);
+
+  const handleToggleStaffStatus = async (staff: Staff) => {
+    if (togglingStaffId) return;
+
+    const nextStatus = !staff.isActive;
+    const previousStaffList = staffList;
+
+    // Optimistic update
+    setStaffList((prev) =>
+      prev.map((s) => (s.id === staff.id ? { ...s, isActive: nextStatus } : s))
+    );
+    setTogglingStaffId(staff.id);
+
+    try {
+      await userService.updateUser(staff.id, {
+        is_active: nextStatus,
+      });
+      showSuccessToast?.(`${staff.name} is now ${nextStatus ? "Active" : "Inactive"}`);
+    } catch (err: any) {
+      console.error("Staff status toggle error:", err);
+      setStaffList(previousStaffList);
+      showErrorToast?.(err?.message || "Failed to update staff status");
+    } finally {
+      setTogglingStaffId(null);
+    }
+  };
 
   useEffect(() => {
     setCurrentPage(1);
@@ -919,11 +940,36 @@ export default function StaffManagement() {
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-[0.14em] text-slate-500 dark:border-slate-800 dark:bg-slate-950/60">
                   <th className="w-20 px-6 py-4 font-bold">#</th>
-                  <th className="px-6 py-4 font-bold">Staff</th>
-                  <th className="px-6 py-4 font-bold">Mobile</th>
-                  <th className="px-6 py-4 font-bold">Role</th>
-                  <th className="px-6 py-4 font-bold">Status</th>
-                  <th className="px-6 py-4 font-bold">Created At</th>
+                  <th
+                    className="px-6 py-4 font-bold cursor-pointer select-none transition hover:text-blue-600 dark:hover:text-blue-400"
+                    onClick={() => handleSort("name")}
+                  >
+                    Staff {sortField === "name" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
+                  </th>
+                  <th
+                    className="px-6 py-4 font-bold cursor-pointer select-none transition hover:text-blue-600 dark:hover:text-blue-400"
+                    onClick={() => handleSort("phone")}
+                  >
+                    Mobile {sortField === "phone" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
+                  </th>
+                  <th
+                    className="px-6 py-4 font-bold cursor-pointer select-none transition hover:text-blue-600 dark:hover:text-blue-400"
+                    onClick={() => handleSort("role")}
+                  >
+                    Role {sortField === "role" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
+                  </th>
+                  <th
+                    className="px-6 py-4 font-bold cursor-pointer select-none transition hover:text-blue-600 dark:hover:text-blue-400"
+                    onClick={() => handleSort("status")}
+                  >
+                    Status {sortField === "status" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
+                  </th>
+                  <th
+                    className="px-6 py-4 font-bold cursor-pointer select-none transition hover:text-blue-600 dark:hover:text-blue-400"
+                    onClick={() => handleSort("joinedAt")}
+                  >
+                    Created At {sortField === "joinedAt" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
+                  </th>
                   <th className="px-6 py-4 text-center font-bold">Actions</th>
                 </tr>
               </thead>
@@ -985,8 +1031,26 @@ export default function StaffManagement() {
                         </span>
                       </td>
 
-                      <td className="px-6 py-4">
-                        <StatusBadge active={staff.isActive} />
+                      <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
+                        <label className="relative inline-flex cursor-pointer items-center">
+                          <input
+                            type="checkbox"
+                            checked={staff.isActive}
+                            onChange={() => handleToggleStaffStatus(staff)}
+                            disabled={togglingStaffId === staff.id}
+                            className="peer sr-only"
+                          />
+                          <div className="peer h-6 w-11 rounded-full bg-slate-200 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-slate-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-emerald-500 peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none dark:border-slate-600 dark:bg-slate-700" />
+                          <span
+                            className={`ml-3 text-xs font-bold uppercase tracking-wider ${
+                              staff.isActive
+                                ? "text-emerald-600 dark:text-emerald-400"
+                                : "text-slate-400 dark:text-slate-500"
+                            }`}
+                          >
+                            {staff.isActive ? "Active" : "Inactive"}
+                          </span>
+                        </label>
                       </td>
 
                       <td className="px-6 py-4">
@@ -1062,8 +1126,16 @@ export default function StaffManagement() {
               startItem={startItem}
               endItem={endItem}
               totalItems={totalItems}
+              itemsPerPage={pageSize}
+              itemLabel="staff members"
+              pageSizeOptions={[5, 10, 25, 50]}
               onPrev={() => setCurrentPage((p) => Math.max(p - 1, 1))}
               onNext={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+              onPageChange={(p) => setCurrentPage(p)}
+              onItemsPerPageChange={(val) => {
+                setPageSize(val);
+                setCurrentPage(1);
+              }}
             />
           )}
         </section>
@@ -1160,14 +1232,11 @@ export default function StaffManagement() {
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <Info label="Staff ID" value={viewStaff.id} />
             <Info label="First Name" value={viewStaff.firstName || "—"} />
             <Info label="Last Name" value={viewStaff.lastName || "—"} />
             <Info label="Email" value={viewStaff.email} />
             <Info label="Mobile Number" value={viewStaff.phone} />
             <Info label="Role" value={formatRole(viewStaff.role)} />
-            <Info label="Role ID" value={viewStaff.roleId || "—"} />
-            <Info label="Company ID" value={viewStaff.companyId || "—"} />
             <Info
               label="Status"
               value={viewStaff.isActive ? "Active" : "Inactive"}

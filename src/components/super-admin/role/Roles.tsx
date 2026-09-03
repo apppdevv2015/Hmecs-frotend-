@@ -201,6 +201,34 @@ export default function Roles() {
     }
   };
 
+  const [togglingRoleId, setTogglingRoleId] = useState<string | number | null>(null);
+
+  const handleToggleRoleStatus = async (role: Role) => {
+    if (togglingRoleId) return;
+
+    const nextStatus: RoleStatus = role.status === "active" ? "inactive" : "active";
+    const previousRoles = roles;
+
+    // Optimistic update
+    setRoles((prev) =>
+      prev.map((r) => (r.id === role.id ? { ...r, status: nextStatus } : r))
+    );
+    setTogglingRoleId(role.id);
+
+    try {
+      await updateRoleApi(role.id, {
+        name: role.rawName,
+        is_active: nextStatus === "active",
+      });
+    } catch (error: any) {
+      console.error("Role status toggle failed:", error);
+      setRoles(previousRoles);
+      showErrorToast(error?.message || "Failed to update role status");
+    } finally {
+      setTogglingRoleId(null);
+    }
+  };
+
   const filteredRoles = useMemo(() => {
     const value = search.trim().toLowerCase();
 
@@ -494,16 +522,26 @@ export default function Roles() {
                       {role.name}
                     </td>
 
-                    <td>
-                      <span
-                        className={`rounded-full px-3 py-1 text-xs font-medium ${
-                          role.status === "active"
-                            ? "bg-green-500/10 text-green-500"
-                            : "bg-red-500/10 text-red-500"
-                        }`}
-                      >
-                        {role.status}
-                      </span>
+                    <td onClick={(e) => e.stopPropagation()}>
+                      <label className="relative inline-flex cursor-pointer items-center">
+                        <input
+                          type="checkbox"
+                          checked={role.status === "active"}
+                          onChange={() => handleToggleRoleStatus(role)}
+                          disabled={togglingRoleId === role.id}
+                          className="peer sr-only"
+                        />
+                        <div className="peer h-6 w-11 rounded-full bg-slate-200 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-slate-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-emerald-500 peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none dark:border-slate-600 dark:bg-slate-700" />
+                        <span
+                          className={`ml-3 text-xs font-bold uppercase tracking-wider ${
+                            role.status === "active"
+                              ? "text-emerald-600 dark:text-emerald-400"
+                              : "text-slate-400 dark:text-slate-500"
+                          }`}
+                        >
+                          {role.status}
+                        </span>
+                      </label>
                     </td>
 
                     <td className="text-gray-500 dark:text-gray-400">

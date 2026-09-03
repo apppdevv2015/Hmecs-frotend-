@@ -10,6 +10,11 @@ import Label from "../form/Label";
 import Input from "../form/input/InputField";
 
 import { authService } from "../../services/Auth/authService";
+import {
+  getPublicOptionalServices,
+  getEquipmentTypes,
+} from "../../services/SuperAdmin/optionalService";
+import { submitQuotationRequest } from "../../services/SuperAdmin/quotationInquiryService";
 
 import { showLoadingToast, updateToast } from "../../utils/toastUtils";
 
@@ -65,6 +70,41 @@ const EQUIPMENT_TYPE_OPTIONS: SelectOption[] = [
   { value: "conveyors", label: "Conveyors" },
   { value: "cranes", label: "Cranes" },
   { value: "other", label: "Other" },
+];
+
+const OPTIONAL_SERVICE_OPTIONS: SelectOption[] = [
+  {
+    value: "telematics_ecu_integration",
+    label: "Telematics / ECU Integration",
+  },
+  {
+    value: "historical_data_migration_cleaning",
+    label: "Historical Data Migration & Cleaning",
+  },
+  {
+    value: "custom_api_development",
+    label: "Custom API Development",
+  },
+  {
+    value: "sap_erp_integration",
+    label: "SAP / ERP Integration",
+  },
+  {
+    value: "additional_training",
+    label: "Additional Training",
+  },
+  {
+    value: "sms_whatsapp_notifications",
+    label: "SMS / WhatsApp Notifications",
+  },
+  {
+    value: "custom_reports",
+    label: "Custom Reports",
+  },
+  {
+    value: "on_site_technical_support",
+    label: "On-site Technical Support",
+  },
 ];
 
 const CONTRACT_DURATION_OPTIONS: SelectOption[] = [
@@ -141,6 +181,7 @@ const quotationSchema = z.object({
     .min(1, "Select at least one equipment type"),
 
   contractDuration: z.string().min(1, "Please select contract duration"),
+  optionalServices: z.array(z.string()).optional(),
 
   implementationRequirements: z.string().trim().optional(),
 
@@ -681,6 +722,76 @@ export default function SignupCard({ onClose, onSuccess }: SignupCardProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [step, setStep] = useState<1 | 2>(1);
 
+  const [equipmentTypeOptions, setEquipmentTypeOptions] =
+    useState<SelectOption[]>(EQUIPMENT_TYPE_OPTIONS);
+  const [optionalServiceOptions, setOptionalServiceOptions] =
+    useState<SelectOption[]>(OPTIONAL_SERVICE_OPTIONS);
+  const [isLoadingDynamicOptions, setIsLoadingDynamicOptions] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadDynamicOptions = async () => {
+      setIsLoadingDynamicOptions(true);
+      try {
+        const [equipmentsRes, servicesRes] = await Promise.allSettled([
+          getEquipmentTypes(),
+          getPublicOptionalServices(),
+        ]);
+
+        if (
+          equipmentsRes.status === "fulfilled" &&
+          Array.isArray(equipmentsRes.value) &&
+          equipmentsRes.value.length > 0
+        ) {
+          const mappedEquipments: SelectOption[] = equipmentsRes.value.map(
+            (item: any) => {
+              if (typeof item === "string") {
+                return { value: item, label: item };
+              }
+              const name =
+                item.name || item.category || item.label || String(item);
+              return { value: name, label: name };
+            },
+          );
+          if (isMounted && mappedEquipments.length > 0) {
+            setEquipmentTypeOptions(mappedEquipments);
+          }
+        }
+
+        if (
+          servicesRes.status === "fulfilled" &&
+          Array.isArray(servicesRes.value) &&
+          servicesRes.value.length > 0
+        ) {
+          const mappedServices: SelectOption[] = servicesRes.value.map(
+            (item: any) => {
+              const val = item.name || item.id || item.value;
+              const lbl = item.name || item.label || val;
+              return { value: val, label: lbl };
+            },
+          );
+          if (isMounted && mappedServices.length > 0) {
+            setOptionalServiceOptions(mappedServices);
+          }
+        }
+      } catch (err) {
+        console.warn(
+          "Failed to load dynamic quotation options, using fallback:",
+          err,
+        );
+      } finally {
+        if (isMounted) setIsLoadingDynamicOptions(false);
+      }
+    };
+
+    loadDynamicOptions();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const {
     control,
     register,
@@ -706,6 +817,7 @@ export default function SignupCard({ onClose, onSuccess }: SignupCardProps) {
       equipmentTypes: [],
       contractDuration: "",
       implementationRequirements: "",
+      optionalServices: [],
       additionalRequirements: "",
       attachment: undefined,
     },
@@ -811,6 +923,7 @@ export default function SignupCard({ onClose, onSuccess }: SignupCardProps) {
 
       const { company, user } = response.data;
 
+
       // IMPORTANT: a new account is not immediately an active session.
       // Clear any stale auth state before redirecting to sign in so the
       // user does not land on a protected route or access-denied page.
@@ -820,23 +933,70 @@ export default function SignupCard({ onClose, onSuccess }: SignupCardProps) {
       // StorageService.remove(STORAGE_KEYS.EMAIL);
       // StorageService.remove(STORAGE_KEYS.NAME);
       // StorageService.remove(STORAGE_KEYS.COMPANY_ID);
+      // Submit Quotation Request Details to Backend Database
+      try {
+        await submitQuotationRequest({
+          companyName: data.companyName.trim(),
+          contactPerson: data.contactPerson.trim(),
+          email: data.email.trim().toLowerCase(),
+          phone: data.phone.trim(),
+          siteLocation: data.siteLocation?.trim(),
+          quotationType: data.quotationType,
+          numberOfSites: Number(data.numberOfSites) || 1,
+          siteNames:
+            data.siteNames?.map((s) => s.name).filter(Boolean) || [],
+          activeMachines: Number(data.activeMachines) || 1,
+          equipmentTypes: data.equipmentTypes || [],
+          contractDuration: data.contractDuration,
+          optionalServices: data.optionalServices || [],
+          implementationRequirements:
+            data.implementationRequirements?.trim(),
+          additionalRequirements: data.additionalRequirements?.trim(),
+          companyId: company?.id,
+          userId: user?.id,
+        });
+      } catch (quotationErr) {
+        console.warn("Quotation inquiry submission notice:", quotationErr);
+      }
+
+      const token = (response as any)?.token || (response as any)?.accessToken;
+      const normalizedRole = "company_admin";
+      const finalUser = {
+        id: user?.id,
+        role: normalizedRole,
+        role_name: "Admin",
+        companyId: company?.id,
+        isActive: false,
+        email: data.email.trim().toLowerCase(),
+        name: data.contactPerson.trim(),
+        companyName: data.companyName.trim(),
+        company: data.companyName.trim(),
+      };
+
+      if (token) {
+        StorageService.set(STORAGE_KEYS.TOKEN, token);
+      }
+      StorageService.set(STORAGE_KEYS.ROLE, normalizedRole);
+      StorageService.set(STORAGE_KEYS.USER, finalUser);
+      StorageService.set(STORAGE_KEYS.EMAIL, finalUser.email);
+      StorageService.set(STORAGE_KEYS.NAME, finalUser.name);
+      if (company?.id) {
+        StorageService.set(STORAGE_KEYS.COMPANY_ID, company.id);
+      }
+
 
       updateToast(
         toastId,
-        response.message || "Account created successfully",
+        "Quotation request submitted successfully! Redirecting to company portal...",
         "success",
       );
 
       if (onSuccess) {
-        // Embedded usage (e.g. inside an admin modal): let the parent
-        // decide what happens next instead of forcing a redirect.
         onSuccess({ company, user });
       } else {
-        // Standalone usage (e.g. full /signup page): send the person to
-        // sign in once their account is activated.
         setTimeout(() => {
-          navigate("/signin", { replace: true });
-        }, 700);
+          window.location.href = "/company-admin/dashboard";
+        }, 1000);
       }
     } catch (error) {
       console.error("Signup API Error:", error);
@@ -1378,8 +1538,12 @@ export default function SignupCard({ onClose, onSuccess }: SignupCardProps) {
                                 clearErrors("equipmentTypes");
                               }
                             }}
-                            options={EQUIPMENT_TYPE_OPTIONS}
-                            placeholder="Select equipment types"
+                            options={equipmentTypeOptions}
+                            placeholder={
+                              isLoadingDynamicOptions
+                                ? "Loading equipment types..."
+                                : "Select equipment types"
+                            }
                             error={Boolean(errors.equipmentTypes)}
                           />
                         )}
@@ -1441,6 +1605,33 @@ export default function SignupCard({ onClose, onSuccess }: SignupCardProps) {
                       className="mt-1 w-full resize-none rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 transition focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/10 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
                       {...register("implementationRequirements")}
                     />
+
+                    <div className="min-h-[10px] pt-1" />
+                  </div>
+
+                  {/* Optional Services */}
+
+                  <div className="flex min-w-0 flex-col">
+                    <Label>Optional Services</Label>
+
+                    <div className="mt-1">
+                      <Controller
+                        name="optionalServices"
+                        control={control}
+                        render={({ field }) => (
+                          <AppMultiSelect
+                            values={field.value || []}
+                            onChange={(values) => field.onChange(values)}
+                            options={optionalServiceOptions}
+                            placeholder={
+                              isLoadingDynamicOptions
+                                ? "Loading optional services..."
+                                : "Select optional services"
+                            }
+                          />
+                        )}
+                      />
+                    </div>
 
                     <div className="min-h-[10px] pt-1" />
                   </div>
