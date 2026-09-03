@@ -9,7 +9,11 @@ import Label from "../form/Label";
 import Input from "../form/input/InputField";
 import { authService } from "../../services/Auth/authService";
 import StorageService, { STORAGE_KEYS } from "../../services/storage.service";
-import { createQuotationRequest } from "../../services/Quotation/quotationService";
+import {
+  createQuotationRequest,
+  extractApiError,
+} from "../../services/Quotation/quotationService";
+import { showErrorToast, showSuccessToast } from "../../utils/toastUtils";
 import {
   getOptionalServices,
   type OptionalService,
@@ -511,14 +515,36 @@ export default function SignUpForm() {
         mobile_number: data.phone.trim(),
       });
 
-      // --------------------------------------------------
-      // 2. Persist authentication data returned by backend
-      // --------------------------------------------------
+      const registerData =
+        (registerResponse as any)?.data ??
+        registerResponse;
 
-      const token = registerResponse.token;
+      const registrationMessage =
+        (typeof registerData?.message === "string" && registerData.message.trim()) ||
+        (typeof (registerResponse as any)?.message === "string" && (registerResponse as any).message.trim()) ||
+        "";
+
+      if (registrationMessage) {
+        showSuccessToast(registrationMessage, { duration: 4000 });
+      }
+
+      const token =
+        registerData?.token ||
+        registerData?.accessToken ||
+        registerData?.access_token;
+
+      // A freshly created account is not an active authenticated session yet.
+      // Clear any token/session state from the browser so the user lands on the
+      // login page instead of getting redirected into a protected dashboard route.
+      StorageService.remove(STORAGE_KEYS.TOKEN);
+      StorageService.remove(STORAGE_KEYS.USER);
+      StorageService.remove(STORAGE_KEYS.ROLE);
+      StorageService.remove(STORAGE_KEYS.EMAIL);
+      StorageService.remove(STORAGE_KEYS.NAME);
+      StorageService.remove(STORAGE_KEYS.COMPANY_ID);
 
       if (token) {
-        StorageService.set(STORAGE_KEYS.TOKEN, token);
+        console.warn("Registration returned a token, but signup flow intentionally clears it so the user must login manually.");
       }
 
       // --------------------------------------------------
@@ -526,6 +552,12 @@ export default function SignUpForm() {
       // --------------------------------------------------
 
       const quotationPayload = {
+        companyId: registerData?.company?.id || registerData?.companyId || null,
+        userId: registerData?.user?.id || registerData?.userId || null,
+        companyName: (registerData?.company?.name || data.companyName.trim()).trim(),
+        contactPerson: data.contactPerson.trim(),
+        email: data.email.trim().toLowerCase(),
+        phone: data.phone.trim(),
         quotationType: data.quotationType.trim(),
         numberOfSites: Number.parseInt(data.numberOfSites, 10),
         siteNames: data.siteNames
@@ -533,7 +565,7 @@ export default function SignUpForm() {
           .filter(Boolean),
         activeMachines: Number(data.activeMachines),
         equipmentTypes: data.equipmentTypes,
-               contractDuration:
+        contractDuration:
           data.contractDuration === "custom"
             ? data.customContractDuration?.trim() || ""
             : data.contractDuration,
@@ -551,6 +583,10 @@ export default function SignUpForm() {
 
       navigate("/signin", { replace: true });
     } catch (error) {
+      const errorMessage = extractApiError(error);
+      if (errorMessage) {
+        showErrorToast(errorMessage, { duration: 5000 });
+      }
       console.error("Signup/Quotation API Error:", error);
       throw error;
     }

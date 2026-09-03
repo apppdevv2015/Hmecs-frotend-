@@ -412,6 +412,15 @@ const SupervisorTaskReview = lazy(
   () => import("./pages/Supervisor/SupervisorTaskReview"),
 );
 
+// ---------------- Engineers ----------------
+
+const EngineersDashboard = lazy(
+  () => import("./pages/EngineersDashboard/EngineersDashboard"),
+);
+
+
+
+
 import AuthInitializer from "./routes/AuthInitializer";
 
 export default function App() {
@@ -1342,7 +1351,7 @@ export default function App() {
             <Route
               element={
                 <RoleProtectedRoute
-                  allowedRoles={["artisans", "artisan", "engineer", "mechanic"]}
+                  allowedRoles={["artisans", "artisan", "mechanic"]}
                 />
               }
             >
@@ -1680,6 +1689,136 @@ export default function App() {
                 <Route path="/supervisor/profile" element={<UserProfiles />} />
               </Route>
             </Route>
+
+                       {/* Engineers Routes */}
+            <Route
+              element={
+                <RoleProtectedRoute allowedRoles={["engineers", "engineer"]} />
+              }
+            >
+              <Route element={<AppLayout role="engineers" />}>
+                <Route
+                  path="/engineers"
+                  element={<Navigate to="/engineers/dashboard" replace />}
+                />
+                <Route
+                  path="/engineers/dashboard"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <EngineersDashboard />
+                    </Suspense>
+                  }
+                />
+                <Route path="/engineers/profile" element={<UserProfiles />} />
+
+                <Route
+                  path="/engineers/staff"
+                  element={<StaffManagement />}
+                />
+                <Route
+                  path="/engineers/machines"
+                  element={<MachineManagement />}
+                />
+                <Route
+                  path="/engineers/components"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <ComponentRegister />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/engineers/heatmap"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <FleetHeatMap />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/engineers/categories"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <CategoryManagement />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/engineers/inspection-entry"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <InspectionDataEntry />
+                    </Suspense>
+                  }
+                />
+                <Route path="/engineers/alerts" element={<AlertsPage />} />
+                <Route
+                  path="/engineers/reporting"
+                  element={<ReportingManagement />}
+                />
+                <Route
+                  path="/engineers/service-log"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <ServiceLog />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/engineers/quotation"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <QuotationManagement />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/engineers/contracts"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <QuotationContract />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/engineers/invoices"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <QuotationInvoice />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/engineers/subscriptions"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <SubscriptionHistory />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/engineers/documents"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <Documents />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/engineers/coming-soon/:module"
+                  element={<ComingSoon />}
+                />
+              </Route>
+            </Route>
+
+
+
+
+
+
+
+
+
 
             {/* Coming Soon Routes */}
             <Route

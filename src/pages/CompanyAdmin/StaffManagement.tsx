@@ -9,6 +9,7 @@ import {
 
 import { CardSkeleton, TableSkeleton } from "../../components/common/Skeleton";
 import AppSelect from "../../components/ui/dropdown/AppSelect";
+import { isReadOnlyRole } from "../../components/common/permissions";
 
 import { createPortal } from "react-dom";
 import { z } from "zod";
@@ -380,6 +381,8 @@ const getRoleTone = (role?: string) => {
 
 export default function StaffManagement() {
   const [staffList, setStaffList] = useState<Staff[]>([]);
+  const readOnly = isReadOnlyRole(StorageService.getRole());
+
   const [roles, setRoles] = useState<ApiRole[]>([]);
 
   const [search, setSearch] = useState("");
@@ -450,7 +453,10 @@ export default function StaffManagement() {
       setRoles(rolesArray);
 
       const validStaffRoles = rolesArray.filter(
-        (r) => !["admin", "super_admin", "sub_super_admin"].includes(normalizeRoleName(r.name))
+        (r) =>
+          !["admin", "super_admin", "sub_super_admin"].includes(
+            normalizeRoleName(r.name),
+          ),
       );
 
       setFormData((prev) => ({
@@ -808,14 +814,16 @@ export default function StaffManagement() {
               {/* Actions */}
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                 {/* Add Staff */}
-                <button
-                  onClick={openAddModal}
-                  disabled={isStaffLimitReached}
-                  className="inline-flex h-11 w-full shrink-0 items-center justify-center gap-2 rounded-xl border border-blue-300/30 bg-white px-5 text-sm font-bold text-[#3730D9] shadow-lg shadow-black/10 transition-all duration-200 hover:-translate-y-0.5 hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-400 disabled:text-white sm:w-fit dark:border-slate-600 dark:bg-slate-900 dark:text-blue-300 dark:hover:bg-slate-800"
-                >
-                  <Plus size={18} strokeWidth={2.4} />
-                  Add Staff
-                </button>
+                {!readOnly && (
+                  <button
+                    onClick={openAddModal}
+                    disabled={isStaffLimitReached}
+                    className="inline-flex h-11 w-full shrink-0 items-center justify-center gap-2 rounded-xl border border-blue-300/30 bg-white px-5 text-sm font-bold text-[#3730D9] shadow-lg shadow-black/10 transition-all duration-200 hover:-translate-y-0.5 hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-400 disabled:text-white sm:w-fit dark:border-slate-600 dark:bg-slate-900 dark:text-blue-300 dark:hover:bg-slate-800"
+                  >
+                    <Plus size={18} strokeWidth={2.4} />
+                    Add Staff
+                  </button>
+                )}
               </div>
             </div>
           </div>

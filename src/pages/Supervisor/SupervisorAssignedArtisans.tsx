@@ -386,7 +386,7 @@ export default function SupervisorAssignedArtisans() {
 
     const existingIndex = assignments.findIndex(
       (a) => a.machineId === modalMachineId && a.componentName === modalComponentName
->>>>>>> Stashed changes
+
     );
 
     if (assignArtisanToMachine.fulfilled.match(result)) {

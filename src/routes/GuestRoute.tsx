@@ -53,7 +53,7 @@ export const getDashboardPathForRole = (role?: any): string => {
 
     artisans: "/artisans/dashboard",
     artisan: "/artisans/dashboard",
-    engineer: "/artisans/dashboard",
+    engineer: "/engineers/dashboard",
     mechanic: "/artisans/dashboard",
 
     operator: "/operator/dashboard",
@@ -63,6 +63,8 @@ export const getDashboardPathForRole = (role?: any): string => {
     technicalsupport: "/support/dashboard",
     support: "/support/dashboard",
     viewer: "/viewer/dashboard",
+
+     engineers: "/engineers/dashboard",
   };
 
   return roleMap[normalized] || "/supervisor/dashboard";
