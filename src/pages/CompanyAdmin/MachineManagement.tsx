@@ -1309,11 +1309,7 @@ const MachineManagement: React.FC = () => {
               <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
                 {loading ? (
                   <tr>
-
-                    <td colSpan={9} className="px-6 py-16 text-center">
-
                     <td colSpan={8} className="px-6 py-16 text-center">
-
                       <div className="flex flex-col items-center justify-center gap-3">
                         <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 text-blue-600 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300">
                           <Loader2 className="animate-spin" size={24} />
@@ -1371,7 +1367,6 @@ const MachineManagement: React.FC = () => {
                         </span>
                       </td>
 
-
                       <td className="px-6 py-4">
                         <span className="text-sm font-bold text-slate-700 dark:text-slate-200">
                           {machine.model}
@@ -1386,49 +1381,8 @@ const MachineManagement: React.FC = () => {
 
                       <td className="px-6 py-4">
                         <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300">
-                          {machine.equipmentType}
+                          {machine.equipmentType || "Mining Equipment"}
                         </span>
-                      </td>
-
-                        <td className="px-6 py-4">
-                          <span className="text-sm font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap">
-                            {machine.model}
-                          </span>
-                        </td>
-
-                        <td className="px-6 py-4">
-                          <span className="font-mono text-xs font-bold text-slate-600 dark:text-slate-300 whitespace-nowrap">
-                            {machine.serialNumber}
-                          </span>
-                        </td>
-
-                        <td className="px-6 py-4">
-                          <span className="text-sm font-semibold text-slate-700 dark:text-slate-200 whitespace-nowrap">
-                            {machine.equipmentType || "Mining Equipment"}
-                          </span>
-                        </td>
-
-                        <td className="px-6 py-4">
-                          {(() => {
-                            const score = machine.healthScore !== undefined ? machine.healthScore : getMachineHealthScore(machine);
-
-                            if (score === null || score === undefined) {
-                              return (
-                                <div className="flex flex-col gap-1.5 min-w-[130px] max-w-[150px]">
-                                  <div className="flex items-center justify-between text-xs font-black">
-                                    <span className="text-slate-400 dark:text-slate-500">Uncalculated</span>
-                                    <span className="text-[11px] font-bold text-slate-400">0%</span>
-                                  </div>
-                                  <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
-                                    <div className="h-full rounded-full bg-slate-300 dark:bg-slate-700 w-0" />
-                                  </div>
-                                </div>
-                              );
-                            }
-
-
-                      <td className="px-6 py-4">
-                        {getConditionBadge(machine.condition)}
                       </td>
 
                       <td className="px-6 py-4">
@@ -2231,54 +2185,6 @@ const FormInput: React.FC<FormInputProps> = ({
     </label>
   );
 };
-
-
-function Pagination({
-  currentPage,
-  totalPages,
-  startItem,
-  endItem,
-  totalItems,
-  itemsPerPage,
-  itemLabel = "items",
-  pageSizeOptions = [10, 25, 50, 100],
-  onPrev,
-  onNext,
-  onPageChange,
-  onItemsPerPageChange,
-}: PaginationProps) {
-  if (totalItems === 0) return null;
-
-  return (
-    <div className="flex shrink-0 flex-col gap-3 border-t border-slate-200 px-5 py-4 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
-      <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
-        Showing {startItem}-{endItem} of {totalItems}
-      </p>
-
-      <div className="flex items-center justify-between gap-2 sm:justify-end">
-        <button
-          disabled={currentPage === 1}
-          onClick={onPrev}
-          className="h-9 rounded-lg border border-slate-300 bg-white px-4 text-xs font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700 dark:bg-[#101f33] dark:text-slate-300 dark:hover:bg-[#12243b]"
-        >
-          Previous
-        </button>
-
-        <span className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-600 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-300">
-          Page {currentPage} of {totalPages || 1}
-        </span>
-
-        <button
-          disabled={currentPage === totalPages || totalPages === 0}
-          onClick={onNext}
-          className="h-9 rounded-lg border border-slate-300 bg-white px-4 text-xs font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700 dark:bg-[#101f33] dark:text-slate-300 dark:hover:bg-[#12243b]"
-        >
-          Next
-        </button>
-      </div>
-    </div>
-  );
-}
 
 type DetailItemProps = {
   label: string;

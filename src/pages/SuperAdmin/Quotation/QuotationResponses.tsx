@@ -9,9 +9,11 @@ import {
   FileText,
   Mail,
   Phone,
+  Receipt,
   X,
   XCircle,
 } from "lucide-react";
+import { EftVerificationModal } from "./EftVerificationModal";
 
 type QuotationResponseStatus =
   | "SENT"
@@ -594,6 +596,7 @@ interface QuotationResponseModalProps {
 const QuotationResponseModal: FC<
   QuotationResponseModalProps
 > = ({ response, onClose }) => {
+  const [showEftModal, setShowEftModal] = useState(false);
   const status = STATUS_CONFIG[response.status];
 
   useEffect(() => {
@@ -871,17 +874,39 @@ const QuotationResponseModal: FC<
           </div>
         </div>
 
-        <footer className="shrink-0 border-t border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-950 sm:p-5">
+        <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-950 sm:p-5">
+          <button
+            type="button"
+            onClick={() => setShowEftModal(true)}
+            className="inline-flex h-11 items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 text-xs font-bold text-blue-700 hover:bg-blue-100 dark:border-blue-900/40 dark:bg-blue-950/40 dark:text-blue-300"
+          >
+            <Receipt size={16} />
+            Verify EFT / Bank Payment
+          </button>
+
           <button
             type="button"
             onClick={onClose}
-            className="h-11 w-full rounded-xl bg-blue-600 px-5 text-sm font-semibold text-white transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30 sm:float-right sm:w-auto sm:min-w-28"
+            className="h-11 w-full rounded-xl bg-blue-600 px-5 text-sm font-semibold text-white transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30 sm:w-auto sm:min-w-28"
           >
             Close
           </button>
-
-          <div className="clear-both" />
         </footer>
+
+        {showEftModal && (
+          <EftVerificationModal
+            isOpen={showEftModal}
+            onClose={() => setShowEftModal(false)}
+            quotation={{
+              id: response.id,
+              quotationNumber: response.quotationNumber,
+              companyName: response.companyName,
+              contactEmail: response.email,
+              totalAmount: response.quotationAmount,
+              status: response.status,
+            }}
+          />
+        )}
       </section>
     </div>
   );

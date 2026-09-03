@@ -406,7 +406,58 @@ function buildDefaultDraft(inquiry: QuotationInquiry): QuotationDraft {
   };
 }
 
+function buildMockInquiry(index: number): QuotationInquiry {
+  const companies = [
+    { name: "Anglo American Platinum", contact: "David Ndlovu", email: "d.ndlovu@angloamerican.co.za", phone: "+27 11 373 6111", loc: "Rustenburg, North West" },
+    { name: "Glencore Coal Operations", contact: "Sarah Jenkins", email: "s.jenkins@glencore.com", phone: "+27 13 656 7000", loc: "Witbank, Mpumalanga" },
+    { name: "Exxaro Resources Ltd", contact: "Kagiso Molefe", email: "k.molefe@exxaro.com", phone: "+27 12 307 5000", loc: "Grootegeluk Mine, Lephalale" },
+    { name: "Sibanye-Stillwater Mining", contact: "Johan van der Merwe", email: "johan.vdm@sibanyestillwater.com", phone: "+27 11 278 9600", loc: "Kroondal Platinum Mine" },
+    { name: "Sasol Mining Secunda", contact: "Thabo Mokoena", email: "thabo.mokoena@sasol.com", phone: "+27 17 614 1111", loc: "Secunda Complex, Mpumalanga" },
+    { name: "Kumba Iron Ore Ltd", contact: "Francois Botha", email: "francois.botha@angloamerican.com", phone: "+27 53 723 8111", loc: "Sishen Mine, Kathu" },
+  ];
+  const c = companies[index % companies.length];
+  const statuses: QuotationRequestStatus[] = ["PENDING", "DRAFT", "SENT", "ACCEPTED", "REJECTED", "EXPIRED"];
+  const status = statuses[index % statuses.length];
+  const quotationTypes = ["Fleet Management", "Predictive Maintenance", "Component Intelligence", "Machine Telemetry Ingestion"];
+  const equipLists = [
+    ["Hydraulic Excavators", "Heavy Haul Trucks"],
+    ["Rotary Drill Rigs", "Track Bulldozers", "Wheel Loaders"],
+    ["Motor Graders", "Hydraulic Excavators"],
+    ["Underground Loaders", "Heavy Haul Trucks"],
+  ];
 
+  return {
+    id: `req-mock-${index + 1}`,
+    inquiryId: `QIN-2026-${String(index + 1).padStart(4, "0")}`,
+    status,
+    inquiryDate: new Date(Date.now() - index * 86_400_000 * 2).toISOString(),
+    company: {
+      companyId: `COMP-${String(index + 1).padStart(3, "0")}`,
+      name: c.name,
+      contactPerson: c.contact,
+      email: c.email,
+      phone: c.phone,
+      location: c.loc,
+    },
+    requirement: {
+      quotationType: quotationTypes[index % quotationTypes.length],
+      numberOfSites: (index % 3) + 1,
+      siteNames: [`${c.loc.split(",")[0]} Site 1`],
+      activeMachines: 10 + (index * 5),
+      equipmentTypes: equipLists[index % equipLists.length],
+      requestedServiceNames: ["Telematics / ECU Integration", "SAP / ERP Integration"],
+      requirementDescription: "Full machine health monitoring and predictive analytics required.",
+      otherRequirements: null,
+    },
+    trial: {
+      requested: index % 3 === 0,
+      duration: "30 Days",
+      machines: 15,
+      description: "Evaluation trial for fleet diagnostics.",
+    },
+    attachmentUrl: null,
+  };
+}
 
 /** In-memory "database" — mutated by save-draft / send-quotation. */
 const mockInquiries: QuotationInquiry[] = Array.from({ length: 24 }, (_, i) =>

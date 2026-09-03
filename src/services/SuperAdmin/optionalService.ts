@@ -79,9 +79,6 @@ export const getEquipmentTypes = async (): Promise<string[]> => {
 
 // ----------------------------------------------------
 // GET ALL (Super Admin - includes inactive)
-=======
-// GET ALL
-
 // ----------------------------------------------------
 
 export const getOptionalServices = async (): Promise<OptionalService[]> => {

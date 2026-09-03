@@ -946,14 +946,13 @@ export default function SupervisorComponentsPage() {
                 Try changing filters or search keyword.
               </p>
             </div>
+          ) : (
             <>
               <div className="grid grid-cols-1 gap-5 p-5 md:grid-cols-2 xl:grid-cols-3">
                 {paginatedComponents.map((component) => {
-                const style = getHealthStyle(component.condition);
-
-                const machine = machines.find(
-                  (m) => m.machineId === component.machineId,
-                );
+                  const machine = machines.find(
+                    (m) => m.machineId === component.machineId,
+                  );
 
                 // Find matching active artisan assignment from localStorage
                 const activeAssignment = (component.assignedArtisanName || (component as any).assigned_artisan_name)
@@ -1178,6 +1177,7 @@ export default function SupervisorComponentsPage() {
                     </div>
                   </div>
                 );
+              })}
               </div>
 
               <div className="border-t border-slate-200 p-4 dark:border-slate-800">
