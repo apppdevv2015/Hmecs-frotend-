@@ -82,26 +82,26 @@ export type QuotationRequestStatus =
 export interface QuotationRequest {
   readonly id: string;
   readonly requestId: string;
-  readonly userId: string;
-  readonly companyId: string;
-  readonly companyName: string;
-  readonly contactPerson: string;
-  readonly email: string;
-  readonly phone: string;
-  readonly siteLocation: string;
+  readonly userId?: string;
+  readonly companyId?: string;
+  readonly companyName?: string;
+  readonly contactPerson?: string;
+  readonly email?: string;
+  readonly phone?: string;
+  readonly siteLocation?: string;
   readonly quotationType: string;
   readonly numberOfSites: number;
-  readonly siteNames: readonly string[];
+  readonly siteNames?: readonly string[];
   readonly activeMachines: number;
-  readonly equipmentTypes: readonly string[];
-  readonly contractDuration: string | null;
-  readonly optionalServices: readonly string[];
-  readonly implementationRequirements: string | null;
-  readonly additionalRequirements: string | null;
-  readonly attachmentUrl: string | null;
-  readonly status: QuotationRequestStatus;
-  readonly createdAt: string;
-  readonly updatedAt: string;
+  readonly equipmentTypes?: readonly string[];
+  readonly contractDuration?: string | null;
+  readonly optionalServices?: readonly string[];
+  readonly implementationRequirements?: string | null;
+  readonly additionalRequirements?: string | null;
+  readonly attachmentUrl?: string | null;
+  readonly status: QuotationRequestStatus | string;
+  readonly createdAt?: string;
+  readonly updatedAt?: string;
 }
 
 export interface ApiEnvelope<T> {
@@ -125,10 +125,14 @@ export interface QuotationRequestListParams {
 }
 
 export interface CreateQuotationRequestPayload {
-  readonly companyId: string;
+  readonly companyName?: string;
+  readonly contactPerson?: string;
+  readonly email?: string;
+  readonly phone?: string;
+  readonly companyId?: string;
   readonly quotationType: string;
   readonly numberOfSites: number;
-  readonly siteNames: readonly string[];
+  readonly siteNames?: readonly string[];
   readonly activeMachines: number;
   readonly equipmentTypes: readonly string[];
   readonly contractDuration?: string;
@@ -138,11 +142,82 @@ export interface CreateQuotationRequestPayload {
   readonly attachmentUrl?: string;
 }
 
+export type QuotationRequestPayload = CreateQuotationRequestPayload;
+
 export type UpdateQuotationRequestPayload = Partial<
   CreateQuotationRequestPayload & {
     readonly status: QuotationRequestStatus;
   }
 >;
+
+export interface AddonQuotationPayload {
+  companyId?: string;
+  companyName: string;
+  contactPerson?: string;
+  contactEmail: string;
+  contactPhone?: string;
+  machineCount: number;
+  ratePerMachine?: number;
+  contractDuration: string;
+  quotationType?: string;
+  machineTypes?: string[];
+  extraSites?: number;
+  siteNames?: string[];
+  baseAmount?: number;
+  optionalServicesAmount?: number;
+  discountAmount?: number;
+  taxAmount?: number;
+  totalAmount?: number;
+  optionalServices?: any[];
+  paymentMethod?: "EFT" | "PAYFAST" | "INVOICE" | "CARD";
+  eftReferenceNumber?: string;
+  proofOfPaymentUrl?: string;
+  notes?: string;
+  validUntil?: string;
+  status?: string;
+}
+
+export interface EftSubmitPayload {
+  eftReferenceNumber?: string;
+  proofOfPaymentUrl?: string;
+  popUrl?: string;
+  notes?: string;
+}
+
+export interface EftVerifyPayload {
+  action: "APPROVE" | "REJECT";
+  notes?: string;
+}
+
+export interface OfficialQuotation {
+  id: string;
+  quotationNumber: string;
+  companyId: string;
+  companyName: string;
+  contactPerson?: string;
+  contactEmail: string;
+  contactPhone?: string;
+  status: string;
+  tier?: string;
+  machineCount: number;
+  contractDuration: string;
+  billingFrequency?: string;
+  baseAmount: number;
+  optionalServicesAmount: number;
+  discountAmount: number;
+  taxAmount: number;
+  totalAmount: number;
+  optionalServices: any[];
+  scopeOfWork?: any;
+  paymentTerms?: string;
+  notes?: string;
+  validUntil?: string;
+  sentAt?: string;
+  acceptedAt?: string;
+  rejectedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
 /* ============================================================================
  * 3. HELPERS
@@ -150,7 +225,7 @@ export type UpdateQuotationRequestPayload = Partial<
 
 function assertValidId(id: string): void {
   if (typeof id !== "string" || id.trim().length === 0) {
-    throw new Error();
+    throw new Error("Invalid ID provided");
   }
 }
 
@@ -158,8 +233,6 @@ const BASE_ENDPOINT = "/quotations/requests";
 
 /**
  * Builds the query string for GET /quotations/requests.
- *
- * Only parameters that contain a value are included.
  */
 function buildQuotationRequestsEndpoint(
   filters: Omit<QuotationRequestListParams, "signal"> = {},
@@ -187,11 +260,6 @@ function buildQuotationRequestsEndpoint(
  * 4. SERVICE FUNCTIONS
  * ==========================================================================*/
 
-/**
- * Raw list call.
- *
- * GET requests intentionally do not show a success Toast.
- */
 export async function getQuotationRequests(
   params: QuotationRequestListParams = {},
 ): Promise<readonly QuotationRequest[]> {
@@ -208,11 +276,6 @@ export async function getQuotationRequests(
   return Array.isArray(result?.data) ? result.data : [];
 }
 
-/**
- * List call used by the Quotation List page.
- *
- * Returns backend data, message and status code.
- */
 export async function getQuotationRequestsWithMeta(
   params: QuotationRequestListParams = {},
   signal?: AbortSignal,
@@ -234,11 +297,6 @@ export async function getQuotationRequestsWithMeta(
   };
 }
 
-/**
- * Get one quotation request by ID.
- *
- * GET request intentionally does not show a success Toast.
- */
 export async function getQuotationRequestById(
   id: string,
   signal?: AbortSignal,
@@ -304,3 +362,76 @@ export async function deleteQuotationRequest(
     },
   );
 }
+
+export const createAddonQuotation = async (
+  payload: AddonQuotationPayload,
+): Promise<OfficialQuotation> => {
+  const response = await apiCall<ApiEnvelope<OfficialQuotation>>(
+    "/quotations/addon",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+    {
+      showSuccess: true,
+      showError: true,
+    },
+  );
+
+  return response.data;
+};
+
+export const submitEftPayment = async (
+  quotationId: string,
+  payload: EftSubmitPayload,
+): Promise<OfficialQuotation> => {
+  const response = await apiCall<ApiEnvelope<OfficialQuotation>>(
+    `/quotations/${quotationId}/eft-submit`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+    {
+      showSuccess: true,
+      showError: true,
+    },
+  );
+
+  return response.data;
+};
+
+export const verifyEftPayment = async (
+  quotationId: string,
+  payload: EftVerifyPayload,
+): Promise<OfficialQuotation> => {
+  const response = await apiCall<ApiEnvelope<OfficialQuotation>>(
+    `/quotations/${quotationId}/verify-eft`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+    {
+      showSuccess: true,
+      showError: true,
+    },
+  );
+
+  return response.data;
+};
+
+export const getOfficialQuotations = async (
+  params?: Record<string, string>,
+): Promise<OfficialQuotation[]> => {
+  const query = params ? "?" + new URLSearchParams(params).toString() : "";
+  const response = await apiCall<ApiEnvelope<OfficialQuotation[]>>(
+    `/quotations${query}`,
+    {
+      method: "GET",
+    },
+    {
+      showError: false,
+    },
+  );
+
+  return response.data || [];
+};

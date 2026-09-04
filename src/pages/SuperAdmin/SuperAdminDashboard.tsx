@@ -22,7 +22,7 @@ export default function Home() {
               </div>
 
               <h1 className="text-3xl font-black tracking-tight text-white">
-                Super Admin Dashboard
+                Centralized Platform Management
               </h1>
 
               <p className="mt-2 max-w-3xl text-sm font-medium text-blue-100">

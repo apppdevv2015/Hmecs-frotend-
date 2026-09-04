@@ -14,36 +14,33 @@ import {
 export const CompanyAdminNav: React.FC = () => {
   const location = useLocation();
   const currentPath = location.pathname;
+  const isSubAdmin = currentPath.startsWith("/sub-admin");
+  const prefix = isSubAdmin ? "/sub-admin" : "/company-admin";
 
   const navItems = [
     {
       name: "Dashboard",
-      path: "/company-admin/dashboard",
+      path: `${prefix}/dashboard`,
       icon: <Dashboard size={18} />,
     },
     {
-      name: "Job Cards",
-      path: "/company-admin/job-cards",
-      icon: <Wrench size={18} />,
-    },
-    {
       name: "Component Register",
-      path: "/company-admin/components",
+      path: `${prefix}/components`,
       icon: <Register size={18} />,
     },
     {
       name: "Add Machine",
-      path: "/company-admin/machines",
+      path: `${prefix}/machines`,
       icon: <Log size={18} />,
     },
     {
       name: "Fleet Heat Map",
-      path: "/company-admin/heatmap",
+      path: `${prefix}/heatmap`,
       icon: <HeatMap size={18} />,
     },
     {
       name: "Alerts & Logs",
-      path: "/company-admin/alerts",
+      path: `${prefix}/alerts`,
       icon: <AlertCircle size={18} />,
     },
   ];

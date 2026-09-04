@@ -11,6 +11,10 @@ import { createPortal } from "react-dom";
 
 import AppSelect from "../../../components/ui/dropdown/AppSelect";
 import CommonPagination from "../../../components/common/Pagination";
+import {
+  getQuotationRequests,
+  type ApiQuotationRequest,
+} from "../../../services/SuperAdmin/quotationInquiryService";
 
 import {
   deleteQuotationRequest,
@@ -401,6 +405,427 @@ function buildDefaultDraft(inquiry: QuotationInquiry): QuotationDraft {
     notes: "",
   };
 }
+
+function buildMockInquiry(index: number): QuotationInquiry {
+  const companies = [
+    { name: "Anglo American Platinum", contact: "David Ndlovu", email: "d.ndlovu@angloamerican.co.za", phone: "+27 11 373 6111", loc: "Rustenburg, North West" },
+    { name: "Glencore Coal Operations", contact: "Sarah Jenkins", email: "s.jenkins@glencore.com", phone: "+27 13 656 7000", loc: "Witbank, Mpumalanga" },
+    { name: "Exxaro Resources Ltd", contact: "Kagiso Molefe", email: "k.molefe@exxaro.com", phone: "+27 12 307 5000", loc: "Grootegeluk Mine, Lephalale" },
+    { name: "Sibanye-Stillwater Mining", contact: "Johan van der Merwe", email: "johan.vdm@sibanyestillwater.com", phone: "+27 11 278 9600", loc: "Kroondal Platinum Mine" },
+    { name: "Sasol Mining Secunda", contact: "Thabo Mokoena", email: "thabo.mokoena@sasol.com", phone: "+27 17 614 1111", loc: "Secunda Complex, Mpumalanga" },
+    { name: "Kumba Iron Ore Ltd", contact: "Francois Botha", email: "francois.botha@angloamerican.com", phone: "+27 53 723 8111", loc: "Sishen Mine, Kathu" },
+  ];
+  const c = companies[index % companies.length];
+  const statuses: QuotationRequestStatus[] = ["PENDING", "DRAFT", "SENT", "ACCEPTED", "REJECTED", "EXPIRED"];
+  const status = statuses[index % statuses.length];
+  const quotationTypes = ["Fleet Management", "Predictive Maintenance", "Component Intelligence", "Machine Telemetry Ingestion"];
+  const equipLists = [
+    ["Hydraulic Excavators", "Heavy Haul Trucks"],
+    ["Rotary Drill Rigs", "Track Bulldozers", "Wheel Loaders"],
+    ["Motor Graders", "Hydraulic Excavators"],
+    ["Underground Loaders", "Heavy Haul Trucks"],
+  ];
+
+  return {
+    id: `req-mock-${index + 1}`,
+    inquiryId: `QIN-2026-${String(index + 1).padStart(4, "0")}`,
+    status,
+    inquiryDate: new Date(Date.now() - index * 86_400_000 * 2).toISOString(),
+    company: {
+      companyId: `COMP-${String(index + 1).padStart(3, "0")}`,
+      name: c.name,
+      contactPerson: c.contact,
+      email: c.email,
+      phone: c.phone,
+      location: c.loc,
+    },
+    requirement: {
+      quotationType: quotationTypes[index % quotationTypes.length],
+      numberOfSites: (index % 3) + 1,
+      siteNames: [`${c.loc.split(",")[0]} Site 1`],
+      activeMachines: 10 + (index * 5),
+      equipmentTypes: equipLists[index % equipLists.length],
+      requestedServiceNames: ["Telematics / ECU Integration", "SAP / ERP Integration"],
+      requirementDescription: "Full machine health monitoring and predictive analytics required.",
+      otherRequirements: null,
+    },
+    trial: {
+      requested: index % 3 === 0,
+      duration: "30 Days",
+      machines: 15,
+      description: "Evaluation trial for fleet diagnostics.",
+    },
+    attachmentUrl: null,
+  };
+}
+
+/** In-memory "database" — mutated by save-draft / send-quotation. */
+const mockInquiries: QuotationInquiry[] = Array.from({ length: 24 }, (_, i) =>
+  buildMockInquiry(i),
+);
+const draftsByInquiryId = new Map<string, QuotationDraft>();
+const mockResponses: QuotationResponse[] = [];
+
+/** Seed a handful of inquiries as already quoted, so Quotation Responses has data on first load. */
+function seedSentQuotations(): void {
+  mockInquiries.slice(0, 4).forEach((inquiry, i) => {
+    const draft = buildDefaultDraft(inquiry);
+    const seededDraft: QuotationDraft = {
+      ...draft,
+      onceOffImplementationFee: 15000,
+      monthlySiteLicence: 8000 + i * 1000,
+      additionalMachineCharge: 500,
+      services: draft.services.map((s, idx) =>
+        idx < 2 ? { ...s, selected: true } : s,
+      ),
+      notes:
+        "Proposal covers predictive maintenance monitoring with monthly health reporting.",
+    };
+    const totals = computeQuotationTotals(seededDraft);
+    const idx = mockInquiries.findIndex(
+      (q) => q.inquiryId === inquiry.inquiryId,
+    );
+    const statusCycle: QuotationStatus[] = [
+      "SENT",
+      "ACCEPTED",
+      "REJECTED",
+      "SENT",
+    ];
+    const quotationStatus = statusCycle[i % statusCycle.length];
+    mockInquiries[idx] = { ...mockInquiries[idx], quotationStatus };
+    draftsByInquiryId.set(inquiry.inquiryId, seededDraft);
+    const sentDate = new Date(
+      Date.now() - (i + 1) * 2 * 86_400_000,
+    ).toISOString();
+    mockResponses.push({
+      quotationId: `QUO-${String(1000 + i)}`,
+      inquiryId: inquiry.inquiryId,
+      company: inquiry.company,
+      sentDate,
+      quotationAmount: totals.contractValue,
+      status: quotationStatus,
+      responseDate:
+        quotationStatus === "SENT"
+          ? null
+          : new Date(Date.now() - i * 86_400_000).toISOString(),
+      draft: seededDraft,
+      inquirySnapshot: mockInquiries[idx],
+    });
+  });
+}
+seedSentQuotations();
+
+function maybeThrowSimulatedError(): void {
+  /* Flip this to a small probability locally to exercise the error + retry state. */
+  const SIMULATE_ERROR_RATE = 0;
+  if (SIMULATE_ERROR_RATE > 0 && Math.random() < SIMULATE_ERROR_RATE) {
+    const err: ApiErrorShape = {
+      response: {
+        data: {
+          message:
+            "The quotation service is temporarily unavailable. Please try again.",
+        },
+      },
+    };
+    throw err;
+  }
+}
+
+export interface InquiryListParams {
+  readonly page: number;
+  readonly limit: number;
+  readonly search?: string;
+  readonly status?: InquiryStatus;
+  readonly quotationType?: string;
+  readonly dateFrom?: string;
+  readonly dateTo?: string;
+}
+
+export interface ResponseListParams {
+  readonly page: number;
+  readonly limit: number;
+  readonly search?: string;
+  readonly status?: QuotationStatus;
+}
+
+const quotationService = {
+  async getInquiries(
+    params: InquiryListParams,
+  ): Promise<ApiResponse<QuotationInquiry[]>> {
+    let apiInquiries: QuotationInquiry[] = [];
+
+    try {
+      const apiReqs = await getQuotationRequests({
+        search: params.search,
+        status: params.status,
+      });
+
+      if (Array.isArray(apiReqs) && apiReqs.length > 0) {
+        apiInquiries = apiReqs.map((req: ApiQuotationRequest) => {
+          const isTrial = (req.quotationType || "")
+            .toLowerCase()
+            .includes("trial");
+
+          const siteNamesList = Array.isArray(req.siteNames)
+            ? req.siteNames
+            : typeof req.siteNames === "string"
+              ? [req.siteNames]
+              : [];
+
+          const equipmentTypesList = Array.isArray(req.equipmentTypes)
+            ? req.equipmentTypes
+            : typeof req.equipmentTypes === "string"
+              ? [req.equipmentTypes]
+              : [];
+
+          const optionalServicesList = Array.isArray(req.optionalServices)
+            ? req.optionalServices
+            : typeof req.optionalServices === "string"
+              ? [req.optionalServices]
+              : [];
+
+          return {
+            inquiryId:
+              req.requestId ||
+              `QIN-${(req.id || "").substring(0, 8).toUpperCase()}`,
+            status: (req.status === "INACTIVE"
+              ? "INACTIVE"
+              : "ACTIVE") as InquiryStatus,
+            inquiryDate: req.createdAt || new Date().toISOString(),
+            company: {
+              companyId: req.companyId || req.id,
+              name: req.companyName || "Registered Company",
+              contactPerson: req.contactPerson || "Contact Person",
+              email: req.email || "-",
+              phone: req.phone || "-",
+              location: req.siteLocation || "Main Mining Site",
+            },
+            requirement: {
+              quotationType: req.quotationType || "Commercial Quotation",
+              numberOfSites: Number(req.numberOfSites) || 1,
+              siteNames:
+                siteNamesList.length > 0 ? siteNamesList : ["Main Site"],
+              activeMachines: Number(req.activeMachines) || 1,
+              equipmentTypes:
+                equipmentTypesList.length > 0
+                  ? equipmentTypesList
+                  : ["Excavators"],
+              requestedServiceIds: optionalServicesList,
+              requirementDescription:
+                req.implementationRequirements ||
+                "Customer submitted quotation inquiry via portal.",
+              otherRequirements: req.additionalRequirements || null,
+            },
+            trial: {
+              requested: isTrial,
+              duration: isTrial
+                ? req.contractDuration || DEFAULT_TRIAL_DURATION
+                : null,
+              machines: isTrial
+                ? Number(req.activeMachines) || DEFAULT_TRIAL_MACHINES
+                : null,
+              description: isTrial ? "Evaluation requested." : null,
+            },
+            quotationStatus: (req.quotationStatus as QuotationStatus) || null,
+          };
+        });
+      }
+    } catch (apiErr) {
+      console.warn("Notice: Fetching quotation requests:", apiErr);
+    }
+
+    const combinedInquiries = [
+      ...apiInquiries,
+      ...mockInquiries.filter(
+        (m) => !apiInquiries.some((a) => a.inquiryId === m.inquiryId),
+      ),
+    ];
+
+    let rows = [...combinedInquiries];
+
+    if (params.search) {
+      const q = params.search.toLowerCase();
+      rows = rows.filter(
+        (inq) =>
+          inq.inquiryId.toLowerCase().includes(q) ||
+          inq.company.name.toLowerCase().includes(q) ||
+          inq.company.contactPerson.toLowerCase().includes(q) ||
+          inq.company.email.toLowerCase().includes(q),
+      );
+    }
+    if (params.status) {
+      rows = rows.filter((inq) => inq.status === params.status);
+    }
+    if (params.quotationType) {
+      rows = rows.filter(
+        (inq) => inq.requirement.quotationType === params.quotationType,
+      );
+    }
+    if (params.dateFrom) {
+      const from = new Date(params.dateFrom).getTime();
+      rows = rows.filter((inq) => new Date(inq.inquiryDate).getTime() >= from);
+    }
+    if (params.dateTo) {
+      const to = new Date(params.dateTo).getTime() + 86_400_000 - 1;
+      rows = rows.filter((inq) => new Date(inq.inquiryDate).getTime() <= to);
+    }
+
+    rows.sort((a, b) => (a.inquiryDate < b.inquiryDate ? 1 : -1));
+
+    const totalRecords = rows.length;
+    const totalPages = Math.max(1, Math.ceil(totalRecords / params.limit));
+    const start = (params.page - 1) * params.limit;
+    const pageRows = rows.slice(start, start + params.limit);
+
+    const summary: InquirySummary = {
+      totalInquiries: combinedInquiries.length,
+      pending: combinedInquiries.filter((i) => i.quotationStatus === null).length,
+      readyToQuote: combinedInquiries.filter(
+        (i) => i.quotationStatus === "DRAFT",
+      ).length,
+      sent: combinedInquiries.filter(
+        (i) => i.quotationStatus !== null && i.quotationStatus !== "DRAFT",
+      ).length,
+    };
+
+    return {
+      data: pageRows,
+      pagination: {
+        page: params.page,
+        limit: params.limit,
+        totalRecords,
+        totalPages,
+      },
+      summary,
+    };
+  },
+
+  async getInquiryById(id: string): Promise<ApiResponse<QuotationInquiry>> {
+    await wait(NETWORK_DELAY_MS / 2);
+    maybeThrowSimulatedError();
+    const found = mockInquiries.find((i) => i.inquiryId === id);
+    if (!found) {
+      const err: ApiErrorShape = {
+        response: { data: { message: `Inquiry ${id} was not found.` } },
+      };
+      throw err;
+    }
+    return { data: found };
+  },
+
+  async getDraftForInquiry(inquiry: QuotationInquiry): Promise<QuotationDraft> {
+    await wait(200);
+    return (
+      draftsByInquiryId.get(inquiry.inquiryId) ?? buildDefaultDraft(inquiry)
+    );
+  },
+
+  async saveQuotationDraft(
+    draft: QuotationDraft,
+  ): Promise<ApiResponse<QuotationInquiry>> {
+    await wait(NETWORK_DELAY_MS);
+    maybeThrowSimulatedError();
+    draftsByInquiryId.set(draft.inquiryId, draft);
+    const idx = mockInquiries.findIndex((i) => i.inquiryId === draft.inquiryId);
+    if (idx === -1) {
+      const err: ApiErrorShape = {
+        response: {
+          data: { message: `Inquiry ${draft.inquiryId} was not found.` },
+        },
+      };
+      throw err;
+    }
+    if (mockInquiries[idx].quotationStatus === null) {
+      mockInquiries[idx] = { ...mockInquiries[idx], quotationStatus: "DRAFT" };
+    }
+    return {
+      data: mockInquiries[idx],
+      message: `Quotation for ${draft.inquiryId} saved as draft.`,
+    };
+  },
+
+  async sendQuotation(
+    inquiry: QuotationInquiry,
+    draft: QuotationDraft,
+  ): Promise<ApiResponse<QuotationResponse>> {
+    await wait(NETWORK_DELAY_MS);
+    maybeThrowSimulatedError();
+    draftsByInquiryId.set(draft.inquiryId, draft);
+    const idx = mockInquiries.findIndex((i) => i.inquiryId === draft.inquiryId);
+    if (idx === -1) {
+      const err: ApiErrorShape = {
+        response: {
+          data: { message: `Inquiry ${draft.inquiryId} was not found.` },
+        },
+      };
+      throw err;
+    }
+    mockInquiries[idx] = { ...mockInquiries[idx], quotationStatus: "SENT" };
+    const totals = computeQuotationTotals(draft);
+    const response: QuotationResponse = {
+      quotationId: `QUO-${String(1000 + mockResponses.length)}`,
+      inquiryId: inquiry.inquiryId,
+      company: inquiry.company,
+      sentDate: new Date().toISOString(),
+      quotationAmount: totals.contractValue,
+      status: "SENT",
+      responseDate: null,
+      draft,
+      inquirySnapshot: mockInquiries[idx],
+    };
+    mockResponses.unshift(response);
+    return {
+      data: response,
+      message: `Quotation sent to ${inquiry.company.name}.`,
+    };
+  },
+
+  async getResponses(
+    params: ResponseListParams,
+  ): Promise<ApiResponse<QuotationResponse[]>> {
+    await wait(NETWORK_DELAY_MS);
+    maybeThrowSimulatedError();
+
+    let rows = [...mockResponses];
+    if (params.search) {
+      const q = params.search.toLowerCase();
+      rows = rows.filter(
+        (r) =>
+          r.quotationId.toLowerCase().includes(q) ||
+          r.inquiryId.toLowerCase().includes(q) ||
+          r.company.name.toLowerCase().includes(q),
+      );
+    }
+    if (params.status) {
+      rows = rows.filter((r) => r.status === params.status);
+    }
+    rows.sort((a, b) => (a.sentDate < b.sentDate ? 1 : -1));
+
+    const totalRecords = rows.length;
+    const totalPages = Math.max(1, Math.ceil(totalRecords / params.limit));
+    const start = (params.page - 1) * params.limit;
+    const pageRows = rows.slice(start, start + params.limit);
+
+    return {
+      data: pageRows,
+      pagination: {
+        page: params.page,
+        limit: params.limit,
+        totalRecords,
+        totalPages,
+      },
+    };
+  },
+};
+
+function getApiErrorMessage(error: unknown, fallback: string): string {
+  const shaped = error as ApiErrorShape | undefined;
+  const backendMessage = shaped?.response?.data?.message ?? shaped?.message;
+  return backendMessage && backendMessage.trim().length > 0
+    ? backendMessage
+    : fallback;
+}
+
 
 /* ============================================================================
  * 5. CALCULATION UTILITIES

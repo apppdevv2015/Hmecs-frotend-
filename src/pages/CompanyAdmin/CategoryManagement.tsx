@@ -17,10 +17,8 @@ import {
   Building2,
   AlertCircle,
   AlertTriangle,
-  ChevronLeft,
-  ChevronRight,
-  ChevronsLeft,
-  ChevronsRight,
+  
+  RefreshCw,
 } from "lucide-react";
 import { showSuccessToast, showErrorToast } from "../../utils/toastUtils";
 import {
@@ -29,6 +27,7 @@ import {
   searchEquipmentIcons,
 } from "../../config/equipmentIcons.config";
 import { getApiBaseUrl } from "../../services/api";
+import StorageService from "../../services/storage.service";
 import Pagination from "../../components/common/Pagination";
 import StorageService from "../../services/storage.service";
 import { isReadOnlyRole } from "../../components/common/permissions";
@@ -52,39 +51,33 @@ type EquipmentTypeItem = {
   updatedAt: string;
 };
 
-type ComponentCategoryItem = {
-  id: string;
-  name: string;
-  description: string;
-  isActive: boolean;
-  companyName: string;
-  companyId: string;
-  createdAt: string;
-  updatedAt: string;
-};
-
 export default function CategoryManagement() {
+
   const [activeTab, setActiveTab] = useState<"equipment" | "component">(
     "equipment",
   );
   const readOnly = isReadOnlyRole(StorageService.getRole());
+
 
   const [search, setSearch] = useState("");
   const [iconSearch, setIconSearch] = useState("");
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
 
-  // Equipment Types & Component Categories State
+  // Equipment Types State
   const [equipmentTypes, setEquipmentTypes] = useState<EquipmentTypeItem[]>([]);
+
   const [componentCategories, setComponentCategories] = useState<
     ComponentCategoryItem[]
   >([]);
 
-  // Modal States for Create & Edit
+
+  // Modal State for Create & Edit
   const [isEqModalOpen, setIsEqModalOpen] = useState(false);
   const [editingEqItem, setEditingEqItem] = useState<EquipmentTypeItem | null>(
     null,
   );
+
 
   const [isCcModalOpen, setIsCcModalOpen] = useState(false);
   const [editingCcItem, setEditingCcItem] =
@@ -100,15 +93,19 @@ export default function CategoryManagement() {
     description?: string;
   }>({});
 
+  // Validation Error State
+  const [eqErrors, setEqErrors] = useState<{ name?: string; description?: string }>({});
+
+
   // Delete Confirmation Modal State
   const [deleteTarget, setDeleteTarget] = useState<{
     id: string;
     name: string;
-    type: "equipment" | "component";
   } | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   // Form Inputs
+
   const [eqForm, setEqForm] = useState({
     name: "",
     description: "",
@@ -116,14 +113,17 @@ export default function CategoryManagement() {
   });
   const [ccForm, setCcForm] = useState({ name: "", description: "" });
 
+  const [eqForm, setEqForm] = useState({ name: "", description: "", icon: "Truck" });
+
+
   // Pagination State
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number | "all">(5);
 
-  // Reset pagination on tab or search change
+  // Reset pagination on search change
   useEffect(() => {
     setCurrentPage(1);
-  }, [activeTab, search, pageSize]);
+  }, [search, pageSize]);
 
   const getHeaders = () => {
     let token =
@@ -153,12 +153,16 @@ export default function CategoryManagement() {
     return headers;
   };
 
-  // --- 1. GET API: Fetch Real Records from DB ---
+  // --- 1. GET API: Fetch Real Records from DB (Custom Categories + Active Company Fleet Machine Categories) ---
   const fetchRealDbData = async () => {
     setLoading(true);
     setApiError(null);
     try {
       const headers = getHeaders();
+      const user = StorageService.getUser();
+      const companyId = user?.companyId || user?.company_id || StorageService.getCompanyId() || "";
+      const query = companyId ? `?companyId=${encodeURIComponent(companyId)}` : "";
+
 
       // Fetch Machine Equipment Types
       const eqRes = await fetch(
@@ -217,6 +221,25 @@ export default function CategoryManagement() {
             })),
           );
         }
+
+      const res = await fetch(`${API_BASE}/machines/categories${query}`, { headers });
+      const resJson = await res.json();
+
+      if (resJson && Array.isArray(resJson.data)) {
+        setEquipmentTypes(
+          resJson.data.map((item: any) => ({
+            id: item.id,
+            name: item.name,
+            description: item.description || "Company Equipment Type",
+            icon: item.icon || "Truck",
+            isActive: item.isActive !== undefined ? item.isActive : true,
+            companyName: item.companyName || user?.companyName || "Mining Operations Ltd",
+            companyId: item.companyId || companyId || "COMP-101",
+            createdAt: item.createdAt ? item.createdAt.split("T")[0] : new Date().toISOString().split("T")[0],
+            updatedAt: item.updatedAt ? item.updatedAt.split("T")[0] : new Date().toISOString().split("T")[0],
+          }))
+        );
+
       }
     } catch (err: any) {
       console.error("Error fetching categories:", err);
@@ -470,21 +493,19 @@ export default function CategoryManagement() {
     }
   };
 
-  // --- 5. DELETE API: Delete Category (Confirmed via Custom Modal & Toast) ---
+  // --- 5. DELETE API: Delete Category ---
   const handleConfirmDelete = async () => {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
       const headers = getHeaders();
-      const url =
-        deleteTarget.type === "equipment"
-          ? `${API_BASE}/machines/categories/${deleteTarget.id}`
-          : `${API_BASE}/components/categories/${deleteTarget.id}`;
+      const url = `${API_BASE}/machines/categories/${deleteTarget.id}`;
 
       const res = await fetch(url, { method: "DELETE", headers });
       const resJson = await res.json();
 
       if (res.ok) {
+
         if (deleteTarget.type === "equipment") {
           setEquipmentTypes((prev) =>
             prev.filter((item) => item.id !== deleteTarget.id),
@@ -494,6 +515,9 @@ export default function CategoryManagement() {
             prev.filter((item) => item.id !== deleteTarget.id),
           );
         }
+
+        setEquipmentTypes((prev) => prev.filter((item) => item.id !== deleteTarget.id));
+
         showSuccessToast(`'${deleteTarget.name}' deleted successfully!`);
         setDeleteTarget(null);
       } else {
@@ -507,7 +531,7 @@ export default function CategoryManagement() {
     }
   };
 
-  // Open Edit Modals
+  // Open Edit Modal
   const openEditEqModal = (item: EquipmentTypeItem) => {
     setEditingEqItem(item);
     setEqForm({
@@ -520,29 +544,13 @@ export default function CategoryManagement() {
     setIsEqModalOpen(true);
   };
 
-  const openEditCcModal = (item: ComponentCategoryItem) => {
-    setEditingCcItem(item);
-    setCcForm({ name: item.name, description: item.description });
-    setCcErrors({});
-    setIsCcModalOpen(true);
-  };
-
-  // Open Create Modals
+  // Open Create Modal
   const openCreateEqModal = () => {
-    setActiveTab("equipment");
     setEditingEqItem(null);
     setEqForm({ name: "", description: "", icon: "Truck" });
     setEqErrors({});
     setIconSearch("");
     setIsEqModalOpen(true);
-  };
-
-  const openCreateCcModal = () => {
-    setActiveTab("component");
-    setEditingCcItem(null);
-    setCcForm({ name: "", description: "" });
-    setCcErrors({});
-    setIsCcModalOpen(true);
   };
 
   // Dynamic Render Icon Helper
@@ -563,6 +571,7 @@ export default function CategoryManagement() {
       item.description.toLowerCase().includes(search.toLowerCase()),
   );
 
+
   const filteredCc = componentCategories.filter(
     (item) =>
       item.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -572,6 +581,10 @@ export default function CategoryManagement() {
   // Pagination Logic
   const currentTotal =
     activeTab === "equipment" ? filteredEq.length : filteredCc.length;
+
+  // Pagination Logic
+  const currentTotal = filteredEq.length;
+
   const isShowAll = pageSize === "all";
   const numericPageSize = isShowAll ? currentTotal || 1 : pageSize;
   const totalPages = isShowAll
@@ -583,12 +596,16 @@ export default function CategoryManagement() {
     ? currentTotal
     : Math.min(startIndex + numericPageSize, currentTotal);
 
+
   const paginatedEq = isShowAll
     ? filteredEq
     : filteredEq.slice(startIndex, endIndex);
   const paginatedCc = isShowAll
     ? filteredCc
     : filteredCc.slice(startIndex, endIndex);
+
+  const paginatedEq = isShowAll ? filteredEq : filteredEq.slice(startIndex, endIndex);
+
 
   return (
     <div className="min-h-screen bg-slate-100 p-4 font-sans text-slate-900 dark:bg-[#07111f] dark:text-white sm:p-6 lg:p-8">
@@ -625,14 +642,33 @@ export default function CategoryManagement() {
                 company database. Records are isolated under your company ID.
               </p>
             </div>
+
+            {/* Header Action Buttons */}
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                onClick={openCreateEqModal}
+                className="inline-flex items-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-extrabold text-blue-700 shadow-lg transition-all hover:bg-blue-50 hover:shadow-xl active:scale-95 dark:bg-slate-900 dark:text-blue-400 dark:hover:bg-slate-800"
+              >
+                <Plus size={18} className="stroke-[3]" />
+                Add Equipment Type
+              </button>
+
+              <button
+                onClick={fetchRealDbData}
+                disabled={loading}
+                title="Refresh Data"
+                className="inline-flex items-center justify-center rounded-2xl border border-white/30 bg-white/10 p-3 text-white backdrop-blur-md transition-all hover:bg-white/20 active:scale-95 disabled:opacity-50"
+              >
+                <RefreshCw size={18} className={loading ? "animate-spin" : ""} />
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Tab Selection & Search Header */}
+        {/* Header Controls & Search */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm dark:border-slate-800 dark:bg-[#0b1728]">
             <button
-              onClick={() => setActiveTab("equipment")}
               className="flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white shadow-md transition-all"
             >
               <Truck size={16} />
@@ -654,9 +690,8 @@ export default function CategoryManagement() {
           </div>
         </div>
 
-        {/* Tab 1: Equipment Types Table */}
-        {activeTab === "equipment" && (
-          <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-[#0b1728]">
+        {/* Equipment Types Table */}
+        <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-[#0b1728]">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[850px]">
                 <thead className="border-b border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-[#101f33]">
@@ -823,7 +858,6 @@ export default function CategoryManagement() {
               onItemsPerPageChange={(val) => setPageSize(val)}
             />
           </div>
-        )}
 
         {/* Modal 1: Create / Edit Equipment Type Modal */}
         {isEqModalOpen && (

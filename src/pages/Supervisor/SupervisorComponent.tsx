@@ -21,6 +21,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 
 import AppSelect from "../../components/ui/dropdown/AppSelect";
+import Pagination from "../../components/common/Pagination";
 import StorageService, { STORAGE_KEYS } from "../../services/storage.service";
 import { machineService } from "../../services/companyadmin/machineService";
 import { componentService } from "../../services/companyadmin/componentService";
@@ -70,6 +71,9 @@ type MachineComponent = {
   plannedLife: number;
   replacementCost: number;
   condition: number;
+  healthScore?: number | null;
+  inspectionParameters?: any;
+  lastInspectedAt?: string | null;
   createdAt?: string;
   updatedAt?: string;
   intelligence?: {
@@ -191,12 +195,40 @@ const normalizeComponent = (item: any): MachineComponent => ({
 
   condition: Number(item?.condition ?? 3),
 
+  healthScore:
+    item?.healthScore !== undefined && item?.healthScore !== null
+      ? Number(item.healthScore)
+      : item?.health_score !== undefined && item?.health_score !== null
+      ? Number(item.health_score)
+      : null,
+
+  inspectionParameters:
+    item?.inspectionParameters || item?.inspection_parameters || item?.parameters || null,
+
+  lastInspectedAt: item?.lastInspectedAt || item?.last_inspected_at || null,
+
   createdAt: item?.createdAt || item?.created_at,
 
   updatedAt: item?.updatedAt || item?.updated_at,
 
   intelligence: item?.intelligence,
 });
+
+const deriveComponentCategory = (comp: any): string => {
+  const cat = String(comp?.category || comp?.categoryName || comp?.category_name || comp?.type || "").trim();
+  const text = `${comp?.description || ""} ${comp?.name || ""} ${cat}`.toLowerCase();
+
+  if (text.includes("tyre") || text.includes("tire")) return "Tyres & Undercarriage";
+  if (text.includes("hydraulic") || text.includes("pump") || text.includes("cylinder") || text.includes("valve")) return "Hydraulics";
+  if (text.includes("transmission") || text.includes("gearbox") || text.includes("powershift")) return "Transmission";
+  if (text.includes("drive") || text.includes("swing") || text.includes("motor") || text.includes("axle") || text.includes("drivetrain") || text.includes("track")) return "Powertrain & Parts";
+  if (text.includes("brake") || text.includes("suspension") || text.includes("strut")) return "Brakes & Suspension";
+  if (text.includes("cooling") || text.includes("radiator") || text.includes("fan")) return "Cooling System";
+  if (text.includes("engine") || text.includes("diesel") || text.includes("v12") || text.includes("v16")) return "Engine";
+  if (text.includes("electric") || text.includes("generator") || text.includes("battery") || text.includes("alternator")) return "Electrical";
+
+  return cat && cat.toLowerCase() !== "engine" ? cat : "General Component";
+};
 
 const getHealthPercent = (condition: number) => {
   const safeCondition = Math.max(1, Math.min(5, Number(condition) || 1));
@@ -374,72 +406,8 @@ export default function SupervisorComponentsPage() {
       const mappedComponents =
         getArrayData<any>(componentResponse).map(normalizeComponent);
 
-      // Load live artisan component assignments from local storage
-      let storedArtisanAssignments: any[] = [];
-      try {
-        const raw = localStorage.getItem("hme_supervisor_artisan_component_assignments");
-        if (raw) storedArtisanAssignments = JSON.parse(raw);
-      } catch {}
-
-      // Add synthetic component cards for assigned components not already in mappedComponents
-      const extraAssignedComponents: MachineComponent[] = [];
-      storedArtisanAssignments.forEach((assign: any) => {
-        if (!assign.componentName) return;
-
-        const exists = mappedComponents.some(
-          (c) =>
-            (c.machineId === assign.machineId || c.machine?.name?.toLowerCase() === assign.machineName?.toLowerCase()) &&
-            (c.description?.toLowerCase().includes(assign.componentName.toLowerCase()) ||
-              assign.componentName.toLowerCase().includes(c.description?.toLowerCase() || ""))
-        );
-
-        if (!exists) {
-          const matchedMachine = mappedMachines.find(
-            (m) =>
-              m.machineId === assign.machineId ||
-              m.id === assign.machineId ||
-              m.name.toLowerCase() === assign.machineName?.toLowerCase()
-          );
-
-          const targetMachineId = matchedMachine ? matchedMachine.machineId : assign.machineId || "m_demo_1";
-
-          extraAssignedComponents.push({
-            id: `assigned_${assign.id || assign.taskId}`,
-            machineId: targetMachineId,
-            category: assign.componentName.toLowerCase().includes("pump") || assign.componentName.toLowerCase().includes("hydraulic")
-              ? "Hydraulic"
-              : assign.componentName.toLowerCase().includes("radiator") || assign.componentName.toLowerCase().includes("cooling")
-              ? "Cooling"
-              : assign.componentName.toLowerCase().includes("engine")
-              ? "Engine"
-              : "Component",
-            description: assign.componentName,
-            serialNumber: `SN-${assign.componentName.toUpperCase().replace(/[^A-Z0-9]/g, "-")}`,
-            supplier: "OEM Maintenance",
-            installHours: 500,
-            currentHours: 2400,
-            plannedLife: 8000,
-            replacementCost: 35000,
-            condition: assign.priority === "High" ? 4 : 2,
-            assignedArtisanName: assign.artisanName,
-            assignedSupervisorName: (assign.supervisorName && assign.supervisorName !== "Marcus Supervisor") ? assign.supervisorName : currentSupervisorName,
-            taskId: assign.taskId,
-            intelligence: {
-              hoursRun: 1900,
-              lifeUsedPercent: 30,
-              remainingHours: 6100,
-              riskStatus: assign.priority === "High" ? "Warning Risk" : "Normal",
-              riskColor: assign.priority === "High" ? "text-amber-600" : "text-emerald-600",
-              riskDriver: assign.workScope || "Assigned for Maintenance",
-              estimatedSavings: "$12,400",
-            },
-          } as any);
-        }
-      });
-
-      const allMergedComponents = [...mappedComponents, ...extraAssignedComponents];
       setMachines(mappedMachines);
-      setComponents(allMergedComponents);
+      setComponents(mappedComponents);
 
       if (categoryResponse) {
         const cats = getArrayData<any>(categoryResponse);
@@ -504,46 +472,146 @@ export default function SupervisorComponentsPage() {
     return result;
   }, [components, selectedMachine, selectedCategory, searchTerm, machines]);
 
+  type ComponentSortField = "name" | "category" | "condition" | "serialNumber";
+  const [sortField, setSortField] = useState<ComponentSortField>("name");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState<number | "all">(6);
+
+  const handleSort = (field: ComponentSortField) => {
+    if (sortField === field) {
+      setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortOrder("asc");
+    }
+  };
+
+  const sortedComponents = useMemo(() => {
+    const list = [...filteredComponents];
+    return list.sort((a, b) => {
+      let valA: any = "";
+      let valB: any = "";
+
+      if (sortField === "name") {
+        valA = (a.description || a.category || "").toLowerCase();
+        valB = (b.description || b.category || "").toLowerCase();
+      } else if (sortField === "category") {
+        valA = deriveComponentCategory(a).toLowerCase();
+        valB = deriveComponentCategory(b).toLowerCase();
+      } else if (sortField === "condition") {
+        valA = getHealthPercent(a.condition);
+        valB = getHealthPercent(b.condition);
+      } else if (sortField === "serialNumber") {
+        valA = (a.serialNumber || "").toLowerCase();
+        valB = (b.serialNumber || "").toLowerCase();
+      }
+
+      if (valA < valB) return sortOrder === "asc" ? -1 : 1;
+      if (valA > valB) return sortOrder === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [filteredComponents, sortField, sortOrder]);
+
+  const isShowAll = itemsPerPage === "all";
+
+  const effectivePageSize = isShowAll
+    ? Math.max(1, sortedComponents.length)
+    : itemsPerPage;
+
+  const totalPages = isShowAll
+    ? 1
+    : Math.max(1, Math.ceil(sortedComponents.length / effectivePageSize));
+
+  const startIndex = (currentPage - 1) * effectivePageSize;
+
+  const paginatedComponents = isShowAll
+    ? sortedComponents
+    : sortedComponents.slice(startIndex, startIndex + effectivePageSize);
+
+  const startItem =
+    filteredComponents.length === 0 ? 0 : isShowAll ? 1 : startIndex + 1;
+
+  const endItem = isShowAll
+    ? filteredComponents.length
+    : Math.min(startIndex + effectivePageSize, filteredComponents.length);
+
   const totalComponents = filteredComponents.length;
 
   const totalAssignedComponents = filteredComponents.filter(
     (item) => Boolean(item.machineId && String(item.machineId).trim() !== ""),
   ).length;
 
-  const healthyComponents = filteredComponents.filter(
-    (item) => getHealthPercent(item.condition) >= 80,
-  ).length;
+  const healthyComponents = filteredComponents.filter((item) => {
+    const info = getComponentHealthInfo(item);
+    return info.hasData && info.score !== null && info.score >= 80;
+  }).length;
 
-  const maintenanceNeeded = filteredComponents.filter(
-    (item) => getHealthPercent(item.condition) < 80,
-  ).length;
+  const maintenanceNeeded = filteredComponents.filter((item) => {
+    const info = getComponentHealthInfo(item);
+    return info.hasData && info.score !== null && info.score < 80;
+  }).length;
 
-  const getHealthStyle = (condition: number) => {
-    const health = getHealthPercent(condition);
+  const getComponentHealthInfo = (comp: any) => {
+    const rawScore = comp?.healthScore !== undefined && comp?.healthScore !== null ? Number(comp.healthScore) : null;
 
-    if (health >= 80) {
+    if (rawScore !== null && !isNaN(rawScore)) {
+      const score = Math.max(0, Math.min(100, rawScore));
+      if (score >= 85) {
+        return {
+          score,
+          label: `Healthy ${score}%`,
+          bg: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300",
+          progress: "bg-emerald-500",
+          icon: <CheckCircle2 className="w-4 h-4 text-emerald-500" />,
+          status: "Healthy",
+          hasData: true,
+        };
+      }
+      if (score >= 50) {
+        return {
+          score,
+          label: `Warning ${score}%`,
+          bg: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300",
+          progress: "bg-amber-500",
+          icon: <AlertTriangle className="w-4 h-4 text-amber-500" />,
+          status: "Warning",
+          hasData: true,
+        };
+      }
       return {
-        label: "Good",
-        bg: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300",
-        progress: "bg-emerald-500",
-        icon: <CheckCircle2 className="w-4 h-4" />,
+        score,
+        label: `Critical ${score}%`,
+        bg: "border-red-200 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300",
+        progress: "bg-red-500",
+        icon: <Wrench className="w-4 h-4 text-red-500" />,
+        status: "Critical",
+        hasData: true,
       };
     }
 
-    if (health >= 50) {
+    if (comp?.condition !== undefined && comp?.condition !== null && Number(comp.condition) > 1) {
+      const calcScore = Math.max(0, Math.min(100, (6 - Number(comp.condition)) * 20));
       return {
-        label: "Warning",
-        bg: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300",
-        progress: "bg-amber-500",
-        icon: <AlertTriangle className="w-4 h-4" />,
+        score: calcScore,
+        label: `Condition ${calcScore}%`,
+        bg: "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300",
+        progress: "bg-blue-500",
+        icon: <Gauge className="w-4 h-4 text-blue-500" />,
+        status: "Normal",
+        hasData: true,
       };
     }
 
     return {
-      label: "Critical",
-      bg: "border-red-200 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300",
-      progress: "bg-red-500",
-      icon: <Wrench className="w-4 h-4" />,
+      score: null,
+      label: "Not Inspected",
+      bg: "border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-400",
+      progress: "bg-slate-400",
+      icon: <Activity className="w-4 h-4 text-slate-400" />,
+      status: "Not Inspected",
+      hasData: false,
     };
   };
 
@@ -879,43 +947,26 @@ export default function SupervisorComponentsPage() {
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-5 p-5 md:grid-cols-2 xl:grid-cols-3">
-              {filteredComponents.map((component) => {
-                const style = getHealthStyle(component.condition);
-
-                const machine = machines.find(
-                  (m) => m.machineId === component.machineId,
-                );
+            <>
+              <div className="grid grid-cols-1 gap-5 p-5 md:grid-cols-2 xl:grid-cols-3">
+                {paginatedComponents.map((component) => {
+                  const machine = machines.find(
+                    (m) => m.machineId === component.machineId,
+                  );
 
                 // Find matching active artisan assignment from localStorage
-                let activeAssignment: any = null;
-                try {
-                  const rawAssignments = localStorage.getItem("hme_supervisor_artisan_component_assignments");
-                  if (rawAssignments) {
-                    const parsed: any[] = JSON.parse(rawAssignments);
-                    activeAssignment = parsed.find((a) => {
-                      if (a.status !== "Active") return false;
-                      const matchMachine =
-                        a.machineId === component.machineId ||
-                        a.machineName?.toLowerCase() === machine?.name?.toLowerCase();
-                      if (!matchMachine) return false;
+                const activeAssignment = (component.assignedArtisanName || (component as any).assigned_artisan_name)
+                  ? {
+                      artisanName: component.assignedArtisanName || (component as any).assigned_artisan_name,
+                      supervisorName: component.assignedSupervisorName || (component as any).assigned_supervisor_name || "Supervisor",
+                      workScope: (component as any).assignedWorkScope || "Component maintenance",
+                      priority: (component as any).assignedPriority || "Medium",
+                    }
+                  : null;
 
-                      const desc = (component.description || "").toLowerCase();
-                      const cat = (component.category || "").toLowerCase();
-                      const target = (a.componentName || "").toLowerCase();
-
-                      return (
-                        desc.includes(target) ||
-                        target.includes(desc) ||
-                        cat.includes(target) ||
-                        target.includes(cat) ||
-                        (component as any).taskId === a.taskId
-                      );
-                    });
-                  }
-                } catch {}
-
-                const health = getHealthPercent(component.condition);
+                const healthInfo = getComponentHealthInfo(component);
+                const style = healthInfo;
+                const health = healthInfo.score ?? 100;
 
                 const remainingHours = Math.max(
                   0,
@@ -958,7 +1009,7 @@ export default function SupervisorComponentsPage() {
                           Component Category Type
                         </span>
                         <span className="font-bold text-indigo-600 dark:text-indigo-400">
-                          {component.category || "Engine"}
+                          {deriveComponentCategory(component)}
                         </span>
                       </div>
 
@@ -1021,38 +1072,49 @@ export default function SupervisorComponentsPage() {
                       <div className="flex items-center justify-between text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-2">
                         <span className="flex items-center gap-1">
                           <Activity size={13} className="text-blue-500" />
-                          Operator Component Inspection Graph
+                          Inspection Parameters & Values
                         </span>
                         <span className="text-[10px] text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 px-2 py-0.5 rounded-full border border-blue-200 dark:border-blue-800 font-bold">
-                          📋 Operator Log Verified
+                          {healthInfo.hasData ? "📋 Live Log Verified" : "⏳ Pending Inspection"}
                         </span>
                       </div>
 
                       {/* Operator Reported Inspection Metrics */}
                       <div className="flex flex-wrap items-center gap-2 mb-3">
-                        {component.category.toLowerCase().includes("tyre") ? (
-                          <>
-                            <span className="rounded-lg bg-emerald-100/70 dark:bg-emerald-950/50 px-2 py-1 text-[10px] font-bold text-emerald-800 dark:text-emerald-300">Operator Log: Air Pressure 32PSI</span>
-                            <span className="rounded-lg bg-blue-100/70 dark:bg-blue-950/50 px-2 py-1 text-[10px] font-bold text-blue-800 dark:text-blue-300">Temp: 45°C</span>
-                          </>
-                        ) : component.category.toLowerCase().includes("engine") ? (
-                          <>
-                            <span className="rounded-lg bg-amber-100/70 dark:bg-amber-950/50 px-2 py-1 text-[10px] font-bold text-amber-800 dark:text-amber-300">Operator Log: Engine Temp 90°C</span>
-                            <span className="rounded-lg bg-emerald-100/70 dark:bg-emerald-950/50 px-2 py-1 text-[10px] font-bold text-emerald-800 dark:text-emerald-300">Oil Level: 100%</span>
-                            <span className="rounded-lg bg-blue-100/70 dark:bg-blue-950/50 px-2 py-1 text-[10px] font-bold text-blue-800 dark:text-blue-300">Coolant: 100%</span>
-                          </>
-                        ) : component.category.toLowerCase().includes("hydraulic") ? (
-                          <>
-                            <span className="rounded-lg bg-blue-100/70 dark:bg-blue-950/50 px-2 py-1 text-[10px] font-bold text-blue-800 dark:text-blue-300">Operator Log: Hydraulic Oil 100%</span>
-                            <span className="rounded-lg bg-emerald-100/70 dark:bg-emerald-950/50 px-2 py-1 text-[10px] font-bold text-emerald-800 dark:text-emerald-300">Pressure: 2100bar</span>
-                            <span className="rounded-lg bg-amber-100/70 dark:bg-amber-950/50 px-2 py-1 text-[10px] font-bold text-amber-800 dark:text-amber-300">Oil Temp: 55°C</span>
-                          </>
-                        ) : (
-                          <>
-                            <span className="rounded-lg bg-emerald-100/70 dark:bg-emerald-950/50 px-2 py-1 text-[10px] font-bold text-emerald-800 dark:text-emerald-300">Operator Log: Oil Level 100%</span>
-                            <span className="rounded-lg bg-blue-100/70 dark:bg-blue-950/50 px-2 py-1 text-[10px] font-bold text-blue-800 dark:text-blue-300">Temp: 60°C</span>
-                          </>
-                        )}
+                        {(() => {
+                          const params = component.inspectionParameters || (component as any).parameters;
+                          let fieldList: any[] = [];
+                          if (Array.isArray(params)) fieldList = params;
+                          else if (params && Array.isArray(params.customFields)) fieldList = params.customFields;
+
+                          if (fieldList && fieldList.length > 0) {
+                            return fieldList.map((f: any, idx: number) => {
+                              const name = f.name || `Param #${idx + 1}`;
+                              const val = f.value !== undefined && f.value !== null ? String(f.value) : "N/A";
+                              const valLower = String(val).toLowerCase();
+                              const isAbnormal = valLower === "0" || valLower.includes("crit") || valLower.includes("warn") || valLower.includes("fail") || valLower.includes("leak");
+
+                              return (
+                                <span
+                                  key={idx}
+                                  className={`rounded-lg px-2.5 py-1 text-[10px] font-bold border ${
+                                    isAbnormal
+                                      ? "bg-amber-100/90 text-amber-900 dark:bg-amber-950/70 dark:text-amber-200 border-amber-300 dark:border-amber-800"
+                                      : "bg-emerald-100/80 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200 border-emerald-300 dark:border-emerald-800"
+                                  }`}
+                                >
+                                  {name}: {val}
+                                </span>
+                              );
+                            });
+                          }
+
+                          return (
+                            <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500 italic">
+                              No inspection parameters added yet
+                            </span>
+                          );
+                        })()}
                       </div>
 
                       {/* Component Trend Area Chart Driven by Operator Log Ratings */}
@@ -1116,7 +1178,27 @@ export default function SupervisorComponentsPage() {
                   </div>
                 );
               })}
-            </div>
+              </div>
+
+              <div className="border-t border-slate-200 p-4 dark:border-slate-800">
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  startItem={startItem}
+                  endItem={endItem}
+                  totalItems={filteredComponents.length}
+                  itemsPerPage={itemsPerPage}
+                  itemLabel="components"
+                  onPrev={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                  onNext={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                  onPageChange={setCurrentPage}
+                  onItemsPerPageChange={(val) => {
+                    setItemsPerPage(val);
+                    setCurrentPage(1);
+                  }}
+                />
+              </div>
+            </>
           )}
 
           {/* View Modal - now shows ONLY the selected component's own details */}
@@ -1149,11 +1231,20 @@ export default function SupervisorComponentsPage() {
                       (m) => m.machineId === selectedComponent.machineId,
                     );
 
-                    const style = getHealthStyle(selectedComponent.condition);
+                    const healthInfo = getComponentHealthInfo(selectedComponent);
+                    const style = healthInfo;
+                    const health = healthInfo.score !== null ? healthInfo.score : 0;
 
-                    const health = getHealthPercent(
-                      selectedComponent.condition,
-                    );
+                    const modalArtisan =
+                      (selectedComponent as any).assignedArtisanName ||
+                      (selectedComponent as any).artisanName ||
+                      (selectedComponent as any).assignedArtisan ||
+                      null;
+
+                    const modalSupervisor =
+                      (selectedComponent as any).supervisorName ||
+                      (selectedComponent as any).assignedSupervisorName ||
+                      null;
 
                     const remainingHours = Math.max(
                       0,
@@ -1205,7 +1296,7 @@ export default function SupervisorComponentsPage() {
                             </p>
 
                             <h3 className="mt-1 text-base font-bold dark:text-white">
-                              {machine?.location || "N/A"}
+                              {machine?.site || machine?.location || "N/A"}
                             </h3>
                           </div>
                         </div>
@@ -1215,7 +1306,7 @@ export default function SupervisorComponentsPage() {
                           <div className="flex items-center justify-between bg-slate-100 px-5 py-3 dark:bg-[#101f33]">
                             <div>
                               <h3 className="text-lg font-bold dark:text-white">
-                                {selectedComponent.category}
+                                {deriveComponentCategory(selectedComponent)}
                               </h3>
 
                               <p className="text-sm text-slate-500">
@@ -1256,8 +1347,12 @@ export default function SupervisorComponentsPage() {
                               <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
                                 Assigned Artisan (User ID)
                               </p>
-                              <p className="mt-1 text-sm font-bold text-blue-600 dark:text-blue-400">
-                                David Miller (ID: ART-204)
+                              <p className="mt-1 text-sm font-bold">
+                                {modalArtisan ? (
+                                  <span className="text-blue-600 dark:text-blue-400">{modalArtisan}</span>
+                                ) : (
+                                  <span className="font-bold text-emerald-600 dark:text-emerald-400">Unassigned</span>
+                                )}
                               </p>
                             </div>
 
@@ -1265,8 +1360,12 @@ export default function SupervisorComponentsPage() {
                               <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
                                 Assigned By Supervisor
                               </p>
-                              <p className="mt-1 text-sm font-bold text-emerald-600 dark:text-emerald-400">
-                                {getSupervisorName(selectedComponent, null)}
+                              <p className="mt-1 text-sm font-bold">
+                                {modalSupervisor ? (
+                                  <span className="text-emerald-600 dark:text-emerald-400">{modalSupervisor}</span>
+                                ) : (
+                                  <span className="font-bold text-emerald-600 dark:text-emerald-400">Unassigned</span>
+                                )}
                               </p>
                             </div>
 
@@ -1275,7 +1374,7 @@ export default function SupervisorComponentsPage() {
                                 Health Status
                               </p>
                               <p className="mt-1 text-sm font-bold dark:text-white">
-                                {health}%
+                                {healthInfo.hasData && healthInfo.score !== null ? `${healthInfo.score}%` : "Not Inspected Yet"}
                               </p>
                             </div>
                           </div>
@@ -1284,7 +1383,7 @@ export default function SupervisorComponentsPage() {
                             <div className="h-3 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
                               <div
                                 className={`h-full rounded-full transition-all duration-500 ${style.progress}`}
-                                style={{ width: `${health}%` }}
+                                style={{ width: `${healthInfo.hasData && healthInfo.score !== null ? healthInfo.score : 0}%` }}
                               />
                             </div>
                           </div>
@@ -1294,38 +1393,49 @@ export default function SupervisorComponentsPage() {
                             <div className="flex items-center justify-between text-xs font-bold text-slate-800 dark:text-slate-200 mb-3">
                               <span className="flex items-center gap-1.5">
                                 <Activity size={15} className="text-blue-500" />
-                                Operator Component Inspection Log Trend Graph
+                                Operator Component Inspection Parameters
                               </span>
                               <span className="text-[10px] text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 px-2.5 py-1 rounded-full border border-blue-200 dark:border-blue-800 font-bold">
-                                📋 Daily Shift Report Data
+                                {healthInfo.hasData ? "📋 Daily Shift Report Data" : "⏳ Pending Inspection"}
                               </span>
                             </div>
 
                             {/* Operator Reported Inspection Metrics */}
                             <div className="flex flex-wrap items-center gap-2 mb-4">
-                              {selectedComponent.category.toLowerCase().includes("tyre") ? (
-                                <>
-                                  <span className="rounded-lg bg-emerald-100/70 dark:bg-emerald-950/50 px-2.5 py-1 text-xs font-bold text-emerald-800 dark:text-emerald-300">Operator Log: Air Pressure 32PSI</span>
-                                  <span className="rounded-lg bg-blue-100/70 dark:bg-blue-950/50 px-2.5 py-1 text-xs font-bold text-blue-800 dark:text-blue-300">Temp: 45°C</span>
-                                </>
-                              ) : selectedComponent.category.toLowerCase().includes("engine") ? (
-                                <>
-                                  <span className="rounded-lg bg-amber-100/70 dark:bg-amber-950/50 px-2.5 py-1 text-xs font-bold text-amber-800 dark:text-amber-300">Operator Log: Engine Temp 90°C</span>
-                                  <span className="rounded-lg bg-emerald-100/70 dark:bg-emerald-950/50 px-2.5 py-1 text-xs font-bold text-emerald-800 dark:text-emerald-300">Oil Level: 100%</span>
-                                  <span className="rounded-lg bg-blue-100/70 dark:bg-blue-950/50 px-2.5 py-1 text-xs font-bold text-blue-800 dark:text-blue-300">Coolant: 100%</span>
-                                </>
-                              ) : selectedComponent.category.toLowerCase().includes("hydraulic") ? (
-                                <>
-                                  <span className="rounded-lg bg-blue-100/70 dark:bg-blue-950/50 px-2.5 py-1 text-xs font-bold text-blue-800 dark:text-blue-300">Operator Log: Hydraulic Oil 100%</span>
-                                  <span className="rounded-lg bg-emerald-100/70 dark:bg-emerald-950/50 px-2.5 py-1 text-xs font-bold text-emerald-800 dark:text-emerald-300">Pressure: 2100bar</span>
-                                  <span className="rounded-lg bg-amber-100/70 dark:bg-amber-950/50 px-2.5 py-1 text-xs font-bold text-amber-800 dark:text-amber-300">Oil Temp: 55°C</span>
-                                </>
-                              ) : (
-                                <>
-                                  <span className="rounded-lg bg-emerald-100/70 dark:bg-emerald-950/50 px-2.5 py-1 text-xs font-bold text-emerald-800 dark:text-emerald-300">Operator Log: Oil Level 100%</span>
-                                  <span className="rounded-lg bg-blue-100/70 dark:bg-blue-950/50 px-2.5 py-1 text-xs font-bold text-blue-800 dark:text-blue-300">Temp: 60°C</span>
-                                </>
-                              )}
+                              {(() => {
+                                const params = selectedComponent.inspectionParameters || (selectedComponent as any).parameters;
+                                let fieldList: any[] = [];
+                                if (Array.isArray(params)) fieldList = params;
+                                else if (params && Array.isArray(params.customFields)) fieldList = params.customFields;
+
+                                if (fieldList && fieldList.length > 0) {
+                                  return fieldList.map((f: any, idx: number) => {
+                                    const name = f.name || `Param #${idx + 1}`;
+                                    const val = f.value !== undefined && f.value !== null ? String(f.value) : "N/A";
+                                    const valLower = String(val).toLowerCase();
+                                    const isAbnormal = valLower === "0" || valLower.includes("crit") || valLower.includes("warn") || valLower.includes("fail") || valLower.includes("leak");
+
+                                    return (
+                                      <span
+                                        key={idx}
+                                        className={`rounded-lg px-3 py-1.5 text-xs font-bold border ${
+                                          isAbnormal
+                                            ? "bg-amber-100/90 text-amber-900 dark:bg-amber-950/70 dark:text-amber-200 border-amber-300 dark:border-amber-800"
+                                            : "bg-emerald-100/80 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200 border-emerald-300 dark:border-emerald-800"
+                                        }`}
+                                      >
+                                        {name}: {val}
+                                      </span>
+                                    );
+                                  });
+                                }
+
+                                return (
+                                  <span className="text-xs font-medium text-slate-400 dark:text-slate-500 italic">
+                                    No inspection parameters or comments added yet
+                                  </span>
+                                );
+                              })()}
                             </div>
 
                             {/* Full Detailed Responsive Area Chart */}

@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from "react";
 import StorageService from "../../services/storage.service";
 import { isReadOnlyRole } from "../../components/common/permissions";
@@ -2050,3 +2051,8 @@ export default function ReportDashboard() {
     </div>
   );
 }
+
+import ComingSoon from "../Common/ComingSoon";
+
+export default ComingSoon;
+

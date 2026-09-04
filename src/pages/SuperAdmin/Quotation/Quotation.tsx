@@ -2,12 +2,13 @@ import { type FC, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   ClipboardList,
-  Send,
   MessageSquareCheck,
+  PlusCircle,
 } from "lucide-react";
 
 import QuotationInquiry from "./QuotationInquiry";
 import QuotationResponses from "./QuotationResponses";
+import { AddonQuotationBuilder } from "./AddonQuotationBuilder";
 
 /* ============================================================
    TYPES
@@ -15,7 +16,7 @@ import QuotationResponses from "./QuotationResponses";
 
 type QuotationTabId =
   | "inquiry"
-  | "send-quotation"
+  | "addon-builder"
   | "responses";
 
 interface QuotationTabConfig {
@@ -33,7 +34,7 @@ const QUOTATION_TABS: readonly QuotationTabConfig[] = [
   {
     id: "inquiry",
     label: "Quotation Inquiry",
-    description: "Review and manage quotation inquiries",
+    description: "Review and manage customer quotation inquiries",
     icon: (
       <ClipboardList
         size={21}
@@ -43,9 +44,21 @@ const QUOTATION_TABS: readonly QuotationTabConfig[] = [
     ),
   },
   {
+    id: "addon-builder",
+    label: "Create Quote / Add-On",
+    description: "Machine add-ons, pricing engine & EFT payments",
+    icon: (
+      <PlusCircle
+        size={21}
+        strokeWidth={2}
+        aria-hidden="true"
+      />
+    ),
+  },
+  {
     id: "responses",
     label: "Quotation Responses",
-    description: "Track quotation responses",
+    description: "Track official quotation responses & proposals",
     icon: (
       <MessageSquareCheck
         size={21}
@@ -65,7 +78,7 @@ const isQuotationTab = (
 ): value is QuotationTabId => {
   return (
     value === "inquiry" ||
-    value === "send-quotation" ||
+    value === "addon-builder" ||
     value === "responses"
   );
 };
@@ -84,7 +97,7 @@ const Quotation: FC = () => {
    * Examples:
    *
    * /super-admin/quotation?tab=inquiry
-   * /super-admin/quotation?tab=send-quotation
+   * /super-admin/quotation?tab=addon-builder
    * /super-admin/quotation?tab=responses
    */
 
@@ -123,6 +136,8 @@ const Quotation: FC = () => {
       case "inquiry":
         return <QuotationInquiry />;
 
+      case "addon-builder":
+        return <AddonQuotationBuilder />;
 
       case "responses":
         return <QuotationResponses />;

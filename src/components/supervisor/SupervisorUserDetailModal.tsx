@@ -87,38 +87,14 @@ export const SupervisorUserDetailModal: React.FC<SupervisorUserDetailModalProps>
   const [newCommentText, setNewCommentText] = useState("");
   const [addingComment, setAddingComment] = useState(false);
 
-  // Load persistent comments for this user
+  // Load comments for this user
   useEffect(() => {
     if (!userDetail?.name) return;
 
-    const storageKey = `hme_user_comments_${userDetail.id || userDetail.name.replace(/\s+/g, "_")}`;
-    try {
-      const stored = localStorage.getItem(storageKey);
-      if (stored) {
-        setComments(JSON.parse(stored));
-      } else {
-        // Initial fallback comments if none stored yet
-        const defaultComments: UserDetailComment[] = [
-          {
-            id: "c1",
-            author: "Marcus Supervisor",
-            text: `Initial shift assignment for ${userDetail.name}. Verified safety equipment & pre-start checklist.`,
-            timestamp: "Today, 08:30 AM",
-          },
-          ...(userDetail.comments || []),
-        ];
-        setComments(defaultComments);
-        localStorage.setItem(storageKey, JSON.stringify(defaultComments));
-      }
-    } catch {
-      setComments(userDetail.comments || []);
-    }
+    setComments(userDetail.comments || []);
   }, [userDetail]);
 
   if (!isOpen || !userDetail) return null;
-
-  const userKey = userDetail.id || userDetail.name.replace(/\s+/g, "_");
-  const storageKey = `hme_user_comments_${userKey}`;
 
   const handleAddCommentSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -127,7 +103,7 @@ export const SupervisorUserDetailModal: React.FC<SupervisorUserDetailModalProps>
     setAddingComment(true);
     const newComment: UserDetailComment = {
       id: `comment_${Date.now()}`,
-      author: "Marcus Supervisor",
+      author: "Supervisor",
       text: newCommentText.trim(),
       timestamp: new Date().toLocaleString("en-GB", {
         day: "2-digit",
@@ -139,11 +115,6 @@ export const SupervisorUserDetailModal: React.FC<SupervisorUserDetailModalProps>
 
     const updated = [newComment, ...comments];
     setComments(updated);
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(updated));
-    } catch (err) {
-      console.warn("Failed to store user comment:", err);
-    }
 
     if (onAddComment) {
       onAddComment(userDetail.id || userDetail.name, newComment);

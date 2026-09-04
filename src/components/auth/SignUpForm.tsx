@@ -14,10 +14,15 @@ import {
   extractApiError,
 } from "../../services/Quotation/quotationService";
 import { showErrorToast, showSuccessToast } from "../../utils/toastUtils";
+
+import { showLoadingToast, updateToast } from "../../utils/toastUtils";
 import {
+  getPublicOptionalServices,
+  getEquipmentTypes,
   getOptionalServices,
   type OptionalService,
 } from "../../services/SuperAdmin/optionalService";
+import { submitQuotationRequest } from "../../services/SuperAdmin/quotationInquiryService";
 
 import {
   signUpSchema,
@@ -25,6 +30,7 @@ import {
   type SignUpFormData,
 } from "../../components/common/FormValidation";
 import PdfAttachment from "../../components/common/PdfAttachment";
+
 
 import Navbar from "../../components/landing/Navbar";
 import Footer from "../../components/landing/Footer";
@@ -72,6 +78,41 @@ const EQUIPMENT_TYPE_OPTIONS: SelectOption[] = [
   { value: "conveyors", label: "Conveyors" },
   { value: "cranes", label: "Cranes" },
   { value: "other", label: "Other" },
+];
+
+const OPTIONAL_SERVICE_OPTIONS: SelectOption[] = [
+  {
+    value: "telematics_ecu_integration",
+    label: "Telematics / ECU Integration",
+  },
+  {
+    value: "historical_data_migration_cleaning",
+    label: "Historical Data Migration & Cleaning",
+  },
+  {
+    value: "custom_api_development",
+    label: "Custom API Development",
+  },
+  {
+    value: "sap_erp_integration",
+    label: "SAP / ERP Integration",
+  },
+  {
+    value: "additional_training",
+    label: "Additional Training",
+  },
+  {
+    value: "sms_whatsapp_notifications",
+    label: "SMS / WhatsApp Notifications",
+  },
+  {
+    value: "custom_reports",
+    label: "Custom Reports",
+  },
+  {
+    value: "on_site_technical_support",
+    label: "On-site Technical Support",
+  },
 ];
 
 const CONTRACT_DURATION_OPTIONS: SelectOption[] = [
@@ -388,39 +429,78 @@ export default function SignUpForm() {
 
   const [step, setStep] = useState<1 | 2>(1);
 
-  const [optionalServices, setOptionalServices] = useState<OptionalService[]>(
-    [],
-  );
-  const [optionalServicesLoading, setOptionalServicesLoading] = useState(false);
+
+  const [equipmentTypeOptions, setEquipmentTypeOptions] =
+    useState<SelectOption[]>(EQUIPMENT_TYPE_OPTIONS);
+  const [optionalServiceOptions, setOptionalServiceOptions] =
+    useState<SelectOption[]>(OPTIONAL_SERVICE_OPTIONS);
+  const [isLoadingDynamicOptions, setIsLoadingDynamicOptions] = useState(false);
 
   useEffect(() => {
-    const loadOptionalServices = async () => {
-      setOptionalServicesLoading(true);
+    let isMounted = true;
 
+    const loadDynamicOptions = async () => {
+      setIsLoadingDynamicOptions(true);
       try {
-        const data = await getOptionalServices();
+        const [equipmentsRes, servicesRes] = await Promise.allSettled([
+          getEquipmentTypes(),
+          getPublicOptionalServices(),
+        ]);
 
-        console.log("OPTIONAL SERVICES:", data);
+        if (
+          equipmentsRes.status === "fulfilled" &&
+          Array.isArray(equipmentsRes.value) &&
+          equipmentsRes.value.length > 0
+        ) {
+          const mappedEquipments: SelectOption[] = equipmentsRes.value.map(
+            (item: any) => {
+              if (typeof item === "string") {
+                return { value: item, label: item };
+              }
+              const name =
+                item.name || item.category || item.label || String(item);
+              return { value: name, label: name };
+            },
+          );
+          if (isMounted && mappedEquipments.length > 0) {
+            setEquipmentTypeOptions(mappedEquipments);
+          }
+        }
 
-        setOptionalServices(data);
-      } catch (error) {
-        console.error("Failed to load optional services:", error);
-        setOptionalServices([]);
+        if (
+          servicesRes.status === "fulfilled" &&
+          Array.isArray(servicesRes.value) &&
+          servicesRes.value.length > 0
+        ) {
+          const mappedServices: SelectOption[] = servicesRes.value.map(
+            (item: any) => {
+              const val = item.name || item.id || item.value;
+              const lbl = item.name || item.label || val;
+              return { value: val, label: lbl };
+            },
+          );
+          if (isMounted && mappedServices.length > 0) {
+            setOptionalServiceOptions(mappedServices);
+          }
+        }
+      } catch (err) {
+        console.warn(
+          "Failed to load dynamic quotation options, using fallback:",
+          err,
+        );
       } finally {
-        setOptionalServicesLoading(false);
+        if (isMounted) setIsLoadingDynamicOptions(false);
       }
     };
 
-    loadOptionalServices();
-  }, []);
-  const optionalServiceOptions: SelectOption[] = optionalServices.map(
-    (service) => ({
-      value: service.name,
-      label: service.name,
-    }),
-  );
+    loadDynamicOptions();
 
-    const {
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const {
     control,
     register,
     handleSubmit,
@@ -543,9 +623,78 @@ export default function SignUpForm() {
       StorageService.remove(STORAGE_KEYS.NAME);
       StorageService.remove(STORAGE_KEYS.COMPANY_ID);
 
+      const createdCompanyId =
+        registerResponse?.data?.company?.id ||
+        registerResponse?.company?.id ||
+        user?.companyId ||
+        user?.company_id;
+
+      const createdUserId =
+        registerResponse?.data?.user?.id ||
+        registerResponse?.user?.id ||
+        user?.id;
+
+      const normalizedRole = "company_admin";
+      const finalUser = {
+        id: createdUserId,
+        role: normalizedRole,
+        role_name: "Admin",
+        companyId: createdCompanyId,
+        isActive: false,
+        email: data.email.trim().toLowerCase(),
+        name: data.contactPerson.trim(),
+        companyName: data.companyName.trim(),
+        company: data.companyName.trim(),
+      };
+
       if (token) {
         console.warn("Registration returned a token, but signup flow intentionally clears it so the user must login manually.");
       }
+
+      StorageService.set(STORAGE_KEYS.ROLE, normalizedRole);
+      StorageService.set(STORAGE_KEYS.USER, finalUser);
+      StorageService.set(STORAGE_KEYS.EMAIL, finalUser.email);
+      StorageService.set(STORAGE_KEYS.NAME, finalUser.name);
+      if (createdCompanyId) {
+        StorageService.set(STORAGE_KEYS.COMPANY_ID, createdCompanyId);
+      }
+
+      // Submit Quotation Request Details to Backend Database
+      try {
+        await submitQuotationRequest({
+          companyName: data.companyName.trim(),
+          contactPerson: data.contactPerson.trim(),
+          email: data.email.trim().toLowerCase(),
+          phone: data.phone.trim(),
+          siteLocation: data.siteLocation?.trim(),
+          quotationType: data.quotationType,
+          numberOfSites: Number(data.numberOfSites) || 1,
+          siteNames:
+            data.siteNames?.map((s) => s.name).filter(Boolean) || [],
+          activeMachines: Number(data.activeMachines) || 1,
+          equipmentTypes: data.equipmentTypes || [],
+          contractDuration: data.contractDuration,
+          optionalServices: data.optionalServices || [],
+          implementationRequirements:
+            data.implementationRequirements?.trim(),
+          additionalRequirements: data.additionalRequirements?.trim(),
+          companyId: createdCompanyId,
+          userId: createdUserId,
+        });
+      } catch (quotationErr) {
+        console.warn("Quotation inquiry submission notice:", quotationErr);
+      }
+
+      updateToast(
+        toastId,
+        "Quotation request submitted successfully! Redirecting to company portal...",
+        "success",
+      );
+
+      setTimeout(() => {
+        window.location.href = "/company-admin/dashboard";
+      }, 1000);
+
 
       // --------------------------------------------------
       // 3. Build quotation request payload
@@ -582,6 +731,7 @@ export default function SignUpForm() {
       await createQuotationRequest(quotationPayload);
 
       navigate("/signin", { replace: true });
+
     } catch (error) {
       const errorMessage = extractApiError(error);
       if (errorMessage) {
@@ -1105,10 +1255,27 @@ export default function SignUpForm() {
                             control={control}
                             render={({ field }) => (
                               <AppMultiSelect
+
+                                values={field.value}
+                                onChange={(values) => {
+                                  field.onChange(values);
+                                  if (errors.equipmentTypes) {
+                                    clearErrors("equipmentTypes");
+                                  }
+                                }}
+                                options={equipmentTypeOptions}
+                                placeholder={
+                                  isLoadingDynamicOptions
+                                    ? "Loading equipment types..."
+                                    : "Select equipment types"
+                                }
+                                error={Boolean(errors.equipmentTypes)}
+
                                 values={field.value || []}
                                 onChange={(values) => field.onChange(values)}
                                 options={optionalServiceOptions}
                                 placeholder="Select optional services"
+
                               />
                             )}
                           />
@@ -1208,8 +1375,15 @@ export default function SignUpForm() {
                                 values={field.value || []}
                                 onChange={(values) => field.onChange(values)}
                                 options={optionalServiceOptions}
+
+                                placeholder={
+                                  isLoadingDynamicOptions
+                                    ? "Loading optional services..."
+                                    : "Select optional services"
+                                }
+
                                 placeholder="Select optional services"
-                              />
+            />
                             )}
                           />
                         </div>

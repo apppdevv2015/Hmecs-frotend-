@@ -48,7 +48,10 @@ import SubscriptionHistoryTable from "../../components/company-admin/dashboard/S
 import MachineHealthChart from "../../components/company-admin/dashboard/MachineHealthChart";
 import { userService } from "../../services/Auth/userService";
 import { componentService } from "../../services/companyadmin/componentService";
+import { machineService } from "../../services/companyadmin/machineService";
 import { CompanyAdminNav } from "../../components/company-admin/CompanyAdminNav";
+import CompanyPendingApprovalView from "../../components/company-admin/CompanyPendingApprovalView";
+import StorageService from "../../services/storage.service";
 import socketService from "../../services/socketService";
 
 const getArrayData = <T,>(response: any): T[] => {
@@ -61,50 +64,67 @@ const getArrayData = <T,>(response: any): T[] => {
   return [];
 };
 
-const normalizeComponent = (item: any) => ({
-  id: String(item.id || item.componentId || item.component_id || ""),
-  machineId: String(
-    item.machineId || item.machine_id || item.machine?.id || "",
-  ),
-  companyId: String(
-    item.companyId ||
+const cleanMachineName = (rawName: string): string => {
+  let name = String(rawName || "").trim();
+  const words = name.split(/\s+/);
+  if (words.length >= 2 && words[0].toLowerCase() === words[1].toLowerCase()) {
+    words.shift();
+    name = words.join(" ");
+  }
+  return name;
+};
+
+const normalizeComponent = (item: any) => {
+  const rawScore = item.healthScore ?? item.health_score ?? item.healthScorePercent ?? null;
+  const score = rawScore !== null && rawScore !== undefined ? Number(rawScore) : null;
+
+  return {
+    id: String(item.id || item.componentId || item.component_id || ""),
+    machineId: String(
+      item.machineId || item.machine_id || item.machine?.id || "",
+    ),
+    companyId: String(
+      item.companyId ||
       item.company_id ||
       item.machine?.companyId ||
       item.machine?.company_id ||
       "",
-  ),
-  companyCode: String(
-    item.companyCode ||
+    ),
+    companyCode: String(
+      item.companyCode ||
       item.company_code ||
       item.machine?.companyCode ||
       item.machine?.company_code ||
       item.company?.companyCode ||
       item.company?.company_code ||
       "",
-  ),
-  companyName: String(
-    item.companyName ||
+    ),
+    companyName: String(
+      item.companyName ||
       item.company_name ||
       item.machine?.companyName ||
       item.machine?.company_name ||
       item.company?.name ||
       "",
-  ),
-  company: item.company || item.machine?.company,
-  machine: item.machine,
-  category: String(item.category || item.categoryName || item.type || ""),
-  description: String(item.description || ""),
-  serialNumber: String(item.serialNumber || item.serial_number || ""),
-  supplier: String(item.supplier || ""),
-  installHours: Number(item.installHours ?? item.install_hours ?? 0),
-  currentHours: Number(item.currentHours ?? item.current_hours ?? 0),
-  plannedLife: Number(item.plannedLife ?? item.planned_life ?? 0),
-  replacementCost: Number(item.replacementCost ?? item.replacement_cost ?? 0),
-  condition: Number(item.condition ?? 3),
-  createdAt: item.createdAt || item.created_at,
-  updatedAt: item.updatedAt || item.updated_at,
-  intelligence: item.intelligence,
-});
+    ),
+    company: item.company || item.machine?.company,
+    machine: item.machine,
+    category: String(item.category || item.categoryName || item.componentType || item.component_type || ""),
+    description: String(item.description || ""),
+    serialNumber: String(item.serialNumber || item.serial_number || ""),
+    supplier: String(item.supplier || ""),
+    installHours: Number(item.installHours ?? item.install_hours ?? 0),
+    currentHours: Number(item.currentHours ?? item.current_hours ?? 0),
+    plannedLife: Number(item.plannedLife ?? item.planned_life ?? 0),
+    replacementCost: Number(item.replacementCost ?? item.replacement_cost ?? item.purchasePrice ?? item.purchase_price ?? 0),
+    condition: Number(item.condition ?? 3),
+    status: item.status || (score !== null ? (score < 50 ? "Critical" : score < 85 ? "Warning" : "Healthy") : "Healthy"),
+    healthScore: score !== null ? score : 100,
+    createdAt: item.createdAt || item.created_at,
+    updatedAt: item.updatedAt || item.updated_at,
+    intelligence: item.intelligence,
+  };
+};
 
 export default function CompanyAdminDashboard() {
   const [subscription, setSubscription] = useState<any>(null);
@@ -117,6 +137,9 @@ export default function CompanyAdminDashboard() {
   const [riskSearch, setRiskSearch] = useState("");
   const [riskStatusFilter, setRiskStatusFilter] = useState("all");
   const [editingComponent, setEditingComponent] = useState<any | null>(null);
+  const [selectedFleetMachineModal, setSelectedFleetMachineModal] = useState<any | null>(null);
+  const [selectedParamComponentModal, setSelectedParamComponentModal] = useState<any | null>(null);
+  const [selectedCategoryHealthModal, setSelectedCategoryHealthModal] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
@@ -140,6 +163,150 @@ export default function CompanyAdminDashboard() {
     { label: "Monitor Only", value: "monitor" },
   ];
 
+  const deletedComponentKeysRef = React.useRef<Set<string>>(new Set());
+
+  const fetchDashboardData = React.useCallback(async () => {
+    try {
+      setLoading(true);
+
+      const [sub, subHistory, machinesList, componentResponse] =
+        await Promise.all([
+          userService.getActiveSubscription(),
+          userService.getSubscriptionHistory(),
+          userService.getMachines(),
+          componentService.getComponents(),
+        ]);
+
+      setSubscription(sub);
+      setHistory(subHistory || []);
+
+      const rawMachines = getArrayData<any>(machinesList);
+      const normalizedMachines = rawMachines.map((m: any) => ({
+        id: String(m.id || m.machineId || m.machine_id || ""),
+        name: String(m.name || m.machineName || m.model || "Unnamed Machine"),
+        machineId: String(m.machineId || m.machine_id || m.id || ""),
+        serialNumber: m.serialNumber || m.serial_number || "",
+        model: m.model || m.equipmentType || m.equipment_type || "",
+        site: m.site || m.location || "",
+        location: m.location || m.site || "",
+        status: m.status || "active",
+      }));
+
+      setMachines(normalizedMachines);
+
+      const rawComponents = getArrayData<any>(componentResponse);
+      const mappedComponents = rawComponents
+        .map(normalizeComponent)
+        .filter((c: any) => {
+          const cId = String(c.id || "").toLowerCase().trim();
+          const cSn = String(c.serialNumber || "").replace(/^DEMO-/i, "").toLowerCase().trim();
+          if (deletedComponentKeysRef.current.has(cId) || (cSn && deletedComponentKeysRef.current.has(cSn))) {
+            return false;
+          }
+          return true;
+        });
+
+      // Fetch DB Manual Inspection records per valid machine ID
+      const inspectionResults = await Promise.all(
+        normalizedMachines.map(async (m: any) => {
+          if (!m.id) return [];
+          try {
+            const res: any = await machineService.getManualInspectionData(m.id);
+            if (res?.data?.records && Array.isArray(res.data.records)) return res.data.records;
+            if (res?.records && Array.isArray(res.records)) return res.records;
+            if (Array.isArray(res)) return res;
+          } catch (err) {}
+          return [];
+        })
+      );
+      const rawInspections = inspectionResults.flat();
+      if (rawInspections && rawInspections.length > 0) {
+        const processInspection = (insp: any, targetMachId?: string) => {
+          if (Array.isArray(insp.components) && insp.components.length > 0) {
+            insp.components.forEach((subComp: any) => {
+              processInspection(subComp, targetMachId || insp.machineId);
+            });
+            return;
+          }
+
+          const inspSn = String(insp.serialNumber || insp.serial_number || "").replace(/^DEMO-/i, "").toLowerCase().trim();
+          const inspCompName = String(insp.componentName || insp.component_name || insp.name || "").toLowerCase().trim();
+          const inspMachId = String(targetMachId || insp.machineId || insp.machine_id || "").toLowerCase().trim();
+          const inspCompId = String(insp.componentId || insp.component_id || insp.id || "").toLowerCase().trim();
+
+          // Skip if marked deleted
+          if (deletedComponentKeysRef.current.has(inspCompId) || (inspSn && deletedComponentKeysRef.current.has(inspSn))) {
+            return;
+          }
+
+          let found = mappedComponents.find((c: any) => {
+            const cId = String(c.id || "").toLowerCase().trim();
+            const cSn = String(c.serialNumber || "").replace(/^DEMO-/i, "").toLowerCase().trim();
+            const cMachId = String(c.machineId || "").toLowerCase().trim();
+            const cName = String(c.displayName || c.name || c.description || c.category || "").toLowerCase().trim();
+
+            if (inspCompId && cId && inspCompId === cId) return true;
+            if (inspSn && cSn && inspSn === cSn) return true;
+            if (inspMachId && cMachId && (inspMachId === cMachId || cMachId.includes(inspMachId) || inspMachId.includes(cMachId))) {
+              if (inspCompName && cName && (inspCompName === cName || inspCompName.includes(cName) || cName.includes(inspCompName))) return true;
+            }
+            return false;
+          });
+
+          const inspScore = Number(insp.healthScore ?? insp.health_score ?? insp.score ?? 100);
+          const isCrit = inspScore < 50 || String(insp.status).toUpperCase().includes("CRIT");
+          const isWarn = (!isCrit && inspScore < 85) || String(insp.status).toUpperCase().includes("WARN");
+          const inspStatus = isCrit ? "CRITICAL" : isWarn ? "WARNING" : "HEALTHY";
+          const riskLabel = isCrit ? "Critical" : isWarn ? "Warning" : "Healthy";
+
+          const rawParams = Array.isArray(insp.parameters) ? insp.parameters : (insp.parameters?.customFields || []);
+          const paramsText = rawParams.length > 0
+            ? rawParams.map((p: any) => `${p.name}: ${p.value}`).join(", ")
+            : "Diagnostic Variance";
+
+          if (found) {
+            found.status = inspStatus;
+            found.healthScore = inspScore;
+            found.condition = isCrit ? 5 : isWarn ? 4 : 2;
+            found.intelligence = {
+              riskStatus: riskLabel,
+              riskDriver: paramsText,
+            };
+          } else if (inspCompName && !inspCompName.startsWith("all components")) {
+            mappedComponents.push({
+              id: insp.id || `insp_${mappedComponents.length}`,
+              machineId: targetMachId || insp.machineId,
+              name: insp.componentName || insp.name || "Machine Component",
+              category: insp.category || "General",
+              description: insp.description || `${insp.componentName || "Component"} (Inspected)`,
+              serialNumber: inspSn || `SN-COMP-${mappedComponents.length}`,
+              supplier: "OEM Standard",
+              status: inspStatus,
+              healthScore: inspScore,
+              condition: isCrit ? 5 : isWarn ? 4 : 2,
+              installHours: 0,
+              currentHours: (100 - inspScore) * 150,
+              plannedLife: 15000,
+              replacementCost: 35000,
+              intelligence: {
+                riskStatus: riskLabel,
+                riskDriver: paramsText,
+              },
+            });
+          }
+        };
+
+        rawInspections.forEach((insp: any) => processInspection(insp));
+      }
+
+      setComponents([...mappedComponents]);
+    } catch (err) {
+      console.error("Dashboard fetch error:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, [navigate]);
+
   const handleDeleteComponent = async () => {
     if (!deleteTarget) return;
 
@@ -151,17 +318,31 @@ export default function CompanyAdminDashboard() {
       return;
     }
 
+    const targetId = String(deleteTarget.id || "").toLowerCase().trim();
+    const targetSn = String(deleteTarget.serialNumber || "").replace(/^DEMO-/i, "").toLowerCase().trim();
+
     try {
       setDeleting(true);
+
+      // Instantly remove from local list
+      setComponents((prev) =>
+        prev.filter((c) => {
+          const cId = String(c.id || "").toLowerCase().trim();
+          const cSn = String(c.serialNumber || "").replace(/^DEMO-/i, "").toLowerCase().trim();
+          if (targetId && cId === targetId) return false;
+          if (targetSn && cSn === targetSn) return false;
+          return true;
+        }),
+      );
+
+      if (targetId) deletedComponentKeysRef.current.add(targetId);
+      if (targetSn) deletedComponentKeysRef.current.add(targetSn);
 
       await componentService.deleteComponent(deleteTarget.id);
       showSuccessToast("Component deleted successfully");
 
-      const componentResponse = await componentService.getComponents();
-      const rawComponents = getArrayData<any>(componentResponse);
-      setComponents(rawComponents.map(normalizeComponent));
-
       setDeleteTarget(null);
+      await fetchDashboardData();
     } catch (err: any) {
       console.error(err);
       showErrorToast(err?.message || "Failed to delete component");
@@ -170,116 +351,9 @@ export default function CompanyAdminDashboard() {
     }
   };
 
-  const handleStartEdit = (comp: any) => {
-    if (isExpired) {
-      showErrorToast(
-        "Action Denied: You cannot edit components because your subscription plan has expired. Please renew your plan.",
-      );
-      return;
-    }
-
-    setEditingComponent(comp);
-    setEditForm({
-      category: comp.cat || comp.category || "",
-      description: comp.description || "",
-      serialNumber: comp.serialNumber || "",
-      supplier: comp.supplier || "",
-      installHours: String(comp.installHours || 0),
-      currentHours: String(comp.currentHours || 0),
-      plannedLife: String(comp.plannedLife || 0),
-      replacementCost: String(comp.replacementCost || 0),
-      condition: String(comp.condition || 3),
-    });
-  };
-
-  const handleSaveEdit = async () => {
-    if (!editingComponent) return;
-
-    if (isExpired) {
-      showErrorToast(
-        "Action Denied: You cannot save changes because your subscription plan has expired. Please renew your plan.",
-      );
-      setEditingComponent(null);
-      return;
-    }
-
-    try {
-      setSavingEdit(true);
-
-      await componentService.updateComponent(editingComponent.id, {
-        category: editForm.category,
-        description: editForm.description,
-        serialNumber: editForm.serialNumber,
-        supplier: editForm.supplier,
-        installHours: Number(editForm.installHours) || 0,
-        currentHours: Number(editForm.currentHours) || 0,
-        plannedLife: Number(editForm.plannedLife) || 0,
-        replacementCost: Number(editForm.replacementCost) || 0,
-        condition: Number(editForm.condition) || 3,
-      });
-
-      showSuccessToast("Component updated successfully");
-
-      const componentResponse = await componentService.getComponents();
-      const rawComponents = getArrayData<any>(componentResponse);
-      setComponents(rawComponents.map(normalizeComponent));
-
-      setEditingComponent(null);
-    } catch (err: any) {
-      console.error(err);
-      showErrorToast(err?.message || "Failed to update component");
-    } finally {
-      setSavingEdit(false);
-    }
-  };
-
   useEffect(() => {
-    const fetchDashboardData = async () => {
-      try {
-        setLoading(true);
-
-        const [sub, subHistory, machinesList, componentResponse] =
-          await Promise.all([
-            userService.getActiveSubscription(),
-            userService.getSubscriptionHistory(),
-            userService.getMachines(),
-            componentService.getComponents(),
-          ]);
-
-        if (!sub && (!subHistory || subHistory.length === 0)) {
-          navigate("/plans");
-          return;
-        }
-
-        setSubscription(sub);
-        setHistory(subHistory);
-
-        const rawMachines = getArrayData<any>(machinesList);
-        const normalizedMachines = rawMachines.map((m: any) => ({
-          id: String(m.id || m.machineId || m.machine_id || ""),
-          name: String(m.name || m.machineName || m.model || "Unnamed Machine"),
-          machineId: String(m.machineId || m.machine_id || m.id || ""),
-          serialNumber: m.serialNumber || m.serial_number || "",
-          model: m.model || m.equipmentType || m.equipment_type || "",
-          site: m.site || m.location || "",
-          location: m.location || m.site || "",
-          status: m.status || "active",
-        }));
-
-        setMachines(normalizedMachines);
-
-        const rawComponents = getArrayData<any>(componentResponse);
-        const mappedComponents = rawComponents.map(normalizeComponent);
-        setComponents(mappedComponents);
-      } catch (err) {
-        console.error("Dashboard fetch error:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchDashboardData();
-  }, [navigate]);
+  }, [fetchDashboardData]);
 
   // 📡 Real-Time WebSocket Listener & Auto-Sync for Live Alerts & Subscription Changes
   useEffect(() => {
@@ -315,7 +389,7 @@ export default function CompanyAdminDashboard() {
       try {
         const sub = await userService.getActiveSubscription();
         setSubscription(sub);
-      } catch (e) {}
+      } catch (e) { }
     }, 30000);
 
     return () => {
@@ -336,19 +410,171 @@ export default function CompanyAdminDashboard() {
     };
   }, [editingComponent, deleteTarget]);
 
+
+
+  const getComponentCategory = React.useCallback((c: any): string => {
+    const rawCat = c.category || c.categoryName || c.componentType || c.type || (c.category && typeof c.category === "object" ? c.category.name : null);
+    if (rawCat && typeof rawCat === "string" && rawCat.trim() && rawCat !== "General" && rawCat !== "Uncategorized" && rawCat !== "Other") {
+      return rawCat.trim();
+    }
+
+    const text = String(c.displayName || c.name || c.description || c.title || c.serialNumber || "").toLowerCase();
+    if (text.includes("tyre") || text.includes("wheel") || text.includes("tire")) return "Tyre";
+    if (text.includes("engine") || text.includes("diesel") || text.includes("motor")) return "Engine";
+    if (text.includes("hydraul") || text.includes("pump") || text.includes("valve") || text.includes("cylinder")) return "Hydraulics";
+    if (text.includes("transmiss") || text.includes("gear") || text.includes("clutch") || text.includes("drivetrain")) return "Transmission";
+    if (text.includes("brake") || text.includes("suspen") || text.includes("axle") || text.includes("chassis") || text.includes("shock")) return "Brakes & Suspension";
+    if (text.includes("electr") || text.includes("sensor") || text.includes("battery") || text.includes("alternator") || text.includes("control")) return "Electrical";
+    if (text.includes("cooling") || text.includes("radiator") || text.includes("fan")) return "Cooling System";
+
+    if (c.displayName || c.name) {
+      const rawName = String(c.displayName || c.name).trim();
+      return rawName.charAt(0).toUpperCase() + rawName.slice(1);
+    }
+
+    return "Powertrain & Parts";
+  }, []);
+
+  const categoryData = React.useMemo(() => {
+    const categoryTotals: Record<string, number> = {};
+
+    const colors: Record<string, string> = {
+      Tyre: "#3b82f6",
+      Engine: "#ef4444",
+      Hydraulics: "#eab308",
+      Transmission: "#a855f7",
+      "Brakes & Suspension": "#ec4899",
+      Electrical: "#06b6d4",
+      "Cooling System": "#14b8a6",
+      "Powertrain & Parts": "#10b981",
+    };
+
+    components.forEach((c: any) => {
+      const cat = getComponentCategory(c);
+      const cost = Number(c.replacementCost || 0);
+      categoryTotals[cat] = (categoryTotals[cat] || 0) + (cost > 0 ? cost : 25000);
+    });
+
+    if (Object.keys(categoryTotals).length === 0) {
+      return [];
+    }
+
+    const palette = ["#3b82f6", "#ef4444", "#eab308", "#a855f7", "#ec4899", "#06b6d4", "#10b981", "#6366f1", "#f97316", "#84cc16", "#d946ef", "#0284c7"];
+
+    return Object.entries(categoryTotals).map(([name, value], index) => ({
+      name,
+      value,
+      color: colors[name] || palette[index % palette.length],
+    }));
+  }, [components, getComponentCategory]);
+
+  const distributionData = React.useMemo(() => {
+    const categoryCounts: Record<string, number> = {};
+
+    const colors: Record<string, string> = {
+      Tyre: "#3b82f6",
+      Engine: "#ef4444",
+      Hydraulics: "#eab308",
+      Transmission: "#a855f7",
+      "Brakes & Suspension": "#ec4899",
+      Electrical: "#06b6d4",
+      "Cooling System": "#14b8a6",
+      "Powertrain & Parts": "#10b981",
+    };
+
+    components.forEach((c: any) => {
+      const cat = getComponentCategory(c);
+      categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
+    });
+
+    const total = components.length || 1;
+
+    if (Object.keys(categoryCounts).length === 0) {
+      return [];
+    }
+
+    const palette = ["#3b82f6", "#ef4444", "#eab308", "#a855f7", "#ec4899", "#06b6d4", "#10b981", "#6366f1", "#f97316", "#84cc16", "#d946ef", "#0284c7"];
+
+    return Object.entries(categoryCounts).map(([name, count], index) => ({
+      name,
+      count,
+      value: Math.round((count / total) * 100),
+      color: colors[name] || palette[index % palette.length],
+    }));
+  }, [components, getComponentCategory]);
+
+  const categoryHealthMap = useMemo(() => {
+    const map: Record<string, { total: number; healthy: number; warning: number; critical: number; avgHealth: number }> = {};
+
+    components.forEach((c: any) => {
+      const cat = getComponentCategory(c) || c.category || "General";
+      const score = typeof c.healthScore === "number" ? c.healthScore : 100;
+      const isCrit = score < 50 || c.status === "Critical" || c.status === "CRITICAL";
+      const isWarn = (!isCrit && score < 85) || c.status === "Warning" || c.status === "WARNING";
+
+      if (!map[cat]) {
+        map[cat] = { total: 0, healthy: 0, warning: 0, critical: 0, avgHealth: 0 };
+      }
+
+      map[cat].total += 1;
+      if (isCrit) map[cat].critical += 1;
+      else if (isWarn) map[cat].warning += 1;
+      else map[cat].healthy += 1;
+
+      map[cat].avgHealth += score;
+    });
+
+    Object.keys(map).forEach((cat) => {
+      if (map[cat].total > 0) {
+        map[cat].avgHealth = Math.round(map[cat].avgHealth / map[cat].total);
+      }
+    });
+
+    return map;
+  }, [components, getComponentCategory]);
+
+  const getComponentRiskStatus = React.useCallback((c: any): "Critical" | "Warning" | "Monitor" | "Healthy" => {
+    // 1. Primary Source of Truth: Direct Diagnostic Health Score
+    const score = typeof c.healthScore === "number" ? Number(c.healthScore) : null;
+    if (score !== null) {
+      if (score < 50) return "Critical";
+      if (score < 85) return "Warning";
+      return "Healthy";
+    }
+
+    // 2. Direct Telemetry Inspection Status
+    const statusStr = String(c.status || "").toUpperCase();
+    if (statusStr.includes("CRIT")) return "Critical";
+    if (statusStr.includes("WARN")) return "Warning";
+    if (statusStr.includes("MONIT")) return "Monitor";
+    if (statusStr.includes("HEALTH") || statusStr.includes("OPTIM")) return "Healthy";
+
+    // 3. Computed Intelligence Risk Status
+    if (c.intelligence?.riskStatus) {
+      const r = String(c.intelligence.riskStatus).toLowerCase();
+      if (r === "critical") return "Critical";
+      if (r === "warning") return "Warning";
+      if (r === "monitor") return "Monitor";
+    }
+
+    return "Healthy";
+  }, []);
+
   const summaryStats = React.useMemo(() => {
     const totalMachines = machines.length;
     const totalComponents = components.length;
 
     const criticalCount = components.filter(
-      (c) => c.intelligence?.riskStatus === "Critical",
+      (c) => getComponentRiskStatus(c) === "Critical",
     ).length;
 
     const warningCount = components.filter(
       (c) =>
-        c.intelligence?.riskStatus === "Warning" ||
-        c.intelligence?.riskStatus === "Monitor",
+        getComponentRiskStatus(c) === "Warning" ||
+        getComponentRiskStatus(c) === "Monitor",
     ).length;
+
+    const healthyCount = totalComponents - criticalCount - warningCount;
 
     const totalReplacementCost = components.reduce(
       (sum, c) => sum + Number(c.replacementCost || 0),
@@ -360,145 +586,62 @@ export default function CompanyAdminDashboard() {
         ? `R ${(totalReplacementCost / 1000000).toFixed(2)}M`
         : totalReplacementCost >= 1000
           ? `R ${(totalReplacementCost / 1000).toFixed(0)}K`
-          : `R ${totalReplacementCost}`;
+          : totalReplacementCost > 0
+            ? `R ${totalReplacementCost}`
+            : "Active Fleet";
 
     return {
       totalMachines,
       totalComponents,
       criticalCount,
       warningCount,
+      healthyCount,
       formattedReplacementCost,
     };
-  }, [machines, components]);
-
-  const categoryData = React.useMemo(() => {
-    const categoryTotals: Record<string, number> = {};
-
-    const colors: Record<string, string> = {
-      Engine: "#f97316",
-      Tyre: "#0ea5e9",
-      Tyres: "#0ea5e9",
-      Transmission: "#a855f7",
-      Hydraulics: "#eab308",
-      Hydraulic: "#eab308",
-      Brakes: "#ec4899",
-      Brake: "#ec4899",
-      Electrical: "#06b6d4",
-      Cooling: "#14b8a6",
-      Cabin: "#64748b",
-    };
-
-    components.forEach((c) => {
-      const cat = c.category || "Other";
-      categoryTotals[cat] =
-        (categoryTotals[cat] || 0) + Number(c.replacementCost || 0);
-    });
-
-    if (Object.keys(categoryTotals).length === 0) {
-      return [
-        { name: "Engine", value: 0, color: "#f97316" },
-        { name: "Tyre", value: 0, color: "#0ea5e9" },
-      ];
-    }
-
-    return Object.entries(categoryTotals).map(([name, value]) => ({
-      name,
-      value,
-      color: colors[name] || "#64748b",
-    }));
-  }, [components]);
-
-  const distributionData = React.useMemo(() => {
-    const categoryCounts: Record<string, number> = {};
-
-    const colors: Record<string, string> = {
-      Engine: "#ef4444",
-      Tyre: "#3b82f6",
-      Tyres: "#3b82f6",
-      Transmission: "#a855f7",
-      Hydraulics: "#eab308",
-      Hydraulic: "#eab308",
-      Brakes: "#f97316",
-      Brake: "#f97316",
-      Electrical: "#06b6d4",
-      Cooling: "#14b8a6",
-      Cabin: "#64748b",
-    };
-
-    components.forEach((c) => {
-      const cat = c.category || "Other";
-      categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
-    });
-
-    const total = components.length || 1;
-
-    if (Object.keys(categoryCounts).length === 0) {
-      return [
-        { name: "Engine", value: 0, color: "#ef4444" },
-        { name: "Tyre", value: 0, color: "#3b82f6" },
-      ];
-    }
-
-    return Object.entries(categoryCounts).map(([name, count]) => ({
-      name,
-      value: Math.round((count / total) * 100),
-      color: colors[name] || "#64748b",
-    }));
-  }, [components]);
+  }, [machines, components, getComponentRiskStatus]);
 
   const fleetMachines = React.useMemo(() => {
     if (machines.length === 0) return [];
 
     return machines.map((m) => {
-      const machineComps = components.filter(
-        (c) => c.machineId === m.machineId || c.machineId === m.id,
-      );
+      const mId = String(m.id || m.machineId || m.machine_id || "");
+      const machineComps = components.filter((c) => {
+        const cMachId = String(c.machineId || c.machine_id || c.machine?.id || c.machine?.machineId || "");
+        return cMachId && mId && (cMachId === mId || cMachId.toLowerCase() === mId.toLowerCase());
+      });
 
       const compsCount = machineComps.length;
 
       const critCount = machineComps.filter(
-        (c) => c.intelligence?.riskStatus === "Critical",
+        (c) => getComponentRiskStatus(c) === "Critical",
       ).length;
 
       const warnCount = machineComps.filter(
         (c) =>
-          c.intelligence?.riskStatus === "Warning" ||
-          c.intelligence?.riskStatus === "Monitor",
+          getComponentRiskStatus(c) === "Warning" ||
+          getComponentRiskStatus(c) === "Monitor",
       ).length;
-
-      const totalCost = machineComps.reduce(
-        (sum, c) => sum + Number(c.replacementCost || 0),
-        0,
-      );
-
-      const formattedCost =
-        totalCost >= 1000000
-          ? `R ${(totalCost / 1000000).toFixed(2)}M`
-          : totalCost >= 1000
-            ? `R ${(totalCost / 1000).toFixed(0)}K`
-            : `R ${totalCost}`;
 
       return {
         id: m.id || m.machineId || m.name,
         machineId: m.machineId || m.id,
         name: m.name || m.machineId || "Unnamed Machine",
-        type: m.model || "N/A",
+        type: m.equipmentType || m.model || "Mining Asset",
         comps: compsCount,
         crit: critCount,
         warn: warnCount,
-        val: formattedCost,
       };
     });
-  }, [machines, components]);
+  }, [machines, components, getComponentRiskStatus]);
 
   const riskComponentsByMachineId = useMemo(() => {
     const riskMap = new Map<string, any[]>();
 
     components.forEach((component) => {
-      const machineId = String(component.machineId || "");
+      const machineId = String(component.machineId || component.machine_id || "");
       if (!machineId) return;
 
-      const riskStatus = component.intelligence?.riskStatus;
+      const riskStatus = getComponentRiskStatus(component);
 
       if (
         riskStatus === "Critical" ||
@@ -509,8 +652,7 @@ export default function CompanyAdminDashboard() {
 
         currentItems.push({
           ...component,
-          displayRisk:
-            riskStatus === "Critical" ? "Critical" : riskStatus || "Warning",
+          displayRisk: riskStatus,
         });
 
         riskMap.set(machineId, currentItems);
@@ -520,13 +662,8 @@ export default function CompanyAdminDashboard() {
     riskMap.forEach((items, machineId) => {
       const sortedItems = items
         .sort((a, b) => {
-          const aCritical =
-            a.displayRisk === "Critical" ||
-            a.intelligence?.riskStatus === "Critical";
-
-          const bCritical =
-            b.displayRisk === "Critical" ||
-            b.intelligence?.riskStatus === "Critical";
+          const aCritical = a.displayRisk === "Critical";
+          const bCritical = b.displayRisk === "Critical";
 
           if (aCritical && !bCritical) return -1;
           if (!aCritical && bCritical) return 1;
@@ -538,84 +675,70 @@ export default function CompanyAdminDashboard() {
     });
 
     return riskMap;
-  }, [components]);
+  }, [components, getComponentRiskStatus]);
 
   const highRiskComponents = React.useMemo(() => {
-    return components
-      .filter(
-        (c) =>
-          c.intelligence?.riskStatus === "Critical" ||
-          c.intelligence?.riskStatus === "Warning" ||
-          c.intelligence?.riskStatus === "Monitor",
-      )
-      .map((c) => {
-        const machine = machines.find(
-          (m) => m.machineId === c.machineId || m.id === c.machineId,
-        );
+    const mapped = components.map((c) => {
+      const risk = getComponentRiskStatus(c);
+      const cMachId = String(c.machineId || c.machine_id || c.machine?.id || "");
+      const machine = machines.find(
+        (m) => String(m.machineId || m.id).toLowerCase() === cMachId.toLowerCase(),
+      );
 
-        const machineLabel = machine ? machine.name : c.machineId || "N/A";
+      const machineLabel = cleanMachineName(machine ? (machine.name || machine.machineId) : (c.machineName || c.machineId || "Fleet Asset"));
+      const categoryLabel = getComponentCategory(c);
 
-        const lifeUsed = c.plannedLife
-          ? Math.min(100, Math.round((c.currentHours / c.plannedLife) * 100))
-          : 0;
+      const lifeUsed = c.plannedLife
+        ? Math.min(100, Math.round((c.currentHours / c.plannedLife) * 100))
+        : 0;
 
-        const remainingLifePercent = 100 - lifeUsed;
+      const remainingLifePercent = c.healthScore !== undefined && c.healthScore !== null ? Number(c.healthScore) : (100 - lifeUsed);
 
-        return {
-          id: c.id,
-          machineId: c.machineId,
-          machineLabel,
-          cat: c.category,
-          description: c.description,
-          serialNumber: c.serialNumber,
-          supplier: c.supplier,
-          installHours: c.installHours,
-          currentHours: c.currentHours,
-          plannedLife: c.plannedLife,
-          replacementCost: c.replacementCost,
-          condition: c.condition,
-          cond:
-            c.condition >= 5
-              ? "Critical"
-              : c.condition >= 4
-                ? "Warning"
-                : c.condition >= 3
-                  ? "Monitor"
-                  : "Good",
-          life: remainingLifePercent,
-          risk: c.intelligence?.riskStatus || "Healthy",
-          driver: c.intelligence?.riskDriver || "Normal",
-          costPerHour: `Rs ${
-            c.plannedLife > 0
-              ? (Number(c.replacementCost) / c.plannedLife).toFixed(2)
-              : "0.00"
-          }/hr`,
-        };
-      })
-      .filter((c) => {
-        const query = riskSearch.toLowerCase();
+      return {
+        id: c.id,
+        machineId: cMachId,
+        machineLabel,
+        cat: categoryLabel,
+        description: String(c.description || c.displayName || c.name || ""),
+        serialNumber: String(c.serialNumber || c.serial_number || ""),
+        supplier: String(c.supplier || ""),
+        installHours: Number(c.installHours ?? c.install_hours ?? 0),
+        currentHours: Number(c.currentHours ?? c.current_hours ?? 0),
+        plannedLife: Number(c.plannedLife ?? c.planned_life ?? 0),
+        replacementCost: Number(c.replacementCost ?? c.replacement_cost ?? 0),
+        condition: Number(c.condition ?? 1),
+        cond: risk,
+        life: remainingLifePercent,
+        risk: risk,
+        driver: String(c.intelligence?.riskDriver || (risk === "Healthy" ? "Safe Operational Parameters" : "")),
+      };
+    });
 
-        if (!query) return true;
+    const searched = mapped.filter((c) => {
+      const query = riskSearch.toLowerCase();
+      if (!query) return true;
+      return (
+        c.machineLabel.toLowerCase().includes(query) ||
+        c.cat.toLowerCase().includes(query) ||
+        c.serialNumber?.toLowerCase().includes(query) ||
+        c.description?.toLowerCase().includes(query)
+      );
+    });
 
-        return (
-          c.machineLabel.toLowerCase().includes(query) ||
-          c.cat.toLowerCase().includes(query) ||
-          c.serialNumber?.toLowerCase().includes(query) ||
-          c.description?.toLowerCase().includes(query)
-        );
-      })
-      .filter((c) => {
-        if (riskStatusFilter === "all") return true;
-        return c.risk.toLowerCase() === riskStatusFilter.toLowerCase();
-      })
-      .sort((a, b) => {
-        const score = { Critical: 3, Warning: 2, Monitor: 1, Healthy: 0 };
-        return (
-          (score[b.risk as keyof typeof score] || 0) -
-          (score[a.risk as keyof typeof score] || 0)
-        );
-      });
-  }, [components, machines, riskSearch, riskStatusFilter]);
+    const highRiskOnly = searched.filter(
+      (c) => c.risk === "Critical" || c.risk === "Warning" || c.risk === "Monitor",
+    );
+
+    const result = highRiskOnly.length > 0 ? highRiskOnly : searched;
+
+    return result.sort((a, b) => {
+      const aCritical = a.risk === "Critical";
+      const bCritical = b.risk === "Critical";
+      if (aCritical && !bCritical) return -1;
+      if (!aCritical && bCritical) return 1;
+      return 0;
+    });
+  }, [components, machines, riskSearch, getComponentCategory, getComponentRiskStatus]);
 
   const fleetScrollRef = React.useRef<HTMLDivElement | null>(null);
 
@@ -679,6 +802,29 @@ export default function CompanyAdminDashboard() {
         <TableSkeleton rows={8} />
 
         <TableSkeleton rows={5} />
+      </div>
+    );
+  }
+
+  const currentUser = StorageService.getUser();
+  const isInactiveOrPending =
+    currentUser?.isActive === false ||
+    currentUser?.is_active === false ||
+    !subscription ||
+    subscription?.status === "pending" ||
+    subscription?.status === "PENDING";
+
+  if (
+    !loading &&
+    isInactiveOrPending &&
+    (!subscription ||
+      subscription?.status === "pending" ||
+      subscription?.status === "PENDING" ||
+      !subscription?.plan)
+  ) {
+    return (
+      <div className="min-h-[calc(100vh-120px)] w-full py-4">
+        <CompanyPendingApprovalView onRefresh={fetchDashboardData} />
       </div>
     );
   }
@@ -792,80 +938,81 @@ export default function CompanyAdminDashboard() {
         <CompanyAdminNav />
       </div>
 
-      <div className="relative mb-8 overflow-hidden rounded-[28px] border border-indigo-300/20 bg-gradient-to-r from-[#3B37E6] via-[#3730D9] to-[#2E2AD9] px-7 py-7 shadow-xl">
-        {/* Background Effects */}
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.12),transparent_35%)]" />
-        <div className="absolute -right-14 -top-14 h-48 w-48 rounded-full bg-white/10 blur-3xl" />
-        <div className="absolute bottom-0 left-0 h-36 w-36 rounded-full bg-cyan-400/10 blur-3xl" />
-        <div className="absolute right-0 top-0 h-56 w-56 translate-x-10 -translate-y-10 rounded-full bg-blue-500/10 blur-3xl" />
+      <div className="mx-auto mb-8 max-w-7xl">
+        <div className="relative overflow-hidden rounded-[28px] border border-indigo-300/20 bg-gradient-to-r from-[#3B37E6] via-[#3730D9] to-[#2E2AD9] p-6 lg:p-8 shadow-xl">
+          {/* Background Effects */}
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.12),transparent_35%)]" />
+          <div className="absolute -right-14 -top-14 h-48 w-48 rounded-full bg-white/10 blur-3xl" />
+          <div className="absolute bottom-0 left-0 h-36 w-36 rounded-full bg-cyan-400/10 blur-3xl" />
+          <div className="absolute right-0 top-0 h-56 w-56 translate-x-10 -translate-y-10 rounded-full bg-blue-500/10 blur-3xl" />
 
-        <div className="relative z-10 flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
-          {/* Left Section */}
-          <div className="max-w-md">
-            <div className="inline-flex items-center rounded-full border border-white/20 bg-white/10 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-white backdrop-blur-md">
-              Fleet Component Intelligence
-            </div>
+          <div className="relative z-10 flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
+            {/* Left Section */}
+            <div className="max-w-md">
+              <div className="inline-flex items-center rounded-full border border-white/20 bg-white/10 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-white backdrop-blur-md">
+                Fleet Component Intelligence
+              </div>
 
-            <h1 className="mt-4 text-[34px] font-extrabold leading-[1.05] tracking-tight text-white lg:text-[40px]">
-              Component <span className="text-blue-200">Lifecycle</span>
-              <br />
-              Dashboard
-            </h1>
+              <h1 className="mt-4 text-[30px] font-extrabold leading-[1.1] tracking-tight text-white sm:text-[36px] lg:text-[40px]">
+                Component <span className="text-blue-200">Lifecycle</span>
+                <br />
+                Dashboard
+              </h1>
 
-            <div className="mt-5 flex items-start gap-3">
-              <div className="mt-2 h-2.5 w-2.5 rounded-full bg-emerald-300 shadow-[0_0_14px_rgba(52,211,153,0.9)]" />
+              <div className="mt-4 flex items-start gap-3">
+                <div className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-300 shadow-[0_0_14px_rgba(52,211,153,0.9)]" />
 
-              <p className="max-w-[320px] text-[13px] leading-5 font-medium text-blue-100">
-                Real-time fleet health, lifecycle tracking and replacement cost
-                insights.
-              </p>
-            </div>
-          </div>
-
-          {/* Right Stats */}
-          <div className="grid w-full grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 xl:max-w-[760px]">
-            {[
-              {
-                label: "Total Machines",
-                value: String(summaryStats.totalMachines),
-                color: "text-white",
-              },
-              {
-                label: "Total Components",
-                value: String(summaryStats.totalComponents),
-                color: "text-white",
-              },
-              {
-                label: "Critical",
-                value: String(summaryStats.criticalCount),
-                color: "text-red-300",
-              },
-              {
-                label: "Warning",
-                value: String(summaryStats.warningCount),
-                color: "text-amber-300",
-              },
-              {
-                label: "Replacement Value",
-                value: summaryStats.formattedReplacementCost,
-                color: "text-white",
-              },
-            ].map((stat, index) => (
-              <div
-                key={index}
-                className="rounded-3xl border border-white/15 bg-white/10 px-4 py-4 backdrop-blur-md transition-all duration-300 hover:-translate-y-1 hover:bg-white/15"
-              >
-                <p className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-[0.12em] text-blue-100">
-                  {stat.label}
-                </p>
-
-                <p
-                  className={`mt-3 text-[28px] sm:text-[32px] font-extrabold leading-none tracking-tight ${stat.color}`}
-                >
-                  {stat.value}
+                <p className="max-w-[340px] text-[13px] leading-5 font-medium text-blue-100">
+                  Real-time fleet health, lifecycle tracking and live diagnostic insights.
                 </p>
               </div>
-            ))}
+            </div>
+
+            {/* Right Stats */}
+            <div className="grid w-full grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 xl:max-w-[720px]">
+              {[
+                {
+                  label: "Total Machines",
+                  value: String(summaryStats.totalMachines),
+                  color: "text-white",
+                },
+                {
+                  label: "Total Components",
+                  value: String(summaryStats.totalComponents),
+                  color: "text-white",
+                },
+                {
+                  label: "Healthy",
+                  value: String(summaryStats.healthyCount),
+                  color: "text-emerald-300",
+                },
+                {
+                  label: "Warning",
+                  value: String(summaryStats.warningCount),
+                  color: "text-amber-300",
+                },
+                {
+                  label: "Critical",
+                  value: String(summaryStats.criticalCount),
+                  color: "text-red-300",
+                },
+              ].map((stat, index) => (
+                <div
+                  key={index}
+                  className="rounded-2xl border border-white/15 bg-white/10 px-3.5 py-3.5 backdrop-blur-md transition-all duration-300 hover:-translate-y-1 hover:bg-white/15"
+                >
+                  <p className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-[0.1em] text-blue-100 truncate">
+                    {stat.label}
+                  </p>
+
+                  <p
+                    className={`mt-2 text-[22px] sm:text-[26px] lg:text-[28px] font-extrabold leading-none tracking-tight ${stat.color}`}
+                  >
+                    {stat.value}
+                  </p>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -946,43 +1093,43 @@ export default function CompanyAdminDashboard() {
                     riskLevel === "Critical"
                       ? "border-red-200/90 bg-gradient-to-br from-red-50/90 via-slate-50 to-red-100/60 hover:border-red-300 hover:shadow-[0_18px_42px_rgba(220,38,38,0.14)] dark:border-red-500/25 dark:from-red-950/30 dark:via-slate-900 dark:to-slate-900 dark:hover:border-red-500/45"
                       : riskLevel === "Warning"
-                        ? "border-orange-200/90 bg-gradient-to-br from-orange-50/90 via-slate-50 to-orange-100/60 hover:border-orange-300 hover:shadow-[0_18px_42px_rgba(249,115,22,0.14)] dark:border-orange-500/25 dark:from-orange-950/30 dark:via-slate-900 dark:to-slate-900 dark:hover:border-orange-500/45"
-                        : "border-blue-200/90 bg-gradient-to-br from-blue-50/90 via-slate-50 to-emerald-50/60 hover:border-blue-300 hover:shadow-[0_18px_42px_rgba(37,99,235,0.12)] dark:border-blue-500/25 dark:from-blue-950/25 dark:via-slate-900 dark:to-slate-900 dark:hover:border-blue-500/45";
+                        ? "border-amber-200/90 bg-gradient-to-br from-amber-50/90 via-slate-50 to-amber-100/60 hover:border-amber-300 hover:shadow-[0_18px_42px_rgba(245,158,11,0.14)] dark:border-amber-500/25 dark:from-amber-950/30 dark:via-slate-900 dark:to-slate-900 dark:hover:border-amber-500/45"
+                        : "border-emerald-200/90 bg-gradient-to-br from-emerald-50/90 via-slate-50 to-emerald-100/60 hover:border-emerald-300 hover:shadow-[0_18px_42px_rgba(16,185,129,0.12)] dark:border-emerald-500/25 dark:from-emerald-950/25 dark:via-slate-900 dark:to-slate-900 dark:hover:border-emerald-500/45";
 
                   const innerBoxClass =
                     riskLevel === "Critical"
                       ? "border-red-200/80 bg-red-50/70 dark:border-red-500/20 dark:bg-red-500/10"
                       : riskLevel === "Warning"
-                        ? "border-orange-200/80 bg-orange-50/70 dark:border-orange-500/20 dark:bg-orange-500/10"
-                        : "border-blue-200/80 bg-blue-50/70 dark:border-blue-500/20 dark:bg-blue-500/10";
+                        ? "border-amber-200/80 bg-amber-50/70 dark:border-amber-500/20 dark:bg-amber-500/10"
+                        : "border-emerald-200/80 bg-emerald-50/70 dark:border-emerald-500/20 dark:bg-emerald-500/10";
 
                   const riskBadgeClass =
                     riskLevel === "Critical"
                       ? "border-red-200 bg-red-100 text-red-700 dark:border-red-500/25 dark:bg-red-500/15 dark:text-red-300"
                       : riskLevel === "Warning"
-                        ? "border-orange-200 bg-orange-100 text-orange-700 dark:border-orange-500/25 dark:bg-orange-500/15 dark:text-orange-300"
+                        ? "border-amber-200 bg-amber-100 text-amber-700 dark:border-amber-500/25 dark:bg-amber-500/15 dark:text-amber-300"
                         : "border-emerald-200 bg-emerald-100 text-emerald-700 dark:border-emerald-500/25 dark:bg-emerald-500/15 dark:text-emerald-300";
 
                   const dotClass =
                     riskLevel === "Critical"
                       ? "bg-red-500 shadow-[0_0_0_4px_rgba(239,68,68,0.13)]"
                       : riskLevel === "Warning"
-                        ? "bg-orange-500 shadow-[0_0_0_4px_rgba(249,115,22,0.13)]"
+                        ? "bg-amber-500 shadow-[0_0_0_4px_rgba(245,158,11,0.13)]"
                         : "bg-emerald-500 shadow-[0_0_0_4px_rgba(16,185,129,0.13)]";
 
                   const typeBadgeClass =
                     riskLevel === "Critical"
                       ? "border-red-200 bg-red-50 text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300"
                       : riskLevel === "Warning"
-                        ? "border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-500/20 dark:bg-orange-500/10 dark:text-orange-300"
-                        : "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-300";
+                        ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300"
+                        : "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300";
 
                   const actionButtonClass =
                     riskLevel === "Critical"
-                      ? "border-red-200 bg-red-50 text-red-700 hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300 dark:hover:bg-red-500/20"
+                      ? "border-red-200 bg-red-100 text-red-700 hover:bg-red-200 dark:border-red-500/30 dark:bg-red-500/15 dark:text-red-300 dark:hover:bg-red-500/25"
                       : riskLevel === "Warning"
-                        ? "border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100 dark:border-orange-500/20 dark:bg-orange-500/10 dark:text-orange-300 dark:hover:bg-orange-500/20"
-                        : "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-300 dark:hover:bg-blue-500/20";
+                        ? "border-amber-200 bg-amber-100 text-amber-700 hover:bg-amber-200 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300 dark:hover:bg-amber-500/25"
+                        : "border-emerald-200 bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:border-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-300 dark:hover:bg-emerald-500/25";
 
                   const statusText =
                     riskLevel === "Critical"
@@ -997,45 +1144,50 @@ export default function CompanyAdminDashboard() {
                     <div
                       key={m.id}
                       data-fleet-card
-                      className={`group relative flex min-h-[430px] min-w-[280px] snap-start flex-col overflow-hidden rounded-[1.65rem] border p-5 shadow-[0_10px_28px_rgba(15,23,42,0.055)] transition-all duration-300 hover:-translate-y-0.5 dark:hover:shadow-slate-950/30 sm:min-w-[300px] lg:min-w-[calc((100%-48px)/4)] ${cardClass}`}
+                      className={`group relative flex min-h-[410px] min-w-[280px] snap-start flex-col overflow-hidden rounded-[1.65rem] border p-5 shadow-[0_10px_28px_rgba(15,23,42,0.055)] transition-all duration-300 hover:-translate-y-0.5 dark:hover:shadow-slate-950/30 sm:min-w-[300px] lg:min-w-[calc((100%-48px)/4)] ${cardClass}`}
                     >
                       <div className="pointer-events-none absolute -right-14 -top-14 h-32 w-32 rounded-full bg-white/30 blur-3xl transition-all group-hover:bg-white/40 dark:bg-white/5" />
                       <div className="pointer-events-none absolute -bottom-16 left-8 h-32 w-32 rounded-full bg-slate-400/10 blur-3xl dark:bg-white/5" />
 
-                      <div className="relative z-10 mb-5 flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="mb-2 flex items-center gap-2">
+                      {/* Header */}
+                      <div className="relative z-10 mb-4 flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="mb-1.5 flex items-center gap-2">
                             <span
-                              className={`h-2 w-2 rounded-full ${dotClass}`}
+                              className={`h-2 w-2 shrink-0 rounded-full ${dotClass}`}
                             />
-
-                            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-600 dark:text-slate-300">
+                            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
                               Machine Asset
                             </p>
                           </div>
 
-                          <h3 className="line-clamp-2 text-sm font-bold leading-5 text-slate-950 dark:text-white">
-                            {m.name}
+                          <h3
+                            className="line-clamp-1 text-sm font-extrabold leading-tight text-slate-950 dark:text-white"
+                            title={cleanMachineName(m.name)}
+                          >
+                            {cleanMachineName(m.name)}
                           </h3>
 
-                          <p className="mt-1 text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                          <p className="mt-1 text-[11px] font-medium text-slate-500 dark:text-slate-400 truncate">
                             {statusText}
                           </p>
                         </div>
 
                         <span
-                          className={`shrink-0 rounded-xl border px-3 py-1.5 text-[9px] font-bold uppercase tracking-wide ${typeBadgeClass}`}
+                          className={`shrink-0 max-w-[120px] truncate rounded-lg border px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wide ${typeBadgeClass}`}
+                          title={m.type}
                         >
                           {m.type}
                         </span>
                       </div>
 
+                      {/* Middle Counter Box */}
                       <div
                         className={`relative z-10 rounded-2xl border p-4 shadow-sm ${innerBoxClass}`}
                       >
                         <div className="flex items-end justify-between gap-4">
                           <div>
-                            <p className="text-3xl font-bold tracking-tight text-slate-950 dark:text-white">
+                            <p className="text-3xl font-black tracking-tight text-slate-950 dark:text-white">
                               {m.comps}
                             </p>
 
@@ -1045,7 +1197,7 @@ export default function CompanyAdminDashboard() {
                           </div>
 
                           <span
-                            className={`rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-wide ${riskBadgeClass}`}
+                            className={`rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-wide ${riskBadgeClass}`}
                           >
                             {riskLevel}
                           </span>
@@ -1062,8 +1214,8 @@ export default function CompanyAdminDashboard() {
                             </p>
                           </div>
 
-                          <div className="rounded-xl border border-orange-200/80 bg-orange-50/80 px-3 py-2 dark:border-orange-500/20 dark:bg-orange-500/10">
-                            <p className="text-sm font-bold text-orange-600 dark:text-orange-400">
+                          <div className="rounded-xl border border-amber-200/80 bg-amber-50/80 px-3 py-2 dark:border-amber-500/20 dark:bg-amber-500/10">
+                            <p className="text-sm font-bold text-amber-600 dark:text-amber-400">
                               {m.warn}
                             </p>
 
@@ -1074,121 +1226,68 @@ export default function CompanyAdminDashboard() {
                         </div>
                       </div>
 
-                      <div className="relative z-10 mt-4">
-                        <div className="mb-2 flex items-center justify-between">
-                          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
-                            Component Alert
-                          </p>
-
-                          {machineRiskComponents.length > 1 && (
-                            <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[8px] font-bold uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
-                              Auto Rotate
-                            </span>
-                          )}
+                      {/* Machine Health Metric Bar */}
+                      <div className="relative z-10 mt-3.5 space-y-1.5">
+                        <div className="flex items-center justify-between text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+                          <span>Fleet Readiness</span>
+                          <span
+                            className={
+                              riskLevel === "Critical"
+                                ? "text-red-600 dark:text-red-400 font-black"
+                                : riskLevel === "Warning"
+                                ? "text-amber-600 dark:text-amber-400 font-black"
+                                : "text-emerald-600 dark:text-emerald-400 font-black"
+                            }
+                          >
+                            {riskLevel === "Critical"
+                              ? "Action Needed"
+                              : riskLevel === "Warning"
+                              ? "Attention Required"
+                              : "100% Operational"}
+                          </span>
                         </div>
 
-                        {machineRiskComponents.length > 0 ? (
-                          <div className="relative h-[78px] overflow-hidden rounded-xl border border-slate-200/80 bg-slate-50/80 shadow-sm dark:border-slate-700 dark:bg-slate-800/70">
-                            {machineRiskComponents.map((item, index) => {
-                              const isCritical =
-                                item.displayRisk === "Critical" ||
-                                item.intelligence?.riskStatus === "Critical";
-
-                              return (
-                                <div
-                                  key={item.id}
-                                  className={`absolute inset-0 px-3 py-3 ${
-                                    machineRiskComponents.length > 1
-                                      ? "risk-alert-card"
-                                      : "opacity-100"
-                                  } ${
-                                    isCritical
-                                      ? "bg-red-50/90 dark:bg-red-500/10"
-                                      : "bg-orange-50/90 dark:bg-orange-500/10"
-                                  }`}
-                                  style={{
-                                    animationDuration: alertDuration,
-                                    animationDelay: `${index * 3}s`,
-                                  }}
-                                >
-                                  <div className="flex items-center justify-between gap-2">
-                                    <p
-                                      className={`truncate text-[12px] font-bold ${
-                                        isCritical
-                                          ? "text-red-700 dark:text-red-300"
-                                          : "text-orange-700 dark:text-orange-300"
-                                      }`}
-                                    >
-                                      {item.description ||
-                                        item.category ||
-                                        "Risk Component"}
-                                    </p>
-
-                                    <span
-                                      className={`shrink-0 rounded-full px-2 py-0.5 text-[8px] font-bold uppercase ${
-                                        isCritical
-                                          ? "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300"
-                                          : "bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300"
-                                      }`}
-                                    >
-                                      {item.displayRisk}
-                                    </span>
-                                  </div>
-
-                                  <p
-                                    className={`mt-1 truncate text-[10px] font-medium ${
-                                      isCritical
-                                        ? "text-red-600/80 dark:text-red-300/80"
-                                        : "text-orange-600/80 dark:text-orange-300/80"
-                                    }`}
-                                  >
-                                    {item.category || "Component"} • Serial:{" "}
-                                    {item.serialNumber || "N/A"}
-                                  </p>
-
-                                  <p
-                                    className={`mt-1 truncate text-[10px] font-medium ${
-                                      isCritical
-                                        ? "text-red-500/80 dark:text-red-300/70"
-                                        : "text-orange-500/80 dark:text-orange-300/70"
-                                    }`}
-                                  >
-                                    {item.intelligence?.riskDriver ||
-                                      "Component requires inspection"}
-                                  </p>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ) : (
-                          <div className="h-[78px] rounded-xl border border-emerald-200/80 bg-emerald-50/80 px-3 py-3 shadow-sm dark:border-emerald-500/20 dark:bg-emerald-500/10">
-                            <p className="text-[12px] font-bold text-emerald-700 dark:text-emerald-300">
-                              No critical or warning component found
-                            </p>
-
-                            <p className="mt-1 text-[10px] font-medium text-emerald-600/80 dark:text-emerald-300/80">
-                              Current machine health looks stable.
-                            </p>
-                          </div>
-                        )}
+                        <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200/80 dark:bg-slate-800">
+                          <div
+                            className={`h-full rounded-full transition-all duration-500 ${
+                              riskLevel === "Critical"
+                                ? "bg-red-500 w-2/5"
+                                : riskLevel === "Warning"
+                                ? "bg-amber-500 w-3/4"
+                                : "bg-emerald-500 w-full"
+                            }`}
+                          />
+                        </div>
                       </div>
 
-                      <div className="relative z-10 mt-4 flex items-center justify-between border-t border-slate-300/60 pt-4 dark:border-slate-700/70">
-                        <div>
-                          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
-                            Replacement Value
+                      {/* Clean Footer with Modal Open Button */}
+                      <div className="relative z-10 mt-auto flex items-center justify-between border-t border-slate-200/80 pt-3.5 dark:border-slate-700/70">
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">
+                            Fleet Status
                           </p>
 
-                          <p className="mt-1 text-sm font-bold text-slate-950 dark:text-white">
-                            {m.val}
+                          <p
+                            className={`mt-0.5 text-xs font-black tracking-tight ${
+                              riskLevel === "Critical"
+                                ? "text-red-700 dark:text-red-400"
+                                : riskLevel === "Warning"
+                                ? "text-amber-700 dark:text-amber-400"
+                                : "text-emerald-700 dark:text-emerald-400"
+                            }`}
+                          >
+                            {riskLevel}
                           </p>
                         </div>
 
                         <button
                           type="button"
-                          className={`flex h-9 w-9 items-center justify-center rounded-xl border transition-all active:scale-95 ${actionButtonClass}`}
+                          onClick={() => setSelectedFleetMachineModal(m)}
+                          className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-bold transition-all active:scale-95 cursor-pointer ${actionButtonClass}`}
+                          title={`View components for ${cleanMachineName(m.name)}`}
                         >
-                          <ChevronRight size={17} />
+                          <span>Inspect Components</span>
+                          <ChevronRight size={14} />
                         </button>
                       </div>
                     </div>
@@ -1469,40 +1568,59 @@ export default function CompanyAdminDashboard() {
                   </ResponsiveContainer>
                 </div>
 
-                <div className="space-y-3">
-                  {distributionData.slice(0, 8).map((item, i) => (
-                    <div
-                      key={i}
-                      className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/60"
-                    >
-                      <div className="mb-2 flex items-center justify-between gap-3">
-                        <div className="flex min-w-0 items-center gap-2.5">
-                          <span
-                            className="h-2.5 w-2.5 shrink-0 rounded-full"
-                            style={{ backgroundColor: item.color }}
-                          />
+                <div className="space-y-2.5 max-h-[260px] overflow-y-auto pr-1 hme-hide-scrollbar">
+                  {distributionData.slice(0, 8).map((item, i) => {
+                    const healthStats = categoryHealthMap[item.name] || { healthy: 0, warning: 0, critical: 0, avgHealth: 100 };
 
-                          <p className="truncate text-xs font-semibold text-slate-700 dark:text-slate-200">
-                            {item.name}
-                          </p>
+                    return (
+                      <div
+                        key={i}
+                        onClick={() => setSelectedCategoryHealthModal(item.name)}
+                        title={`Click to view all components in ${item.name} and their health scores`}
+                        className="group cursor-pointer rounded-xl border border-slate-100 bg-slate-50/80 px-3.5 py-2.5 transition-all hover:border-blue-300 hover:bg-white hover:shadow-sm dark:border-slate-700/80 dark:bg-slate-900/60 dark:hover:border-blue-500/40 dark:hover:bg-slate-900"
+                      >
+                        <div className="mb-1.5 flex items-center justify-between gap-2">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <span
+                              className="h-2.5 w-2.5 shrink-0 rounded-full shadow-xs"
+                              style={{ backgroundColor: item.color }}
+                            />
+
+                            <p className="truncate text-xs font-black text-slate-800 transition group-hover:text-blue-600 dark:text-slate-200 dark:group-hover:text-blue-400">
+                              {item.name}
+                            </p>
+                          </div>
+
+                          <div className="flex shrink-0 items-center gap-1.5">
+                            <span
+                              className={`rounded-full border px-2 py-0.5 text-[9px] font-black ${
+                                healthStats.avgHealth < 50
+                                  ? "border-red-200 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"
+                                  : healthStats.avgHealth < 85
+                                  ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
+                                  : "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300"
+                              }`}
+                            >
+                              {healthStats.avgHealth}% Health
+                            </span>
+                            <span className="text-[10px] font-bold text-slate-400">
+                              {item.count} {item.count === 1 ? "unit" : "units"}
+                            </span>
+                          </div>
                         </div>
 
-                        <p className="text-xs font-bold text-slate-900 dark:text-white">
-                          {item.value}%
-                        </p>
+                        <div className="h-1.5 overflow-hidden rounded-full bg-slate-200/80 dark:bg-slate-700">
+                          <div
+                            className="h-full rounded-full transition-all duration-500"
+                            style={{
+                              width: `${Math.max(item.value, 6)}%`,
+                              backgroundColor: item.color,
+                            }}
+                          />
+                        </div>
                       </div>
-
-                      <div className="h-1.5 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
-                        <div
-                          className="h-full rounded-full"
-                          style={{
-                            width: `${item.value}%`,
-                            backgroundColor: item.color,
-                          }}
-                        />
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -1542,7 +1660,7 @@ export default function CompanyAdminDashboard() {
                     <p className="mt-1 text-lg font-extrabold text-red-700 dark:text-red-400">
                       {
                         highRiskComponents.filter(
-                          (item) => item.risk === "Critical",
+                          (item) => String(item.risk || item.cond || "").toLowerCase().includes("crit"),
                         ).length
                       }
                     </p>
@@ -1555,7 +1673,7 @@ export default function CompanyAdminDashboard() {
                     <p className="mt-1 text-lg font-extrabold text-orange-700 dark:text-orange-400">
                       {
                         highRiskComponents.filter(
-                          (item) => item.risk === "Warning",
+                          (item) => String(item.risk || item.cond || "").toLowerCase().includes("warn"),
                         ).length
                       }
                     </p>
@@ -1580,16 +1698,6 @@ export default function CompanyAdminDashboard() {
                 </div>
 
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                  <div className="w-full sm:w-[180px]">
-                    <AppSelect
-                      value={riskStatusFilter}
-                      options={riskOptions}
-                      onChange={setRiskStatusFilter}
-                      placeholder="All Risks"
-                      triggerClassName="h- rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold  text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
-                    />
-                  </div>
-
                   <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm dark:border-slate-700 dark:bg-slate-900">
                     <span className="flex items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-wide text-red-600 dark:bg-red-500/10 dark:text-red-400">
                       <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
@@ -1630,9 +1738,6 @@ export default function CompanyAdminDashboard() {
                       Remaining Life
                     </th>
                     <th className="px-6 py-4 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
-                      Cost / Hour
-                    </th>
-                    <th className="px-6 py-4 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
                       Risk Status
                     </th>
                     <th className="px-6 py-4 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
@@ -1641,16 +1746,13 @@ export default function CompanyAdminDashboard() {
                     <th className="px-6 py-4 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
                       Alert
                     </th>
-                    <th className="px-6 py-4 text-right text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
-                      Actions
-                    </th>
                   </tr>
                 </thead>
 
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-700/70">
                   {highRiskComponents.length === 0 ? (
                     <tr>
-                      <td colSpan={10} className="px-6 py-14">
+                      <td colSpan={8} className="px-6 py-14">
                         <div className="mx-auto max-w-md text-center">
                           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
                             <CheckLineIcon size={24} />
@@ -1676,15 +1778,14 @@ export default function CompanyAdminDashboard() {
                         <td className="px-6 py-5">
                           <div className="flex items-center gap-3">
                             <span
-                              className={`h-10 w-1 rounded-full ${
-                                item.risk === "Critical"
+                              className={`h-10 w-1 rounded-full ${item.risk === "Critical"
                                   ? "bg-red-500"
                                   : item.risk === "Warning"
                                     ? "bg-orange-500"
                                     : item.risk === "Monitor"
                                       ? "bg-yellow-500"
                                       : "bg-emerald-500"
-                              }`}
+                                }`}
                             />
 
                             <div>
@@ -1719,15 +1820,14 @@ export default function CompanyAdminDashboard() {
 
                         <td className="px-6 py-5">
                           <span
-                            className={`inline-flex rounded-full px-3 py-1 text-[10px] font-extrabold uppercase tracking-wide ${
-                              item.cond === "Critical"
+                            className={`inline-flex rounded-full px-3 py-1 text-[10px] font-extrabold uppercase tracking-wide ${item.cond === "Critical"
                                 ? "bg-red-50 text-red-700 ring-1 ring-red-100 dark:bg-red-500/10 dark:text-red-400 dark:ring-red-500/20"
                                 : item.cond === "Warning"
                                   ? "bg-orange-50 text-orange-700 ring-1 ring-orange-100 dark:bg-orange-500/10 dark:text-orange-400 dark:ring-orange-500/20"
                                   : item.cond === "Monitor"
                                     ? "bg-yellow-50 text-yellow-700 ring-1 ring-yellow-100 dark:bg-yellow-500/10 dark:text-yellow-400 dark:ring-yellow-500/20"
                                     : "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/20"
-                            }`}
+                              }`}
                           >
                             {item.cond}
                           </span>
@@ -1747,13 +1847,12 @@ export default function CompanyAdminDashboard() {
 
                             <div className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
                               <div
-                                className={`h-full rounded-full ${
-                                  item.life < 15
+                                className={`h-full rounded-full ${item.life < 15
                                     ? "bg-red-500"
                                     : item.life < 30
                                       ? "bg-orange-500"
                                       : "bg-emerald-500"
-                                }`}
+                                  }`}
                                 style={{ width: `${item.life}%` }}
                               />
                             </div>
@@ -1761,26 +1860,15 @@ export default function CompanyAdminDashboard() {
                         </td>
 
                         <td className="px-6 py-5">
-                          <p className="text-sm font-extrabold text-slate-950 dark:text-white">
-                            {item.costPerHour}
-                          </p>
-
-                          <p className="mt-0.5 text-[10px] font-semibold text-slate-400">
-                            Operating cost
-                          </p>
-                        </td>
-
-                        <td className="px-6 py-5">
                           <span
-                            className={`inline-flex rounded-full px-3 py-1 text-[10px] font-extrabold uppercase tracking-wide ${
-                              item.risk === "Critical"
+                            className={`inline-flex rounded-full px-3 py-1 text-[10px] font-extrabold uppercase tracking-wide ${item.risk === "Critical"
                                 ? "bg-red-600 text-white shadow-sm shadow-red-500/20"
                                 : item.risk === "Warning"
                                   ? "bg-orange-500 text-white shadow-sm shadow-orange-500/20"
                                   : item.risk === "Monitor"
                                     ? "bg-yellow-500 text-white shadow-sm shadow-yellow-500/20"
                                     : "bg-emerald-500 text-white shadow-sm shadow-emerald-500/20"
-                            }`}
+                              }`}
                           >
                             {item.risk}
                           </span>
@@ -1788,13 +1876,12 @@ export default function CompanyAdminDashboard() {
 
                         <td className="px-6 py-5">
                           <span
-                            className={`inline-flex max-w-[190px] rounded-xl border px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-wide ${
-                              item.risk === "Critical"
+                            className={`inline-flex max-w-[190px] rounded-xl border px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-wide ${item.risk === "Critical"
                                 ? "border-red-200 bg-red-50 text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400"
                                 : item.risk === "Warning"
                                   ? "border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-500/20 dark:bg-orange-500/10 dark:text-orange-400"
                                   : "border-yellow-200 bg-yellow-50 text-yellow-700 dark:border-yellow-500/20 dark:bg-yellow-500/10 dark:text-yellow-400"
-                            }`}
+                              }`}
                           >
                             <span className="truncate">{item.driver}</span>
                           </span>
@@ -1803,13 +1890,12 @@ export default function CompanyAdminDashboard() {
                         <td className="px-6 py-5">
                           <div className="flex items-center gap-2">
                             <span
-                              className={`h-2.5 w-2.5 rounded-full ${
-                                item.risk === "Critical"
+                              className={`h-2.5 w-2.5 rounded-full ${item.risk === "Critical"
                                   ? "bg-red-500 shadow-[0_0_0_5px_rgba(239,68,68,0.12)]"
                                   : item.risk === "Warning"
                                     ? "bg-orange-500 shadow-[0_0_0_5px_rgba(249,115,22,0.12)]"
                                     : "bg-emerald-500 shadow-[0_0_0_5px_rgba(16,185,129,0.12)]"
-                              }`}
+                                }`}
                             />
 
                             <span className="text-[10px] font-extrabold uppercase tracking-wide text-slate-500 dark:text-slate-400">
@@ -1819,28 +1905,6 @@ export default function CompanyAdminDashboard() {
                                   ? "Monitor Closely"
                                   : "Stable"}
                             </span>
-                          </div>
-                        </td>
-
-                        <td className="px-6 py-5 text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            <button
-                              type="button"
-                              onClick={() => handleStartEdit(item)}
-                              title="Edit Component"
-                              className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 shadow-sm transition-all hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600 active:scale-95 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-blue-500/30 dark:hover:bg-blue-500/10"
-                            >
-                              <Edit size={14} />
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => setDeleteTarget(item)}
-                              title="Delete Component"
-                              className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 shadow-sm transition-all hover:border-red-200 hover:bg-red-50 hover:text-red-600 active:scale-95 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-red-500/30 dark:hover:bg-red-500/10"
-                            >
-                              <Trash2 size={14} />
-                            </button>
                           </div>
                         </td>
                       </tr>
@@ -2072,13 +2136,12 @@ export default function CompanyAdminDashboard() {
                               </p>
 
                               <span
-                                className={`max-w-[135px] truncate rounded-full px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-wide ${
-                                  item.risk === "Critical"
+                                className={`max-w-[135px] truncate rounded-full px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-wide ${item.risk === "Critical"
                                     ? "border border-red-200 bg-red-50 text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400"
                                     : item.risk === "Warning"
                                       ? "border border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-500/20 dark:bg-orange-500/10 dark:text-orange-400"
                                       : "border border-slate-200 bg-white text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400"
-                                }`}
+                                  }`}
                               >
                                 {alertLabel}
                               </span>
@@ -2177,315 +2240,647 @@ export default function CompanyAdminDashboard() {
             />
 
             <div className="mt-10">
-              <SubscriptionHistoryTable history={history} />
+              <SubscriptionHistoryTable history={history} activeSubscription={subscription} />
             </div>
           </div>
         </div>
       </div>
 
-      {editingComponent && (
+      {/* ── ALL MACHINE COMPONENTS MODAL ── */}
+      {selectedFleetMachineModal && (
         <div
-          className="fixed inset-0 z-[999999] flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm"
-          onClick={() => setEditingComponent(null)}
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-xs"
+          onClick={() => setSelectedFleetMachineModal(null)}
         >
           <div
-            className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900"
+            className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-start justify-between gap-5 rounded-t-3xl border-b border-blue-700/30 bg-gradient-to-r from-blue-800 via-blue-700 to-blue-800 px-6 py-5 shadow-sm">
-              <div>
-                <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-blue-100">
-                  Component Maintenance
-                </p>
-
-                <h3 className="mt-1 text-xl font-extrabold tracking-tight text-white">
-                  Edit High-Risk Component
-                </h3>
-
-                <p className="mt-1 text-sm font-medium text-blue-100">
-                  Update component lifecycle details without changing the
-                  dashboard data flow.
-                </p>
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-200 bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 px-6 py-5 text-white dark:border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-md">
+                  <Truck size={24} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-white">
+                    {selectedFleetMachineModal.name} ({selectedFleetMachineModal.type || "Machine Asset"})
+                  </h3>
+                  <p className="text-xs font-semibold text-blue-200">
+                    All registered components and live health status records
+                  </p>
+                </div>
               </div>
 
               <button
                 type="button"
-                onClick={() => setEditingComponent(null)}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/20 bg-white/10 text-blue-100 transition-all hover:bg-white/20 hover:text-white"
+                onClick={() => setSelectedFleetMachineModal(null)}
+                className="rounded-xl p-2 text-blue-200 transition hover:bg-white/10 hover:text-white"
               >
-                <X size={18} />
+                <X size={20} />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-6 py-6">
-              <div className="mb-6 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/70">
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                  <div>
-                    <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-400">
-                      Machine
-                    </p>
-                    <p className="mt-1 text-sm font-extrabold text-slate-900 dark:text-white">
-                      {editingComponent.machineLabel || "N/A"}
-                    </p>
+            {/* Modal Body: List of Components */}
+            <div className="flex-1 overflow-y-auto p-6">
+              {(() => {
+                const targetMachId = String(
+                  selectedFleetMachineModal.id ||
+                    selectedFleetMachineModal.machineId ||
+                    "",
+                ).toLowerCase();
+                const targetMachName = String(
+                  selectedFleetMachineModal.name || "",
+                ).toLowerCase();
+
+                const machComps = components.filter((c: any) => {
+                  const cId = String(
+                    c.machineId || c.machine_id || c.machine?.id || "",
+                  ).toLowerCase();
+                  const cName = String(
+                    c.machineName || c.machine?.name || "",
+                  ).toLowerCase();
+                  return (
+                    (cId && targetMachId && cId === targetMachId) ||
+                    (cName && targetMachName && cName === targetMachName)
+                  );
+                });
+
+                if (machComps.length === 0) {
+                  return (
+                    <div className="flex flex-col items-center justify-center py-16 text-center">
+                      <Truck size={40} className="mb-3 text-slate-300 dark:text-slate-600" />
+                      <p className="text-sm font-bold text-slate-500 dark:text-slate-400">
+                        No registered components found for {selectedFleetMachineModal.name}.
+                      </p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {machComps.map((comp: any) => {
+                      const name =
+                        comp.displayName ||
+                        comp.name ||
+                        comp.description ||
+                        comp.category ||
+                        "Component";
+                      const score =
+                        typeof comp.healthScore === "number"
+                          ? comp.healthScore
+                          : null;
+                      const isCrit =
+                        (score !== null && score < 50) ||
+                        comp.status === "Critical" ||
+                        comp.status === "CRITICAL";
+                      const isWarn =
+                        (score !== null && score >= 50 && score < 85) ||
+                        comp.status === "Warning" ||
+                        comp.status === "WARNING" ||
+                        comp.status === "Monitor";
+
+                      const statusBadgeClass = isCrit
+                        ? "border-red-200 bg-red-100 text-red-700 dark:border-red-500/30 dark:bg-red-500/20 dark:text-red-300"
+                        : isWarn
+                          ? "border-amber-200 bg-amber-100 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/20 dark:text-amber-300"
+                          : "border-emerald-200 bg-emerald-100 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/20 dark:text-emerald-300";
+
+                      const statusLabel = isCrit
+                        ? "CRITICAL"
+                        : isWarn
+                          ? "WARNING"
+                          : "HEALTHY";
+
+                      return (
+                        <div
+                          key={comp.id}
+                          className="flex flex-col justify-between rounded-2xl border border-slate-200/80 bg-slate-50/60 p-4 transition hover:bg-slate-50 hover:shadow-md dark:border-slate-800 dark:bg-slate-950/60 dark:hover:bg-slate-950"
+                        >
+                          <div>
+                            <div className="flex items-center justify-between gap-2">
+                              <span
+                                className={`rounded-full border px-2.5 py-0.5 text-[9px] font-black uppercase tracking-wider ${statusBadgeClass}`}
+                              >
+                                {statusLabel}
+                              </span>
+                              {comp.serialNumber && (
+                                <span className="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-mono font-bold text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
+                                  {comp.serialNumber}
+                                </span>
+                              )}
+                            </div>
+
+                            <h4
+                              className="mt-3 truncate text-sm font-extrabold text-slate-900 dark:text-white"
+                              title={name}
+                            >
+                              {name}
+                            </h4>
+
+                            <div className="mt-3 flex items-baseline justify-between">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                Health Score
+                              </span>
+                              <span className="text-xl font-black text-slate-900 dark:text-white">
+                                {score !== null ? `${score}%` : "100%"}
+                              </span>
+                            </div>
+
+                            <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+                              <div
+                                className={`h-full rounded-full transition-all duration-500 ${
+                                  isCrit
+                                    ? "bg-red-500"
+                                    : isWarn
+                                      ? "bg-amber-500"
+                                      : "bg-emerald-500"
+                                }`}
+                                style={{
+                                  width: `${score !== null ? score : 100}%`,
+                                }}
+                              />
+                            </div>
+                          </div>
+
+                          {comp.intelligence?.riskDriver && (
+                            <div className="mt-3 border-t border-slate-200/60 pt-2 text-[10px] font-medium text-slate-500 dark:border-slate-800 dark:text-slate-400">
+                              <span className="font-bold text-slate-700 dark:text-slate-300">
+                                Issue Driver:{" "}
+                              </span>
+                              {comp.intelligence.riskDriver}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
-
-                  <div>
-                    <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-400">
-                      Current Risk
-                    </p>
-                    <p className="mt-1 text-sm font-extrabold text-red-600 dark:text-red-400">
-                      {editingComponent.risk || "N/A"}
-                    </p>
-                  </div>
-
-                  <div>
-                    <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-400">
-                      Serial Number
-                    </p>
-                    <p className="mt-1 text-sm font-extrabold text-slate-900 dark:text-white">
-                      {editingComponent.serialNumber || "N/A"}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-                <div>
-                  <label className="mb-2 block text-xs font-extrabold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
-                    Category
-                  </label>
-                  <input
-                    type="text"
-                    value={editForm.category}
-                    onChange={(e) =>
-                      setEditForm((prev) => ({
-                        ...prev,
-                        category: e.target.value,
-                      }))
-                    }
-                    className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-xs font-extrabold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
-                    Serial Number
-                  </label>
-                  <input
-                    type="text"
-                    value={editForm.serialNumber}
-                    onChange={(e) =>
-                      setEditForm((prev) => ({
-                        ...prev,
-                        serialNumber: e.target.value,
-                      }))
-                    }
-                    className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
-                  />
-                </div>
-
-                <div className="md:col-span-2">
-                  <label className="mb-2 block text-xs font-extrabold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
-                    Description
-                  </label>
-                  <input
-                    type="text"
-                    value={editForm.description}
-                    onChange={(e) =>
-                      setEditForm((prev) => ({
-                        ...prev,
-                        description: e.target.value,
-                      }))
-                    }
-                    className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-xs font-extrabold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
-                    Supplier
-                  </label>
-                  <input
-                    type="text"
-                    value={editForm.supplier}
-                    onChange={(e) =>
-                      setEditForm((prev) => ({
-                        ...prev,
-                        supplier: e.target.value,
-                      }))
-                    }
-                    className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-xs font-extrabold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
-                    Condition Rating
-                  </label>
-                  <select
-                    value={editForm.condition}
-                    onChange={(e) =>
-                      setEditForm((prev) => ({
-                        ...prev,
-                        condition: e.target.value,
-                      }))
-                    }
-                    className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
-                  >
-                    <option value="1">1 - Excellent</option>
-                    <option value="2">2 - Good</option>
-                    <option value="3">3 - Monitor</option>
-                    <option value="4">4 - Warning</option>
-                    <option value="5">5 - Critical</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-xs font-extrabold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
-                    Install Hours
-                  </label>
-                  <input
-                    type="number"
-                    value={editForm.installHours}
-                    onChange={(e) =>
-                      setEditForm((prev) => ({
-                        ...prev,
-                        installHours: e.target.value,
-                      }))
-                    }
-                    className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-xs font-extrabold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
-                    Current Hours
-                  </label>
-                  <input
-                    type="number"
-                    value={editForm.currentHours}
-                    onChange={(e) =>
-                      setEditForm((prev) => ({
-                        ...prev,
-                        currentHours: e.target.value,
-                      }))
-                    }
-                    className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-xs font-extrabold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
-                    Planned Life
-                  </label>
-                  <input
-                    type="number"
-                    value={editForm.plannedLife}
-                    onChange={(e) =>
-                      setEditForm((prev) => ({
-                        ...prev,
-                        plannedLife: e.target.value,
-                      }))
-                    }
-                    className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-xs font-extrabold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
-                    Replacement Cost
-                  </label>
-                  <input
-                    type="number"
-                    value={editForm.replacementCost}
-                    onChange={(e) =>
-                      setEditForm((prev) => ({
-                        ...prev,
-                        replacementCost: e.target.value,
-                      }))
-                    }
-                    className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
-                  />
-                </div>
-              </div>
+                );
+              })()}
             </div>
 
-            <div className="shrink-0 border-t border-slate-200 bg-white px-6 py-4 dark:border-slate-700 dark:bg-slate-900">
-              <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-                <button
-                  type="button"
-                  disabled={savingEdit}
-                  onClick={() => setEditingComponent(null)}
-                  className="rounded-2xl border border-slate-200 bg-white px-6 py-3 text-sm font-bold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
-                >
-                  Cancel
-                </button>
-
-                <button
-                  type="button"
-                  disabled={savingEdit}
-                  onClick={handleSaveEdit}
-                  className="rounded-2xl bg-blue-600 px-7 py-3 text-sm font-extrabold text-white shadow-lg shadow-blue-500/20 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {savingEdit ? "Saving..." : "Save Changes"}
-                </button>
-              </div>
+            {/* Modal Footer */}
+            <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-6 py-4 dark:border-slate-800 dark:bg-slate-950">
+              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                Click X or close button to return to dashboard
+              </span>
+              <button
+                type="button"
+                onClick={() => setSelectedFleetMachineModal(null)}
+                className="rounded-xl bg-blue-600 px-5 py-2.5 text-xs font-extrabold text-white shadow-md transition hover:bg-blue-700"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {deleteTarget && (
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-md">
-          <div className="w-full max-w-md rounded-[2rem] border border-slate-200 bg-white p-7 shadow-2xl dark:border-slate-700 dark:bg-slate-800">
-            <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400">
-              <Trash2 size={26} />
+      {/* ── COMPONENT PARAMETERS MODAL ── */}
+      {selectedParamComponentModal && (
+        <div
+          className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-xs"
+          onClick={() => setSelectedParamComponentModal(null)}
+        >
+          <div
+            className="flex max-h-[85vh] w-full max-w-xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-slate-200 bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 px-6 py-5 text-white dark:border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-md">
+                  <BarChart3 size={22} />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-white">
+                    {selectedParamComponentModal.displayName || selectedParamComponentModal.description || selectedParamComponentModal.name || "Component Details"}
+                  </h3>
+                  <p className="text-xs font-semibold text-blue-200">
+                    S/N: {selectedParamComponentModal.serialNumber || "N/A"}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSelectedParamComponentModal(null)}
+                className="rounded-xl p-2 text-blue-200 transition hover:bg-white/10 hover:text-white"
+              >
+                <X size={20} />
+              </button>
             </div>
 
-            <div className="text-center">
-              <h3 className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-                Delete Component
-              </h3>
+            {/* Body: Inspected Parameter Values */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-5">
+              <div className="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950">
+                <div>
+                  <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+                    Updated Health Status
+                  </p>
+                  <p className="mt-1 text-sm font-black text-slate-900 dark:text-white">
+                    {selectedParamComponentModal.status || selectedParamComponentModal.intelligence?.riskStatus || "Healthy"}
+                  </p>
+                </div>
 
-              <p className="mt-3 text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">
-                Are you sure you want to delete this component? This action
-                cannot be undone.
-              </p>
+                <div className="text-right">
+                  <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+                    Calculated Score
+                  </p>
+                  <p className="mt-1 text-xl font-black text-blue-600 dark:text-blue-400">
+                    {selectedParamComponentModal.healthScore !== undefined ? `${selectedParamComponentModal.healthScore}%` : "100%"}
+                  </p>
+                </div>
+              </div>
 
-              <div className="mt-5 rounded-2xl border border-slate-100 bg-slate-50 p-4 text-left dark:border-slate-700 dark:bg-slate-900/50">
-                <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-400">
-                  Component
-                </p>
+              <div>
+                <h4 className="mb-3 text-xs font-black uppercase tracking-wider text-slate-400">
+                  Inspected Parameters & Live Values
+                </h4>
 
-                <p className="mt-1 text-sm font-extrabold text-slate-900 dark:text-white">
-                  {deleteTarget.description ||
-                    deleteTarget.cat ||
-                    "Selected Component"}
-                </p>
+                {(() => {
+                  const driver = selectedParamComponentModal.intelligence?.riskDriver || "";
+                  const paramPairs = driver && driver !== "Parameter Variance" && driver !== "Component requires inspection"
+                    ? driver.split(", ").map((str: string) => {
+                        const parts = str.split(": ");
+                        return { name: parts[0], value: parts[1] || "-" };
+                      })
+                    : [];
 
-                <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
-                  Serial: {deleteTarget.serialNumber || "N/A"}
-                </p>
+                  if (paramPairs.length === 0) {
+                    return (
+                      <div className="rounded-2xl border border-dashed border-slate-300 p-6 text-center text-xs font-bold text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                        Standard operational metric checks within normal limits.
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      {paramPairs.map((param: any, idx: number) => (
+                        <div key={idx} className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950">
+                          <span className="text-xs font-extrabold text-slate-600 dark:text-slate-300">
+                            {param.name}
+                          </span>
+                          <span className="rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-black text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300">
+                            {param.value}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
               </div>
             </div>
 
-            <div className="mt-7 grid grid-cols-2 gap-3">
+            {/* Footer */}
+            <div className="flex items-center justify-end border-t border-slate-200 bg-slate-50 px-6 py-4 dark:border-slate-800 dark:bg-slate-950">
               <button
                 type="button"
-                disabled={deleting}
-                onClick={() => setDeleteTarget(null)}
-                className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+                onClick={() => setSelectedParamComponentModal(null)}
+                className="rounded-xl bg-blue-600 px-6 py-2.5 text-xs font-extrabold text-white shadow-md transition hover:bg-blue-700"
               >
-                Cancel
+                Close
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── CATEGORY COMPONENT HEALTH MODAL ── */}
+      {selectedCategoryHealthModal && (
+        <div
+          className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-xs"
+          onClick={() => setSelectedCategoryHealthModal(null)}
+        >
+          <div
+            className="flex max-h-[85vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-slate-200 bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 px-6 py-5 text-white dark:border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-md">
+                  <PieChartIcon size={22} />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-white">
+                    {selectedCategoryHealthModal} Components
+                  </h3>
+                  <p className="text-xs font-semibold text-blue-200">
+                    Live calculated health scores & status breakdown for {selectedCategoryHealthModal}
+                  </p>
+                </div>
+              </div>
 
               <button
                 type="button"
-                disabled={deleting}
-                onClick={handleDeleteComponent}
-                className="rounded-2xl bg-red-600 px-4 py-3 text-sm font-bold text-white shadow-lg shadow-red-500/20 transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-70"
+                onClick={() => setSelectedCategoryHealthModal(null)}
+                className="rounded-xl p-2 text-blue-200 transition hover:bg-white/10 hover:text-white"
               >
-                {deleting ? "Deleting..." : "Yes, Delete"}
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              {(() => {
+                const catComps = components.filter((c: any) => {
+                  const cat = getComponentCategory(c) || c.category || "General";
+                  return cat.toLowerCase() === selectedCategoryHealthModal.toLowerCase();
+                });
+
+                const stats = categoryHealthMap[selectedCategoryHealthModal] || { healthy: 0, warning: 0, critical: 0, avgHealth: 100 };
+
+                return (
+                  <>
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                      <div className="rounded-2xl border border-blue-200/80 bg-blue-50/80 p-4 text-center dark:border-blue-500/20 dark:bg-blue-500/10">
+                        <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Average Category Health</p>
+                        <p className="mt-1 text-2xl font-black text-blue-600 dark:text-blue-400">{stats.avgHealth}%</p>
+                      </div>
+
+                      <div className="rounded-2xl border border-emerald-200/80 bg-emerald-50/80 p-4 text-center dark:border-emerald-500/20 dark:bg-emerald-500/10">
+                        <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Healthy</p>
+                        <p className="mt-1 text-2xl font-black text-emerald-600 dark:text-emerald-400">{stats.healthy}</p>
+                      </div>
+
+                      <div className="rounded-2xl border border-amber-200/80 bg-amber-50/80 p-4 text-center dark:border-amber-500/20 dark:bg-amber-500/10">
+                        <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Warning</p>
+                        <p className="mt-1 text-2xl font-black text-amber-600 dark:text-amber-400">{stats.warning}</p>
+                      </div>
+
+                      <div className="rounded-2xl border border-red-200/80 bg-red-50/80 p-4 text-center dark:border-red-500/20 dark:bg-red-500/10">
+                        <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Critical</p>
+                        <p className="mt-1 text-2xl font-black text-red-600 dark:text-red-400">{stats.critical}</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                      {catComps.map((comp: any) => {
+                        const name = comp.displayName || comp.name || comp.description || comp.category || "Component";
+                        const score = typeof comp.healthScore === "number" ? comp.healthScore : 100;
+                        const isCrit = score < 50 || comp.status === "Critical" || comp.status === "CRITICAL";
+                        const isWarn = (!isCrit && score < 85) || comp.status === "Warning" || comp.status === "WARNING";
+
+                        const statusBadgeClass = isCrit
+                          ? "border-red-200 bg-red-100 text-red-700 dark:border-red-500/30 dark:bg-red-500/20 dark:text-red-300"
+                          : isWarn
+                          ? "border-amber-200 bg-amber-100 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/20 dark:text-amber-300"
+                          : "border-emerald-200 bg-emerald-100 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/20 dark:text-emerald-300";
+
+                        const statusLabel = isCrit ? "CRITICAL" : isWarn ? "WARNING" : "HEALTHY";
+
+                        return (
+                          <div
+                            key={comp.id}
+                            className="flex flex-col justify-between rounded-2xl border border-slate-200/80 bg-slate-50/60 p-4 transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-950/60 dark:hover:bg-slate-950"
+                          >
+                            <div>
+                              <div className="flex items-center justify-between gap-2">
+                                <span className={`rounded-full border px-2.5 py-0.5 text-[9px] font-black uppercase tracking-wider ${statusBadgeClass}`}>
+                                  {statusLabel}
+                                </span>
+                                {comp.serialNumber && (
+                                  <span className="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-mono font-bold text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
+                                    {comp.serialNumber}
+                                  </span>
+                                )}
+                              </div>
+
+                              <h4 className="mt-3 truncate text-sm font-extrabold text-slate-900 dark:text-white" title={name}>
+                                {name}
+                              </h4>
+
+                              <div className="mt-3 flex items-baseline justify-between">
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Calculated Health</span>
+                                <span className="text-xl font-black text-slate-900 dark:text-white">{score}%</span>
+                              </div>
+
+                              <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+                                <div
+                                  className={`h-full rounded-full transition-all duration-500 ${
+                                    isCrit ? "bg-red-500" : isWarn ? "bg-amber-500" : "bg-emerald-500"
+                                  }`}
+                                  style={{ width: `${score}%` }}
+                                />
+                              </div>
+                            </div>
+
+                            {comp.intelligence?.riskDriver && (
+                              <div className="mt-3 border-t border-slate-200/60 pt-2 text-[10px] font-medium text-slate-500 dark:border-slate-800 dark:text-slate-400">
+                                <span className="font-bold text-slate-700 dark:text-slate-300">Live Values: </span>
+                                {comp.intelligence.riskDriver}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-end border-t border-slate-200 bg-slate-50 px-6 py-4 dark:border-slate-800 dark:bg-slate-950">
+              <button
+                type="button"
+                onClick={() => setSelectedCategoryHealthModal(null)}
+                className="rounded-xl bg-blue-600 px-6 py-2.5 text-xs font-extrabold text-white shadow-md transition hover:bg-blue-700"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MACHINE COMPONENT HEALTH INSPECTOR MODAL ── */}
+      {selectedFleetMachineModal && (
+        <div
+          className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-xs"
+          onClick={() => setSelectedFleetMachineModal(null)}
+        >
+          <div
+            className="flex max-h-[85vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900 animate-in fade-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-200 bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 px-6 py-5 text-white dark:border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-md">
+                  <Truck size={22} />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-white">
+                    {cleanMachineName(selectedFleetMachineModal.name)}
+                  </h3>
+                  <p className="text-xs font-semibold text-blue-200">
+                    {selectedFleetMachineModal.type} • Live Machine Diagnostic Components
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSelectedFleetMachineModal(null)}
+                className="rounded-xl p-2 text-blue-200 transition hover:bg-white/10 hover:text-white"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              {(() => {
+                const targetId = String(
+                  selectedFleetMachineModal.machineId || selectedFleetMachineModal.id || "",
+                ).toLowerCase().trim();
+
+                const machComps = components.filter((c: any) => {
+                  const cMachId = String(
+                    c.machineId || c.machine_id || c.machine?.id || c.machine?.machineId || "",
+                  ).toLowerCase().trim();
+                  return cMachId && targetId && (cMachId === targetId || targetId.includes(cMachId) || cMachId.includes(targetId));
+                });
+
+                const critCount = machComps.filter(
+                  (c) => getComponentRiskStatus(c) === "Critical",
+                ).length;
+                const warnCount = machComps.filter(
+                  (c) => getComponentRiskStatus(c) === "Warning" || getComponentRiskStatus(c) === "Monitor",
+                ).length;
+                const healthyCount = machComps.length - critCount - warnCount;
+
+                const overallScore = machComps.length > 0
+                  ? Math.round(
+                      machComps.reduce(
+                        (sum, c) => sum + (typeof c.healthScore === "number" ? c.healthScore : 100),
+                        0,
+                      ) / machComps.length,
+                    )
+                  : 100;
+
+                return (
+                  <>
+                    {/* Top Stats Cards */}
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                      <div className="rounded-2xl border border-blue-200/80 bg-blue-50/80 p-4 text-center dark:border-blue-500/20 dark:bg-blue-500/10">
+                        <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Total Components</p>
+                        <p className="mt-1 text-2xl font-black text-blue-600 dark:text-blue-400">{machComps.length}</p>
+                      </div>
+
+                      <div className="rounded-2xl border border-emerald-200/80 bg-emerald-50/80 p-4 text-center dark:border-emerald-500/20 dark:bg-emerald-500/10">
+                        <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Healthy</p>
+                        <p className="mt-1 text-2xl font-black text-emerald-600 dark:text-emerald-400">{healthyCount}</p>
+                      </div>
+
+                      <div className="rounded-2xl border border-amber-200/80 bg-amber-50/80 p-4 text-center dark:border-amber-500/20 dark:bg-amber-500/10">
+                        <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Warning</p>
+                        <p className="mt-1 text-2xl font-black text-amber-600 dark:text-amber-400">{warnCount}</p>
+                      </div>
+
+                      <div className="rounded-2xl border border-red-200/80 bg-red-50/80 p-4 text-center dark:border-red-500/20 dark:bg-red-500/10">
+                        <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Critical</p>
+                        <p className="mt-1 text-2xl font-black text-red-600 dark:text-red-400">{critCount}</p>
+                      </div>
+                    </div>
+
+                    {/* Components List */}
+                    {machComps.length === 0 ? (
+                      <div className="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-xs font-semibold text-slate-400 dark:border-slate-800">
+                        No registered components found for this machine.
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        {machComps.map((comp: any) => {
+                          const name = comp.displayName || comp.name || comp.description || comp.category || "Component";
+                          const score = typeof comp.healthScore === "number" ? comp.healthScore : 100;
+                          const risk = getComponentRiskStatus(comp);
+
+                          const isCrit = risk === "Critical";
+                          const isWarn = risk === "Warning" || risk === "Monitor";
+
+                          const statusBadgeClass = isCrit
+                            ? "border-red-200 bg-red-100 text-red-700 dark:border-red-500/30 dark:bg-red-500/20 dark:text-red-300"
+                            : isWarn
+                            ? "border-amber-200 bg-amber-100 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/20 dark:text-amber-300"
+                            : "border-emerald-200 bg-emerald-100 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/20 dark:text-emerald-300";
+
+                          const statusLabel = isCrit ? "CRITICAL" : isWarn ? "WARNING" : "HEALTHY";
+
+                          return (
+                            <div
+                              key={comp.id}
+                              className="flex flex-col justify-between rounded-2xl border border-slate-200/80 bg-slate-50/60 p-4 transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-950/60 dark:hover:bg-slate-950"
+                            >
+                              <div>
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className={`rounded-full border px-2.5 py-0.5 text-[9px] font-black uppercase tracking-wider ${statusBadgeClass}`}>
+                                    {statusLabel}
+                                  </span>
+                                  {comp.serialNumber && (
+                                    <span className="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-mono font-bold text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
+                                      {comp.serialNumber}
+                                    </span>
+                                  )}
+                                </div>
+
+                                <h4 className="mt-3 truncate text-sm font-extrabold text-slate-950 dark:text-white" title={name}>
+                                  {name}
+                                </h4>
+
+                                <div className="mt-3 flex items-baseline justify-between">
+                                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Health Score</span>
+                                  <span className="text-xl font-black text-slate-900 dark:text-white">{score}%</span>
+                                </div>
+
+                                <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+                                  <div
+                                    className={`h-full rounded-full transition-all duration-500 ${
+                                      isCrit ? "bg-red-500" : isWarn ? "bg-amber-500" : "bg-emerald-500"
+                                    }`}
+                                    style={{ width: `${score}%` }}
+                                  />
+                                </div>
+                              </div>
+
+                              {comp.intelligence?.riskDriver && isCrit && (
+                                <div className="mt-3 border-t border-slate-200/60 pt-2 text-[10px] font-medium text-slate-500 dark:border-slate-800 dark:text-slate-400">
+                                  <span className="font-bold text-red-600 dark:text-red-400">Live Values: </span>
+                                  {comp.intelligence.riskDriver}
+                                </div>
+                              )}
+                              {comp.intelligence?.riskDriver && isWarn && (
+                                <div className="mt-3 border-t border-slate-200/60 pt-2 text-[10px] font-medium text-slate-500 dark:border-slate-800 dark:text-slate-400">
+                                  <span className="font-bold text-amber-600 dark:text-amber-400">Live Values: </span>
+                                  {comp.intelligence.riskDriver}
+                                </div>
+                              )}
+                              {!isCrit && !isWarn && (
+                                <div className="mt-3 border-t border-slate-200/60 pt-2 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                                  ✓ Safe Operational Parameters
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-end border-t border-slate-200 bg-slate-50 px-6 py-4 dark:border-slate-800 dark:bg-slate-950">
+              <button
+                type="button"
+                onClick={() => setSelectedFleetMachineModal(null)}
+                className="rounded-xl bg-blue-600 px-6 py-2.5 text-xs font-extrabold text-white shadow-md transition hover:bg-blue-700"
+              >
+                Close
               </button>
             </div>
           </div>

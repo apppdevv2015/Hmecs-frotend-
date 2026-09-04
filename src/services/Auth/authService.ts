@@ -14,6 +14,12 @@ export type LoginPayload = {
   password: string;
 };
 
+export type ImpersonatePayload = {
+  companyId?: string;
+  userId?: string;
+  email?: string;
+};
+
 export type ForgotPasswordPayload = {
   email: string;
 };
@@ -43,8 +49,6 @@ export type AuthResponse = {
   data?: unknown;
 };
 
-
-
 export const authService = {
   register: (payload: RegisterPayload) =>
     apiRequest<AuthResponse>("/auth/register", {
@@ -58,7 +62,13 @@ export const authService = {
       body: JSON.stringify(payload),
     }),
 
-    getMe: () =>
+  impersonate: (payload: ImpersonatePayload) =>
+    apiRequest<AuthResponse>("/auth/impersonate", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  getMe: () =>
     apiRequest<AuthResponse>("/auth/me", {
       method: "GET",
     }),
@@ -80,8 +90,4 @@ export const authService = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-
-    
 };
-
-

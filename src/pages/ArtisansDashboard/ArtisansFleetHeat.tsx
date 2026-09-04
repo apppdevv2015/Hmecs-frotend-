@@ -1,3 +1,4 @@
+
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { machineService } from "../../services/companyadmin/machineService";
 // import { fleetService } from "../../services/Fleet/fleetService";
@@ -1332,4 +1333,10 @@ export default function ArtisansFleetHeat() {
       </div>
     </div>
   );
+
+import FleetHeatMap from "../CompanyAdmin/FleetHeatMap";
+
+export default function ArtisansFleetHeat() {
+  return <FleetHeatMap />;
+
 }

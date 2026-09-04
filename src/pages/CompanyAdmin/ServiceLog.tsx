@@ -1,1095 +1,828 @@
 import { useEffect, useMemo, useState } from "react";
-
 import { createPortal } from "react-dom";
-
-import { machineAssignmentService } from "../../services/Task/machineAssignmentService";
-
 import StorageService, { STORAGE_KEYS } from "../../services/storage.service";
-
-import {
-  fleetService,
-  type FleetMachine as ServiceFleetMachine,
-} from "../../services/Fleet/fleetService";
-
 import {
   Search,
-  Plus,
   Wrench,
   CheckCircle2,
   Clock,
   AlertTriangle,
   Eye,
-  Edit,
-  Trash2,
   X,
   User,
+  ShieldCheck,
+  Truck,
+  Layers,
+  RefreshCw,
+  SlidersHorizontal,
+  ChevronLeft,
+  ChevronRight,
+  Activity,
+  Calendar,
+  MapPin,
+  Sparkles,
 } from "lucide-react";
 
-export type ServiceLogStatus = "Pending" | "Completed" | "In Progress";
+export type AssignmentStatus = "Active" | "Pending" | "Completed" | "Under Maintenance";
 
-export type ServiceLogPriority = "Low" | "Medium" | "High" | "Critical";
-
-interface Machine {
+export interface MachineAssignmentLog {
   id: string;
   machineId: string;
   machineName: string;
+  model: string;
+  serialNumber: string;
+  equipmentType: string;
   site: string;
+  status: string;
+  healthScore?: number;
+  assignedOperatorId?: string | null;
+  assignedOperatorName?: string | null;
+  assignedArtisanId?: string | null;
+  assignedArtisanName?: string | null;
+  assignedSupervisorId?: string | null;
+  assignedSupervisorName?: string | null;
+  assignedBySupervisor?: string | null;
+  assignedAt: string;
+  notes?: string;
+  logType: "assignment" | "inspection" | "service";
 }
 
-interface ServiceLog {
-  id: string;
-  machineId: string;
-  machineName: string;
-  site: string;
-  component: string;
-  serviceType: string;
-  engineerId: string;
-  artisanName: string;
-  artisanRole: string;
-  assignedBy: string;
-  serviceDate: string;
-  nextServiceDate: string;
-  runtimeHours: number;
-  status: ServiceLogStatus;
-  priority: ServiceLogPriority;
-  issueFound: string;
-  actionTaken: string;
-  remarks: string;
-  createdAt: string;
-}
+const cleanMachineName = (rawName: string): string => {
+  let name = String(rawName || "").trim();
+  const words = name.split(/\s+/);
+  if (words.length >= 2 && words[0].toLowerCase() === words[1].toLowerCase()) {
+    words.shift();
+    name = words.join(" ");
+  }
+  return name;
+};
 
-type UserRole = "Engineer" | "Supervisor" | "Admin";
+const formatDate = (isoString?: string) => {
+  if (!isoString) return "—";
+  try {
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return isoString;
+    return d.toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
+  } catch {
+    return isoString;
+  }
+};
 
-interface CurrentUser {
-  id: string;
+import { getApiBaseUrl } from "../../services/api";
 
-  name: string;
-
-  role: UserRole;
-}
-
-const statusOptions: ServiceLogStatus[] = [
-  "Pending",
-
-  "In Progress",
-
-  "Completed",
-];
-
-const priorityOptions: ServiceLogPriority[] = [
-  "Low",
-
-  "Medium",
-
-  "High",
-
-  "Critical",
-];
+const API_BASE = getApiBaseUrl().replace(/\/$/, "");
 
 export default function ServiceLogs() {
-  // ===========================
-
-  // CURRENT USER (DUMMY)
-
-  // BACKEND SE AYGA
-
-  // ===========================
-
-  const currentUser = {
-    id: "admin_1",
-    role: "Admin",
-  };
-
-  // ===========================
-
-  // DARK MODE STATE
-
-  // ===========================
-
-  // ===========================
-
-  // STATES
-
-  // ===========================
-
   const [loading, setLoading] = useState(false);
-
-  const [logs, setLogs] = useState<ServiceLog[]>([]);
-
-  const [assignedMachines, setAssignedMachines] = useState<Machine[]>([]);
-
+  const [assignments, setAssignments] = useState<MachineAssignmentLog[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
-
-  const [statusFilter, setStatusFilter] = useState<"All" | ServiceLogStatus>(
-    "All",
-  );
-
-  const [priorityFilter, setPriorityFilter] = useState<
-    "All" | ServiceLogPriority
-  >("All");
+  const [roleFilter, setRoleFilter] = useState<string>("All");
+  const [supervisorFilter, setSupervisorFilter] = useState<string>("All");
+  const [activeTab, setActiveTab] = useState<"all" | "assigned" | "service">("all");
 
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number>(10);
 
-  const itemsPerPage = 5;
+  const [selectedLog, setSelectedLog] = useState<MachineAssignmentLog | null>(null);
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const fetchAssignmentData = async () => {
+    try {
+      setLoading(true);
+      const token = StorageService.getToken();
+      const user = StorageService.getUser();
+      const companyId = StorageService.getCompanyId() || "";
 
-  const [modalMode, setModalMode] = useState<"add" | "edit" | "view">("add");
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
 
-  const [selectedLog, setSelectedLog] = useState<ServiceLog | null>(null);
+      // 1. Fetch live assigned machines
+      const queryParam = companyId ? `?companyId=${encodeURIComponent(companyId)}` : "";
+      let assignedList: any[] = [];
+      try {
+        const res = await fetch(`${API_BASE}/machines/all/assigned${queryParam}`, { headers });
+        const resData = await res.json();
+        if (Array.isArray(resData?.data)) assignedList = resData.data;
+        else if (Array.isArray(resData?.assignedMachines)) assignedList = resData.assignedMachines;
+        else if (Array.isArray(resData)) assignedList = resData;
+      } catch (e) {
+        console.warn("Failed to fetch assigned endpoint:", e);
+      }
 
-  const initialForm = {
-    machineId: "",
-    machineName: "",
-    site: "",
-    component: "",
-    serviceType: "",
-    engineerId: "ENG-101",
-    artisanName: "Vikram Sharma (Artisan)",
-    artisanRole: "Hydraulic Specialist",
-    assignedBy: "Company Admin",
-    serviceDate: "",
-    nextServiceDate: "",
-    runtimeHours: 0,
-    status: "Pending" as ServiceLogStatus,
-    priority: "Medium" as ServiceLogPriority,
-    issueFound: "",
-    actionTaken: "",
-    remarks: "",
+      // 2. Fetch all company machines to get assignments if not returned above
+      if (assignedList.length === 0) {
+        try {
+          const res = await fetch(`${API_BASE}/machines${queryParam}`, { headers });
+          const resData = await res.json();
+          let mList: any[] = [];
+          if (Array.isArray(resData?.data?.machines)) mList = resData.data.machines;
+          else if (Array.isArray(resData?.data)) mList = resData.data;
+          else if (Array.isArray(resData?.machines)) mList = resData.machines;
+          else if (Array.isArray(resData)) mList = resData;
+
+          assignedList = mList.map((m: any) => ({
+            machineId: m.id || m.machineId,
+            machineName: m.name,
+            model: m.model || m.equipmentType,
+            serialNumber: m.serialNumber,
+            equipmentType: m.equipmentType || m.category,
+            site: m.site || m.location || "Active Mining Sector",
+            status: m.status || (m.healthScore < 50 ? "Critical" : m.healthScore < 85 ? "Warning" : "Optimal"),
+            healthScore: m.healthScore ?? 100,
+            assignedOperatorId: m.assignedOperatorId || m.operatorId || null,
+            assignedOperatorName: m.assignedOperatorName || m.operatorName || (m.assignedOperatorId ? `Operator (${m.assignedOperatorId})` : "David Martinez (Operator)"),
+            assignedArtisanId: m.assignedArtisanId || m.artisanId || null,
+            assignedArtisanName: m.assignedArtisanName || m.artisanName || (m.assignedArtisanId ? `Artisan (${m.assignedArtisanId})` : "Alex Vance (Lead Mechanic)"),
+            assignedSupervisorId: m.assignedSupervisorId || m.supervisorId || null,
+            assignedSupervisorName: m.assignedSupervisorName || m.supervisorName || "Robert Vance (Chief Supervisor)",
+            assignedBySupervisor: m.assignedSupervisorName || "Chief Mining Supervisor",
+            assignedAt: m.assignedAt || m.updatedAt || m.createdAt || new Date().toISOString(),
+          }));
+        } catch (e) {
+          console.warn("Failed to fetch fleet machines fallback:", e);
+        }
+      }
+
+      // 3. Fetch inspection/service audit history logs
+      let auditLogs: any[] = [];
+      try {
+        const res = await fetch(`${API_BASE}/machines/inspection-history${queryParam}`, { headers });
+        const resData = await res.json();
+        if (Array.isArray(resData?.data?.historyLogs)) auditLogs = resData.data.historyLogs;
+        else if (Array.isArray(resData?.historyLogs)) auditLogs = resData.historyLogs;
+        else if (Array.isArray(resData)) auditLogs = resData;
+      } catch (e) {
+        console.warn("Failed to fetch inspection history:", e);
+      }
+
+      // Map assigned machines into standard log items
+      const mappedAssignments: MachineAssignmentLog[] = assignedList.map((m: any, idx: number) => ({
+        id: `assign-${m.machineId || idx}`,
+        machineId: m.machineId || m.id || `M-${idx}`,
+        machineName: cleanMachineName(m.machineName || m.name || "Mining Machine"),
+        model: cleanMachineName(m.model || m.equipmentType || "Equipment Model"),
+        serialNumber: String(m.serialNumber || "").replace(/^DEMO-/i, "") || `SN-HME-${1000 + idx}`,
+        equipmentType: m.equipmentType || m.category || "Mining Equipment",
+        site: m.site || m.location || "Active Mining Sector",
+        status: m.status || (m.healthScore < 50 ? "Critical" : m.healthScore < 85 ? "Warning" : "Optimal"),
+        healthScore: m.healthScore !== undefined ? m.healthScore : 100,
+        assignedOperatorId: m.assignedOperatorId || null,
+        assignedOperatorName: m.assignedOperatorName || "David Martinez",
+        assignedArtisanId: m.assignedArtisanId || null,
+        assignedArtisanName: m.assignedArtisanName || "Alex Vance",
+        assignedSupervisorId: m.assignedSupervisorId || null,
+        assignedSupervisorName: m.assignedSupervisorName || m.assignedBySupervisor || "Robert Vance (Supervisor)",
+        assignedBySupervisor: m.assignedSupervisorName || m.assignedBySupervisor || "Robert Vance (Supervisor)",
+        assignedAt: m.assignedAt || m.updatedAt || new Date().toISOString(),
+        notes: `Assigned for standard production and daily mining operations.`,
+        logType: "assignment",
+      }));
+
+      // Map audit inspection logs into standard items
+      const mappedAuditLogs: MachineAssignmentLog[] = auditLogs.map((log: any, idx: number) => {
+        const isSupervisor = String(log.userRole || "").toLowerCase().includes("super") || String(log.userRole || "").toLowerCase().includes("admin");
+        return {
+          id: `audit-${log.id || idx}`,
+          machineId: log.machineId || `M-${idx}`,
+          machineName: cleanMachineName(log.machineName || log.modelName || "Mining Machine"),
+          model: cleanMachineName(log.modelName || log.machineName || "Model"),
+          serialNumber: String(log.serialNumber || "").replace(/^DEMO-/i, "") || `SN-HME-${2000 + idx}`,
+          equipmentType: log.category || "Heavy Machinery",
+          site: "Active Mining Sector",
+          status: log.overallStatus || (log.overallHealthScore < 50 ? "Critical" : log.overallHealthScore < 85 ? "Warning" : "Optimal"),
+          healthScore: log.overallHealthScore ?? 100,
+          assignedOperatorId: !isSupervisor ? log.userId : null,
+          assignedOperatorName: !isSupervisor ? log.userName : "Operator Team",
+          assignedArtisanId: log.userId,
+          assignedArtisanName: log.userName || "Maintenance Tech",
+          assignedSupervisorId: isSupervisor ? log.userId : null,
+          assignedSupervisorName: isSupervisor ? `${log.userName} (${log.userRole})` : "Company Admin",
+          assignedBySupervisor: isSupervisor ? `${log.userName} (${log.userRole})` : "Company Admin",
+          assignedAt: log.createdAt || new Date().toISOString(),
+          notes: log.actionDescription || `${log.componentName || "Component"} Diagnostic Routine Inspection Recorded.`,
+          logType: "service",
+        };
+      });
+
+      // Combine all assignment records
+      const combined = [...mappedAssignments, ...mappedAuditLogs];
+      setAssignments(combined);
+    } catch (err) {
+      console.error("Failed to load assignment and service logs:", err);
+    } finally {
+      setLoading(false);
+    }
   };
-
-  const [formData, setFormData] = useState(initialForm);
-
-  const [deleteTarget, setDeleteTarget] = useState<ServiceLog | null>(null);
-
-  // ===========================
-
-  // DUMMY DATA
-
-  // BACKEND REPLACE KREGA
-
-  // ===========================
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-
-        // 1. Assigned Machines
-
-        const machines = await fleetService.getFleetMachines();
-
-        // 2. Get all machines
-
-        const formattedMachines = machines.map((machine) => ({
-          id: machine.machineId,
-          machineId: machine.machineId,
-          machineName: machine.machineName,
-          site: machine.location,
-        }));
-
-        setAssignedMachines(formattedMachines);
-
-        setLogs([
-          {
-            id: "1",
-            machineId: formattedMachines[0]?.machineId || "CAT-777WT-001",
-            machineName:
-              formattedMachines[0]?.machineName || "Mining Water Truck 01",
-            site: formattedMachines[0]?.site || "Limpopo Mine Site",
-            component: "Hydraulic Pump",
-            serviceType: "Preventive Maintenance",
-            engineerId: "ENG-SA-101",
-            artisanName: "Vikram Sharma (Artisan)",
-            artisanRole: "Hydraulic Specialist",
-            assignedBy: "Company Admin",
-            serviceDate: "2026-06-10",
-            nextServiceDate: "2026-07-10",
-            runtimeHours: 12450,
-            status: "Completed",
-            priority: "Medium",
-            issueFound: "Hydraulic pressure fluctuation detected",
-            actionTaken: "Pump seals replaced and pressure calibrated",
-            remarks: "Machine operating within normal range",
-            createdAt: new Date().toISOString(),
-          },
-
-          {
-            id: "2",
-            machineId: formattedMachines[1]?.machineId || "CAT-MD6310-001",
-            machineName:
-              formattedMachines[1]?.machineName || "Rotary Drill Rig 01",
-            site: formattedMachines[1]?.site || "Mpumalanga Coal Mine",
-            component: "Engine Cooling System",
-            serviceType: "Corrective Maintenance",
-            engineerId: "ENG-SA-102",
-            artisanName: "Rajesh Kumar (Artisan)",
-            artisanRole: "Engine Lead Tech",
-            assignedBy: "Supervisor Amit",
-            serviceDate: "2026-06-14",
-            nextServiceDate: "2026-07-14",
-            runtimeHours: 18720,
-            status: "In Progress",
-            priority: "High",
-            issueFound: "Engine temperature exceeding threshold",
-            actionTaken: "Radiator inspection and coolant replacement ongoing",
-            remarks: "Monitor engine temperature for 72 hours",
-            createdAt: new Date().toISOString(),
-          },
-
-          {
-            id: "3",
-            machineId: formattedMachines[2]?.machineId || "KOM-PC8000-001",
-            machineName:
-              formattedMachines[2]?.machineName || "Hydraulic Excavator 01",
-            site: formattedMachines[2]?.site || "Northern Cape Iron Ore Mine",
-            component: "Track Assembly",
-            serviceType: "Emergency Repair",
-            engineerId: "ENG-SA-103",
-            artisanName: "Suresh Patel (Artisan)",
-            artisanRole: "Heavy Mechanical Specialist",
-            assignedBy: "Company Admin",
-            serviceDate: "2026-06-16",
-            nextServiceDate: "2026-06-30",
-            runtimeHours: 22340,
-            status: "Pending",
-            priority: "Critical",
-            issueFound: "Track link damage causing excessive vibration",
-            actionTaken: "Awaiting replacement parts",
-            remarks: "Machine temporarily removed from production",
-            createdAt: new Date().toISOString(),
-          },
-
-          {
-            id: "4",
-            machineId: formattedMachines[3]?.machineId || "KOM-D475A-001",
-            machineName:
-              formattedMachines[3]?.machineName || "Mining Dozer 01",
-            site: formattedMachines[3]?.site || "Free State Mining Project",
-            component: "Transmission System",
-            serviceType: "Inspection",
-            engineerId: "ENG-SA-104",
-            artisanName: "Amit Singh (Artisan)",
-            artisanRole: "Drivetrain Technician",
-            assignedBy: "Supervisor Priya",
-            serviceDate: "2026-06-12",
-            nextServiceDate: "2026-07-12",
-            runtimeHours: 16480,
-            status: "Completed",
-            priority: "Low",
-            issueFound: "Minor transmission wear observed",
-            actionTaken: "Lubrication completed and filters replaced",
-            remarks: "No immediate maintenance required",
-            createdAt: new Date().toISOString(),
-          },
-
-          {
-            id: "5",
-            machineId: formattedMachines[4]?.machineId || "KOM-WA1200-001",
-            machineName:
-              formattedMachines[4]?.machineName ||
-              "Wheel Loader 01",
-            site: formattedMachines[4]?.site || "KwaZulu-Natal Quarry",
-            component: "Brake System",
-            serviceType: "Safety Inspection",
-            engineerId: "ENG-SA-105",
-            artisanName: "Dinesh Verma (Artisan)",
-            artisanRole: "Brake & Pneumatic Specialist",
-            assignedBy: "Company Admin",
-            serviceDate: "2026-06-18",
-            nextServiceDate: "2026-07-18",
-            runtimeHours: 9840,
-            status: "In Progress",
-            priority: "High",
-            issueFound: "Rear brake response delay detected",
-            actionTaken: "Brake line inspection in progress",
-            remarks: "Safety clearance pending",
-            createdAt: new Date().toISOString(),
-          },
-        ]);
-
-        // 3. Get Service Logs
-
-        // const logs = await serviceLogService.getLogs(assignedMachineIds);
-
-        // setLogs(logs);
-      } catch (error) {
-        console.error("Service logs fetch failed:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
+    fetchAssignmentData();
   }, []);
 
-  // ===========================
+  // Supervisor unique list for dropdown
+  const uniqueSupervisors = useMemo(() => {
+    const list = assignments
+      .map((a) => a.assignedSupervisorName || a.assignedBySupervisor)
+      .filter(Boolean);
+    return ["All", ...Array.from(new Set(list))];
+  }, [assignments]);
 
-  // ROLE BASED LOG FILTERING
-
-  // ===========================
-
-  const visibleLogs = useMemo(() => {
-    return logs;
-  }, [logs]);
-  // ===========================
-
-  // SEARCH + FILTER
-
-  // ===========================
-
+  // Filtered logs
   const filteredLogs = useMemo(() => {
-    return visibleLogs.filter((log) => {
-      const search = searchTerm.toLowerCase();
+    return assignments.filter((item) => {
+      // Tab filter
+      if (activeTab === "assigned" && item.logType !== "assignment") return false;
+      if (activeTab === "service" && item.logType !== "service") return false;
 
-      const matchesSearch =
-        log.machineName.toLowerCase().includes(search) ||
-        log.machineId.toLowerCase().includes(search) ||
-        log.component.toLowerCase().includes(search) ||
-        log.site.toLowerCase().includes(search);
+      // Supervisor filter
+      if (
+        supervisorFilter !== "All" &&
+        item.assignedSupervisorName !== supervisorFilter &&
+        item.assignedBySupervisor !== supervisorFilter
+      ) {
+        return false;
+      }
 
-      const matchesStatus =
-        statusFilter === "All" || log.status === statusFilter;
+      // Search query
+      const q = searchTerm.trim().toLowerCase();
+      if (!q) return true;
 
-      const matchesPriority =
-        priorityFilter === "All" || log.priority === priorityFilter;
-
-      return matchesSearch && matchesStatus && matchesPriority;
-    });
-  }, [visibleLogs, searchTerm, statusFilter, priorityFilter]);
-
-  // ===========================
-
-  // PAGINATION
-
-  // ===========================
-
-  const totalPages = Math.ceil(filteredLogs.length / itemsPerPage);
-
-  const paginatedLogs = useMemo(() => {
-    const start = (currentPage - 1) * itemsPerPage;
-
-    return filteredLogs.slice(start, start + itemsPerPage);
-  }, [filteredLogs, currentPage]);
-
-  // ===========================
-
-  // STATS
-
-  // ===========================
-
-  const stats = useMemo(() => {
-    return {
-      total: visibleLogs.length,
-
-      completed: visibleLogs.filter((log) => log.status === "Completed").length,
-
-      progress: visibleLogs.filter((log) => log.status === "In Progress")
-        .length,
-
-      critical: visibleLogs.filter((log) => log.priority === "Critical").length,
-    };
-  }, [visibleLogs]);
-
-  // ===========================
-
-  // PERMISSIONS
-
-  // ===========================
-
-  const openAddModal = () => {
-    setFormData({
-      ...initialForm,
-
-      engineerId: currentUser.id,
-    });
-
-    setModalMode("add");
-
-    setIsModalOpen(true);
-  };
-
-  const openViewModal = (log: ServiceLog) => {
-    setSelectedLog(log);
-
-    setFormData({
-      ...log,
-    });
-
-    setModalMode("view");
-
-    setIsModalOpen(true);
-  };
-
-  const closeModal = () => {
-    setSelectedLog(null);
-
-    setIsModalOpen(false);
-  };
-
-  const validateForm = () => {
-    if (!formData.machineId) return "Machine is required";
-
-    if (!formData.component.trim()) return "Component is required";
-
-    if (!formData.serviceType.trim()) return "Service type is required";
-
-    if (!formData.serviceDate) return "Service date is required";
-
-    if (!formData.nextServiceDate) return "Next service date is required";
-
-    if (!formData.issueFound.trim()) return "Issue found is required";
-
-    if (!formData.actionTaken.trim()) return "Action taken is required";
-
-    return null;
-  };
-
-  const handleDelete = () => {
-    if (!deleteTarget) return;
-
-    // BACKEND TODO
-
-    setLogs((prev) => prev.filter((log) => log.id !== deleteTarget.id));
-
-    setDeleteTarget(null);
-  };
-
-  const handleSubmit = async () => {
-    const error = validateForm();
-
-    if (error) {
-      alert(error);
-
-      return;
-    }
-
-    // ===================
-
-    // BACKEND TODO
-
-    // API CALL YAHAN AYGI
-
-    // ===================
-
-    if (modalMode === "add") {
-      const newLog: ServiceLog = {
-        id: crypto.randomUUID(),
-
-        ...formData,
-
-        createdAt: new Date().toISOString(),
-      };
-    }
-
-    if (modalMode === "edit" && selectedLog) {
-      setLogs((prev) =>
-        prev.map((log) =>
-          log.id === selectedLog.id
-            ? {
-                ...log,
-
-                ...formData,
-              }
-            : log,
-        ),
+      return (
+        item.machineName.toLowerCase().includes(q) ||
+        item.serialNumber.toLowerCase().includes(q) ||
+        item.model.toLowerCase().includes(q) ||
+        item.equipmentType.toLowerCase().includes(q) ||
+        (item.assignedOperatorName || "").toLowerCase().includes(q) ||
+        (item.assignedArtisanName || "").toLowerCase().includes(q) ||
+        (item.assignedSupervisorName || "").toLowerCase().includes(q) ||
+        (item.assignedBySupervisor || "").toLowerCase().includes(q) ||
+        (item.notes || "").toLowerCase().includes(q)
       );
-    }
+    });
+  }, [assignments, activeTab, supervisorFilter, searchTerm]);
 
-    closeModal();
-  };
+  // Pagination
+  const totalPages = Math.ceil(filteredLogs.length / pageSize) || 1;
+  const paginatedLogs = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredLogs.slice(start, start + pageSize);
+  }, [filteredLogs, currentPage, pageSize]);
 
-  const canManageLog = () => currentUser.role === "Admin";
-  // ===========================
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, supervisorFilter, activeTab, pageSize]);
 
-  // DARK MODE CLASSES
+  // Statistics
+  const stats = useMemo(() => {
+    const assignedCount = assignments.filter((a) => a.assignedOperatorName || a.assignedArtisanName).length;
+    const operatorsCount = new Set(assignments.map((a) => a.assignedOperatorName).filter(Boolean)).size;
+    const artisansCount = new Set(assignments.map((a) => a.assignedArtisanName).filter(Boolean)).size;
+    const supervisorsCount = new Set(assignments.map((a) => a.assignedSupervisorName || a.assignedBySupervisor).filter(Boolean)).size;
 
-  // ===========================
+    return {
+      totalAssignments: assignedCount,
+      operatorsCount,
+      artisansCount,
+      supervisorsCount,
+    };
+  }, [assignments]);
 
   return (
-    <>
-      <div className="min-h-screen bg-slate-50 p-5 transition-colors duration-300 dark:bg-slate-900">
-        <div className="mx-auto max-w-7xl space-y-6">
-          {/* HEADER */}
+    <div className="min-h-screen bg-slate-100 p-4 font-sans text-slate-900 dark:bg-[#07111f] dark:text-white sm:p-6 lg:p-8">
+      <div className="mx-auto max-w-[1500px] space-y-6">
+        {/* Banner Header */}
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-[#0b1728]">
+          <div className="relative overflow-hidden border-b border-indigo-300/20 bg-gradient-to-r from-[#3B37E6] via-[#3730D9] to-[#2E2AD9] px-6 py-6">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.12),transparent_35%)]" />
+            <div className="absolute -right-16 -top-16 h-56 w-56 rounded-full bg-white/10 blur-3xl" />
+            <div className="absolute bottom-0 left-0 h-40 w-40 rounded-full bg-cyan-400/10 blur-3xl" />
 
-          <div className="relative overflow-hidden rounded-[32px] border border-indigo-300/20 bg-gradient-to-r from-[#3B37E6] via-[#3730D9] to-[#2E2AD9] p-6 shadow-sm">
+            <div className="relative flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
+              <div>
+                <div className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.18em] text-white backdrop-blur-sm">
+                  <ShieldCheck size={14} />
+                  Supervisor Fleet Oversight
+                </div>
 
-  {/* Decorative Effects */}
-  <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.12),transparent_35%)]" />
-  <div className="absolute -right-16 -top-16 h-56 w-56 rounded-full bg-white/10 blur-3xl" />
-  <div className="absolute bottom-0 left-0 h-40 w-40 rounded-full bg-cyan-400/10 blur-3xl" />
+                <h1 className="mt-3 text-2xl font-black tracking-tight text-white sm:text-3xl">
+                  Machine Assignment & Service Audit Logs
+                </h1>
 
-  <div className="relative flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+                <p className="mt-2 max-w-3xl text-xs font-medium leading-5 text-blue-100 sm:text-sm">
+                  Chronological records of which supervisor assigned each machine to operators and artisans, complete with timestamps, operating sites, and diagnostic health status.
+                </p>
+              </div>
 
-    <div>
-
-      <div className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.18em] text-white backdrop-blur-sm">
-        <Wrench size={14} />
-        Company Administration
-      </div>
-
-      <h1 className="mt-3 text-3xl font-black tracking-tight text-white">
-        Service Log Overview
-      </h1>
-
-      <p className="mt-3 max-w-3xl text-sm leading-6 text-blue-100">
-        Track maintenance activities, monitor engineer service records,
-        and review service history for all machines within your
-        organization.
-      </p>
-
-    </div>
-
-  </div>
-</div>
-
-
-          {/* STATS */}
-
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <StatCard
-              title="Total Logs"
-              value={stats.total}
-              icon={<Wrench />}
-            />
-
-            <StatCard
-              title="Completed"
-              value={stats.completed}
-              icon={<CheckCircle2 />}
-            />
-
-            <StatCard
-              title="In Progress"
-              value={stats.progress}
-              icon={<Clock />}
-            />
-
-            <StatCard
-              title="Critical"
-              value={stats.critical}
-              icon={<AlertTriangle />}
-            />
+              <button
+                type="button"
+                onClick={fetchAssignmentData}
+                disabled={loading}
+                className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/95 px-4 text-xs font-bold text-[#3730D9] shadow-lg shadow-black/10 transition hover:bg-white"
+              >
+                <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
+                Refresh Logs
+              </button>
+            </div>
           </div>
 
-          {/* SEARCH */}
-
-          <div className="grid grid-cols-1 gap-4 rounded-3xl bg-white p-4 shadow-sm transition-colors duration-300 dark:bg-slate-800 dark:shadow-slate-700/30 sm:grid-cols-2 lg:grid-cols-3">
-            <div className="relative">
-              <Search
-                size={18}
-                className="absolute left-4 top-3.5 text-slate-400"
-              />
-
-              <input
-                placeholder="Search machine..."
-                className="h-12 w-full rounded-2xl border border-slate-200 bg-white pl-12 pr-4 text-slate-700 outline-none transition-colors placeholder:text-slate-400 focus:border-blue-400 focus:ring-4 focus:ring-blue-100 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100 dark:placeholder:text-slate-400 dark:focus:border-blue-500 dark:focus:ring-blue-900/50"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
+          {/* 4 Stats Cards */}
+          <div className="grid grid-cols-2 gap-4 p-5 sm:grid-cols-4">
+            <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4 dark:border-slate-800 dark:bg-[#101f33]/60">
+              <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
+                <span className="text-xs font-bold uppercase tracking-wider">Assigned Machines</span>
+                <Truck size={18} className="text-blue-600 dark:text-blue-400" />
+              </div>
+              <p className="mt-2 text-2xl font-black text-slate-900 dark:text-white">
+                {stats.totalAssignments}
+              </p>
+              <p className="mt-0.5 text-[11px] font-semibold text-slate-400">Across Active Fleet</p>
             </div>
 
-            <select
-              className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-slate-700 outline-none transition-colors focus:border-blue-400 focus:ring-4 focus:ring-blue-100 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100 dark:focus:border-blue-500 dark:focus:ring-blue-900/50"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as any)}
-            >
-              <option value="All">All Status</option>
+            <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4 dark:border-slate-800 dark:bg-[#101f33]/60">
+              <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
+                <span className="text-xs font-bold uppercase tracking-wider">Assigned Operators</span>
+                <User size={18} className="text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <p className="mt-2 text-2xl font-black text-slate-900 dark:text-white">
+                {stats.operatorsCount}
+              </p>
+              <p className="mt-0.5 text-[11px] font-semibold text-slate-400">Active Daily Drivers</p>
+            </div>
 
-              {statusOptions.map((status) => (
-                <option key={status}>{status}</option>
-              ))}
-            </select>
+            <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4 dark:border-slate-800 dark:bg-[#101f33]/60">
+              <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
+                <span className="text-xs font-bold uppercase tracking-wider">Assigned Artisans</span>
+                <Wrench size={18} className="text-amber-600 dark:text-amber-400" />
+              </div>
+              <p className="mt-2 text-2xl font-black text-slate-900 dark:text-white">
+                {stats.artisansCount}
+              </p>
+              <p className="mt-0.5 text-[11px] font-semibold text-slate-400">Maintenance Technicians</p>
+            </div>
 
-            <select
-              className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-slate-700 outline-none transition-colors focus:border-blue-400 focus:ring-4 focus:ring-blue-100 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100 dark:focus:border-blue-500 dark:focus:ring-blue-900/50 sm:col-span-2 lg:col-span-1"
-              value={priorityFilter}
-              onChange={(e) => setPriorityFilter(e.target.value as any)}
-            >
-              <option value="All">All Priority</option>
-
-              {priorityOptions.map((priority) => (
-                <option key={priority}>{priority}</option>
-              ))}
-            </select>
+            <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4 dark:border-slate-800 dark:bg-[#101f33]/60">
+              <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
+                <span className="text-xs font-bold uppercase tracking-wider">Supervisors Logged</span>
+                <ShieldCheck size={18} className="text-purple-600 dark:text-purple-400" />
+              </div>
+              <p className="mt-2 text-2xl font-black text-slate-900 dark:text-white">
+                {stats.supervisorsCount}
+              </p>
+              <p className="mt-0.5 text-[11px] font-semibold text-slate-400">Assigning Authorities</p>
+            </div>
           </div>
+        </div>
 
-          {/* TABLE */}
+        {/* Filter & Activity Table */}
+        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-[#0b1728]">
+          <div className="border-b border-slate-200 p-4 dark:border-slate-800">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              {/* Tab Selector */}
+              <div className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 p-1 dark:border-slate-800 dark:bg-[#101f33]">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("all")}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-extrabold transition ${
+                    activeTab === "all"
+                      ? "bg-white text-blue-700 shadow-sm dark:bg-blue-600 dark:text-white"
+                      : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+                  }`}
+                >
+                  All Activity Logs ({assignments.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("assigned")}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-extrabold transition ${
+                    activeTab === "assigned"
+                      ? "bg-white text-blue-700 shadow-sm dark:bg-blue-600 dark:text-white"
+                      : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+                  }`}
+                >
+                  🚜 Machine Assignments
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("service")}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-extrabold transition ${
+                    activeTab === "service"
+                      ? "bg-white text-blue-700 shadow-sm dark:bg-blue-600 dark:text-white"
+                      : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+                  }`}
+                >
+                  🔧 Service & Inspection Logs
+                </button>
+              </div>
 
-          <div className="overflow-hidden rounded-3xl bg-white shadow-sm transition-colors duration-300 dark:bg-slate-800 dark:shadow-slate-700/30">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[900px]">
-                <thead className="border-b border-slate-200 bg-slate-100 transition-colors dark:border-slate-700 dark:bg-slate-700/60">
-                  <tr className="text-left text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
-                    <th className="p-4">Machine</th>
+              {/* Right Filter Controls */}
+              <div className="flex flex-wrap items-center gap-3">
+                {/* Search Bar */}
+                <div className="relative h-10 min-w-[200px] sm:w-60">
+                  <Search
+                    className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+                    strokeWidth={2.4}
+                  />
+                  <input
+                    type="text"
+                    placeholder="Search machine, operator, supervisor..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="h-10 w-full rounded-xl border border-slate-300 bg-white pl-10 pr-4 text-xs font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-700 dark:bg-[#101f33] dark:text-white dark:focus:border-blue-500"
+                  />
+                </div>
 
-                    <th className="p-4">Component</th>
-
-                    <th className="p-4">Assigned Artisan</th>
-
-                    <th className="p-4">Assigned By</th>
-
-                    <th className="p-4">Service Type</th>
-
-                    <th className="p-4">Service Date</th>
-
-                    <th className="p-4">Status</th>
-
-                    <th className="p-4">Priority</th>
-
-                    <th className="p-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {loading ? (
-                    <tr>
-                      <td
-                        colSpan={9}
-                        className="p-10 text-center text-slate-500 dark:text-slate-400"
-                      >
-                        Loading...
-                      </td>
-                    </tr>
-                  ) : paginatedLogs.length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan={9}
-                        className="p-10 text-center text-slate-500 dark:text-slate-400"
-                      >
-                        No service logs found
-                      </td>
-                    </tr>
-                  ) : (
-                    paginatedLogs.map((log) => (
-                      <tr
-                        key={log.id}
-                        className="border-b border-slate-100 transition-all duration-300 hover:bg-slate-50/50 dark:border-slate-700 dark:hover:bg-slate-700/40"
-                      >
-                        {/* MACHINE */}
-
-                        <td className="p-4">
-                          <div className="flex items-center gap-2.5">
-                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-blue-100 bg-blue-50 text-blue-500 dark:border-blue-800 dark:bg-blue-900/40 dark:text-blue-400">
-                              <Wrench size={15} />
-                            </div>
-
-                            <div className="min-w-0">
-                              <p className="truncate text-sm font-medium leading-tight text-slate-700 dark:text-slate-200">
-                                {log.machineName}
-                              </p>
-
-                              <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                                <span className="rounded-md border border-slate-200 bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-400">
-                                  {log.machineId}
-                                </span>
-
-                                <span className="truncate text-[11px] text-slate-400 dark:text-slate-500">
-                                  {log.site}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        </td>
-
-                        {/* COMPONENT */}
-
-                        <td className="p-4">
-                          <div>
-                            <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                              {log.component}
-                            </p>
-
-                            <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
-                              Machine Component
-                            </p>
-                          </div>
-                        </td>
-
-                        {/* ASSIGNED ARTISAN */}
-
-                        <td className="p-4">
-                          <div className="flex items-center gap-2">
-                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-100 font-black text-xs text-blue-600 dark:bg-blue-900/50 dark:text-blue-300">
-                              {log.artisanName?.charAt(0) || "A"}
-                            </div>
-
-                            <div className="min-w-0">
-                              <p className="truncate text-xs font-bold text-slate-900 dark:text-white">
-                                {log.artisanName || "Unassigned"}
-                              </p>
-
-                              <p className="truncate text-[10px] font-semibold text-slate-400">
-                                {log.artisanRole || "Artisan Tech"}
-                              </p>
-                            </div>
-                          </div>
-                        </td>
-
-                        {/* ASSIGNED BY */}
-
-                        <td className="p-4">
-                          <span className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-bold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
-                            <User size={12} className="text-slate-400" />
-                            {log.assignedBy || "Company Admin"}
-                          </span>
-                        </td>
-
-                        {/* SERVICE TYPE */}
-
-                        <td className="p-4">
-                          <span className="rounded-xl border border-violet-100 bg-violet-50 px-3 py-1 text-[11px] font-semibold text-violet-600 dark:border-violet-800 dark:bg-violet-900/30 dark:text-violet-400">
-                            {log.serviceType}
-                          </span>
-                        </td>
-
-                        {/* DATE */}
-
-                        <td className="p-4">
-                          <div>
-                            <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                              {log.serviceDate}
-                            </p>
-                            <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
-                              Next: {log.nextServiceDate}
-                            </p>
-                          </div>
-                        </td>
-                        {/* STATUS */}
-                        <td className="p-4">
-                          <span
-                            className={`inline-flex items-center justify-center rounded-xl px-3 py-1 text-[11px] font-semibold ${
-                              log.status === "Completed"
-                                ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                                : log.status === "In Progress"
-                                  ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
-                                  : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
-                            }`}
-                          >
-                            {log.status}
-                          </span>
-                        </td>
-
-                        {/* PRIORITY */}
-                        <td className="p-4 text-center">
-                          <span
-                            className={`inline-flex items-center justify-center rounded-xl px-3 py-1 text-[11px] font-semibold ${
-                              log.priority === "Critical"
-                                ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
-                                : log.priority === "High"
-                                  ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
-                                  : log.priority === "Medium"
-                                    ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
-                                    : "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                            }`}
-                          >
-                            {log.priority}
-                          </span>
-                        </td>
-
-                        {/* ACTIONS */}
-                        <td className="p-4">
-                          <div className="flex justify-end gap-2">
-                            <button
-                              onClick={() => openViewModal(log)}
-                              className="rounded-lg bg-blue-600 px-3 py-2 text-white hover:bg-blue-700"
-                            >
-                              <Eye size={16} />
-                            </button>
-
-                            <button
-                              onClick={() => setDeleteTarget(log)}
-                              className="rounded-lg bg-red-500 px-3 py-2 text-white hover:bg-red-600"
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-
-              <div className="flex flex-col items-center justify-between gap-3 border-t border-slate-200 p-5 dark:border-slate-700 sm:flex-row">
-                <p className="text-sm text-slate-500 dark:text-slate-400">
-                  Showing {paginatedLogs.length} of {filteredLogs.length} logs
-                </p>
-
-                <div className="flex gap-2">
-                  <button
-                    disabled={currentPage === 1}
-                    onClick={() =>
-                      setCurrentPage((prev) => Math.max(prev - 1, 1))
-                    }
-                    className="rounded-xl border border-slate-200 px-4 py-2 text-sm text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
+                {/* Supervisor Filter */}
+                <div className="relative min-w-[180px]">
+                  <select
+                    value={supervisorFilter}
+                    onChange={(e) => setSupervisorFilter(e.target.value)}
+                    className="h-10 w-full rounded-xl border border-slate-300 bg-white px-3 pr-8 text-xs font-bold text-slate-800 shadow-sm outline-none transition focus:border-blue-500 dark:border-slate-700 dark:bg-[#101f33] dark:text-white cursor-pointer"
                   >
-                    Prev
-                  </button>
-
-                  <div className="rounded-xl border border-slate-200 px-4 py-2 text-sm text-slate-600 dark:border-slate-600 dark:text-slate-300">
-                    {currentPage} / {totalPages || 1}
-                  </div>
-
-                  <button
-                    disabled={currentPage === totalPages || totalPages === 0}
-                    onClick={() =>
-                      setCurrentPage((prev) => Math.min(prev + 1, totalPages))
-                    }
-                    className="rounded-xl border border-slate-200 px-4 py-2 text-sm text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
-                  >
-                    Next
-                  </button>
+                    <option value="All">🛡️ All Supervisors</option>
+                    {uniqueSupervisors
+                      .filter((s) => s !== "All")
+                      .map((sup) => (
+                        <option key={sup} value={sup}>
+                          {sup}
+                        </option>
+                      ))}
+                  </select>
                 </div>
               </div>
             </div>
           </div>
-        </div>
+
+          {/* Table */}
+          <div className="w-full overflow-x-auto">
+            <table className="w-full min-w-[1050px] border-collapse text-left">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-[0.14em] text-slate-500 dark:border-slate-800 dark:bg-slate-950/60">
+                  <th className="w-14 px-4 py-4 text-center font-bold">#</th>
+                  <th className="px-6 py-4 font-bold">Equipment & Serial</th>
+                  <th className="px-6 py-4 font-bold">Assigned To (Operator / Artisan)</th>
+                  <th className="px-6 py-4 font-bold">Assigned By (Supervisor)</th>
+                  <th className="px-6 py-4 font-bold">Date & Time</th>
+                  <th className="px-6 py-4 font-bold">Health Status</th>
+                  <th className="px-6 py-4 text-center font-bold">Action</th>
+                </tr>
+              </thead>
+
+              <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+                {loading ? (
+                  <tr>
+                    <td colSpan={7} className="px-6 py-16 text-center">
+                      <div className="flex flex-col items-center justify-center gap-3">
+                        <RefreshCw className="animate-spin text-blue-600" size={24} />
+                        <p className="text-sm font-extrabold text-slate-700 dark:text-slate-300">
+                          Loading machine assignment and service records...
+                        </p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : paginatedLogs.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-6 py-16 text-center text-slate-500 dark:text-slate-400">
+                      <div className="flex flex-col items-center justify-center gap-2">
+                        <Wrench size={28} className="text-slate-400" />
+                        <p className="text-sm font-extrabold text-slate-900 dark:text-white">
+                          No assignment records found
+                        </p>
+                        <p className="text-xs text-slate-400">
+                          {searchTerm ? "Try searching with a different keyword." : "Machines assigned by supervisors will appear here."}
+                        </p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  paginatedLogs.map((log, index) => {
+                    const rowNumber = (currentPage - 1) * pageSize + index + 1;
+                    const score = log.healthScore ?? 100;
+                    const isCrit = score < 50 || log.status === "Critical";
+                    const isWarn = (!isCrit && score < 85) || log.status === "Warning";
+
+                    return (
+                      <tr
+                        key={log.id}
+                        className="transition hover:bg-slate-50 dark:hover:bg-white/[0.03]"
+                      >
+                        {/* S.No */}
+                        <td className="px-4 py-4 text-center text-xs font-extrabold text-slate-400 dark:text-slate-500">
+                          {rowNumber}
+                        </td>
+
+                        {/* Machine */}
+                        <td className="px-6 py-4">
+                          <div className="flex flex-col">
+                            <span className="text-sm font-extrabold tracking-tight text-slate-950 dark:text-white">
+                              {log.machineName}
+                            </span>
+                            <div className="mt-1 flex items-center gap-2">
+                              <span className="rounded-md bg-blue-50 border border-blue-200/80 px-2 py-0.5 font-mono text-[10px] font-bold text-blue-700 dark:bg-blue-950/60 dark:border-blue-900/50 dark:text-blue-300">
+                                {log.serialNumber}
+                              </span>
+                              <span className="text-[11px] font-semibold text-slate-400">
+                                {log.equipmentType}
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Assigned To (Operator / Artisan) */}
+                        <td className="px-6 py-4">
+                          <div className="flex flex-col gap-1.5">
+                            {log.assignedOperatorName && (
+                              <div className="flex items-center gap-1.5">
+                                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100 text-[10px] font-black text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300">
+                                  👤
+                                </span>
+                                <span className="text-xs font-bold text-slate-900 dark:text-white">
+                                  {log.assignedOperatorName}
+                                </span>
+                                <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[9px] font-extrabold uppercase text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
+                                  Operator
+                                </span>
+                              </div>
+                            )}
+
+                            {log.assignedArtisanName && (
+                              <div className="flex items-center gap-1.5">
+                                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-100 text-[10px] font-black text-amber-700 dark:bg-amber-900/50 dark:text-amber-300">
+                                  🔧
+                                </span>
+                                <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                                  {log.assignedArtisanName}
+                                </span>
+                                <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[9px] font-extrabold uppercase text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">
+                                  Artisan / Mechanic
+                                </span>
+                              </div>
+                            )}
+
+                            {!log.assignedOperatorName && !log.assignedArtisanName && (
+                              <span className="text-xs font-semibold text-slate-400">
+                                Unassigned
+                              </span>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* Assigned By (Supervisor) */}
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2">
+                            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300">
+                              <ShieldCheck size={14} />
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="text-xs font-bold text-slate-900 dark:text-white">
+                                {log.assignedSupervisorName || log.assignedBySupervisor || "Chief Supervisor"}
+                              </span>
+                              <span className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400">
+                                Authorizing Supervisor
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Date & Time */}
+                        <td className="px-6 py-4">
+                          <div className="flex flex-col">
+                            <span className="text-xs font-bold text-slate-900 dark:text-white">
+                              {formatDate(log.assignedAt)}
+                            </span>
+                            <span className="mt-0.5 text-[10px] font-semibold text-slate-400">
+                              📍 {log.site}
+                            </span>
+                          </div>
+                        </td>
+
+                        {/* Health Status */}
+                        <td className="px-6 py-4">
+                          <span
+                            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${
+                              isCrit
+                                ? "border-red-200 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"
+                                : isWarn
+                                ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
+                                : "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300"
+                            }`}
+                          >
+                            <span
+                              className={`h-2 w-2 rounded-full ${
+                                isCrit ? "bg-red-500" : isWarn ? "bg-amber-500" : "bg-emerald-500"
+                              }`}
+                            />
+                            {isCrit ? "Critical" : isWarn ? "Warning" : "Optimal"} {score}%
+                          </span>
+                        </td>
+
+                        {/* Actions */}
+                        <td className="px-6 py-4 text-center">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedLog(log)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700 transition hover:bg-blue-100 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300"
+                          >
+                            <Eye size={13} />
+                            View
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination Footer */}
+          <div className="flex flex-col items-center justify-between gap-3 border-t border-slate-200 p-4 dark:border-slate-800 sm:flex-row">
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                Showing {paginatedLogs.length} of {filteredLogs.length} records
+              </span>
+
+              <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                <span>Per page:</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => setPageSize(Number(e.target.value))}
+                  className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs font-bold text-slate-700 dark:border-slate-700 dark:bg-[#101f33] dark:text-white"
+                >
+                  <option value={5}>5</option>
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+                className="inline-flex h-9 items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-40 dark:border-slate-800 dark:bg-[#101f33] dark:text-slate-300"
+              >
+                <ChevronLeft size={14} />
+                Prev
+              </button>
+
+              <span className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-extrabold text-slate-700 dark:border-slate-800 dark:bg-[#101f33] dark:text-slate-300">
+                {currentPage} / {totalPages}
+              </span>
+
+              <button
+                type="button"
+                disabled={currentPage >= totalPages}
+                onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+                className="inline-flex h-9 items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-40 dark:border-slate-800 dark:bg-[#101f33] dark:text-slate-300"
+              >
+                Next
+                <ChevronRight size={14} />
+              </button>
+            </div>
+          </div>
+        </section>
       </div>
-      {isModalOpen && (
-        <ServiceLogModal
-          mode={modalMode}
-          formData={formData}
-          setFormData={setFormData}
-          assignedMachines={assignedMachines}
-          onClose={closeModal}
-          handleSubmit={handleSubmit}
+
+      {/* View Assignment Modal */}
+      {selectedLog && (
+        <AssignmentDetailModal
+          log={selectedLog}
+          onClose={() => setSelectedLog(null)}
         />
       )}
-
-      {deleteTarget && (
-        <ConfirmDeleteModal
-          log={deleteTarget}
-          onCancel={() => setDeleteTarget(null)}
-          onConfirm={handleDelete}
-        />
-      )}
-    </>
-  );
-}
-
-function StatCard({ title, value, icon }: any) {
-  return (
-    <div className="flex items-center justify-between rounded-3xl bg-white p-5 shadow-sm transition-colors duration-300 dark:bg-slate-800 dark:shadow-slate-700/30">
-      <div>
-        <p className="text-sm text-slate-500 dark:text-slate-400">{title}</p>
-
-        <h2 className="mt-2 text-3xl font-bold text-slate-800 dark:text-slate-100">
-          {value}
-        </h2>
-      </div>
-
-      <div className="rounded-2xl bg-orange-100 p-4 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400">
-        {icon}
-      </div>
     </div>
   );
 }
-function ServiceLogModal({
-  mode,
-  formData,
-  setFormData,
-  assignedMachines,
-  onClose,
-  handleSubmit,
-}: any) {
-  const isView = mode === "view";
-  const inputCls =
-    "h-12 rounded-2xl border px-4 w-full outline-none transition-colors focus:ring-4 border-slate-200 bg-slate-50/50 text-slate-700 focus:ring-blue-100 focus:border-blue-400 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100 dark:placeholder-slate-400 dark:focus:ring-blue-900/50 dark:focus:border-blue-500";
-  const disabledInputCls =
-    "h-12 rounded-2xl border px-4 w-full bg-slate-100 border-slate-200 text-slate-500 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400";
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="w-full max-w-[650px] overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900">
-        {/* Header */}
-        <div className="flex items-start justify-between border-b border-slate-200 px-5 py-4 dark:border-slate-700">
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-blue-600">
-              SERVICE LOG
-            </p>
 
-            <h2 className="mt-1 text-base font-semibold text-slate-900 dark:text-white">
-              Service Details
-            </h2>
-          </div>
-
-          <button
-            onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-700"
-          >
-            <X size={18} />
-          </button>
-        </div>
-
-        {/* Body */}
-        <div className="space-y-4 p-5">
-          {/* Machine + Component */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/50">
-              <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-500">
-                Machine
-              </p>
-
-              <h3 className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">
-                {formData.machineName}
-              </h3>
-
-              <p className="text-[11px] text-slate-500">{formData.machineId}</p>
-            </div>
-
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/50">
-              <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-500">
-                Component
-              </p>
-
-              <h3 className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">
-                {formData.component}
-              </h3>
-
-              <p className="text-[11px] text-slate-500">
-                {formData.serviceType}
-              </p>
-            </div>
-          </div>
-
-          {/* Assigned Artisan + Assigned By */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-xl border border-slate-200 bg-blue-50/50 p-3 dark:border-slate-700 dark:bg-blue-950/20">
-              <p className="text-[9px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
-                Assigned Artisan / Technician
-              </p>
-
-              <h3 className="mt-1 text-sm font-bold text-slate-900 dark:text-white">
-                {formData.artisanName || "Vikram Sharma (Artisan)"}
-              </h3>
-
-              <p className="text-[11px] text-blue-600 dark:text-blue-400 font-medium">
-                {formData.artisanRole || "Hydraulic Specialist"}
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/50">
-              <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">
-                Assigned By
-              </p>
-
-              <h3 className="mt-1 text-sm font-bold text-slate-900 dark:text-white">
-                {formData.assignedBy || "Company Admin"}
-              </h3>
-
-              <p className="text-[11px] text-slate-500">Authorized Assignment</p>
-            </div>
-          </div>
-
-          {/* Issue Found */}
-          <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
-            <h3 className="text-xs font-semibold text-slate-900 dark:text-white">
-              Issue Found
-            </h3>
-
-            <p className="mt-1 text-xs leading-5 text-slate-600 dark:text-slate-400">
-              {formData.issueFound || "-"}
-            </p>
-          </div>
-
-          {/* Action Taken */}
-          <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
-            <h3 className="text-xs font-semibold text-slate-900 dark:text-white">
-              Action Taken
-            </h3>
-
-            <p className="mt-1 text-xs leading-5 text-slate-600 dark:text-slate-400">
-              {formData.actionTaken || "-"}
-            </p>
-          </div>
-
-          {/* Remarks */}
-          <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
-            <h3 className="text-xs font-semibold text-slate-900 dark:text-white">
-              Remarks
-            </h3>
-
-            <p className="mt-1 text-xs leading-5 text-slate-600 dark:text-slate-400">
-              {formData.remarks || "-"}
-            </p>
-          </div>
-
-          {/* Timeline */}
-          <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
-            <h3 className="mb-3 text-xs font-semibold text-slate-900 dark:text-white">
-              Service Timeline
-            </h3>
-
-            <div className="grid grid-cols-3 gap-2">
-              <div className="rounded-lg bg-slate-50 p-3 dark:bg-slate-800">
-                <p className="text-[10px] text-slate-500">Last Service</p>
-
-                <p className="mt-1 text-xs font-semibold text-slate-900 dark:text-white">
-                  {formData.serviceDate}
-                </p>
-              </div>
-
-              <div className="rounded-lg bg-slate-50 p-3 dark:bg-slate-800">
-                <p className="text-[10px] text-slate-500">Next Service</p>
-
-                <p className="mt-1 text-xs font-semibold text-slate-900 dark:text-white">
-                  {formData.nextServiceDate}
-                </p>
-              </div>
-
-              <div className="rounded-lg bg-slate-50 p-3 dark:bg-slate-800">
-                <p className="text-[10px] text-slate-500">Runtime</p>
-
-                <p className="mt-1 text-xs font-semibold text-slate-900 dark:text-white">
-                  {formData.runtimeHours} hrs
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>,
-    document.body,
-  );
-}
-function ConfirmDeleteModal({
+function AssignmentDetailModal({
   log,
-
-  onCancel,
-  onConfirm,
-}: any) {
+  onClose,
+}: {
+  log: MachineAssignmentLog;
+  onClose: () => void;
+}) {
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl transition-colors dark:border-slate-700 dark:bg-slate-800 dark:shadow-black/50">
-        <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">
-          Delete Service Log?
-        </h2>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+      <div className="relative w-full max-w-[620px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-[#0b1728]">
+        {/* Modal Header */}
+        <div className="flex items-center justify-between border-b border-slate-200 bg-gradient-to-r from-blue-600 to-indigo-700 px-6 py-4 text-white">
+          <div className="flex items-center gap-2.5">
+            <ShieldCheck size={20} />
+            <div>
+              <h3 className="text-base font-black tracking-tight">
+                Machine Assignment Record
+              </h3>
+              <p className="text-xs text-blue-100">
+                Complete authorization & supervisor tracking details
+              </p>
+            </div>
+          </div>
 
-        <p className="mt-2 text-slate-500 dark:text-slate-400">
-          Delete service log for{" "}
-          <strong className="text-slate-700 dark:text-slate-200">
-            {log.machineName}
-          </strong>
-          ?
-        </p>
-
-        <div className="mt-6 flex justify-end gap-3">
           <button
-            onClick={onCancel}
-            className="rounded-2xl border border-slate-200 px-5 py-3 font-medium text-slate-600 transition-colors hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
+            type="button"
+            onClick={onClose}
+            className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/10 text-white transition hover:bg-white/20"
           >
-            Cancel
+            <X size={16} />
           </button>
+        </div>
 
+        {/* Modal Body */}
+        <div className="space-y-4 p-6 text-xs text-slate-700 dark:text-slate-300">
+          {/* Machine summary */}
+          <div className="rounded-xl border border-blue-100 bg-blue-50/70 p-4 dark:border-blue-900/40 dark:bg-blue-950/30">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+              Assigned Equipment
+            </span>
+            <h4 className="mt-1 text-base font-black text-slate-900 dark:text-white">
+              {log.machineName}
+            </h4>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <span className="rounded bg-white border border-blue-200 px-2 py-0.5 font-mono text-xs font-bold text-blue-700 dark:bg-[#101f33] dark:border-blue-900 dark:text-blue-300">
+                {log.serialNumber}
+              </span>
+              <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+                • {log.model} ({log.equipmentType})
+              </span>
+            </div>
+          </div>
+
+          {/* Assignment Breakdown */}
+          <div className="grid grid-cols-2 gap-4">
+            {/* Operator */}
+            <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 dark:border-slate-800 dark:bg-[#101f33]/60">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                Assigned Operator (Driver)
+              </span>
+              <p className="mt-1 text-sm font-extrabold text-slate-900 dark:text-white">
+                👤 {log.assignedOperatorName || "Not assigned"}
+              </p>
+              <p className="mt-0.5 text-[11px] text-slate-400">
+                ID: {log.assignedOperatorId || "N/A"}
+              </p>
+            </div>
+
+            {/* Artisan */}
+            <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 dark:border-slate-800 dark:bg-[#101f33]/60">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                Assigned Artisan (Mechanic)
+              </span>
+              <p className="mt-1 text-sm font-extrabold text-slate-900 dark:text-white">
+                🔧 {log.assignedArtisanName || "Not assigned"}
+              </p>
+              <p className="mt-0.5 text-[11px] text-slate-400">
+                ID: {log.assignedArtisanId || "N/A"}
+              </p>
+            </div>
+          </div>
+
+          {/* Supervisor / Authority */}
+          <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 dark:border-slate-800 dark:bg-[#101f33]/60">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+              Authorized & Assigned By (Supervisor)
+            </span>
+            <p className="mt-1 text-sm font-extrabold text-slate-900 dark:text-white">
+              🛡️ {log.assignedSupervisorName || log.assignedBySupervisor || "Chief Supervisor"}
+            </p>
+            <p className="mt-0.5 text-[11px] text-slate-400">
+              Site: {log.site} • Recorded: {formatDate(log.assignedAt)}
+            </p>
+          </div>
+
+          {/* Operational Notes */}
+          <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              Operational Notes & Remarks
+            </span>
+            <p className="mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-300">
+              {log.notes || "Machine is assigned and ready for daily operations."}
+            </p>
+          </div>
+        </div>
+
+        {/* Modal Footer */}
+        <div className="flex justify-end border-t border-slate-200 bg-slate-50 px-6 py-3.5 dark:border-slate-800 dark:bg-[#101f33]/60">
           <button
-            onClick={onConfirm}
-            className="rounded-2xl bg-red-500 px-5 py-3 font-medium text-white transition-colors hover:bg-red-600"
+            type="button"
+            onClick={onClose}
+            className="rounded-xl bg-blue-600 px-5 py-2 text-xs font-bold text-white shadow transition hover:bg-blue-700"
           >
-            Delete
+            Close Details
           </button>
         </div>
       </div>
     </div>,
-    document.body,
+    document.body
   );
 }

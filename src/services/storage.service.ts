@@ -69,7 +69,11 @@ class StorageService {
 
       if (!item) return null;
 
-      return JSON.parse(item) as T;
+      try {
+        return JSON.parse(item) as T;
+      } catch {
+        return item as unknown as T;
+      }
     } catch (error) {
       console.error(
         `[StorageService] Read Error (${key})`,
@@ -176,8 +180,8 @@ class StorageService {
     return (
       age >
       maxAgeInMinutes *
-        60 *
-        1000
+      60 *
+      1000
     );
   }
 
