@@ -29,6 +29,8 @@ import {
 import { getApiBaseUrl } from "../../services/api";
 import StorageService from "../../services/storage.service";
 import Pagination from "../../components/common/Pagination";
+import StorageService from "../../services/storage.service";
+import { isReadOnlyRole } from "../../components/common/permissions";
 
 const API_BASE = getApiBaseUrl().replace(/\/$/, "");
 
@@ -50,6 +52,13 @@ type EquipmentTypeItem = {
 };
 
 export default function CategoryManagement() {
+
+  const [activeTab, setActiveTab] = useState<"equipment" | "component">(
+    "equipment",
+  );
+  const readOnly = isReadOnlyRole(StorageService.getRole());
+
+
   const [search, setSearch] = useState("");
   const [iconSearch, setIconSearch] = useState("");
   const [loading, setLoading] = useState(false);
@@ -58,12 +67,35 @@ export default function CategoryManagement() {
   // Equipment Types State
   const [equipmentTypes, setEquipmentTypes] = useState<EquipmentTypeItem[]>([]);
 
+  const [componentCategories, setComponentCategories] = useState<
+    ComponentCategoryItem[]
+  >([]);
+
+
   // Modal State for Create & Edit
   const [isEqModalOpen, setIsEqModalOpen] = useState(false);
-  const [editingEqItem, setEditingEqItem] = useState<EquipmentTypeItem | null>(null);
+  const [editingEqItem, setEditingEqItem] = useState<EquipmentTypeItem | null>(
+    null,
+  );
+
+
+  const [isCcModalOpen, setIsCcModalOpen] = useState(false);
+  const [editingCcItem, setEditingCcItem] =
+    useState<ComponentCategoryItem | null>(null);
+
+  // Validation Error States
+  const [eqErrors, setEqErrors] = useState<{
+    name?: string;
+    description?: string;
+  }>({});
+  const [ccErrors, setCcErrors] = useState<{
+    name?: string;
+    description?: string;
+  }>({});
 
   // Validation Error State
   const [eqErrors, setEqErrors] = useState<{ name?: string; description?: string }>({});
+
 
   // Delete Confirmation Modal State
   const [deleteTarget, setDeleteTarget] = useState<{
@@ -73,7 +105,16 @@ export default function CategoryManagement() {
   const [deleting, setDeleting] = useState(false);
 
   // Form Inputs
+
+  const [eqForm, setEqForm] = useState({
+    name: "",
+    description: "",
+    icon: "Truck",
+  });
+  const [ccForm, setCcForm] = useState({ name: "", description: "" });
+
   const [eqForm, setEqForm] = useState({ name: "", description: "", icon: "Truck" });
+
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -94,7 +135,10 @@ export default function CategoryManagement() {
 
     if (token) {
       token = token.trim();
-      if ((token.startsWith('"') && token.endsWith('"')) || (token.startsWith("'") && token.endsWith("'"))) {
+      if (
+        (token.startsWith('"') && token.endsWith('"')) ||
+        (token.startsWith("'") && token.endsWith("'"))
+      ) {
         try {
           const parsed = JSON.parse(token);
           if (typeof parsed === "string") token = parsed;
@@ -119,6 +163,65 @@ export default function CategoryManagement() {
       const companyId = user?.companyId || user?.company_id || StorageService.getCompanyId() || "";
       const query = companyId ? `?companyId=${encodeURIComponent(companyId)}` : "";
 
+
+      // Fetch Machine Equipment Types
+      const eqRes = await fetch(
+        `${API_BASE}/machines/categories?includeInactive=true`,
+        { headers },
+      );
+      if (eqRes.ok) {
+        const eqData = await eqRes.json();
+        if (eqData && Array.isArray(eqData.data)) {
+          setEquipmentTypes(
+            eqData.data.map((item: any) => ({
+              id: item.id,
+              name: item.name,
+              description: item.description || "",
+              icon: item.icon || "Truck",
+              isActive: item.isActive !== undefined ? item.isActive : true,
+              companyName: item.companyName || "Mining Operations Ltd",
+              companyId: item.companyId || "COMP-101",
+              createdAt: item.createdAt
+                ? item.createdAt.split("T")[0]
+                : new Date().toISOString().split("T")[0],
+              updatedAt: item.updatedAt
+                ? item.updatedAt.split("T")[0]
+                : item.createdAt
+                  ? item.createdAt.split("T")[0]
+                  : new Date().toISOString().split("T")[0],
+            })),
+          );
+        }
+      }
+
+      // Fetch Component Categories
+      const compRes = await fetch(
+        `${API_BASE}/components/categories?includeInactive=true`,
+        { headers },
+      );
+      if (compRes.ok) {
+        const compData = await compRes.json();
+        if (compData && Array.isArray(compData.data)) {
+          setComponentCategories(
+            compData.data.map((item: any) => ({
+              id: item.id,
+              name: item.name,
+              description: item.description || "",
+              isActive: item.isActive !== undefined ? item.isActive : true,
+              companyName: item.companyName || "Mining Operations Ltd",
+              companyId: item.companyId || "COMP-101",
+              createdAt: item.createdAt
+                ? item.createdAt.split("T")[0]
+                : new Date().toISOString().split("T")[0],
+              updatedAt: item.updatedAt
+                ? item.updatedAt.split("T")[0]
+                : item.createdAt
+                  ? item.createdAt.split("T")[0]
+                  : new Date().toISOString().split("T")[0],
+            })),
+          );
+        }
+
       const res = await fetch(`${API_BASE}/machines/categories${query}`, { headers });
       const resJson = await res.json();
 
@@ -136,6 +239,7 @@ export default function CategoryManagement() {
             updatedAt: item.updatedAt ? item.updatedAt.split("T")[0] : new Date().toISOString().split("T")[0],
           }))
         );
+
       }
     } catch (err: any) {
       console.error("Error fetching categories:", err);
@@ -164,7 +268,7 @@ export default function CategoryManagement() {
       const isDuplicate = equipmentTypes.some(
         (item) =>
           item.name.toLowerCase() === trimmed.toLowerCase() &&
-          item.id !== editingEqItem?.id
+          item.id !== editingEqItem?.id,
       );
       if (isDuplicate) {
         errors.name = "An equipment type with this name already exists.";
@@ -193,7 +297,7 @@ export default function CategoryManagement() {
       const isDuplicate = componentCategories.some(
         (item) =>
           item.name.toLowerCase() === trimmed.toLowerCase() &&
-          item.id !== editingCcItem?.id
+          item.id !== editingCcItem?.id,
       );
       if (isDuplicate) {
         errors.name = "A component category with this name already exists.";
@@ -264,7 +368,7 @@ export default function CategoryManagement() {
       showSuccessToast(
         isEditing
           ? "Equipment type updated successfully!"
-          : "Equipment type created successfully!"
+          : "Equipment type created successfully!",
       );
 
       // Refresh list from backend
@@ -308,13 +412,15 @@ export default function CategoryManagement() {
 
       const resJson = await res.json();
       if (!res.ok) {
-        throw new Error(resJson.message || "Failed to save component category.");
+        throw new Error(
+          resJson.message || "Failed to save component category.",
+        );
       }
 
       showSuccessToast(
         isEditing
           ? "Component category updated successfully!"
-          : "Component category created successfully!"
+          : "Component category created successfully!",
       );
 
       // Refresh list from backend
@@ -342,10 +448,12 @@ export default function CategoryManagement() {
       });
       if (res.ok) {
         setEquipmentTypes((prev) =>
-          prev.map((eq) => (eq.id === item.id ? { ...eq, isActive: newStatus } : eq))
+          prev.map((eq) =>
+            eq.id === item.id ? { ...eq, isActive: newStatus } : eq,
+          ),
         );
         showSuccessToast(
-          `'${item.name}' status set to ${newStatus ? "Active" : "Deactive"}`
+          `'${item.name}' status set to ${newStatus ? "Active" : "Deactive"}`,
         );
       } else {
         const resJson = await res.json();
@@ -368,10 +476,12 @@ export default function CategoryManagement() {
       });
       if (res.ok) {
         setComponentCategories((prev) =>
-          prev.map((cc) => (cc.id === item.id ? { ...cc, isActive: newStatus } : cc))
+          prev.map((cc) =>
+            cc.id === item.id ? { ...cc, isActive: newStatus } : cc,
+          ),
         );
         showSuccessToast(
-          `'${item.name}' status set to ${newStatus ? "Active" : "Deactive"}`
+          `'${item.name}' status set to ${newStatus ? "Active" : "Deactive"}`,
         );
       } else {
         const resJson = await res.json();
@@ -395,7 +505,19 @@ export default function CategoryManagement() {
       const resJson = await res.json();
 
       if (res.ok) {
+
+        if (deleteTarget.type === "equipment") {
+          setEquipmentTypes((prev) =>
+            prev.filter((item) => item.id !== deleteTarget.id),
+          );
+        } else {
+          setComponentCategories((prev) =>
+            prev.filter((item) => item.id !== deleteTarget.id),
+          );
+        }
+
         setEquipmentTypes((prev) => prev.filter((item) => item.id !== deleteTarget.id));
+
         showSuccessToast(`'${deleteTarget.name}' deleted successfully!`);
         setDeleteTarget(null);
       } else {
@@ -412,7 +534,11 @@ export default function CategoryManagement() {
   // Open Edit Modal
   const openEditEqModal = (item: EquipmentTypeItem) => {
     setEditingEqItem(item);
-    setEqForm({ name: item.name, description: item.description, icon: item.icon });
+    setEqForm({
+      name: item.name,
+      description: item.description,
+      icon: item.icon,
+    });
     setEqErrors({});
     setIconSearch("");
     setIsEqModalOpen(true);
@@ -430,7 +556,9 @@ export default function CategoryManagement() {
   // Dynamic Render Icon Helper
   const renderIcon = (iconName: string) => {
     const IconComponent = getEquipmentIconComponent(iconName);
-    return <IconComponent className="h-5 w-5 text-blue-600 dark:text-blue-400" />;
+    return (
+      <IconComponent className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+    );
   };
 
   // Filtered Icon Picker List
@@ -440,24 +568,48 @@ export default function CategoryManagement() {
   const filteredEq = equipmentTypes.filter(
     (item) =>
       item.name.toLowerCase().includes(search.toLowerCase()) ||
-      item.description.toLowerCase().includes(search.toLowerCase())
+      item.description.toLowerCase().includes(search.toLowerCase()),
+  );
+
+
+  const filteredCc = componentCategories.filter(
+    (item) =>
+      item.name.toLowerCase().includes(search.toLowerCase()) ||
+      item.description.toLowerCase().includes(search.toLowerCase()),
   );
 
   // Pagination Logic
+  const currentTotal =
+    activeTab === "equipment" ? filteredEq.length : filteredCc.length;
+
+  // Pagination Logic
   const currentTotal = filteredEq.length;
+
   const isShowAll = pageSize === "all";
   const numericPageSize = isShowAll ? currentTotal || 1 : pageSize;
-  const totalPages = isShowAll ? 1 : Math.max(1, Math.ceil(currentTotal / numericPageSize));
+  const totalPages = isShowAll
+    ? 1
+    : Math.max(1, Math.ceil(currentTotal / numericPageSize));
 
   const startIndex = isShowAll ? 0 : (currentPage - 1) * numericPageSize;
-  const endIndex = isShowAll ? currentTotal : Math.min(startIndex + numericPageSize, currentTotal);
+  const endIndex = isShowAll
+    ? currentTotal
+    : Math.min(startIndex + numericPageSize, currentTotal);
+
+
+  const paginatedEq = isShowAll
+    ? filteredEq
+    : filteredEq.slice(startIndex, endIndex);
+  const paginatedCc = isShowAll
+    ? filteredCc
+    : filteredCc.slice(startIndex, endIndex);
 
   const paginatedEq = isShowAll ? filteredEq : filteredEq.slice(startIndex, endIndex);
+
 
   return (
     <div className="min-h-screen bg-slate-100 p-4 font-sans text-slate-900 dark:bg-[#07111f] dark:text-white sm:p-6 lg:p-8">
       <div className="mx-auto max-w-[1500px] space-y-6">
-
         {/* Global Error Banner */}
         {apiError && (
           <div className="flex items-center justify-between rounded-2xl border border-red-200 bg-red-50 p-4 text-red-700 shadow-sm dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
@@ -486,7 +638,8 @@ export default function CategoryManagement() {
                 Category & Equipment Master
               </h1>
               <p className="mt-2 max-w-2xl text-sm leading-relaxed text-blue-100">
-                Create and manage custom machine equipment types for your company database. Records are isolated under your company ID.
+                Create and manage custom machine equipment types for your
+                company database. Records are isolated under your company ID.
               </p>
             </div>
 
@@ -563,14 +716,20 @@ export default function CategoryManagement() {
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {loading && (
                     <tr>
-                      <td colSpan={5} className="py-8 text-center text-sm font-semibold text-slate-500">
+                      <td
+                        colSpan={5}
+                        className="py-8 text-center text-sm font-semibold text-slate-500"
+                      >
                         Loading Equipment Types...
                       </td>
                     </tr>
                   )}
                   {!loading && paginatedEq.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="py-8 text-center text-sm font-semibold text-slate-500">
+                      <td
+                        colSpan={5}
+                        className="py-8 text-center text-sm font-semibold text-slate-500"
+                      >
                         {filteredEq.length === 0
                           ? "No Equipment Types found. Click 'Create Equipment Type' to add one."
                           : "No items on this page."}
@@ -602,24 +761,33 @@ export default function CategoryManagement() {
 
                         <td className="px-6 py-4">
                           <div className="flex flex-col text-xs font-semibold">
-                            <span className="text-slate-800 dark:text-slate-200">Created: {item.createdAt}</span>
-                            <span className="text-slate-500">Updated: {item.updatedAt}</span>
+                            <span className="text-slate-800 dark:text-slate-200">
+                              Created: {item.createdAt}
+                            </span>
+                            <span className="text-slate-500">
+                              Updated: {item.updatedAt}
+                            </span>
                           </div>
                         </td>
 
                         <td className="px-6 py-4">
                           <button
                             type="button"
-                            onClick={() => toggleEqStatus(item)}
-                            title="Click to toggle Active / Deactive status"
-                            className="group focus:outline-none"
+                            onClick={() => !readOnly && toggleEqStatus(item)}
+                            disabled={readOnly}
+                            title={
+                              readOnly
+                                ? ""
+                                : "Click to toggle Active / Deactive status"
+                            }
+                            className="group focus:outline-none disabled:cursor-default"
                           >
                             {item.isActive ? (
-                              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3.5 py-1 text-xs font-bold text-emerald-700 shadow-sm transition hover:scale-105 hover:bg-emerald-100 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-400">
+                              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3.5 py-1 text-xs font-bold text-emerald-700 shadow-sm transition group-disabled:hover:scale-100 hover:scale-105 hover:bg-emerald-100 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-400">
                                 <CheckCircle2 size={13} /> Active
                               </span>
                             ) : (
-                              <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-slate-100 px-3.5 py-1 text-xs font-bold text-slate-600 shadow-sm transition hover:scale-105 hover:bg-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
+                              <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-slate-100 px-3.5 py-1 text-xs font-bold text-slate-600 shadow-sm transition group-disabled:hover:scale-100 hover:scale-105 hover:bg-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
                                 <XCircle size={13} /> Deactive
                               </span>
                             )}
@@ -628,29 +796,44 @@ export default function CategoryManagement() {
 
                         <td className="px-6 py-4 text-center">
                           <div className="flex items-center justify-center gap-2">
-                            <button
-                              onClick={() => openEditEqModal(item)}
-                              className="rounded-xl border border-slate-200 p-2 text-slate-600 transition hover:border-blue-500 hover:text-blue-600 dark:border-slate-700 dark:text-slate-300"
-                              title="Edit"
-                            >
-                              <Pencil size={16} />
-                            </button>
+                            {!readOnly && (
+                              <>
+                                <button
+                                  onClick={() => openEditEqModal(item)}
+                                  className="rounded-xl border border-slate-200 p-2 text-slate-600 transition hover:border-blue-500 hover:text-blue-600 dark:border-slate-700 dark:text-slate-300"
+                                  title="Edit"
+                                >
+                                  <Pencil size={16} />
+                                </button>
 
-                            <button
-                              onClick={() => toggleEqStatus(item)}
-                              className="rounded-xl border border-slate-200 p-2 text-slate-600 transition hover:border-emerald-500 hover:text-emerald-600 dark:border-slate-700 dark:text-slate-300"
-                              title="Toggle Status"
-                            >
-                              <ShieldCheck size={16} />
-                            </button>
+                                <button
+                                  onClick={() => toggleEqStatus(item)}
+                                  className="rounded-xl border border-slate-200 p-2 text-slate-600 transition hover:border-emerald-500 hover:text-emerald-600 dark:border-slate-700 dark:text-slate-300"
+                                  title="Toggle Status"
+                                >
+                                  <ShieldCheck size={16} />
+                                </button>
 
-                            <button
-                              onClick={() => setDeleteTarget({ id: item.id, name: item.name, type: "equipment" })}
-                              className="rounded-xl border border-red-200 p-2 text-red-500 transition hover:bg-red-50 dark:border-red-900/40 dark:hover:bg-red-950/30"
-                              title="Delete"
-                            >
-                              <Trash2 size={16} />
-                            </button>
+                                <button
+                                  onClick={() =>
+                                    setDeleteTarget({
+                                      id: item.id,
+                                      name: item.name,
+                                      type: "equipment",
+                                    })
+                                  }
+                                  className="rounded-xl border border-red-200 p-2 text-red-500 transition hover:bg-red-50 dark:border-red-900/40 dark:hover:bg-red-950/30"
+                                  title="Delete"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </>
+                            )}
+                            {readOnly && (
+                              <span className="text-xs font-semibold text-slate-400">
+                                View Only
+                              </span>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -682,7 +865,9 @@ export default function CategoryManagement() {
             <div className="w-full max-w-xl rounded-3xl bg-white p-6 shadow-2xl dark:bg-[#0b1728]">
               <div className="flex items-center justify-between border-b border-slate-200 pb-4 dark:border-slate-800">
                 <h3 className="text-xl font-extrabold text-slate-900 dark:text-white">
-                  {editingEqItem ? "Edit Equipment Type" : "Create Equipment Type"}
+                  {editingEqItem
+                    ? "Edit Equipment Type"
+                    : "Create Equipment Type"}
                 </h3>
                 <button
                   onClick={() => setIsEqModalOpen(false)}
@@ -692,13 +877,18 @@ export default function CategoryManagement() {
                 </button>
               </div>
 
-              <form onSubmit={handleSaveEquipmentType} className="mt-5 space-y-4">
+              <form
+                onSubmit={handleSaveEquipmentType}
+                className="mt-5 space-y-4"
+              >
                 <div>
                   <div className="flex items-center justify-between">
                     <label className="block text-xs font-bold uppercase text-slate-500">
                       Equipment Type Name *
                     </label>
-                    <span className={`text-[11px] font-bold ${eqForm.name.length > NAME_MAX_LENGTH ? "text-red-500" : "text-slate-400"}`}>
+                    <span
+                      className={`text-[11px] font-bold ${eqForm.name.length > NAME_MAX_LENGTH ? "text-red-500" : "text-slate-400"}`}
+                    >
                       {eqForm.name.length} / {NAME_MAX_LENGTH}
                     </span>
                   </div>
@@ -726,7 +916,9 @@ export default function CategoryManagement() {
                     <label className="block text-xs font-bold uppercase text-slate-500">
                       Description
                     </label>
-                    <span className={`text-[11px] font-bold ${eqForm.description.length > DESC_MAX_LENGTH ? "text-red-500" : "text-slate-400"}`}>
+                    <span
+                      className={`text-[11px] font-bold ${eqForm.description.length > DESC_MAX_LENGTH ? "text-red-500" : "text-slate-400"}`}
+                    >
                       {eqForm.description.length} / {DESC_MAX_LENGTH}
                     </span>
                   </div>
@@ -752,7 +944,8 @@ export default function CategoryManagement() {
                 <div>
                   <div className="flex items-center justify-between">
                     <label className="block text-xs font-bold uppercase text-slate-500">
-                      Select Icon Symbol ({EQUIPMENT_ICON_CATALOG.length} Machine Icons)
+                      Select Icon Symbol ({EQUIPMENT_ICON_CATALOG.length}{" "}
+                      Machine Icons)
                     </label>
                     <span className="text-xs font-extrabold text-blue-600 dark:text-blue-400">
                       Selected: {eqForm.icon}
@@ -775,13 +968,17 @@ export default function CategoryManagement() {
                   <div className="mt-2.5 max-h-48 overflow-y-auto rounded-2xl border border-slate-200 bg-slate-50 p-2.5 dark:border-slate-800 dark:bg-[#101f33]">
                     <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                       {filteredIcons.map((item) => {
-                        const IconComponent = getEquipmentIconComponent(item.key);
+                        const IconComponent = getEquipmentIconComponent(
+                          item.key,
+                        );
                         const isSelected = eqForm.icon === item.key;
                         return (
                           <button
                             type="button"
                             key={item.key}
-                            onClick={() => setEqForm({ ...eqForm, icon: item.key })}
+                            onClick={() =>
+                              setEqForm({ ...eqForm, icon: item.key })
+                            }
                             className={`flex items-center gap-2.5 rounded-xl border p-2.5 text-left transition-all ${
                               isSelected
                                 ? "border-blue-500 bg-blue-50 text-blue-700 shadow-sm dark:border-blue-500 dark:bg-blue-950/60 dark:text-blue-300"
@@ -798,12 +995,19 @@ export default function CategoryManagement() {
                               <IconComponent size={16} />
                             </div>
                             <div className="min-w-0 flex-1">
-                              <p className="truncate text-xs font-bold">{item.key}</p>
+                              <p className="truncate text-xs font-bold">
+                                {item.key}
+                              </p>
                               <p className="truncate text-[10px] text-slate-500 dark:text-slate-400">
                                 {item.label}
                               </p>
                             </div>
-                            {isSelected && <Check size={14} className="text-blue-600 dark:text-blue-400" />}
+                            {isSelected && (
+                              <Check
+                                size={14}
+                                className="text-blue-600 dark:text-blue-400"
+                              />
+                            )}
                           </button>
                         );
                       })}
@@ -829,7 +1033,9 @@ export default function CategoryManagement() {
                     disabled={Object.keys(eqErrors).length > 0}
                     className="rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-bold text-white shadow-md transition hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {editingEqItem ? "Update Equipment Type" : "Save Equipment Type"}
+                    {editingEqItem
+                      ? "Update Equipment Type"
+                      : "Save Equipment Type"}
                   </button>
                 </div>
               </form>
@@ -849,12 +1055,18 @@ export default function CategoryManagement() {
                   <h3 className="text-lg font-black text-slate-900 dark:text-white">
                     Confirm Deletion
                   </h3>
-                  <p className="text-xs text-slate-500">Action cannot be undone</p>
+                  <p className="text-xs text-slate-500">
+                    Action cannot be undone
+                  </p>
                 </div>
               </div>
 
               <p className="mt-4 text-sm font-medium text-slate-700 dark:text-slate-300">
-                Are you sure you want to delete <span className="font-extrabold text-slate-900 dark:text-white">"{deleteTarget.name}"</span>?
+                Are you sure you want to delete{" "}
+                <span className="font-extrabold text-slate-900 dark:text-white">
+                  "{deleteTarget.name}"
+                </span>
+                ?
               </p>
 
               <div className="mt-6 flex items-center justify-end gap-3">
@@ -878,7 +1090,6 @@ export default function CategoryManagement() {
             </div>
           </div>
         )}
-
       </div>
     </div>
   );

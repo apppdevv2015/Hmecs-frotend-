@@ -21,7 +21,12 @@ import { componentService } from "../../services/companyadmin/componentService";
 import AppSelect from "../../components/ui/dropdown/AppSelect";
 import Pagination from "../../components/common/Pagination";
 
+
+import StorageService from "../../services/storage.service";
+import { isReadOnlyRole } from "../../components/common/permissions";
+
 import { componentSchema } from "../../validations/companyAdminValidation";
+
 
 type MachineStatus = "good" | "warning" | "critical";
 type ComponentStatus = "good" | "warning" | "critical";
@@ -130,6 +135,104 @@ const LOCKED_ON_EDIT_FIELDS: (keyof ComponentForm)[] = [
   "plannedLife",
   "replacementCost",
 ];
+
+
+const componentSchema = z
+  .object({
+    machineId: z.string().trim().min(1, "Machine is required"),
+
+    category: z.string().trim().optional(),
+
+    customCategory: z
+      .string()
+      .trim()
+      .max(50, "Custom category cannot exceed 50 characters"),
+
+    name: z
+      .string()
+      .trim()
+      .min(1, "Component name is required")
+      .max(100, "Component name cannot exceed 100 characters"),
+
+    description: z
+      .string()
+      .trim()
+      .max(500, "Description cannot exceed 500 characters"),
+
+    serialNumber: z
+      .string()
+      .trim()
+      .min(1, "Serial number is required")
+      .max(50, "Serial number cannot exceed 50 characters"),
+
+    supplier: z
+      .string()
+      .trim()
+      .min(1, "Supplier is required")
+      .max(100, "Supplier cannot exceed 100 characters"),
+
+    installHours: z
+      .string()
+      .trim()
+      .min(1, "Install hours is required")
+      .regex(/^\d+$/, "Install hours must contain only numbers"),
+
+    currentHours: z
+      .string()
+      .trim()
+      .min(1, "Current hours is required")
+      .regex(/^\d+$/, "Current hours must contain only numbers"),
+
+    plannedLife: z
+      .string()
+      .trim()
+      .min(1, "Planned life is required")
+      .regex(/^\d+$/, "Planned life must contain only numbers"),
+
+    replacementCost: z.string().optional(),
+
+    condition: z.string().trim().min(1, "Condition is required"),
+  })
+  .superRefine((data, ctx) => {
+    if (data.category === "Custom" && data.customCategory.trim().length < 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["customCategory"],
+        message: "Custom category is required",
+      });
+    }
+
+    const install = Number(data.installHours);
+    const current = Number(data.currentHours);
+    const planned = Number(data.plannedLife);
+    const replacement = Number(data.replacementCost);
+    const condition = Number(data.condition);
+
+    if (current < install) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["currentHours"],
+        message: "Current hours cannot be less than install hours",
+      });
+    }
+
+    if (planned <= install) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["plannedLife"],
+        message: "Planned life must be greater than install hours",
+      });
+    }
+
+    if (condition < 1 || condition > 5) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["condition"],
+        message: "Condition must be between 1 and 5",
+      });
+    }
+  });
+
 
 const defaultCategories: Category[] = [
   { id: "1", name: "Engine" },
@@ -262,14 +365,19 @@ const normalizeComponent = (item: any): MachineComponent => {
     ),
     name: deriveComponentName(item),
     description: String(item?.description || ""),
-    serialNumber: String(item?.serialNumber || item?.serial_number || "").replace(/^DEMO-/i, ""),
+    serialNumber: String(
+      item?.serialNumber || item?.serial_number || "",
+    ).replace(/^DEMO-/i, ""),
     supplier: String(item?.supplier || ""),
     installHours: Number(item?.installHours ?? item?.install_hours ?? 0),
     currentHours: currentHrs,
     plannedLife: planned,
-    replacementCost: Number(item?.replacementCost ?? item?.replacement_cost ?? 0),
+    replacementCost: Number(
+      item?.replacementCost ?? item?.replacement_cost ?? 0,
+    ),
     condition: Number(item?.condition ?? 3),
-    parentComponentId: item?.parentComponentId || item?.parent_component_id || "",
+    parentComponentId:
+      item?.parentComponentId || item?.parent_component_id || "",
     parentComponent: item?.parentComponent,
     subComponents: item?.subComponents || [],
     imageUrl: item?.imageUrl || item?.image || item?.photo || "",
@@ -294,10 +402,7 @@ const getLifeUsedPercent = (component: MachineComponent) => {
   const planned = component.plannedLife || 18000;
   if (!planned || !component.currentHours) return 0;
 
-  return Math.min(
-    100,
-    Math.round((component.currentHours / planned) * 100),
-  );
+  return Math.min(100, Math.round((component.currentHours / planned) * 100));
 };
 
 const formatDateTime = (dateStr?: string) => {
@@ -376,6 +481,7 @@ const getConditionLabel = (condition: any) => {
 
 const ComponentManagement: React.FC = () => {
   const [machines, setMachines] = useState<Machine[]>([]);
+  const readOnly = isReadOnlyRole(StorageService.getRole());
   const [components, setComponents] = useState<MachineComponent[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
 
@@ -522,16 +628,23 @@ const ComponentManagement: React.FC = () => {
   const selectedMachineComponents = useMemo(() => {
     if (!selectedMachine) return components;
 
-    const machIds = new Set([selectedMachine.machineId, selectedMachine.id].filter(Boolean));
+    const machIds = new Set(
+      [selectedMachine.machineId, selectedMachine.id].filter(Boolean),
+    );
     return components.filter(
       (component) =>
         machIds.has(component.machineId) ||
         (component.machineId &&
           selectedMachine.name &&
+
+          component.machineId.toLowerCase() ===
+            selectedMachine.name.toLowerCase()),
+
           component.machineId.toLowerCase() === selectedMachine.name.toLowerCase()) ||
         (component.machineId &&
           selectedMachine.serialNumber &&
           component.machineId.toLowerCase() === selectedMachine.serialNumber.toLowerCase()),
+
     );
   }, [components, selectedMachine]);
 
@@ -892,7 +1005,9 @@ const ComponentManagement: React.FC = () => {
     }
 
     const finalCategory =
-      form.category === "Custom" ? form.customCategory.trim() : (form.category.trim() || "General");
+      form.category === "Custom"
+        ? form.customCategory.trim()
+        : form.category.trim() || "General";
 
     const payload = {
       name: form.name.trim(),
@@ -962,7 +1077,8 @@ const ComponentManagement: React.FC = () => {
 
         if (
           targetMachine &&
-          (targetMachine.id || targetMachine.machineId) !== (selectedMachine.id || selectedMachine.machineId)
+          (targetMachine.id || targetMachine.machineId) !==
+            (selectedMachine.id || selectedMachine.machineId)
         ) {
           await fetchComponents(targetMachine.id || targetMachine.machineId);
         }
@@ -1068,17 +1184,21 @@ const ComponentManagement: React.FC = () => {
               </div>
 
               {/* Action Button */}
-              <button
-                onClick={openAddModal}
-                className="inline-flex h-11 w-full shrink-0 items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/95 px-5 text-sm font-bold text-[#3730D9] shadow-lg shadow-black/10 transition-all duration-200 hover:-translate-y-0.5 hover:bg-white sm:w-fit"
-              >
-                <Plus size={18} strokeWidth={2.4} />
-                Add Component
-              </button>
+              {!readOnly && (
+                <button
+                  onClick={openAddModal}
+                  className="inline-flex h-11 w-full shrink-0 items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/95 px-5 text-sm font-bold text-[#3730D9] shadow-lg shadow-black/10 transition-all duration-200 hover:-translate-y-0.5 hover:bg-white sm:w-fit"
+                >
+                  <Plus size={18} strokeWidth={2.4} />
+                  Add Component
+                </button>
+              )}
             </div>
           </div>
 
-          <div className={`p-5 ${showHealthView ? "grid grid-cols-1 gap-4 sm:grid-cols-2" : ""}`}>
+          <div
+            className={`p-5 ${showHealthView ? "grid grid-cols-1 gap-4 sm:grid-cols-2" : ""}`}
+          >
             <MetricCard
               title="Total Components"
               value={`${selectedMachineComponents.length}`}
@@ -1165,6 +1285,59 @@ const ComponentManagement: React.FC = () => {
                 <Activity size={15} />
                 {showHealthView ? "Health View: ON" : "Health View: OFF"}
               </button>
+
+
+              <div className="relative h-11 w-52 shrink-0">
+                <Search
+                  className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+                  strokeWidth={2.4}
+                />
+                <input
+                  type="text"
+                  placeholder="Search..."
+                  value={componentSearchQuery}
+                  onChange={(e) => setComponentSearchQuery(e.target.value)}
+                  className="h-11 w-full rounded-xl border border-slate-300 bg-white pl-10 pr-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-700 dark:bg-[#101f33] dark:text-white dark:focus:border-blue-500"
+                />
+              </div>
+
+              <div className="w-52 shrink-0">
+                <AppSelect
+                  value={
+                    selectedMachine?.id || selectedMachine?.machineId || "all"
+                  }
+                  options={machineFilterOptions}
+                  onChange={(value) => {
+                    setSelectedComponentFilter("all");
+                    if (value === "all") {
+                      setSelectedMachine(null);
+                      fetchComponents();
+                    } else {
+                      const mach = machines.find(
+                        (m) => m.id === value || m.machineId === value,
+                      );
+
+                      if (mach) {
+                        setSelectedMachine(mach);
+                        fetchComponents(mach.id || mach.machineId);
+                      }
+                    }
+                  }}
+                  placeholder="Select Machine"
+                  triggerClassName="h-11 w-full rounded-xl border border-slate-300 bg-white px-3.5 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:bg-[#101f33] dark:text-white"
+                />
+              </div>
+
+              <div className="w-52 shrink-0">
+                <AppSelect
+                  value={selectedComponentFilter}
+                  options={componentDropdownOptions}
+                  onChange={setSelectedComponentFilter}
+                  placeholder="Select Component"
+                  triggerClassName="h-11 w-full rounded-xl border border-slate-300 bg-white px-3.5 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:bg-[#101f33] dark:text-white"
+                />
+              </div>
+
             </div>
           </div>
 
@@ -1205,10 +1378,20 @@ const ComponentManagement: React.FC = () => {
                     : "N/A";
 
                   const lifeUsed = getLifeUsedPercent(component);
-                  const effectivePlanned = component.plannedLife || (component.currentHours > 0 ? 18000 : 0);
-                  const remainingHours = component.currentHours > 0 && effectivePlanned > 0
-                    ? Math.max(0, effectivePlanned - Math.max(0, component.currentHours - component.installHours))
-                    : 0;
+                  const effectivePlanned =
+                    component.plannedLife ||
+                    (component.currentHours > 0 ? 18000 : 0);
+                  const remainingHours =
+                    component.currentHours > 0 && effectivePlanned > 0
+                      ? Math.max(
+                          0,
+                          effectivePlanned -
+                            Math.max(
+                              0,
+                              component.currentHours - component.installHours,
+                            ),
+                        )
+                      : 0;
                   const conditionInfo = getConditionLabel(component.condition);
                   const cIdKey = String(component.id || "").toLowerCase().trim();
                   const cSnKey = String(component.serialNumber || "").replace(/^DEMO-/i, "").toLowerCase().trim();
@@ -1315,21 +1498,26 @@ const ComponentManagement: React.FC = () => {
                           <Eye size={14} strokeWidth={2.4} />
                           View
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => openEditModal(component)}
-                          className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg border border-orange-200 bg-white text-xs font-bold text-orange-700 transition hover:bg-orange-50 dark:border-orange-500/30 dark:bg-orange-500/10 dark:text-orange-300 dark:hover:bg-orange-500/20"
-                        >
-                          <Edit size={14} strokeWidth={2.4} />
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setDeleteTarget(component)}
-                          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-red-200 bg-white text-red-700 transition hover:bg-red-50 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300 dark:hover:bg-red-500/20"
-                        >
-                          <Trash2 size={14} strokeWidth={2.4} />
-                        </button>
+
+                        {!readOnly && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => openEditModal(component)}
+                              className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg border border-orange-200 bg-white text-xs font-bold text-orange-700 transition hover:bg-orange-50 dark:border-orange-500/30 dark:bg-orange-500/10 dark:text-orange-300 dark:hover:bg-orange-500/20"
+                            >
+                              <Edit size={14} strokeWidth={2.4} />
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDeleteTarget(component)}
+                              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-red-200 bg-white text-red-700 transition hover:bg-red-50 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300 dark:hover:bg-red-500/20"
+                            >
+                              <Trash2 size={14} strokeWidth={2.4} />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
                   );
@@ -1341,7 +1529,15 @@ const ComponentManagement: React.FC = () => {
                 <table className="w-full min-w-[1000px] border-collapse text-left">
                   <thead>
                     <tr className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-[0.14em] text-slate-500 dark:border-slate-800 dark:bg-slate-950/60">
-                      <th className="px-4 py-4 text-center font-bold w-14">S.No.</th>
+
+                      <th className="px-4 py-4 text-center font-bold w-14">
+                        S.No.
+                      </th>
+                      <th className="px-6 py-4 font-bold">Machine / Type</th>
+                      <th className="px-6 py-4 font-bold">
+                        Component Name / Serial
+
+                     <th className="px-4 py-4 text-center font-bold w-14">S.No.</th>
                       <th
                         className="px-6 py-4 font-bold cursor-pointer select-none transition hover:text-blue-600 dark:hover:text-blue-400"
                         onClick={() => handleSort("machine")}
@@ -1366,6 +1562,7 @@ const ComponentManagement: React.FC = () => {
                         onClick={() => handleSort("updatedAt")}
                       >
                         Date & Time {sortField === "updatedAt" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
+
                       </th>
                       <th className="px-6 py-4 text-center font-bold">
                         Actions
@@ -1424,7 +1621,9 @@ const ComponentManagement: React.FC = () => {
                             <div className="flex flex-col max-w-[220px]">
                               <span
                                 className="truncate text-sm font-extrabold tracking-tight text-slate-950 dark:text-white"
-                                title={component.name || component.description || "-"}
+                                title={
+                                  component.name || component.description || "-"
+                                }
                               >
                                 {component.name || "-"}
                               </span>
@@ -1509,23 +1708,27 @@ const ComponentManagement: React.FC = () => {
                                 <Eye size={15} strokeWidth={2.4} />
                               </button>
 
-                              <button
-                                type="button"
-                                onClick={() => openEditModal(component)}
-                                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-orange-200 bg-white text-orange-700 transition hover:bg-orange-50 dark:border-orange-500/30 dark:bg-orange-500/10 dark:text-orange-300 dark:hover:bg-orange-500/20"
-                                title="Edit Component"
-                              >
-                                <Edit size={15} strokeWidth={2.4} />
-                              </button>
+                              {!readOnly && (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => openEditModal(component)}
+                                    className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-orange-200 bg-white text-orange-700 transition hover:bg-orange-50 dark:border-orange-500/30 dark:bg-orange-500/10 dark:text-orange-300 dark:hover:bg-orange-500/20"
+                                    title="Edit Component"
+                                  >
+                                    <Edit size={15} strokeWidth={2.4} />
+                                  </button>
 
-                              <button
-                                type="button"
-                                onClick={() => setDeleteTarget(component)}
-                                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-red-200 bg-white text-red-700 transition hover:bg-red-50 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300 dark:hover:bg-red-500/20"
-                                title="Delete Component"
-                              >
-                                <Trash2 size={15} strokeWidth={2.4} />
-                              </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setDeleteTarget(component)}
+                                    className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-red-200 bg-white text-red-700 transition hover:bg-red-50 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300 dark:hover:bg-red-500/20"
+                                    title="Delete Component"
+                                  >
+                                    <Trash2 size={15} strokeWidth={2.4} />
+                                  </button>
+                                </>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -1545,7 +1748,9 @@ const ComponentManagement: React.FC = () => {
                 itemLabel="components"
                 pageSizeOptions={[5, 10, 25, 50]}
                 onPrev={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                onNext={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                onNext={() =>
+                  setCurrentPage((p) => Math.min(totalPages, p + 1))
+                }
                 onPageChange={setCurrentPage}
                 onItemsPerPageChange={(val) => {
                   setItemsPerPage(val);
@@ -1717,8 +1922,15 @@ function ComponentDetailsModal({
             {component.companyName && (
               <DetailItem label="Company Name" value={component.companyName} />
             )}
+
+            <DetailItem
+              label="Component Name"
+              value={component.name || component.description || "-"}
+            />
+
             <DetailItem label="Component Name" value={component.name || component.description || "-"} />
             <DetailItem label="Category" value={component.category || "General"} />
+
             <DetailItem
               label="Full Description / Spec Notes"
               value={component.description || "-"}
@@ -1997,8 +2209,6 @@ function ComponentFormModal({
               error={formErrors.plannedLife}
             />
 
-
-
             <FormSelect
               label="Condition"
               value={form.condition}
@@ -2033,7 +2243,9 @@ function ComponentFormModal({
                       <Plus size={16} />
                       <span>Upload Custom Component Photo</span>
                     </div>
-                    <span className="mt-0.5 text-[11px] text-slate-400">Select PNG, JPG, or WebP photo</span>
+                    <span className="mt-0.5 text-[11px] text-slate-400">
+                      Select PNG, JPG, or WebP photo
+                    </span>
                     <input
                       type="file"
                       accept="image/*"

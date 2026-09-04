@@ -1059,7 +1059,7 @@ export default function StaffManagement() {
                         </span>
                       </td>
 
-                      <td className="px-6 py-4 text-center">
+                                            <td className="px-6 py-4 text-center">
                         <div className="flex items-center justify-center gap-2">
                           <ActionButton
                             title="View Staff Details"
@@ -1069,23 +1069,28 @@ export default function StaffManagement() {
                             <Eye size={15} strokeWidth={2.4} />
                           </ActionButton>
 
-                          <ActionButton
-                            title="Edit Staff"
-                            onClick={() => openEditModal(staff)}
-                            tone="edit"
-                          >
-                            <Pencil size={15} strokeWidth={2.4} />
-                          </ActionButton>
+                          {!readOnly && (
+                            <>
+                              <ActionButton
+                                title="Edit Staff"
+                                onClick={() => openEditModal(staff)}
+                                tone="edit"
+                              >
+                                <Pencil size={15} strokeWidth={2.4} />
+                              </ActionButton>
 
-                          <ActionButton
-                            title="Delete Staff"
-                            onClick={() => setDeleteStaff(staff)}
-                            tone="delete"
-                          >
-                            <Trash2 size={15} strokeWidth={2.4} />
-                          </ActionButton>
+                              <ActionButton
+                                title="Delete Staff"
+                                onClick={() => setDeleteStaff(staff)}
+                                tone="delete"
+                              >
+                                <Trash2 size={15} strokeWidth={2.4} />
+                              </ActionButton>
+                            </>
+                          )}
                         </div>
                       </td>
+
                     </tr>
                   ))
                 ) : (
@@ -1105,12 +1110,14 @@ export default function StaffManagement() {
                 <ErrorState message={error} />
               ) : paginatedStaff.length > 0 ? (
                 paginatedStaff.map((staff) => (
-                  <MobileStaffCard
+
+                                   <MobileStaffCard
                     key={staff.id}
                     staff={staff}
                     onView={() => openViewModal(staff)}
                     onEdit={() => openEditModal(staff)}
                     onDelete={() => setDeleteStaff(staff)}
+                    readOnly={readOnly}
                   />
                 ))
               ) : (
@@ -1406,11 +1413,13 @@ function MobileStaffCard({
   onView,
   onEdit,
   onDelete,
+  readOnly,
 }: {
   staff: Staff;
   onView: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  readOnly: boolean;
 }) {
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-[#101f33]">
@@ -1462,19 +1471,25 @@ function MobileStaffCard({
         </div>
       </div>
 
-      <div className="mt-4 flex justify-end gap-2 border-t border-slate-200 pt-4 dark:border-slate-800">
+            <div className="mt-4 flex justify-end gap-2 border-t border-slate-200 pt-4 dark:border-slate-800">
         <ActionButton title="View Staff Details" onClick={onView} tone="view">
           <Eye size={15} strokeWidth={2.4} />
         </ActionButton>
 
-        <ActionButton title="Edit Staff" onClick={onEdit} tone="edit">
-          <Pencil size={15} strokeWidth={2.4} />
-        </ActionButton>
+        {!readOnly && (
+          <>
+            <ActionButton title="Edit Staff" onClick={onEdit} tone="edit">
+              <Pencil size={15} strokeWidth={2.4} />
+            </ActionButton>
 
-        <ActionButton title="Delete Staff" onClick={onDelete} tone="delete">
-          <Trash2 size={15} strokeWidth={2.4} />
-        </ActionButton>
+            <ActionButton title="Delete Staff" onClick={onDelete} tone="delete">
+              <Trash2 size={15} strokeWidth={2.4} />
+            </ActionButton>
+          </>
+        )}
       </div>
+
+
     </div>
   );
 }

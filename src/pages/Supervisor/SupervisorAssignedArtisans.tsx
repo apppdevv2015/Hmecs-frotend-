@@ -354,6 +354,7 @@ export default function SupervisorAssignedArtisans() {
 
     const generatedTaskId = `TSK-${Math.floor(100000 + Math.random() * 900000)}`;
 
+
     const result = await dispatch(
       assignArtisanToMachine({
         machineId: modalMachineId,
@@ -370,6 +371,8 @@ export default function SupervisorAssignedArtisans() {
         startDate: modalStartDate,
         dueDate: modalDueDate,
       })
+    );
+
 
     const newEntry: ComponentArtisanAssignment = {
       id: `ASGN-${Date.now()}`,
@@ -848,9 +851,19 @@ export default function SupervisorAssignedArtisans() {
                     <td className="whitespace-nowrap px-6 py-4">
                       <span className="inline-flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700 dark:border-blue-800/60 dark:bg-blue-950/40 dark:text-blue-300">
                         <ShieldCheck size={14} />
+
+
+                        {item.supervisorName || "—"}
+
                         {item.supervisorName && item.supervisorName !== "Marcus Supervisor"
                           ? item.supervisorName
                           : (StorageService.getUser()?.name || StorageService.getUser()?.fullName || StorageService.get<string>(STORAGE_KEYS.USER_NAME) || "Supervisor")}
+
+
+                        {item.supervisorName && item.supervisorName !== "Marcus Supervisor"
+                          ? item.supervisorName
+                          : (StorageService.getUser()?.name || StorageService.getUser()?.fullName || StorageService.get<string>(STORAGE_KEYS.USER_NAME) || "Supervisor")}
+
                       </span>
                     </td>
 

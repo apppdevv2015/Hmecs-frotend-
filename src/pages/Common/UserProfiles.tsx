@@ -61,68 +61,25 @@ type ProfileFormData = {
   address: string;
 };
 
-const getToken = () => StorageService.get<string>(STORAGE_KEYS.TOKEN) || "";
 
-const decodeToken = () => {
-  try {
-    const token = getToken();
-    if (!token) return null;
-
-    const base64Url = token.split(".")[1];
-    if (!base64Url) return null;
-
-    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
-    return JSON.parse(window.atob(base64));
-  } catch {
-    return null;
-  }
-};
 
 const isUuid = (val: string) => {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
 };
 
 const getStoredUser = (): ProfileUser => {
-  try {
-    const storedUser = StorageService.get<ProfileUser>(STORAGE_KEYS.USER);
-    if (storedUser && Object.keys(storedUser).length > 0) {
-      return storedUser;
-    }
+  const storedUser = StorageService.get<ProfileUser>(STORAGE_KEYS.USER);
 
-    const decoded = decodeToken();
-    return {
-      id: decoded?.id || decoded?.user?.id || decoded?.data?.user?.id || "",
-      name:
-        decoded?.name ||
-        decoded?.user?.name ||
-        StorageService.get<string>(STORAGE_KEYS.NAME) ||
-        "",
-      email:
-        decoded?.email ||
-        decoded?.user?.email ||
-        StorageService.get<string>(STORAGE_KEYS.EMAIL) ||
-        "",
-      role:
-        decoded?.role ||
-        decoded?.role_name ||
-        decoded?.user?.role ||
-        StorageService.get<string>(STORAGE_KEYS.ROLE) ||
-        "",
-      companyId:
-        StorageService.get<string>(STORAGE_KEYS.COMPANY_ID) ||
-        decoded?.companyId ||
-        decoded?.company_id ||
-        "",
-      companyName:
-        decoded?.companyName ||
-        decoded?.company_name ||
-        "",
-    };
-  } catch (error) {
-    console.error("Stored user parse error:", error);
+  if (!storedUser || Object.keys(storedUser).length === 0) {
+    console.error("[Auth] User data missing from storage — invalid session");
+    StorageService.clear();
+    window.location.href = "/login";
     return {};
   }
+
+  return storedUser;
 };
+
 
 const formatRoleName = (role?: any) => {
   if (!role) return "Supervisor";
@@ -413,9 +370,12 @@ export default function UserProfile() {
     };
     reader.readAsDataURL(file);
   };
-
-  const handleUpdateProfile = async () => {
+const handleUpdateProfile = async () => {
     const userId = user.id;
+
+    if (!userId) {
+      return;
+    }
 
     try {
       setSaving(true);
@@ -430,14 +390,7 @@ export default function UserProfile() {
         address: formData.address.trim(),
       };
 
-      // Call backend update user API if user has ID
-      if (userId) {
-        try {
-          await userService.updateUser(userId, payload);
-        } catch (apiErr) {
-          console.warn("Backend updateUser fallback:", apiErr);
-        }
-      }
+      const response: any = await userService.updateUser(userId, payload);
 
       const updatedProfile: ProfileUser = {
         ...user,
@@ -460,10 +413,16 @@ export default function UserProfile() {
       StorageService.set(STORAGE_KEYS.USER, updatedProfile);
       StorageService.set(STORAGE_KEYS.NAME, updatedProfile.name);
 
-      showSuccessToast("Profile updated successfully");
+      // Backend jo message bheje wahi dikhao
+      showSuccessToast(response?.message || response?.data?.message);
     } catch (error: any) {
-      console.error("Profile update error:", error);
-      showErrorToast(error?.message || "Unable to update profile");
+      // Backend ka error message dikhao
+      const backendMessage =
+        error?.response?.data?.message ||
+        error?.data?.message ||
+        error?.message;
+
+      showErrorToast(backendMessage);
     } finally {
       setSaving(false);
     }
