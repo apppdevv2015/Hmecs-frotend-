@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { machineService } from "../../services/companyadmin/machineService";
-import { fleetService } from "../../services/Fleet/fleetService";
+// import { fleetService } from "../../services/Fleet/fleetService";
 
 import tyreImg from "../../assets/images/landingpageimages/FleetLogo/TyreLogo.png";
 import engineImg from "../../assets/images/landingpageimages/FleetLogo/Engine.png";
@@ -54,21 +54,23 @@ type SubMetric = {
   label: string;
   value: string;
 };
-
-type MachineComponent = {
-  status: ComponentStatus;
-  label: string;
-  life: string;
-  lifePercent: number;
-  overallHealthPercent: number | null;
-  subMetrics: SubMetric[];
+type InspectionParameter = {
+  name: string;
+  unit: string;
+  safeMax: number;
+  safeMin: number;
+  defaultVal: number;
+  description: string;
 };
 
-type MaintenanceRecord = {
-  date: string;
-  type: string;
-  technician: string;
-  notes: string;
+type MachineComponent = {
+  id: string;
+  name: string;
+  category: string;
+  healthScore: number;
+  condition: number;
+  serialNumber: string;
+  inspectionParameters: InspectionParameter[];
 };
 
 type FleetMachine = {
@@ -80,17 +82,9 @@ type FleetMachine = {
   operator: string;
   location: string;
   type: string;
-  health: string;
   healthPercent: number;
   status: FleetStatus;
-  lastSeen: string;
-  hoursRun: number;
-  fuelLevel: number;
-  tyre: MachineComponent;
-  engine: MachineComponent;
-  hydraulic: MachineComponent;
-  transmission: MachineComponent;
-  maintenanceHistory: MaintenanceRecord[];
+  components: MachineComponent[];
 };
 
 type Company = {
@@ -115,6 +109,7 @@ const COMPONENT_ICON_MAP: Record<string, any> = {
   TYRE: tyreImg,
   ENGINE: engineImg,
   HYDRAULIC: hydraulicImg,
+  HYDRAULICS: hydraulicImg,
   SUSPENSION: suspensionImg,
 };
 
@@ -357,371 +352,75 @@ function buildHeatmapOption(
 }
 
 /* ==========================================================
-   DEFAULT SEED FLEET DATA
-========================================================== */
-
-const INITIAL_FLEET_MACHINES: FleetMachine[] = [
-  {
-    id: "m-101",
-    machine: "HT-501",
-    company: "Mining Enterprise",
-    companyId: "CMP-01",
-    fleet: "IN-MT-501-SYS",
-    operator: "Assigned Operator, Kasani Mine",
-    location: "Kasani Mine",
-    type: "CAT 777D Dump Truck",
-    health: "85%",
-    healthPercent: 85,
-    status: "Healthy",
-    lastSeen: "2 mins ago",
-    hoursRun: 4250,
-    fuelLevel: 82,
-    tyre: {
-      status: "ok",
-      label: "TYRE",
-      life: "85% life left",
-      lifePercent: 85,
-      overallHealthPercent: 85,
-      subMetrics: [
-        { label: "Air Pressure", value: "32 PSI" },
-        { label: "Tyre Temperature", value: "65°C" },
-      ],
-    },
-    engine: {
-      status: "ok",
-      label: "ENGINE",
-      life: "88% life left",
-      lifePercent: 88,
-      overallHealthPercent: 88,
-      subMetrics: [
-        { label: "Engine Temperature", value: "80°C" },
-        { label: "Engine Oil Level", value: "100%" },
-        { label: "Coolant Level", value: "100%" },
-      ],
-    },
-    hydraulic: {
-      status: "ok",
-      label: "HYDRAULIC",
-      life: "75% life left",
-      lifePercent: 75,
-      overallHealthPercent: 75,
-      subMetrics: [
-        { label: "Oil Level", value: "100%" },
-        { label: "Hydraulic Pressure", value: "210 Bar" },
-        { label: "Oil Temperature", value: "55°C" },
-      ],
-    },
-    transmission: {
-      status: "ok",
-      label: "SUSPENSION",
-      life: "80% life left",
-      lifePercent: 80,
-      overallHealthPercent: 80,
-      subMetrics: [
-        { label: "Fluid Level", value: "80%" },
-        { label: "Gear Temperature", value: "72°C" },
-      ],
-    },
-    maintenanceHistory: [
-      { date: "2026-07-20", type: "Preventive Service", technician: "Rajesh K.", notes: "Replaced oil filter & inspected hydraulics." },
-    ],
-  },
-  {
-    id: "m-102",
-    machine: "EX-202",
-    company: "Mining Enterprise",
-    companyId: "CMP-01",
-    fleet: "IN-EX-202-SYS",
-    operator: "Assigned Operator, North Pit",
-    location: "North Pit",
-    type: "Komatsu PC1250",
-    health: "62%",
-    healthPercent: 62,
-    status: "Warning",
-    lastSeen: "Just now",
-    hoursRun: 5120,
-    fuelLevel: 68,
-    tyre: {
-      status: "ok",
-      label: "TYRE",
-      life: "78% life left",
-      lifePercent: 78,
-      overallHealthPercent: 78,
-      subMetrics: [{ label: "Air Pressure", value: "34 PSI" }, { label: "Tyre Temperature", value: "60°C" }],
-    },
-    engine: {
-      status: "warn",
-      label: "ENGINE",
-      life: "58% life left",
-      lifePercent: 58,
-      overallHealthPercent: 58,
-      subMetrics: [{ label: "Engine Temperature", value: "89°C" }, { label: "Engine Oil Level", value: "80%" }, { label: "Coolant Level", value: "85%" }],
-    },
-    hydraulic: {
-      status: "warn",
-      label: "HYDRAULIC",
-      life: "52% life left",
-      lifePercent: 52,
-      overallHealthPercent: 52,
-      subMetrics: [{ label: "Oil Level", value: "65%" }, { label: "Hydraulic Pressure", value: "195 Bar" }, { label: "Oil Temperature", value: "68°C" }],
-    },
-    transmission: {
-      status: "ok",
-      label: "SUSPENSION",
-      life: "72% life left",
-      lifePercent: 72,
-      overallHealthPercent: 72,
-      subMetrics: [{ label: "Fluid Level", value: "75%" }, { label: "Gear Temperature", value: "70°C" }],
-    },
-    maintenanceHistory: [],
-  },
-  {
-    id: "m-103",
-    machine: "DT-1023",
-    company: "Mining Enterprise",
-    companyId: "CMP-01",
-    fleet: "IN-DT-1023-SYS",
-    operator: "Assigned Operator, East Pit",
-    location: "East Pit",
-    type: "CAT 789D",
-    health: "55%",
-    healthPercent: 55,
-    status: "Warning",
-    lastSeen: "10 mins ago",
-    hoursRun: 6200,
-    fuelLevel: 45,
-    tyre: {
-      status: "warn",
-      label: "TYRE",
-      life: "60% life left",
-      lifePercent: 60,
-      overallHealthPercent: 60,
-      subMetrics: [{ label: "Air Pressure", value: "30 PSI" }, { label: "Tyre Temperature", value: "72°C" }],
-    },
-    engine: {
-      status: "crit",
-      label: "ENGINE",
-      life: "35% life left",
-      lifePercent: 35,
-      overallHealthPercent: 35,
-      subMetrics: [{ label: "Engine Temperature", value: "95°C" }, { label: "Engine Oil Level", value: "45%" }, { label: "Coolant Level", value: "50%" }],
-    },
-    hydraulic: {
-      status: "ok",
-      label: "HYDRAULIC",
-      life: "70% life left",
-      lifePercent: 70,
-      overallHealthPercent: 70,
-      subMetrics: [{ label: "Oil Level", value: "85%" }, { label: "Hydraulic Pressure", value: "205 Bar" }, { label: "Oil Temperature", value: "60°C" }],
-    },
-    transmission: {
-      status: "warn",
-      label: "SUSPENSION",
-      life: "55% life left",
-      lifePercent: 55,
-      overallHealthPercent: 55,
-      subMetrics: [{ label: "Fluid Level", value: "60%" }, { label: "Gear Temperature", value: "82°C" }],
-    },
-    maintenanceHistory: [],
-  },
-  {
-    id: "m-104",
-    machine: "WL-8212",
-    company: "Mining Enterprise",
-    companyId: "CMP-01",
-    fleet: "IN-WL-8212-SYS",
-    operator: "Assigned Operator, West Stockpile",
-    location: "West Stockpile",
-    type: "CAT 992K Wheel Loader",
-    health: "68%",
-    healthPercent: 68,
-    status: "Warning",
-    lastSeen: "15 mins ago",
-    hoursRun: 3800,
-    fuelLevel: 75,
-    tyre: {
-      status: "ok",
-      label: "TYRE",
-      life: "82% life left",
-      lifePercent: 82,
-      overallHealthPercent: 82,
-      subMetrics: [{ label: "Air Pressure", value: "35 PSI" }, { label: "Tyre Temperature", value: "58°C" }],
-    },
-    engine: {
-      status: "warn",
-      label: "ENGINE",
-      life: "58% life left",
-      lifePercent: 58,
-      overallHealthPercent: 58,
-      subMetrics: [{ label: "Engine Temperature", value: "88°C" }, { label: "Engine Oil Level", value: "78%" }, { label: "Coolant Level", value: "82%" }],
-    },
-    hydraulic: {
-      status: "ok",
-      label: "HYDRAULIC",
-      life: "74% life left",
-      lifePercent: 74,
-      overallHealthPercent: 74,
-      subMetrics: [{ label: "Oil Level", value: "90%" }, { label: "Hydraulic Pressure", value: "215 Bar" }, { label: "Oil Temperature", value: "58°C" }],
-    },
-    transmission: {
-      status: "ok",
-      label: "SUSPENSION",
-      life: "76% life left",
-      lifePercent: 76,
-      overallHealthPercent: 76,
-      subMetrics: [{ label: "Fluid Level", value: "80%" }, { label: "Gear Temperature", value: "74°C" }],
-    },
-    maintenanceHistory: [],
-  },
-  {
-    id: "m-105",
-    machine: "CAT-777-DEMO",
-    company: "Mining Enterprise",
-    companyId: "CMP-01",
-    fleet: "IN-CAT-777-SYS",
-    operator: "Assigned Operator, Kasani Mine",
-    location: "Kasani Mine",
-    type: "CAT 777F Haul Truck",
-    health: "32%",
-    healthPercent: 32,
-    status: "Critical",
-    lastSeen: "5 mins ago",
-    hoursRun: 8400,
-    fuelLevel: 30,
-    tyre: {
-      status: "crit",
-      label: "TYRE",
-      life: "25% life left",
-      lifePercent: 25,
-      overallHealthPercent: 25,
-      subMetrics: [{ label: "Air Pressure", value: "22 PSI" }, { label: "Tyre Temperature", value: "88°C" }],
-    },
-    engine: {
-      status: "crit",
-      label: "ENGINE",
-      life: "20% life left",
-      lifePercent: 20,
-      overallHealthPercent: 20,
-      subMetrics: [{ label: "Engine Temperature", value: "102°C" }, { label: "Engine Oil Level", value: "30%" }, { label: "Coolant Level", value: "40%" }],
-    },
-    hydraulic: {
-      status: "warn",
-      label: "HYDRAULIC",
-      life: "45% life left",
-      lifePercent: 45,
-      overallHealthPercent: 45,
-      subMetrics: [{ label: "Oil Level", value: "50%" }, { label: "Hydraulic Pressure", value: "175 Bar" }, { label: "Oil Temperature", value: "78°C" }],
-    },
-    transmission: {
-      status: "crit",
-      label: "SUSPENSION",
-      life: "38% life left",
-      lifePercent: 38,
-      overallHealthPercent: 38,
-      subMetrics: [{ label: "Fluid Level", value: "40%" }, { label: "Gear Temperature", value: "92°C" }],
-    },
-    maintenanceHistory: [],
-  },
-  {
-    id: "m-106",
-    machine: "D10-101",
-    company: "Mining Enterprise",
-    companyId: "CMP-01",
-    fleet: "IN-DT-101-SYS",
-    operator: "Assigned Operator, North Pit",
-    location: "North Pit",
-    type: "CAT D10T Dozer",
-    health: "64%",
-    healthPercent: 64,
-    status: "Warning",
-    lastSeen: "3 mins ago",
-    hoursRun: 4900,
-    fuelLevel: 62,
-    tyre: {
-      status: "ok",
-      label: "TYRE",
-      life: "72% life left",
-      lifePercent: 72,
-      overallHealthPercent: 72,
-      subMetrics: [{ label: "Air Pressure", value: "32 PSI" }, { label: "Tyre Temperature", value: "62°C" }],
-    },
-    engine: {
-      status: "warn",
-      label: "ENGINE",
-      life: "55% life left",
-      lifePercent: 55,
-      overallHealthPercent: 55,
-      subMetrics: [{ label: "Engine Temperature", value: "87°C" }, { label: "Engine Oil Level", value: "75%" }, { label: "Coolant Level", value: "80%" }],
-    },
-    hydraulic: {
-      status: "ok",
-      label: "HYDRAULIC",
-      life: "70% life left",
-      lifePercent: 70,
-      overallHealthPercent: 70,
-      subMetrics: [{ label: "Oil Level", value: "85%" }, { label: "Hydraulic Pressure", value: "210 Bar" }, { label: "Oil Temperature", value: "60°C" }],
-    },
-    transmission: {
-      status: "warn",
-      label: "SUSPENSION",
-      life: "58% life left",
-      lifePercent: 58,
-      overallHealthPercent: 58,
-      subMetrics: [{ label: "Fluid Level", value: "65%" }, { label: "Gear Temperature", value: "76°C" }],
-    },
-    maintenanceHistory: [],
-  },
-];
-
-/* ==========================================================
    MAIN ARTISANS FLEET COMPONENT MONITORING DASHBOARD
 ========================================================== */
 
 export default function ArtisansFleetHeat() {
-  const [fleetTable, setFleetTable] = useState<FleetMachine[]>(INITIAL_FLEET_MACHINES);
+  const [fleetTable, setFleetTable] = useState<FleetMachine[]>([]);
   const [loading, setLoading] = useState(false);
 
   // Filters
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"All" | "Healthy" | "Warning" | "Critical">("All");
+  const [statusFilter, setStatusFilter] = useState<
+    "All" | "Healthy" | "Warning" | "Critical"
+  >("All");
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [activeTab, setActiveTab] = useState<CategoryTab>("All Equipment");
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>("all");
-  const [companies, setCompanies] = useState<Company[]>([
-    { id: "CMP-01", companyName: "Tata Mining", companyCode: "TM001" },
-    { id: "CMP-02", companyName: "L&T Construction", companyCode: "LT001" },
-  ]);
+
+  const companies: Company[] = useMemo(() => {
+    const map = new Map<string, Company>();
+    fleetTable.forEach((m) => {
+      if (m.companyId && !map.has(m.companyId)) {
+        map.set(m.companyId, {
+          id: m.companyId,
+          companyName: m.company,
+          companyCode: "",
+        });
+      }
+    });
+    return Array.from(map.values());
+  }, [fleetTable]);
 
   // Modal State
-  const [selectedMachine, setSelectedMachine] = useState<FleetMachine | null>(null);
+  const [selectedMachine, setSelectedMachine] = useState<FleetMachine | null>(
+    null,
+  );
   const [openModal, setOpenModal] = useState(false);
 
   // Selected Machine for Component Health Overview cards above the table
-  const [overviewMachine, setOverviewMachine] = useState<FleetMachine | null>(INITIAL_FLEET_MACHINES[0]);
+  const [overviewMachine, setOverviewMachine] = useState<FleetMachine | null>(null);
 
   const chartRef = useRef<any>(null);
-
-  const HEATMAP_COMPONENTS = ["Tyre", "Engine", "Hydraulic", "Suspension"] as const;
-
   const heatmapFleets = useMemo(
     () => fleetTable.map((m) => m.fleet),
-    [fleetTable]
+    [fleetTable],
   );
 
+  // Real component categories jo bhi backend se aayein, unhi ko x-axis banao
+  const heatmapComponentNames = useMemo(() => {
+    const names = new Set<string>();
+    fleetTable.forEach((m) =>
+      m.components.forEach((c) => names.add(c.category)),
+    );
+    return Array.from(names);
+  }, [fleetTable]);
+
   const heatmapData = useMemo(() => {
-    const COMPONENTS = ["tyre", "engine", "hydraulic", "transmission"] as const;
     const points: HeatmapDataPoint[] = [];
     fleetTable.forEach((m, fi) => {
-      COMPONENTS.forEach((comp, ci) => {
+      m.components.forEach((c) => {
+        const ci = heatmapComponentNames.indexOf(c.category);
+        if (ci === -1) return;
         points.push({
           fleetIndex: fi,
           componentIndex: ci,
-          healthScore: m[comp].lifePercent,
+          healthScore: c.healthScore,
         });
       });
     });
     return points;
-  }, [fleetTable]);
+  }, [fleetTable, heatmapComponentNames]);
 
   /* ── Dark-mode detection ── */
   const [isDark, setIsDark] = useState(false);
@@ -733,92 +432,67 @@ export default function ArtisansFleetHeat() {
     return () => mq.removeEventListener("change", handler);
   }, []);
 
-  /* ── Heatmap option ── */
   const heatMapOption = useMemo(
     () =>
       buildHeatmapOption(
-        [...HEATMAP_COMPONENTS],
+        heatmapComponentNames,
         heatmapFleets,
         heatmapData,
         isDark,
       ),
-    [heatmapData, heatmapFleets, isDark]
+    [heatmapData, heatmapFleets, heatmapComponentNames, isDark],
   );
 
-  /* ── Load Live Data from API ── */
   const fetchDashboard = useCallback(async () => {
     setLoading(true);
     try {
-      let rawMachines: any[] = [];
-      try {
-        const res: any = await machineService.getCompanyMachines();
-        rawMachines = Array.isArray(res) ? res : res?.data || res?.machines || [];
-      } catch (e) {
-        const fleetRes: any = await fleetService.getAllMachines();
-        rawMachines = Array.isArray(fleetRes) ? fleetRes : fleetRes?.data || fleetRes?.machines || [];
-      }
+      const res: any = await machineService.getAllAssignedMachines();
+      const rawMachines: any[] = Array.isArray(res) ? res : res?.data || [];
 
-      if (Array.isArray(rawMachines) && rawMachines.length > 0) {
-        const mappedMachines: FleetMachine[] = rawMachines.map((m: any, idx: number) => {
-          const fleetCode = m.serialNumber || m.fleetId || m.machine || `IN-FL-${101 + idx}-SYS`;
-          const healthScore = m.healthPercent ?? Math.floor(Math.random() * 40) + 55;
-          const statusVal = healthScore >= 75 ? "Healthy" : healthScore >= 50 ? "Warning" : "Critical";
+      const mappedMachines: FleetMachine[] = rawMachines.map((m: any) => {
+        const healthScore = m.healthScore ?? 0;
+        const statusVal: FleetStatus =
+          m.status === "Critical"
+            ? "Critical"
+            : m.status === "Warning"
+              ? "Warning"
+              : "Healthy";
 
-          return {
-            id: m.id || m.machineId || `m-${idx}`,
-            machine: m.name || m.machineName || m.model || `Machine-${idx + 1}`,
-            company: m.companyName || m.company?.companyName || "Mining Enterprise",
-            companyId: m.companyId || "CMP-01",
-            fleet: fleetCode,
-            operator: m.operator || m.operatorName || "Assigned Operator",
-            location: m.location || m.site || "North Pit",
-            type: m.type || m.equipmentType || "Mining Haul Truck",
-            health: `${healthScore}%`,
-            healthPercent: healthScore,
-            status: statusVal,
-            lastSeen: "Just now",
-            hoursRun: m.hoursRun || 4200,
-            fuelLevel: m.fuelLevel || 80,
-            tyre: {
-              status: healthScore >= 75 ? "ok" : "warn",
-              label: "TYRE",
-              life: `${Math.min(100, healthScore + 5)}% life left`,
-              lifePercent: Math.min(100, healthScore + 5),
-              overallHealthPercent: Math.min(100, healthScore + 5),
-              subMetrics: [{ label: "Air Pressure", value: "32 PSI" }, { label: "Tyre Temperature", value: "65°C" }],
-            },
-            engine: {
-              status: healthScore >= 70 ? "ok" : "crit",
-              label: "ENGINE",
-              life: `${healthScore}% life left`,
-              lifePercent: healthScore,
-              overallHealthPercent: healthScore,
-              subMetrics: [{ label: "Engine Temperature", value: "80°C" }, { label: "Engine Oil Level", value: "100%" }, { label: "Coolant Level", value: "100%" }],
-            },
-            hydraulic: {
-              status: healthScore >= 60 ? "ok" : "warn",
-              label: "HYDRAULIC",
-              life: `${Math.max(20, healthScore - 10)}% life left`,
-              lifePercent: Math.max(20, healthScore - 10),
-              overallHealthPercent: Math.max(20, healthScore - 10),
-              subMetrics: [{ label: "Oil Level", value: "100%" }, { label: "Hydraulic Pressure", value: "210 Bar" }, { label: "Oil Temperature", value: "55°C" }],
-            },
-            transmission: {
-              status: healthScore >= 70 ? "ok" : "warn",
-              label: "SUSPENSION",
-              life: `${Math.min(100, healthScore + 2)}% life left`,
-              lifePercent: Math.min(100, healthScore + 2),
-              overallHealthPercent: Math.min(100, healthScore + 2),
-              subMetrics: [{ label: "Fluid Level", value: "80%" }, { label: "Gear Temperature", value: "72°C" }],
-            },
-            maintenanceHistory: [],
-          };
-        });
-        setFleetTable(mappedMachines);
-        if (mappedMachines.length > 0) setOverviewMachine(mappedMachines[0]);
-      }
+        const components: MachineComponent[] = Array.isArray(m.components)
+          ? m.components.map((c: any) => ({
+              id: c.id,
+              name: c.name || c.category || "Component",
+              category: c.category || c.componentType || "Other",
+              healthScore: c.healthScore ?? 0,
+              condition: c.condition ?? 0,
+              serialNumber: c.serialNumber || "",
+              inspectionParameters: Array.isArray(c.inspectionParameters)
+                ? c.inspectionParameters
+                : [],
+            }))
+          : [];
+
+        return {
+          id: m.machineId,
+          machine: m.machineName || m.model || "—",
+          company: m.companyName || "—",
+          companyId: m.companyId || "",
+          fleet: m.serialNumber || "—",
+          operator: m.assignedOperatorName || "Unassigned",
+          location: m.site || "—",
+          type: m.equipmentType || "—",
+          healthPercent: healthScore,
+          status: statusVal,
+          components,
+        };
+      });
+
+      setFleetTable(mappedMachines);
+      setOverviewMachine(mappedMachines.length > 0 ? mappedMachines[0] : null);
     } catch (err) {
-      console.log("Using seed dataset for Artisans Fleet Component Monitoring.", err);
+      console.error("Unable to load assigned fleet machines.", err);
+      setFleetTable([]);
+      setOverviewMachine(null);
     } finally {
       setLoading(false);
     }
@@ -848,10 +522,16 @@ export default function ArtisansFleetHeat() {
       let matchesTab = true;
       if (activeTab !== "All Equipment") {
         const typeLower = item.type.toLowerCase();
-        if (activeTab === "Excavators") matchesTab = typeLower.includes("excavator") || typeLower.includes("pc");
-        else if (activeTab === "Trucks") matchesTab = typeLower.includes("truck") || typeLower.includes("haul");
-        else if (activeTab === "Dozers") matchesTab = typeLower.includes("dozer") || typeLower.includes("d10");
-        else if (activeTab === "Graders") matchesTab = typeLower.includes("grader");
+        if (activeTab === "Excavators")
+          matchesTab =
+            typeLower.includes("excavator") || typeLower.includes("pc");
+        else if (activeTab === "Trucks")
+          matchesTab =
+            typeLower.includes("truck") || typeLower.includes("haul");
+        else if (activeTab === "Dozers")
+          matchesTab = typeLower.includes("dozer") || typeLower.includes("d10");
+        else if (activeTab === "Graders")
+          matchesTab = typeLower.includes("grader");
       }
 
       return matchesSearch && matchesStatus && matchesCompany && matchesTab;
@@ -879,17 +559,7 @@ export default function ArtisansFleetHeat() {
     doc.text(`Total Machines: ${machines.length}`, 14, 34);
 
     const headers = [
-      [
-        "Machine",
-        "Company",
-        "Fleet ID",
-        "Operator",
-        "Tyre",
-        "Engine",
-        "Hydraulic",
-        "Suspension",
-        "Health",
-      ],
+      ["Machine", "Company", "Fleet ID", "Operator", "Components", "Health"],
     ];
 
     const rows = machines.map((m) => [
@@ -897,11 +567,8 @@ export default function ArtisansFleetHeat() {
       m.company,
       m.fleet,
       m.operator,
-      `${m.tyre.lifePercent}%`,
-      `${m.engine.lifePercent}%`,
-      `${m.hydraulic.lifePercent}%`,
-      `${m.transmission.lifePercent}%`,
-      m.health,
+      m.components.map((c) => `${c.category}: ${c.healthScore}%`).join(", "),
+      `${m.healthPercent}%`,
     ]);
 
     autoTable(doc, {
@@ -942,11 +609,13 @@ export default function ArtisansFleetHeat() {
   };
 
   const renderComponentRing = (comp: MachineComponent) => {
-    let color = "text-green-500 border-green-500 bg-green-50 dark:bg-green-950/40";
-    if (comp.status === "warn") {
-      color = "text-orange-500 border-orange-500 bg-orange-50 dark:bg-orange-950/40";
-    } else if (comp.status === "crit") {
+    let color =
+      "text-green-500 border-green-500 bg-green-50 dark:bg-green-950/40";
+    if (comp.healthScore < 40) {
       color = "text-red-500 border-red-500 bg-red-50 dark:bg-red-950/40";
+    } else if (comp.healthScore < 70) {
+      color =
+        "text-orange-500 border-orange-500 bg-orange-50 dark:bg-orange-950/40";
     }
 
     return (
@@ -954,10 +623,10 @@ export default function ArtisansFleetHeat() {
         <div
           className={`flex h-9 w-9 items-center justify-center rounded-full border-2 text-[11px] font-black ${color}`}
         >
-          {comp.lifePercent}%
+          {comp.healthScore}%
         </div>
         <span className="mt-1 text-[9px] font-bold uppercase tracking-wider text-slate-400">
-          {comp.label}
+          {comp.category}
         </span>
       </div>
     );
@@ -983,9 +652,9 @@ export default function ArtisansFleetHeat() {
               </h1>
 
               <p className="mt-3 max-w-2xl text-sm leading-6 text-blue-100">
-                Monitor all company machines, health status, fleet performance and
-                operator activity across every organization from one centralized
-                dashboard.
+                Monitor all company machines, health status, fleet performance
+                and operator activity across every organization from one
+                centralized dashboard.
               </p>
             </div>
 
@@ -1035,28 +704,32 @@ export default function ArtisansFleetHeat() {
               title: "Total Machines",
               value: stats.totalMachines,
               icon: Truck,
-              color: "bg-blue-100 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400",
+              color:
+                "bg-blue-100 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400",
               trend: null,
             },
             {
               title: "Healthy Machines",
               value: stats.healthy,
               icon: ShieldCheck,
-              color: "bg-green-100 text-green-600 dark:bg-green-500/10 dark:text-green-400",
+              color:
+                "bg-green-100 text-green-600 dark:bg-green-500/10 dark:text-green-400",
               trend: "Fully operational",
             },
             {
               title: "Maintenance",
               value: stats.maintenance,
               icon: Wrench,
-              color: "bg-orange-100 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400",
+              color:
+                "bg-orange-100 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400",
               trend: "Needs attention",
             },
             {
               title: "Critical Alerts",
               value: stats.critical,
               icon: AlertTriangle,
-              color: "bg-red-100 text-red-600 dark:bg-red-500/10 dark:text-red-400",
+              color:
+                "bg-red-100 text-red-600 dark:bg-red-500/10 dark:text-red-400",
               trend: "Immediate action",
             },
           ].map((item) => {
@@ -1066,7 +739,9 @@ export default function ArtisansFleetHeat() {
                 key={item.title}
                 className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-xs transition hover:shadow-md dark:border-slate-800 dark:bg-slate-900"
               >
-                <div className={`flex h-14 w-14 items-center justify-center rounded-[20px] ${item.color}`}>
+                <div
+                  className={`flex h-14 w-14 items-center justify-center rounded-[20px] ${item.color}`}
+                >
                   <Icon size={24} />
                 </div>
                 <p className="mt-5 text-sm font-medium text-slate-500 dark:text-slate-400">
@@ -1170,7 +845,7 @@ export default function ArtisansFleetHeat() {
                         >
                           {option}
                         </button>
-                      )
+                      ),
                     )}
                   </div>
                 )}
@@ -1204,14 +879,27 @@ export default function ArtisansFleetHeat() {
                 Fleet Component Health Map
               </h3>
               <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                Fleet-wise component health monitoring — hover a cell for details.
+                Fleet-wise component health monitoring — hover a cell for
+                details.
               </p>
             </div>
             <div className="hidden items-center gap-3 lg:flex">
               {[
-                { label: "Healthy", bg: "bg-green-100 dark:bg-green-900/30", text: "text-green-700 dark:text-green-400" },
-                { label: "Warning", bg: "bg-orange-100 dark:bg-orange-900/30", text: "text-orange-700 dark:text-orange-400" },
-                { label: "Critical", bg: "bg-red-100 dark:bg-red-900/30", text: "text-red-700 dark:text-red-400" },
+                {
+                  label: "Healthy",
+                  bg: "bg-green-100 dark:bg-green-900/30",
+                  text: "text-green-700 dark:text-green-400",
+                },
+                {
+                  label: "Warning",
+                  bg: "bg-orange-100 dark:bg-orange-900/30",
+                  text: "text-orange-700 dark:text-orange-400",
+                },
+                {
+                  label: "Critical",
+                  bg: "bg-red-100 dark:bg-red-900/30",
+                  text: "text-red-700 dark:text-red-400",
+                },
               ].map(({ label, bg, text }) => (
                 <span
                   key={label}
@@ -1235,7 +923,9 @@ export default function ArtisansFleetHeat() {
             <div className="flex h-[340px] items-center justify-center">
               <div className="flex flex-col items-center gap-3 text-slate-400">
                 <BarChart2 size={32} />
-                <p className="text-sm">No data available for selected company.</p>
+                <p className="text-sm">
+                  No data available for selected company.
+                </p>
               </div>
             </div>
           ) : (
@@ -1278,85 +968,104 @@ export default function ArtisansFleetHeat() {
           </div>
 
           {overviewMachine ? (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {(["tyre", "engine", "hydraulic", "transmission"] as const).map(
-                (compKey) => {
-                  const comp = overviewMachine[compKey];
-                  const img = COMPONENT_ICON_MAP[comp.label] || tyreImg;
-                  const isOk = comp.status === "ok";
-                  const isWarn = comp.status === "warn";
-                  const isCrit = comp.status === "crit";
+            overviewMachine.components.length > 0 ? (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {overviewMachine.components.map((comp) => {
+                  const img =
+                    COMPONENT_ICON_MAP[comp.category.toUpperCase()] || tyreImg;
+                  const isWarn =
+                    comp.healthScore < 70 && comp.healthScore >= 40;
+                  const isCrit = comp.healthScore < 40;
 
-                  let badgeBg = "bg-green-100 text-green-700 dark:bg-green-950/60 dark:text-green-400";
+                  let badgeBg =
+                    "bg-green-100 text-green-700 dark:bg-green-950/60 dark:text-green-400";
                   let badgeLabel = "GOOD";
                   let barBg = "bg-green-500";
 
                   if (isWarn) {
-                    badgeBg = "bg-orange-100 text-orange-700 dark:bg-orange-950/60 dark:text-orange-400";
+                    badgeBg =
+                      "bg-orange-100 text-orange-700 dark:bg-orange-950/60 dark:text-orange-400";
                     badgeLabel = "WARN";
                     barBg = "bg-orange-500";
                   } else if (isCrit) {
-                    badgeBg = "bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-400";
+                    badgeBg =
+                      "bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-400";
                     badgeLabel = "CRITICAL";
                     barBg = "bg-red-500";
                   }
 
                   return (
                     <div
-                      key={compKey}
+                      key={comp.id}
                       className="flex flex-col justify-between rounded-2xl border border-slate-200/80 bg-slate-50/60 p-5 transition hover:bg-slate-50 hover:shadow-xs dark:border-slate-800 dark:bg-slate-950/60 dark:hover:bg-slate-950"
                     >
                       <div>
                         <div className="flex items-center justify-between">
-                          <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider ${badgeBg}`}>
+                          <span
+                            className={`rounded-full px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider ${badgeBg}`}
+                          >
                             {badgeLabel}
                           </span>
                         </div>
 
-                        {/* Component Image Illustration */}
                         <div className="my-4 flex h-24 items-center justify-center">
                           <img
                             src={img}
-                            alt={comp.label}
+                            alt={comp.category}
                             className="max-h-20 max-w-full object-contain transition-transform duration-300 hover:scale-105"
                           />
                         </div>
 
-                        <h4 className="text-base font-bold text-slate-900 dark:text-white capitalize">
-                          {compKey === "transmission" ? "Suspension" : compKey}
+                        <h4 className="text-base font-bold text-slate-900 dark:text-white">
+                          {comp.name}
                         </h4>
-                        <p className="text-[11px] font-semibold text-slate-400">Overall Health</p>
+                        <p className="text-[11px] font-semibold text-slate-400">
+                          {comp.category}
+                        </p>
 
                         <div className="mt-3 flex items-baseline justify-between">
-                          <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Health Score</span>
+                          <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                            Health Score
+                          </span>
                           <span className="text-2xl font-black text-slate-900 dark:text-white">
-                            {comp.lifePercent}%
+                            {comp.healthScore}%
                           </span>
                         </div>
 
-                        {/* Progress Bar */}
                         <div className="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
                           <div
                             className={`h-full rounded-full transition-all duration-500 ${barBg}`}
-                            style={{ width: `${comp.lifePercent}%` }}
+                            style={{ width: `${comp.healthScore}%` }}
                           />
                         </div>
                       </div>
 
-                      {/* Sub-Metrics Details */}
-                      <div className="mt-5 space-y-2 border-t border-slate-200/80 pt-4 dark:border-slate-800">
-                        {comp.subMetrics.map((m, idx) => (
-                          <div key={idx} className="flex items-center justify-between text-xs">
-                            <span className="font-medium text-slate-500 dark:text-slate-400">{m.label}</span>
-                            <span className="font-bold text-slate-900 dark:text-white">{m.value}</span>
-                          </div>
-                        ))}
-                      </div>
+                      {comp.inspectionParameters.length > 0 && (
+                        <div className="mt-5 space-y-2 border-t border-slate-200/80 pt-4 dark:border-slate-800">
+                          {comp.inspectionParameters.map((p, idx) => (
+                            <div
+                              key={idx}
+                              className="flex items-center justify-between text-xs"
+                            >
+                              <span className="font-medium text-slate-500 dark:text-slate-400">
+                                {p.name}
+                              </span>
+                              <span className="font-bold text-slate-900 dark:text-white">
+                                {p.defaultVal} {p.unit}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   );
-                }
-              )}
-            </div>
+                })}
+              </div>
+            ) : (
+              <div className="py-12 text-center text-sm font-semibold text-slate-400">
+                No components recorded for this machine.
+              </div>
+            )
           ) : (
             <div className="py-12 text-center text-sm font-semibold text-slate-400">
               No machine selected.
@@ -1370,7 +1079,8 @@ export default function ArtisansFleetHeat() {
             <div>
               <h3 className="text-lg font-black">Company Fleet</h3>
               <p className="text-xs text-blue-200">
-                All machines across registered companies. Click a row to load it above.
+                All machines across registered companies. Click a row to load it
+                above.
               </p>
             </div>
             <span className="rounded-full bg-blue-800 px-3 py-1 text-xs font-bold">
@@ -1386,10 +1096,9 @@ export default function ArtisansFleetHeat() {
                   <th className="px-6 py-4">Company</th>
                   <th className="px-6 py-4">Fleet ID</th>
                   <th className="px-6 py-4">Operator</th>
-                  <th className="px-4 py-4 text-center">Tyre</th>
-                  <th className="px-4 py-4 text-center">Engine</th>
-                  <th className="px-4 py-4 text-center">Hydraulic</th>
-                  <th className="px-4 py-4 text-center">Suspension</th>
+
+                  <th className="px-4 py-4 text-center">Components</th>
+
                   <th className="px-6 py-4 text-center">Health</th>
                   <th className="px-6 py-4 text-center">Actions</th>
                 </tr>
@@ -1453,25 +1162,28 @@ export default function ArtisansFleetHeat() {
                           </div>
                         </td>
 
-                        {/* Component Rings */}
-                        <td className="px-4 py-4 text-center align-middle">
-                          {renderComponentRing(row.tyre)}
-                        </td>
-                        <td className="px-4 py-4 text-center align-middle">
-                          {renderComponentRing(row.engine)}
-                        </td>
-                        <td className="px-4 py-4 text-center align-middle">
-                          {renderComponentRing(row.hydraulic)}
-                        </td>
-                        <td className="px-4 py-4 text-center align-middle">
-                          {renderComponentRing(row.transmission)}
+                        {/* Component Rings — dynamic, jitne bhi is machine ke components hain */}
+                        <td className="px-4 py-4 align-middle">
+                          <div className="flex items-center justify-center gap-3">
+                            {row.components.length > 0 ? (
+                              row.components.map((comp) => (
+                                <div key={comp.id}>
+                                  {renderComponentRing(comp)}
+                                </div>
+                              ))
+                            ) : (
+                              <span className="text-[11px] text-slate-400">
+                                No data
+                              </span>
+                            )}
+                          </div>
                         </td>
 
                         {/* Overall Health Badge */}
                         <td className="px-6 py-4 text-center align-middle">
                           <span
                             className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-extrabold uppercase tracking-wider ${getStatusBadge(
-                              row.status
+                              row.status,
                             )}`}
                           >
                             <span className="h-1.5 w-1.5 rounded-full bg-current" />
@@ -1499,7 +1211,10 @@ export default function ArtisansFleetHeat() {
                   })
                 ) : (
                   <tr>
-                    <td colSpan={10} className="py-12 text-center text-sm font-semibold text-slate-400">
+                    <td
+                      colSpan={7}
+                      className="py-12 text-center text-sm font-semibold text-slate-400"
+                    >
                       No machines found matching your criteria.
                     </td>
                   </tr>
@@ -1520,8 +1235,12 @@ export default function ArtisansFleetHeat() {
                     <Truck size={22} />
                   </div>
                   <div>
-                    <h3 className="text-lg font-bold">{selectedMachine.machine} ({selectedMachine.fleet})</h3>
-                    <p className="text-xs text-blue-200">{selectedMachine.type} • {selectedMachine.location}</p>
+                    <h3 className="text-lg font-bold">
+                      {selectedMachine.machine} ({selectedMachine.fleet})
+                    </h3>
+                    <p className="text-xs text-blue-200">
+                      {selectedMachine.type} • {selectedMachine.location}
+                    </p>
                   </div>
                 </div>
                 <button
@@ -1537,53 +1256,64 @@ export default function ArtisansFleetHeat() {
                 {/* General Info Grid */}
                 <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                   <div className="rounded-2xl bg-slate-50 p-4 dark:bg-slate-950">
-                    <span className="text-[10px] font-bold uppercase text-slate-400">Company</span>
-                    <p className="mt-1 text-sm font-bold text-slate-900 dark:text-white">{selectedMachine.company}</p>
+                    <span className="text-[10px] font-bold uppercase text-slate-400">
+                      Overall Health
+                    </span>
+                    <p className="mt-1 text-sm font-bold text-slate-900 dark:text-white">
+                      {selectedMachine.healthPercent}% ({selectedMachine.status}
+                      )
+                    </p>
                   </div>
                   <div className="rounded-2xl bg-slate-50 p-4 dark:bg-slate-950">
-                    <span className="text-[10px] font-bold uppercase text-slate-400">Operator</span>
-                    <p className="mt-1 text-sm font-bold text-slate-900 dark:text-white">{selectedMachine.operator}</p>
-                  </div>
-                  <div className="rounded-2xl bg-slate-50 p-4 dark:bg-slate-950">
-                    <span className="text-[10px] font-bold uppercase text-slate-400">Overall Health</span>
-                    <p className="mt-1 text-sm font-bold text-slate-900 dark:text-white">{selectedMachine.health} ({selectedMachine.status})</p>
-                  </div>
-                  <div className="rounded-2xl bg-slate-50 p-4 dark:bg-slate-950">
-                    <span className="text-[10px] font-bold uppercase text-slate-400">Engine Hours</span>
-                    <p className="mt-1 text-sm font-bold text-slate-900 dark:text-white">{selectedMachine.hoursRun} hrs</p>
+                    <span className="text-[10px] font-bold uppercase text-slate-400">
+                      Total Components
+                    </span>
+                    <p className="mt-1 text-sm font-bold text-slate-900 dark:text-white">
+                      {selectedMachine.components.length}
+                    </p>
                   </div>
                 </div>
 
-                {/* Component Breakdown */}
                 <div>
                   <h4 className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-400">
                     Component Health Breakdown
                   </h4>
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    {(["tyre", "engine", "hydraulic", "transmission"] as const).map((compKey) => {
-                      const comp = selectedMachine[compKey];
-                      return (
-                        <div key={compKey} className="rounded-2xl border border-slate-200/80 bg-slate-50/60 p-4 dark:border-slate-800 dark:bg-slate-950">
+                  {selectedMachine.components.length > 0 ? (
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      {selectedMachine.components.map((comp) => (
+                        <div
+                          key={comp.id}
+                          className="rounded-2xl border border-slate-200/80 bg-slate-50/60 p-4 dark:border-slate-800 dark:bg-slate-950"
+                        >
                           <div className="flex items-center justify-between">
-                            <span className="text-sm font-bold capitalize text-slate-900 dark:text-white">
-                              {compKey === "transmission" ? "Suspension" : compKey}
+                            <span className="text-sm font-bold text-slate-900 dark:text-white">
+                              {comp.name}
                             </span>
                             <span className="text-sm font-bold text-blue-600 dark:text-blue-400">
-                              {comp.lifePercent}%
+                              {comp.healthScore}%
                             </span>
                           </div>
                           <div className="mt-2 space-y-1">
-                            {comp.subMetrics.map((m, i) => (
-                              <div key={i} className="flex justify-between text-xs text-slate-500">
-                                <span>{m.label}:</span>
-                                <span className="font-semibold text-slate-800 dark:text-slate-200">{m.value}</span>
+                            {comp.inspectionParameters.map((p, i) => (
+                              <div
+                                key={i}
+                                className="flex justify-between text-xs text-slate-500"
+                              >
+                                <span>{p.name}:</span>
+                                <span className="font-semibold text-slate-800 dark:text-slate-200">
+                                  {p.defaultVal} {p.unit}
+                                </span>
                               </div>
                             ))}
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm font-semibold text-slate-400">
+                      No components recorded.
+                    </p>
+                  )}
                 </div>
               </div>
 

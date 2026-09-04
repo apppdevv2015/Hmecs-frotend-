@@ -50,7 +50,7 @@ export type UserRole =
   | "operator"
   | "supervisor"
   | "technical_support"
-  | "engineers"; 
+  | "engineers";
 
 export type NavLinkItem = {
   name: string;
@@ -176,13 +176,15 @@ const companyAdminNavGroups: NavGroup[] = [
   },
 ];
 
-const engineerNavGroups: NavGroup[] = companyAdminNavGroups.map((group) => ({
-  ...group,
-  items: group.items.map((item) => ({
-    ...item,
-    path: item.path?.replace(/^\/company-admin\//, "/engineers/"),
-  })),
-}));
+const engineerNavGroups: NavGroup[] = companyAdminNavGroups
+  .filter((group) => group.title !== "Commercial")
+  .map((group) => ({
+    ...group,
+    items: group.items.map((item) => ({
+      ...item,
+      path: item.path?.replace(/^\/company-admin\//, "/engineers/"),
+    })),
+  }));
 
 export const sidebarConfig: Record<
   UserRole,
@@ -289,7 +291,8 @@ export const sidebarConfig: Record<
             icon: <FileClock className={sidebarIconClass} />,
           },
         ],
-      }, {
+      },
+      {
         title: "Optional Service",
         items: [
           {
@@ -311,7 +314,6 @@ export const sidebarConfig: Record<
           },
         ],
       },
-      
     ],
 
     profile: {
@@ -838,39 +840,32 @@ export const sidebarConfig: Record<
     },
   },
 
-
-   // Engineer sidebar 
-
-  
-engineers: {
-  dashboardItem: {
-    icon: <LayoutDashboard className={engineersIconClass} />,
-    name: "Dashboard",
-    path: "/engineers/dashboard",
-  },
-
-  navGroups: [
-    ...engineerNavGroups,
-    {
-      title: "Account",
-      items: [
-        {
-          name: "Profile",
-          path: "/engineers/profile",
-          icon: <UserCog className={engineersIconClass} />,
-        },
-      ],
+    engineers: {
+    dashboardItem: {
+      icon: <LayoutDashboard className={engineersIconClass} />,
+      name: "Dashboard",
+      path: "/engineers/dashboard",
     },
-  ],
 
-  profile: {
-    shortName: "EN",
-    title: "Engineer",
-    subtitle: "engineer@hme.com",
-    email: "engineer@hme.com",
+    navGroups: [
+      ...engineerNavGroups,
+      {
+        title: "Account",
+        items: [
+          {
+            name: "Profile",
+            path: "/engineers/profile",
+            icon: <UserCog className={engineersIconClass} />,
+          },
+        ],
+      },
+    ],
+
+    profile: {
+      shortName: "EN",
+      title: "Engineer",
+      subtitle: "engineer@hme.com",
+      email: "engineer@hme.com",
+    },
   },
-},
-
 };
-
-

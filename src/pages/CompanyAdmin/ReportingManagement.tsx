@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
+import StorageService from "../../services/storage.service";
+import { isReadOnlyRole } from "../../components/common/permissions";
 
 // ════════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -817,11 +819,13 @@ function Spinner({ size = "sm" }: { size?: "sm" | "md" }) {
 function ReportModal({
   report,
   userRole,
+  readOnly = false,
   onClose,
   onAction,
 }: {
   report: Report;
   userRole: Role;
+  readOnly?: boolean;
   onClose: () => void;
   onAction: (
     id: string,
@@ -941,50 +945,35 @@ function ReportModal({
               ))}
             </div>
           </div>
-
           {/* Note input — show only when action is possible */}
-          {((roleCanReview(userRole) && report.status === "pending") ||
-            (roleCanApprove(userRole) && report.status === "reviewed")) && (
-            <div className="px-6 pt-4">
-              <p className="text-xs text-slate-400 font-medium uppercase tracking-wide mb-2">
-                Remark / Note{" "}
-                <span className="normal-case text-slate-300">(optional)</span>
-              </p>
-              <textarea
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                placeholder="Add a remark that will be saved in the activity log…"
-                rows={2}
-                disabled={submitting}
-                className="w-full px-3 py-2 text-sm border border-blue-100 rounded-xl bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none placeholder-slate-300 disabled:opacity-60"
-              />
-            </div>
-          )}
+          {!readOnly &&
+            ((roleCanReview(userRole) && report.status === "pending") ||
+              (roleCanApprove(userRole) && report.status === "reviewed")) && (
+              <div className="px-6 pt-4">
+                <p className="text-xs text-slate-400 font-medium uppercase tracking-wide mb-2">
+                  Remark / Note{" "}
+                  <span className="normal-case text-slate-300">(optional)</span>
+                </p>
+                <textarea
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  placeholder="Add a remark that will be saved in the activity log…"
+                  rows={2}
+                  disabled={submitting}
+                  className="w-full px-3 py-2 text-sm border border-blue-100 rounded-xl bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none placeholder-slate-300 disabled:opacity-60"
+                />
+              </div>
+            )}
 
           {/* Action footer */}
           <div className="flex items-center justify-end gap-3 px-6 py-5 mt-2 border-t border-blue-50">
-            {roleCanReview(userRole) && report.status === "pending" && (
-              <button
-                onClick={() => handleAction("reviewed")}
-                disabled={submitting}
-                className="px-4 py-2 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 text-sm font-semibold border border-blue-200 transition-colors disabled:opacity-60 flex items-center gap-2"
-              >
-                {submitting ? (
-                  <>
-                    <Spinner />
-                    Processing…
-                  </>
-                ) : (
-                  "Mark Reviewed"
-                )}
-              </button>
-            )}
-            {roleCanApprove(userRole) && report.status === "reviewed" && (
-              <>
+            {!readOnly &&
+              roleCanReview(userRole) &&
+              report.status === "pending" && (
                 <button
-                  onClick={() => handleAction("rejected")}
+                  onClick={() => handleAction("reviewed")}
                   disabled={submitting}
-                  className="px-4 py-2 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 text-sm font-semibold border border-red-200 transition-colors disabled:opacity-60 flex items-center gap-2"
+                  className="px-4 py-2 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 text-sm font-semibold border border-blue-200 transition-colors disabled:opacity-60 flex items-center gap-2"
                 >
                   {submitting ? (
                     <>
@@ -992,26 +981,45 @@ function ReportModal({
                       Processing…
                     </>
                   ) : (
-                    "Reject"
+                    "Mark Reviewed"
                   )}
                 </button>
-                <button
-                  onClick={() => handleAction("approved")}
-                  disabled={submitting}
-                  className="px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 text-sm font-semibold transition-colors shadow-sm disabled:opacity-60 flex items-center gap-2"
-                >
-                  {submitting ? (
-                    <>
-                      <Spinner />
-                      Processing…
-                    </>
-                  ) : (
-                    "Approve Report"
-                  )}
-                </button>
-              </>
-            )}
-            {!roleCanReview(userRole) && (
+              )}
+            {!readOnly &&
+              roleCanApprove(userRole) &&
+              report.status === "reviewed" && (
+                <>
+                  <button
+                    onClick={() => handleAction("rejected")}
+                    disabled={submitting}
+                    className="px-4 py-2 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 text-sm font-semibold border border-red-200 transition-colors disabled:opacity-60 flex items-center gap-2"
+                  >
+                    {submitting ? (
+                      <>
+                        <Spinner />
+                        Processing…
+                      </>
+                    ) : (
+                      "Reject"
+                    )}
+                  </button>
+                  <button
+                    onClick={() => handleAction("approved")}
+                    disabled={submitting}
+                    className="px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 text-sm font-semibold transition-colors shadow-sm disabled:opacity-60 flex items-center gap-2"
+                  >
+                    {submitting ? (
+                      <>
+                        <Spinner />
+                        Processing…
+                      </>
+                    ) : (
+                      "Approve Report"
+                    )}
+                  </button>
+                </>
+              )}
+            {(readOnly || !roleCanReview(userRole)) && (
               <p className="text-xs text-slate-400 italic">
                 Read-only access for your role
               </p>
@@ -1181,12 +1189,14 @@ function ReportsPage({
   reports,
   loading,
   activeRole,
+  readOnly = false,
   onAction,
   setActivePage,
 }: {
   reports: Report[];
   loading: boolean;
   activeRole: Role;
+  readOnly?: boolean;
   onAction: (
     id: string,
     status: Report["status"],
@@ -1238,54 +1248,46 @@ function ReportsPage({
     <div>
       {/* Page header */}
       <div className="relative mb-6 overflow-hidden rounded-[28px] border border-indigo-300/20 bg-gradient-to-r from-[#3B37E6] via-[#3730D9] to-[#2E2AD9] px-6 py-6 shadow-sm">
+        {/* Decorative Effects */}
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.12),transparent_35%)]" />
+        <div className="absolute -right-16 -top-16 h-56 w-56 rounded-full bg-white/10 blur-3xl" />
+        <div className="absolute bottom-0 left-0 h-40 w-40 rounded-full bg-cyan-400/10 blur-3xl" />
 
-  {/* Decorative Effects */}
-  <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.12),transparent_35%)]" />
-  <div className="absolute -right-16 -top-16 h-56 w-56 rounded-full bg-white/10 blur-3xl" />
-  <div className="absolute bottom-0 left-0 h-40 w-40 rounded-full bg-cyan-400/10 blur-3xl" />
+        <div className="relative">
+          {/* Breadcrumb */}
+          <div className="mb-3 flex items-center gap-2 text-xs text-blue-100">
+            <span>Dashboard</span>
+            <span>›</span>
+            <span className="font-semibold text-white">Reports</span>
+          </div>
 
-  <div className="relative">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h1 className="text-3xl font-black tracking-tight text-white">
+                Report Management
+              </h1>
 
-    {/* Breadcrumb */}
-    <div className="mb-3 flex items-center gap-2 text-xs text-blue-100">
-      <span>Dashboard</span>
-      <span>›</span>
-      <span className="font-semibold text-white">
-        Reports
-      </span>
-    </div>
+              <p className="mt-2 text-sm text-blue-100">
+                Review, verify and approve field reports · Role:{" "}
+                <span className="font-bold text-white">
+                  {ROLE_CFG[activeRole].label}
+                </span>
+              </p>
+            </div>
 
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <span className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-xs font-bold text-white backdrop-blur-sm">
+                <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-300" />
+                Live
+              </span>
 
-      <div>
-        <h1 className="text-3xl font-black tracking-tight text-white">
-          Report Management
-        </h1>
-
-        <p className="mt-2 text-sm text-blue-100">
-          Review, verify and approve field reports · Role:{" "}
-          <span className="font-bold text-white">
-            {ROLE_CFG[activeRole].label}
-          </span>
-        </p>
+              <span className="rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-xs font-medium text-blue-100 backdrop-blur-sm">
+                June 10, 2025
+              </span>
+            </div>
+          </div>
+        </div>
       </div>
-
-      <div className="flex items-center gap-3">
-
-        <span className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-xs font-bold text-white backdrop-blur-sm">
-          <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-300" />
-          Live
-        </span>
-
-        <span className="rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-xs font-medium text-blue-100 backdrop-blur-sm">
-          June 10, 2025
-        </span>
-
-      </div>
-    </div>
-
-  </div>
-</div>
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -1528,6 +1530,7 @@ function ReportsPage({
         <ReportModal
           report={selected}
           userRole={activeRole}
+          readOnly={readOnly}
           onClose={() => setSelected(null)}
           onAction={async (id, status, note) => {
             await onAction(id, status, note);
@@ -1909,6 +1912,7 @@ function HistoryPage({
 export default function ReportDashboard() {
   const [activePage, setActivePage] = useState<Page>("reports");
   const [activeRole, setActiveRole] = useState<Role>("supervisor");
+  const readOnly = isReadOnlyRole(StorageService.getRole());
   const [reports, setReports] = useState<Report[]>([]);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [loadingReports, setLoadingReports] = useState(true);
@@ -2028,15 +2032,16 @@ export default function ReportDashboard() {
             reports={reports}
             loading={loadingReports}
             activeRole={activeRole}
+            readOnly={readOnly}
             onAction={handleAction}
             setActivePage={setActivePage}
           />
         ) : (
           <HistoryPage
-  history={history}
-  reports={reports}
-  loading={loadingHistory}
-/>
+            history={history}
+            reports={reports}
+            loading={loadingHistory}
+          />
         )}
       </div>
 

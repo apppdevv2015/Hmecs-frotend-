@@ -30,6 +30,8 @@ import {
 import { machineService } from "../../services/companyadmin/machineService";
 import { componentService } from "../../services/companyadmin/componentService";
 import { showSuccessToast, showErrorToast } from "../../utils/toastUtils";
+import StorageService from "../../services/storage.service";
+import { isReadOnlyRole } from "../../components/common/permissions";
 
 type MachineItem = {
   id: string;
@@ -48,18 +50,25 @@ type DynamicCategory = {
 
 export default function InspectionDataEntry() {
   const [machines, setMachines] = useState<MachineItem[]>([]);
+  const readOnly = isReadOnlyRole(StorageService.getRole());
   const [selectedMachineId, setSelectedMachineId] = useState<string>("");
-  const [selectedMachine, setSelectedMachine] = useState<MachineItem | null>(null);
+  const [selectedMachine, setSelectedMachine] = useState<MachineItem | null>(
+    null,
+  );
 
   const [machineComponents, setMachineComponents] = useState<any[]>([]);
   const [totalFleetComponents, setTotalFleetComponents] = useState<number>(0);
   const [loadingComponents, setLoadingComponents] = useState(false);
-  const [componentHealthMap, setComponentHealthMap] = useState<Record<string, { healthScore: number; status: string }>>({});
+  const [componentHealthMap, setComponentHealthMap] = useState<
+    Record<string, { healthScore: number; status: string }>
+  >({});
 
   // Stored Component Health Records for selected machine
   const [inspectedRecords, setInspectedRecords] = useState<any[]>([]);
   const [loadingRecords, setLoadingRecords] = useState(false);
-  const [selectedParamsRecord, setSelectedParamsRecord] = useState<any | null>(null);
+  const [selectedParamsRecord, setSelectedParamsRecord] = useState<any | null>(
+    null,
+  );
 
   const loadInspectedRecords = async (machineId: string) => {
     if (!machineId) return;
@@ -86,7 +95,8 @@ export default function InspectionDataEntry() {
   // Dynamic Component Categories State (Fetched from Category Master API)
   const [categories, setCategories] = useState<DynamicCategory[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
-  const [activeComponentTab, setActiveComponentTab] = useState<string>("Engine Assembly");
+  const [activeComponentTab, setActiveComponentTab] =
+    useState<string>("Engine Assembly");
 
   const [loadingMachines, setLoadingMachines] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -100,9 +110,15 @@ export default function InspectionDataEntry() {
   } | null>(null);
 
   // Dynamic Readings (Section A), Checklist (Section B), and Custom Admin Fields mapped per category tab
-  const [readingsState, setReadingsState] = useState<Record<string, Record<string, string>>>({});
-  const [checklistState, setChecklistState] = useState<Record<string, Record<string, string>>>({});
-  const [customFieldsState, setCustomFieldsState] = useState<Record<string, Array<{ id: string; name: string; value: string }>>>({});
+  const [readingsState, setReadingsState] = useState<
+    Record<string, Record<string, string>>
+  >({});
+  const [checklistState, setChecklistState] = useState<
+    Record<string, Record<string, string>>
+  >({});
+  const [customFieldsState, setCustomFieldsState] = useState<
+    Record<string, Array<{ id: string; name: string; value: string }>>
+  >({});
 
   // 1. Fetch Fleet Machines on mount
   useEffect(() => {
@@ -146,23 +162,24 @@ export default function InspectionDataEntry() {
     fetchTotalComponentsCount();
   }, []);
 
-const deriveComponentName = (item: any): string => {
-  const directName = item?.name || item?.componentName || item?.component_name;
-  if (directName && directName !== "General") {
-    return String(directName);
-  }
+  const deriveComponentName = (item: any): string => {
+    const directName =
+      item?.name || item?.componentName || item?.component_name;
+    if (directName && directName !== "General") {
+      return String(directName);
+    }
 
-  const desc = String(item?.description || "").trim();
-  if (desc) {
-    const cleaned = desc.replace(/^Spec Notes:\s*/i, "").trim();
-    const parts = cleaned.split(" - ");
-    if (parts[0]) return parts[0].trim();
-  }
+    const desc = String(item?.description || "").trim();
+    if (desc) {
+      const cleaned = desc.replace(/^Spec Notes:\s*/i, "").trim();
+      const parts = cleaned.split(" - ");
+      if (parts[0]) return parts[0].trim();
+    }
 
-  if (directName) return String(directName);
+    if (directName) return String(directName);
 
-  return "Component";
-};
+    return "Component";
+  };
 
   // 1b. Fetch registered components for selected machine directly by machine ID
   useEffect(() => {
@@ -171,7 +188,8 @@ const deriveComponentName = (item: any): string => {
     const fetchMachineComponents = async () => {
       setLoadingComponents(true);
       try {
-        const res: any = await componentService.getComponentsByMachineId(selectedMachineId);
+        const res: any =
+          await componentService.getComponentsByMachineId(selectedMachineId);
         let list: any[] = [];
         if (Array.isArray(res)) {
           list = res;
@@ -182,7 +200,10 @@ const deriveComponentName = (item: any): string => {
         const mapped = list.map((c: any) => ({
           ...c,
           displayName: deriveComponentName(c),
-          serialNumber: String(c.serialNumber || c.serial_number || "").replace(/^DEMO-/i, ""),
+          serialNumber: String(c.serialNumber || c.serial_number || "").replace(
+            /^DEMO-/i,
+            "",
+          ),
         }));
 
         setMachineComponents(mapped);
@@ -241,74 +262,258 @@ const deriveComponentName = (item: any): string => {
     const name = tabName.toLowerCase();
     if (name.includes("battery")) {
       return [
-        { key: "batteryVoltage", label: "Operating Voltage (V)", type: "number", placeholder: "e.g. 24.5" },
-        { key: "batteryTemp", label: "Operating Temperature (°C)", type: "number", placeholder: "e.g. 35" },
-        { key: "chargeState", label: "Battery Charge Level (%)", type: "number", placeholder: "e.g. 98" },
-        { key: "faultCodes", label: "Diagnostic Fault Codes (DTCs)", type: "text", placeholder: "None or DTC-B001" },
+        {
+          key: "batteryVoltage",
+          label: "Operating Voltage (V)",
+          type: "number",
+          placeholder: "e.g. 24.5",
+        },
+        {
+          key: "batteryTemp",
+          label: "Operating Temperature (°C)",
+          type: "number",
+          placeholder: "e.g. 35",
+        },
+        {
+          key: "chargeState",
+          label: "Battery Charge Level (%)",
+          type: "number",
+          placeholder: "e.g. 98",
+        },
+        {
+          key: "faultCodes",
+          label: "Diagnostic Fault Codes (DTCs)",
+          type: "text",
+          placeholder: "None or DTC-B001",
+        },
       ];
     }
     if (name.includes("engine") || name.includes("diesel")) {
       return [
-        { key: "coolantTemp", label: "Coolant Temperature (°C)", type: "number", placeholder: "e.g. 85" },
-        { key: "engineOilPressure", label: "Engine Oil Pressure (bar)", type: "number", placeholder: "e.g. 4.2" },
-        { key: "operatingRpm", label: "Operating RPM", type: "number", placeholder: "e.g. 1800" },
-        { key: "faultCodes", label: "Diagnostic Fault Codes (DTCs)", type: "text", placeholder: "None" },
+        {
+          key: "coolantTemp",
+          label: "Coolant Temperature (°C)",
+          type: "number",
+          placeholder: "e.g. 85",
+        },
+        {
+          key: "engineOilPressure",
+          label: "Engine Oil Pressure (bar)",
+          type: "number",
+          placeholder: "e.g. 4.2",
+        },
+        {
+          key: "operatingRpm",
+          label: "Operating RPM",
+          type: "number",
+          placeholder: "e.g. 1800",
+        },
+        {
+          key: "faultCodes",
+          label: "Diagnostic Fault Codes (DTCs)",
+          type: "text",
+          placeholder: "None",
+        },
       ];
     }
     if (name.includes("brake")) {
       return [
-        { key: "brakePressure", label: "Brake Hydraulic Pressure (bar)", type: "number", placeholder: "e.g. 150" },
-        { key: "operatingTemp", label: "Brake Temperature (°C)", type: "number", placeholder: "e.g. 70" },
-        { key: "fluidPressure", label: "Brake Fluid Line Pressure (bar)", type: "number", placeholder: "e.g. 120" },
-        { key: "faultCodes", label: "Diagnostic Fault Codes (DTCs)", type: "text", placeholder: "None" },
+        {
+          key: "brakePressure",
+          label: "Brake Hydraulic Pressure (bar)",
+          type: "number",
+          placeholder: "e.g. 150",
+        },
+        {
+          key: "operatingTemp",
+          label: "Brake Temperature (°C)",
+          type: "number",
+          placeholder: "e.g. 70",
+        },
+        {
+          key: "fluidPressure",
+          label: "Brake Fluid Line Pressure (bar)",
+          type: "number",
+          placeholder: "e.g. 120",
+        },
+        {
+          key: "faultCodes",
+          label: "Diagnostic Fault Codes (DTCs)",
+          type: "text",
+          placeholder: "None",
+        },
       ];
     }
     if (name.includes("hydraulic") || name.includes("pump")) {
       return [
-        { key: "systemPressure", label: "Main System Pressure (bar)", type: "number", placeholder: "e.g. 280" },
-        { key: "operatingTemp", label: "Hydraulic Oil Temp (°C)", type: "number", placeholder: "e.g. 65" },
-        { key: "returnPressure", label: "Return Line Pressure (bar)", type: "number", placeholder: "e.g. 12" },
-        { key: "faultCodes", label: "Diagnostic Fault Codes (DTCs)", type: "text", placeholder: "None" },
+        {
+          key: "systemPressure",
+          label: "Main System Pressure (bar)",
+          type: "number",
+          placeholder: "e.g. 280",
+        },
+        {
+          key: "operatingTemp",
+          label: "Hydraulic Oil Temp (°C)",
+          type: "number",
+          placeholder: "e.g. 65",
+        },
+        {
+          key: "returnPressure",
+          label: "Return Line Pressure (bar)",
+          type: "number",
+          placeholder: "e.g. 12",
+        },
+        {
+          key: "faultCodes",
+          label: "Diagnostic Fault Codes (DTCs)",
+          type: "text",
+          placeholder: "None",
+        },
       ];
     }
     if (name.includes("transmission") || name.includes("swing")) {
       return [
-        { key: "transPressure", label: "Transmission Oil Pressure (bar)", type: "number", placeholder: "e.g. 22" },
-        { key: "transTemp", label: "Transmission Temp (°C)", type: "number", placeholder: "e.g. 80" },
-        { key: "converterPressure", label: "Torque Converter Pressure (bar)", type: "number", placeholder: "e.g. 15" },
-        { key: "faultCodes", label: "Diagnostic Fault Codes (DTCs)", type: "text", placeholder: "None" },
+        {
+          key: "transPressure",
+          label: "Transmission Oil Pressure (bar)",
+          type: "number",
+          placeholder: "e.g. 22",
+        },
+        {
+          key: "transTemp",
+          label: "Transmission Temp (°C)",
+          type: "number",
+          placeholder: "e.g. 80",
+        },
+        {
+          key: "converterPressure",
+          label: "Torque Converter Pressure (bar)",
+          type: "number",
+          placeholder: "e.g. 15",
+        },
+        {
+          key: "faultCodes",
+          label: "Diagnostic Fault Codes (DTCs)",
+          type: "text",
+          placeholder: "None",
+        },
       ];
     }
     if (name.includes("tyre") || name.includes("tire")) {
       return [
-        { key: "tyreInflation", label: "Tyre Inflation Pressure (PSI)", type: "number", placeholder: "e.g. 105" },
-        { key: "operatingTemp", label: "Tyre Surface Temp (°C)", type: "number", placeholder: "e.g. 45" },
-        { key: "treadDepth", label: "Tread Depth (mm)", type: "number", placeholder: "e.g. 42" },
-        { key: "faultCodes", label: "Diagnostic Notes & Code", type: "text", placeholder: "Normal" },
+        {
+          key: "tyreInflation",
+          label: "Tyre Inflation Pressure (PSI)",
+          type: "number",
+          placeholder: "e.g. 105",
+        },
+        {
+          key: "operatingTemp",
+          label: "Tyre Surface Temp (°C)",
+          type: "number",
+          placeholder: "e.g. 45",
+        },
+        {
+          key: "treadDepth",
+          label: "Tread Depth (mm)",
+          type: "number",
+          placeholder: "e.g. 42",
+        },
+        {
+          key: "faultCodes",
+          label: "Diagnostic Notes & Code",
+          type: "text",
+          placeholder: "Normal",
+        },
       ];
     }
     if (name.includes("fuel") || name.includes("delivery")) {
       return [
-        { key: "fuelPressure", label: "Fuel Injection Pressure (bar)", type: "number", placeholder: "e.g. 1600" },
-        { key: "fuelTemp", label: "Fuel Temperature (°C)", type: "number", placeholder: "e.g. 40" },
-        { key: "flowRate", label: "Fuel Flow Rate (L/min)", type: "number", placeholder: "e.g. 45" },
-        { key: "faultCodes", label: "Diagnostic Fault Codes (DTCs)", type: "text", placeholder: "None" },
+        {
+          key: "fuelPressure",
+          label: "Fuel Injection Pressure (bar)",
+          type: "number",
+          placeholder: "e.g. 1600",
+        },
+        {
+          key: "fuelTemp",
+          label: "Fuel Temperature (°C)",
+          type: "number",
+          placeholder: "e.g. 40",
+        },
+        {
+          key: "flowRate",
+          label: "Fuel Flow Rate (L/min)",
+          type: "number",
+          placeholder: "e.g. 45",
+        },
+        {
+          key: "faultCodes",
+          label: "Diagnostic Fault Codes (DTCs)",
+          type: "text",
+          placeholder: "None",
+        },
       ];
     }
-    if (name.includes("tank") || name.includes("nozzle") || name.includes("axle")) {
+    if (
+      name.includes("tank") ||
+      name.includes("nozzle") ||
+      name.includes("axle")
+    ) {
       return [
-        { key: "tankLevel", label: "Operating Capacity / Level (%)", type: "number", placeholder: "e.g. 95" },
-        { key: "operatingPressure", label: "Operating Pressure (bar)", type: "number", placeholder: "e.g. 8.5" },
-        { key: "operatingTemp", label: "Operating Temperature (°C)", type: "number", placeholder: "e.g. 50" },
-        { key: "faultCodes", label: "Diagnostic Notes / Codes", type: "text", placeholder: "None" },
+        {
+          key: "tankLevel",
+          label: "Operating Capacity / Level (%)",
+          type: "number",
+          placeholder: "e.g. 95",
+        },
+        {
+          key: "operatingPressure",
+          label: "Operating Pressure (bar)",
+          type: "number",
+          placeholder: "e.g. 8.5",
+        },
+        {
+          key: "operatingTemp",
+          label: "Operating Temperature (°C)",
+          type: "number",
+          placeholder: "e.g. 50",
+        },
+        {
+          key: "faultCodes",
+          label: "Diagnostic Notes / Codes",
+          type: "text",
+          placeholder: "None",
+        },
       ];
     }
 
     return [
-      { key: "operatingPressure", label: "Operating Pressure (bar)", type: "number", placeholder: "e.g. 10" },
-      { key: "operatingTemp", label: "Operating Temperature (°C)", type: "number", placeholder: "e.g. 60" },
-      { key: "coolantTemp", label: "Coolant / System Temp (°C)", type: "number", placeholder: "e.g. 75" },
-      { key: "faultCodes", label: "Diagnostic Fault Codes (DTCs)", type: "text", placeholder: "None" },
+      {
+        key: "operatingPressure",
+        label: "Operating Pressure (bar)",
+        type: "number",
+        placeholder: "e.g. 10",
+      },
+      {
+        key: "operatingTemp",
+        label: "Operating Temperature (°C)",
+        type: "number",
+        placeholder: "e.g. 60",
+      },
+      {
+        key: "coolantTemp",
+        label: "Coolant / System Temp (°C)",
+        type: "number",
+        placeholder: "e.g. 75",
+      },
+      {
+        key: "faultCodes",
+        label: "Diagnostic Fault Codes (DTCs)",
+        type: "text",
+        placeholder: "None",
+      },
     ];
   };
 
@@ -317,49 +522,129 @@ const deriveComponentName = (item: any): string => {
     const name = tabName.toLowerCase();
     if (name.includes("battery")) {
       return [
-        { key: "electrolyteLevel", label: "Electrolyte Fluid Level", options: ["Normal", "Low", "Critical Low"] },
-        { key: "terminalCorrosion", label: "Terminal & Cable Corrosion", options: ["Pass", "Minor Corrosion", "Severe Corrosion"] },
-        { key: "casingCondition", label: "Mechanical Casing & Seals", options: ["Normal", "Cracked/Sweating", "Damaged"] },
+        {
+          key: "electrolyteLevel",
+          label: "Electrolyte Fluid Level",
+          options: ["Normal", "Low", "Critical Low"],
+        },
+        {
+          key: "terminalCorrosion",
+          label: "Terminal & Cable Corrosion",
+          options: ["Pass", "Minor Corrosion", "Severe Corrosion"],
+        },
+        {
+          key: "casingCondition",
+          label: "Mechanical Casing & Seals",
+          options: ["Normal", "Cracked/Sweating", "Damaged"],
+        },
       ];
     }
     if (name.includes("engine") || name.includes("diesel")) {
       return [
-        { key: "engineOilLevel", label: "Engine Oil & Fluid Level", options: ["Normal", "Low", "Critical Low"] },
-        { key: "engineOilLeak", label: "Oil & Coolant Leakage", options: ["Pass", "Minor Seepage", "Severe Leak"] },
-        { key: "exhaustBlowby", label: "Exhaust & Crankcase Blowby", options: ["Normal", "Black Smoke", "Severe Blowby"] },
+        {
+          key: "engineOilLevel",
+          label: "Engine Oil & Fluid Level",
+          options: ["Normal", "Low", "Critical Low"],
+        },
+        {
+          key: "engineOilLeak",
+          label: "Oil & Coolant Leakage",
+          options: ["Pass", "Minor Seepage", "Severe Leak"],
+        },
+        {
+          key: "exhaustBlowby",
+          label: "Exhaust & Crankcase Blowby",
+          options: ["Normal", "Black Smoke", "Severe Blowby"],
+        },
       ];
     }
     if (name.includes("brake")) {
       return [
-        { key: "padWear", label: "Brake Lining / Pad Wear", options: ["Normal (80%+)", "Moderate (40-70%)", "Critical Wear (<20%)"] },
-        { key: "fluidLevel", label: "Brake Fluid Level", options: ["Normal", "Low", "Critical Low"] },
-        { key: "leakageInspection", label: "Hydraulic Line Leakage", options: ["Pass", "Minor Seepage", "Severe Leak"] },
+        {
+          key: "padWear",
+          label: "Brake Lining / Pad Wear",
+          options: [
+            "Normal (80%+)",
+            "Moderate (40-70%)",
+            "Critical Wear (<20%)",
+          ],
+        },
+        {
+          key: "fluidLevel",
+          label: "Brake Fluid Level",
+          options: ["Normal", "Low", "Critical Low"],
+        },
+        {
+          key: "leakageInspection",
+          label: "Hydraulic Line Leakage",
+          options: ["Pass", "Minor Seepage", "Severe Leak"],
+        },
       ];
     }
     if (name.includes("hydraulic") || name.includes("pump")) {
       return [
-        { key: "fluidLevel", label: "Hydraulic Fluid Level", options: ["Normal", "Low", "Critical Low"] },
-        { key: "hoseInspection", label: "Hose & Fitting Inspection", options: ["Pass", "Minor Sweating", "Severe Leak/Burst"] },
-        { key: "valveOperation", label: "Control Valve Operation", options: ["Normal", "Sluggish", "Failed/Stuck"] },
+        {
+          key: "fluidLevel",
+          label: "Hydraulic Fluid Level",
+          options: ["Normal", "Low", "Critical Low"],
+        },
+        {
+          key: "hoseInspection",
+          label: "Hose & Fitting Inspection",
+          options: ["Pass", "Minor Sweating", "Severe Leak/Burst"],
+        },
+        {
+          key: "valveOperation",
+          label: "Control Valve Operation",
+          options: ["Normal", "Sluggish", "Failed/Stuck"],
+        },
       ];
     }
     if (name.includes("tyre") || name.includes("tire")) {
       return [
-        { key: "treadWear", label: "Tread Wear Condition", options: ["Normal", "Uneven Wear", "Severe Wear/Smooth"] },
-        { key: "sidewallCut", label: "Sidewall & Bead Damage", options: ["Pass", "Minor Cut/Bulge", "Severe Cut/Damage"] },
-        { key: "rimTorque", label: "Rim & Wheel Nut Torque", options: ["Normal", "Loose Nuts", "Rim Damage"] },
+        {
+          key: "treadWear",
+          label: "Tread Wear Condition",
+          options: ["Normal", "Uneven Wear", "Severe Wear/Smooth"],
+        },
+        {
+          key: "sidewallCut",
+          label: "Sidewall & Bead Damage",
+          options: ["Pass", "Minor Cut/Bulge", "Severe Cut/Damage"],
+        },
+        {
+          key: "rimTorque",
+          label: "Rim & Wheel Nut Torque",
+          options: ["Normal", "Loose Nuts", "Rim Damage"],
+        },
       ];
     }
 
     return [
-      { key: "fluidLevel", label: "Fluid & Oil Level", options: ["Normal", "Low", "Critical Low"] },
-      { key: "leakageInspection", label: "Leakage Inspection", options: ["Pass", "Minor", "Severe"] },
-      { key: "mechanicalCondition", label: "Mechanical Condition", options: ["Normal", "Warning", "Failed"] },
+      {
+        key: "fluidLevel",
+        label: "Fluid & Oil Level",
+        options: ["Normal", "Low", "Critical Low"],
+      },
+      {
+        key: "leakageInspection",
+        label: "Leakage Inspection",
+        options: ["Pass", "Minor", "Severe"],
+      },
+      {
+        key: "mechanicalCondition",
+        label: "Mechanical Condition",
+        options: ["Normal", "Warning", "Failed"],
+      },
     ];
   };
 
   // Field change handler for dynamic readings
-  const handleReadingChange = (tabName: string, fieldKey: string, value: string) => {
+  const handleReadingChange = (
+    tabName: string,
+    fieldKey: string,
+    value: string,
+  ) => {
     setReadingsState((prev) => ({
       ...prev,
       [tabName]: {
@@ -370,7 +655,11 @@ const deriveComponentName = (item: any): string => {
   };
 
   // Field change handler for dynamic checklist
-  const handleChecklistChange = (tabName: string, fieldKey: string, value: string) => {
+  const handleChecklistChange = (
+    tabName: string,
+    fieldKey: string,
+    value: string,
+  ) => {
     setChecklistState((prev) => ({
       ...prev,
       [tabName]: {
@@ -392,14 +681,22 @@ const deriveComponentName = (item: any): string => {
   const updateCustomFieldName = (tabName: string, id: string, name: string) => {
     setCustomFieldsState((prev) => ({
       ...prev,
-      [tabName]: (prev[tabName] || []).map((f) => (f.id === id ? { ...f, name } : f)),
+      [tabName]: (prev[tabName] || []).map((f) =>
+        f.id === id ? { ...f, name } : f,
+      ),
     }));
   };
 
-  const updateCustomFieldValue = (tabName: string, id: string, value: string) => {
+  const updateCustomFieldValue = (
+    tabName: string,
+    id: string,
+    value: string,
+  ) => {
     setCustomFieldsState((prev) => ({
       ...prev,
-      [tabName]: (prev[tabName] || []).map((f) => (f.id === id ? { ...f, value } : f)),
+      [tabName]: (prev[tabName] || []).map((f) =>
+        f.id === id ? { ...f, value } : f,
+      ),
     }));
   };
 
@@ -411,14 +708,22 @@ const deriveComponentName = (item: any): string => {
   };
 
   // Get current reading value for field
-  const getReadingValue = (tabName: string, fieldKey: string, defaultVal: string) => {
+  const getReadingValue = (
+    tabName: string,
+    fieldKey: string,
+    defaultVal: string,
+  ) => {
     return readingsState[tabName]?.[fieldKey] !== undefined
       ? readingsState[tabName][fieldKey]
       : defaultVal;
   };
 
   // Get current checklist value for field
-  const getChecklistValue = (tabName: string, fieldKey: string, defaultVal: string) => {
+  const getChecklistValue = (
+    tabName: string,
+    fieldKey: string,
+    defaultVal: string,
+  ) => {
     return checklistState[tabName]?.[fieldKey] !== undefined
       ? checklistState[tabName][fieldKey]
       : defaultVal;
@@ -445,7 +750,7 @@ const deriveComponentName = (item: any): string => {
       const checklistPayload: Record<string, string> = {};
 
       const customFields = (customFieldsState[activeComponentTab] || []).filter(
-        (f) => f.name.trim() !== ""
+        (f) => f.name.trim() !== "",
       );
 
       const payload = {
@@ -455,11 +760,15 @@ const deriveComponentName = (item: any): string => {
         customFields,
       };
 
-      const res: any = await machineService.saveManualInspectionData(selectedMachineId, payload);
+      const res: any = await machineService.saveManualInspectionData(
+        selectedMachineId,
+        payload,
+      );
 
       if (res && (res.success !== false || res.status === 200 || res.data)) {
         const responseData = res.data || res;
-        const compObj = responseData?.component || responseData?.componentHealth;
+        const compObj =
+          responseData?.component || responseData?.componentHealth;
         const healthObj = responseData?.health || responseData;
 
         if (compObj?.healthScore !== undefined) {
@@ -475,9 +784,11 @@ const deriveComponentName = (item: any): string => {
         if (healthObj) {
           setCalcResult({
             status: healthObj.status || healthObj.machineStatus || "Healthy",
-            healthScore: healthObj.healthScore !== undefined ? healthObj.healthScore : 100,
+            healthScore:
+              healthObj.healthScore !== undefined ? healthObj.healthScore : 100,
             issues: healthObj.issues || [],
-            message: res.message || "Manual inspection data saved successfully.",
+            message:
+              res.message || "Manual inspection data saved successfully.",
           });
 
           // Show Toast Notification!
@@ -496,11 +807,15 @@ const deriveComponentName = (item: any): string => {
           }
         }
       } else {
-        showErrorToast(`Failed to save inspection: ${res?.message || "Server Error"}`);
+        showErrorToast(
+          `Failed to save inspection: ${res?.message || "Server Error"}`,
+        );
       }
     } catch (err: any) {
       console.error("Error submitting manual data:", err);
-      showErrorToast(`Error submitting inspection: ${err?.message || "Server Communication Error"}`);
+      showErrorToast(
+        `Error submitting inspection: ${err?.message || "Server Communication Error"}`,
+      );
     } finally {
       setSubmitting(false);
     }
@@ -543,7 +858,9 @@ const deriveComponentName = (item: any): string => {
                 Inspection & Manual Data Capture
               </h1>
               <p className="mt-2 max-w-2xl text-sm leading-relaxed text-blue-100">
-                Select any fleet machine and enter manual operating parameters and physical inspection checklists. Component Categories are dynamically fetched live from your Category Master.
+                Select any fleet machine and enter manual operating parameters
+                and physical inspection checklists. Component Categories are
+                dynamically fetched live from your Category Master.
               </p>
             </div>
 
@@ -568,7 +885,8 @@ const deriveComponentName = (item: any): string => {
               </label>
               {loadingMachines ? (
                 <div className="mt-1.5 flex items-center gap-2 text-sm text-slate-500">
-                  <Loader2 size={16} className="animate-spin" /> Loading fleet machines...
+                  <Loader2 size={16} className="animate-spin" /> Loading fleet
+                  machines...
                 </div>
               ) : (
                 <select
@@ -588,7 +906,8 @@ const deriveComponentName = (item: any): string => {
             {/* Fleet Overview & Machine Stats Badges */}
             <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-[#101f33]">
               <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-bold text-slate-700 shadow-xs dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
-                <Truck size={13} className="text-blue-500" /> {machines.length} Fleet Machines
+                <Truck size={13} className="text-blue-500" /> {machines.length}{" "}
+                Fleet Machines
               </span>
 
               <span className="inline-flex items-center gap-1.5 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-300">
@@ -596,11 +915,12 @@ const deriveComponentName = (item: any): string => {
               </span>
 
               <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-extrabold text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300">
-                <Layers size={13} /> {machineComponents.length} Machine Components
+                <Layers size={13} /> {machineComponents.length} Machine
+                Components
               </span>
 
-              {selectedMachine && (
-                selectedMachine.status === "Critical" ? (
+              {selectedMachine &&
+                (selectedMachine.status === "Critical" ? (
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-black text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400">
                     <AlertTriangle size={14} /> Critical Risk
                   </span>
@@ -612,8 +932,7 @@ const deriveComponentName = (item: any): string => {
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-400">
                     <CheckCircle2 size={14} /> Healthy (Optimal)
                   </span>
-                )
-              )}
+                ))}
             </div>
           </div>
         </div>
@@ -634,14 +953,27 @@ const deriveComponentName = (item: any): string => {
           <div className="flex overflow-x-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-sm dark:border-slate-800 dark:bg-[#0b1728]">
             {loadingComponents ? (
               <div className="flex items-center gap-2 px-4 py-3 text-xs font-semibold text-slate-500">
-                <Loader2 size={14} className="animate-spin" /> Loading components for selected machine...
+                <Loader2 size={14} className="animate-spin" /> Loading
+                components for selected machine...
               </div>
             ) : machineComponents.length > 0 ? (
               machineComponents.map((comp) => {
-                const compName = comp.displayName || comp.name || comp.description || comp.category || "Component";
+                const compName =
+                  comp.displayName ||
+                  comp.name ||
+                  comp.description ||
+                  comp.category ||
+                  "Component";
                 const isActive = activeComponentTab === compName;
 
-                const healthInfo = componentHealthMap[compName] || (comp.healthScore !== null && comp.healthScore !== undefined ? { healthScore: comp.healthScore, status: comp.status || "Healthy" } : null);
+                const healthInfo =
+                  componentHealthMap[compName] ||
+                  (comp.healthScore !== null && comp.healthScore !== undefined
+                    ? {
+                        healthScore: comp.healthScore,
+                        status: comp.status || "Healthy",
+                      }
+                    : null);
 
                 return (
                   <button
@@ -666,8 +998,8 @@ const deriveComponentName = (item: any): string => {
                           healthInfo.healthScore < 50
                             ? "bg-red-500 text-white"
                             : healthInfo.healthScore < 85
-                            ? "bg-amber-500 text-white"
-                            : "bg-emerald-500 text-white"
+                              ? "bg-amber-500 text-white"
+                              : "bg-emerald-500 text-white"
                         }`}
                       >
                         {healthInfo.healthScore}%
@@ -719,8 +1051,8 @@ const deriveComponentName = (item: any): string => {
               calcResult.status === "Critical"
                 ? "border-red-300 bg-red-50 text-red-900 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200"
                 : calcResult.status === "Warning"
-                ? "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200"
-                : "border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-200"
+                  ? "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200"
+                  : "border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-200"
             }`}
           >
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -734,15 +1066,20 @@ const deriveComponentName = (item: any): string => {
                     <CheckCircle2 size={20} className="text-emerald-600" />
                   )}
                   <span className="text-lg uppercase">
-                    Calculated Status: {calcResult.status} (Health Score: {calcResult.healthScore}%)
+                    Calculated Status: {calcResult.status} (Health Score:{" "}
+                    {calcResult.healthScore}%)
                   </span>
                 </div>
-                <p className="mt-1 text-sm font-medium opacity-90">{calcResult.message}</p>
+                <p className="mt-1 text-sm font-medium opacity-90">
+                  {calcResult.message}
+                </p>
               </div>
 
               {calcResult.issues.length > 0 && (
                 <div className="rounded-2xl bg-white/60 p-3 backdrop-blur-sm dark:bg-black/20">
-                  <span className="text-xs font-bold uppercase tracking-wider">Detected Risk Factors:</span>
+                  <span className="text-xs font-bold uppercase tracking-wider">
+                    Detected Risk Factors:
+                  </span>
                   <ul className="mt-1 list-disc pl-4 text-xs font-semibold">
                     {calcResult.issues.map((iss, i) => (
                       <li key={i}>{iss}</li>
@@ -776,104 +1113,133 @@ const deriveComponentName = (item: any): string => {
                     Manual Inspection Parameters ({activeComponentTab})
                   </h4>
                   <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                    Add custom parameter fields and fill in values for {activeComponentTab}.
+                    Add custom parameter fields and fill in values for{" "}
+                    {activeComponentTab}.
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => addCustomField(activeComponentTab)}
-                  className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white shadow-md transition hover:bg-blue-700 active:scale-95"
-                >
-                  <Plus size={16} strokeWidth={2.4} />
-                  Add Inspection Field
-                </button>
+                {!readOnly && (
+                  <button
+                    type="button"
+                    onClick={() => addCustomField(activeComponentTab)}
+                    className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white shadow-md transition hover:bg-blue-700 active:scale-95"
+                  >
+                    <Plus size={16} strokeWidth={2.4} />
+                    Add Inspection Field
+                  </button>
+                )}
               </div>
 
               {(customFieldsState[activeComponentTab] || []).length > 0 ? (
                 <div className="space-y-3 pt-2">
-                  {(customFieldsState[activeComponentTab] || []).map((field, idx) => (
-                    <div
-                      key={field.id}
-                      className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5 dark:border-slate-800 dark:bg-[#101f33] sm:flex-row sm:items-center"
-                    >
-                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-xs font-black text-blue-700 dark:bg-blue-500/20 dark:text-blue-300">
-                        {idx + 1}
-                      </div>
-
-                      <div className="w-full sm:w-1/2">
-                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                          Parameter Name
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="e.g. Operating Temp (°C), Pressure (bar), Tread Depth"
-                          value={field.name}
-                          onChange={(e) => updateCustomFieldName(activeComponentTab, field.id, e.target.value)}
-                          className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-900 outline-none transition focus:border-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
-                        />
-                      </div>
-
-                      <div className="w-full sm:w-1/2">
-                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                          Parameter Value / Reading
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="e.g. 85, 4.2 bar, Normal, Pass, DTC-001"
-                          value={field.value}
-                          onChange={(e) => updateCustomFieldValue(activeComponentTab, field.id, e.target.value)}
-                          className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-extrabold text-slate-900 outline-none transition focus:border-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
-                        />
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => removeCustomField(activeComponentTab, field.id)}
-                        className="mt-4 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-red-200 bg-red-50 text-red-600 transition hover:bg-red-100 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400 sm:mt-4"
-                        title="Delete Field"
+                  {(customFieldsState[activeComponentTab] || []).map(
+                    (field, idx) => (
+                      <div
+                        key={field.id}
+                        className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5 dark:border-slate-800 dark:bg-[#101f33] sm:flex-row sm:items-center"
                       >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  ))}
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-xs font-black text-blue-700 dark:bg-blue-500/20 dark:text-blue-300">
+                          {idx + 1}
+                        </div>
+
+                        <div className="w-full sm:w-1/2">
+                          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                            Parameter Name
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="e.g. Operating Temp (°C), Pressure (bar), Tread Depth"
+                            value={field.name}
+                            disabled={readOnly}
+                            onChange={(e) =>
+                              updateCustomFieldName(
+                                activeComponentTab,
+                                field.id,
+                                e.target.value,
+                              )
+                            }
+                            className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-900 outline-none transition focus:border-blue-500 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:disabled:bg-slate-800"
+                          />
+                        </div>
+
+                        <div className="w-full sm:w-1/2">
+                          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                            Parameter Value / Reading
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="e.g. 85, 4.2 bar, Normal, Pass, DTC-001"
+                            value={field.value}
+                            disabled={readOnly}
+                            onChange={(e) =>
+                              updateCustomFieldValue(
+                                activeComponentTab,
+                                field.id,
+                                e.target.value,
+                              )
+                            }
+                            className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-extrabold text-slate-900 outline-none transition focus:border-blue-500 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:disabled:bg-slate-800"
+                          />
+                        </div>
+
+                        {!readOnly && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              removeCustomField(activeComponentTab, field.id)
+                            }
+                            className="mt-4 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-red-200 bg-red-50 text-red-600 transition hover:bg-red-100 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400 sm:mt-4"
+                            title="Delete Field"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        )}
+                      </div>
+                    ),
+                  )}
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 py-10 text-center dark:border-slate-700">
                   <p className="text-xs font-bold text-slate-500 dark:text-slate-400">
-                    No inspection parameters defined for <span className="text-blue-600 dark:text-blue-400">{activeComponentTab}</span> yet.
+                    No inspection parameters defined for{" "}
+                    <span className="text-blue-600 dark:text-blue-400">
+                      {activeComponentTab}
+                    </span>{" "}
+                    yet.
                   </p>
-                  <button
-                    type="button"
-                    onClick={() => addCustomField(activeComponentTab)}
-                    className="mt-3 inline-flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-xs font-extrabold text-blue-700 transition hover:bg-blue-100 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300"
-                  >
-                    <Plus size={15} /> Add First Inspection Field
-                  </button>
+                  {!readOnly && (
+                    <button
+                      type="button"
+                      onClick={() => addCustomField(activeComponentTab)}
+                      className="mt-3 inline-flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-xs font-extrabold text-blue-700 transition hover:bg-blue-100 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300"
+                    >
+                      <Plus size={15} /> Add First Inspection Field
+                    </button>
+                  )}
                 </div>
               )}
             </div>
           </div>
 
-
-
           {/* SUBMIT BUTTON */}
-          <div className="flex items-center justify-end gap-4 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-[#0b1728]">
-            <button
-              type="submit"
-              disabled={submitting || !selectedMachineId}
-              className="flex items-center gap-2 rounded-2xl bg-blue-600 px-8 py-4 text-base font-extrabold text-white shadow-xl transition hover:bg-blue-700 active:scale-95 disabled:opacity-50"
-            >
-              {submitting ? (
-                <>
-                  <Loader2 size={20} className="animate-spin" /> Submitting...
-                </>
-              ) : (
-                <>
-                  <Save size={20} /> Submit
-                </>
-              )}
-            </button>
-          </div>
+          {!readOnly && (
+            <div className="flex items-center justify-end gap-4 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-[#0b1728]">
+              <button
+                type="submit"
+                disabled={submitting || !selectedMachineId}
+                className="flex items-center gap-2 rounded-2xl bg-blue-600 px-8 py-4 text-base font-extrabold text-white shadow-xl transition hover:bg-blue-700 active:scale-95 disabled:opacity-50"
+              >
+                {submitting ? (
+                  <>
+                    <Loader2 size={20} className="animate-spin" /> Submitting...
+                  </>
+                ) : (
+                  <>
+                    <Save size={20} /> Submit
+                  </>
+                )}
+              </button>
+            </div>
+          )}
         </form>
 
         {/* STORED COMPONENT HEALTH & INSPECTION PARAMETERS TABLE */}
@@ -882,10 +1248,12 @@ const deriveComponentName = (item: any): string => {
             <div>
               <h3 className="flex items-center gap-2 text-lg font-black text-slate-900 dark:text-white">
                 <Layers size={20} className="text-blue-600" />
-                Stored Component Health Records ({selectedMachine?.name || "Selected Machine"})
+                Stored Component Health Records (
+                {selectedMachine?.name || "Selected Machine"})
               </h3>
               <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                Live inspection parameters and health status records saved in database for {selectedMachine?.name || "this machine"}.
+                Live inspection parameters and health status records saved in
+                database for {selectedMachine?.name || "this machine"}.
               </p>
             </div>
             <button
@@ -911,7 +1279,8 @@ const deriveComponentName = (item: any): string => {
                 No Component Health Records Stored Yet
               </h4>
               <p className="mt-1 max-w-sm text-xs text-slate-500">
-                Select a component tab above, add custom inspection fields, and click "Submit" to calculate & store the record.
+                Select a component tab above, add custom inspection fields, and
+                click "Submit" to calculate & store the record.
               </p>
             </div>
           ) : (
@@ -933,13 +1302,21 @@ const deriveComponentName = (item: any): string => {
                     const paramsList = Array.isArray(rec.parameters)
                       ? rec.parameters
                       : rec.parameters?.customFields || [];
-                    const score = Number(rec.healthScore ?? rec.health_score ?? 100);
+                    const score = Number(
+                      rec.healthScore ?? rec.health_score ?? 100,
+                    );
                     const isCrit = score < 50 || rec.status === "Critical";
-                    const isWarn = (score >= 50 && score < 85) || rec.status === "Warning";
+                    const isWarn =
+                      (score >= 50 && score < 85) || rec.status === "Warning";
 
                     return (
-                      <tr key={rec.id || idx} className="hover:bg-slate-50/70 dark:hover:bg-[#101f33]/50">
-                        <td className="px-4 py-3 text-slate-400 font-extrabold">{idx + 1}</td>
+                      <tr
+                        key={rec.id || idx}
+                        className="hover:bg-slate-50/70 dark:hover:bg-[#101f33]/50"
+                      >
+                        <td className="px-4 py-3 text-slate-400 font-extrabold">
+                          {idx + 1}
+                        </td>
                         <td className="px-4 py-3 font-extrabold text-slate-900 dark:text-white">
                           {rec.componentName}
                         </td>
@@ -956,7 +1333,9 @@ const deriveComponentName = (item: any): string => {
                               <Eye size={14} /> View All ({paramsList.length})
                             </button>
                           ) : (
-                            <span className="italic text-slate-400">Standard metric checks</span>
+                            <span className="italic text-slate-400">
+                              Standard metric checks
+                            </span>
                           )}
                         </td>
                         <td className="px-4 py-3">
@@ -966,27 +1345,41 @@ const deriveComponentName = (item: any): string => {
                                 isCrit
                                   ? "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400"
                                   : isWarn
-                                  ? "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400"
-                                  : "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400"
+                                    ? "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400"
+                                    : "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400"
                               }`}
                             >
-                              {isCrit ? "Critical" : isWarn ? "Warning" : "Healthy"}
+                              {isCrit
+                                ? "Critical"
+                                : isWarn
+                                  ? "Warning"
+                                  : "Healthy"}
                             </span>
-                            <span className="font-extrabold text-slate-800 dark:text-slate-200">{score}%</span>
+                            <span className="font-extrabold text-slate-800 dark:text-slate-200">
+                              {score}%
+                            </span>
                           </div>
                         </td>
                         <td className="px-4 py-3 text-slate-500">
-                          {rec.createdAt ? new Date(rec.createdAt).toLocaleString() : "Just now"}
+                          {rec.createdAt
+                            ? new Date(rec.createdAt).toLocaleString()
+                            : "Just now"}
                         </td>
                         <td className="px-4 py-3 text-center">
-                          <button
-                            type="button"
-                            onClick={() => handleEditRecord(rec)}
-                            className="inline-flex h-8.5 w-8.5 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-700 transition hover:bg-blue-100 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300"
-                            title="Edit / Update Parameters"
-                          >
-                            <Pencil size={14} />
-                          </button>
+                          {!readOnly ? (
+                            <button
+                              type="button"
+                              onClick={() => handleEditRecord(rec)}
+                              className="inline-flex h-8.5 w-8.5 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-700 transition hover:bg-blue-100 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300"
+                              title="Edit / Update Parameters"
+                            >
+                              <Pencil size={14} />
+                            </button>
+                          ) : (
+                            <span className="text-[10px] font-semibold text-slate-400">
+                              —
+                            </span>
+                          )}
                         </td>
                       </tr>
                     );
@@ -1007,7 +1400,9 @@ const deriveComponentName = (item: any): string => {
                     Inspected Parameters ({selectedParamsRecord.componentName})
                   </h3>
                   <p className="mt-0.5 text-xs text-blue-200 font-semibold">
-                    {selectedParamsRecord.serialNumber || "S/N: N/A"} • Health Score: {selectedParamsRecord.healthScore}% ({selectedParamsRecord.status})
+                    {selectedParamsRecord.serialNumber || "S/N: N/A"} • Health
+                    Score: {selectedParamsRecord.healthScore}% (
+                    {selectedParamsRecord.status})
                   </p>
                 </div>
                 <button
@@ -1021,7 +1416,9 @@ const deriveComponentName = (item: any): string => {
 
               <div className="max-h-[calc(90vh-130px)] overflow-y-auto p-5">
                 {(() => {
-                  const paramsList = Array.isArray(selectedParamsRecord.parameters)
+                  const paramsList = Array.isArray(
+                    selectedParamsRecord.parameters,
+                  )
                     ? selectedParamsRecord.parameters
                     : selectedParamsRecord.parameters?.customFields || [];
 
@@ -1036,8 +1433,13 @@ const deriveComponentName = (item: any): string => {
                       </thead>
                       <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-semibold">
                         {paramsList.map((p: any, idx: number) => (
-                          <tr key={idx} className="hover:bg-slate-50/70 dark:hover:bg-[#101f33]/50">
-                            <td className="px-4 py-3 text-slate-400 font-extrabold">{idx + 1}</td>
+                          <tr
+                            key={idx}
+                            className="hover:bg-slate-50/70 dark:hover:bg-[#101f33]/50"
+                          >
+                            <td className="px-4 py-3 text-slate-400 font-extrabold">
+                              {idx + 1}
+                            </td>
                             <td className="px-4 py-3 font-extrabold text-slate-900 dark:text-white">
                               {p.name || "Parameter"}
                             </td>

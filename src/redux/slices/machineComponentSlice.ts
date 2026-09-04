@@ -204,7 +204,7 @@ export const fetchMachineComponents =
         -------------------------------------- */
 
         const response =
-          await componentService.getComponents(
+          await componentService.getMachineComponents(
             machineId,
           );
 

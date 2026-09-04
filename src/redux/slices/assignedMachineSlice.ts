@@ -15,17 +15,28 @@ export type AssignmentStatus = "Active" | "Completed";
 export interface CurrentMachine {
   machineName: string;
   machineId: string;
+  model: string;
   serialNumber: string;
+  companyId: string;
+  companyName: string;
+  equipmentType: string;
+  site: string;
+  assignedOperatorName: string;
+  assignedSupervisorName: string;
   modelYear: string;
   fuelType: string;
   status: AssignmentStatus;
+  healthStatus: string;
   assignedOn: string;
+  assignedAt: string;
   assignedBy: string;
   location: string;
+  healthScore: number;
   overallHealth: number;
   totalHours: number;
   fuelLevel: number;
   nextServiceDue: string;
+  components: any[];
 }
 
 export interface AssignmentHistoryItem {
@@ -40,6 +51,7 @@ export interface AssignmentHistoryItem {
 
 interface AssignedMachineState {
   currentMachine: CurrentMachine | null;
+  assignedMachines: CurrentMachine[];
   assignmentHistory: AssignmentHistoryItem[];
 
   loading: boolean;
@@ -48,6 +60,7 @@ interface AssignedMachineState {
 
 const initialState: AssignedMachineState = {
   currentMachine: null,
+  assignedMachines: [],
   assignmentHistory: [],
 
   loading: false,
@@ -73,12 +86,13 @@ const normalizeHistoryItem = (
       item?.machine_name ??
       "",
   ),
-
   machineId: String(
     item?.machineId ??
       item?.machine_id ??
       "",
   ),
+
+  model: String(item?.model ?? ""),
 
   assignedOn: String(
     item?.assignedOn ??
@@ -118,11 +132,30 @@ const normalizeCurrentMachine = (
       item?.machine_id ??
       "",
   ),
+  model: String(item?.model ?? ""),
 
   serialNumber: String(
     item?.serialNumber ??
       item?.serial_number ??
       "",
+  ),
+
+  companyId: String(item?.companyId ?? item?.company_id ?? ""),
+
+  companyName: String(item?.companyName ?? item?.company_name ?? ""),
+
+  equipmentType: String(
+    item?.equipmentType ?? item?.equipment_type ?? "",
+  ),
+
+  site: String(item?.site ?? ""),
+
+  assignedOperatorName: String(
+    item?.assignedOperatorName ?? item?.assigned_operator_name ?? "",
+  ),
+
+  assignedSupervisorName: String(
+    item?.assignedSupervisorName ?? item?.assigned_supervisor_name ?? "",
   ),
 
   modelYear: String(
@@ -138,14 +171,25 @@ const normalizeCurrentMachine = (
   ),
 
   status:
-    (item?.status as AssignmentStatus) ||
-    "Active",
+    item?.assignmentStatus === "Completed" || item?.assignment_status === "Completed"
+      ? "Completed"
+      : "Active",
+
+  healthStatus: String(item?.status ?? item?.machineStatus ?? ""),
 
   assignedOn: String(
     item?.assignedOn ??
       item?.assignedAt ??
       item?.assigned_on ??
       item?.assigned_at ??
+      "",
+  ),
+
+  assignedAt: String(
+    item?.assignedAt ??
+      item?.assignedOn ??
+      item?.assigned_at ??
+      item?.assigned_on ??
       "",
   ),
 
@@ -161,6 +205,15 @@ const normalizeCurrentMachine = (
 
   overallHealth: Number(
     item?.overallHealth ??
+      item?.overall_health ??
+      item?.healthScore ??
+      0,
+  ),
+
+  healthScore: Number(
+    item?.healthScore ??
+      item?.health_score ??
+      item?.overallHealth ??
       item?.overall_health ??
       0,
   ),
@@ -182,6 +235,8 @@ const normalizeCurrentMachine = (
       item?.next_service_due ??
       "-",
   ),
+
+  components: Array.isArray(item?.components) ? item.components : [],
 });
 
 /* ==========================================
@@ -218,11 +273,20 @@ export const fetchOperatorAssignments =
             payload.activeAssignments[0] ?? null;
         }
 
+        if (
+          !rawCurrent &&
+          Array.isArray(payload?.activeAssignedMachines)
+        ) {
+          rawCurrent =
+            payload.activeAssignedMachines[0] ?? null;
+        }
+
         let rawHistory =
           payload?.history ??
           payload?.assignmentHistory ??
           payload?.assignment_history ??
           payload?.assignments ??
+          payload?.activeAssignedMachines ??
           (Array.isArray(payload)
             ? payload
             : []);
@@ -281,6 +345,10 @@ export const fetchOperatorAssignments =
             ? normalizeCurrentMachine(rawCurrent)
             : null,
 
+          assignedMachines: Array.isArray(payload?.activeAssignedMachines)
+            ? payload.activeAssignedMachines.map(normalizeCurrentMachine)
+            : rawHistory.map(normalizeCurrentMachine),
+
           assignmentHistory:
             rawHistory.map(
               normalizeHistoryItem,
@@ -307,6 +375,7 @@ const assignedMachineSlice = createSlice({
   reducers: {
     clearAssignedMachine: (state) => {
       state.currentMachine = null;
+      state.assignedMachines = [];
       state.assignmentHistory = [];
     },
 
@@ -333,6 +402,9 @@ const assignedMachineSlice = createSlice({
 
           state.currentMachine =
             action.payload.currentMachine;
+
+          state.assignedMachines =
+            action.payload.assignedMachines;
 
           state.assignmentHistory =
             action.payload.assignmentHistory;
