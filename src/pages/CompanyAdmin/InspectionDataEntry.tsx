@@ -45,9 +45,7 @@ import {
   Zap,
 } from "lucide-react";
 import { machineService } from "../../services/companyadmin/machineService";
-import { componentService } from "../../services/companyadmin/componentService";
 import { showSuccessToast, showErrorToast } from "../../utils/toastUtils";
-import StorageService from "../../services/storage.service";
 import { isReadOnlyRole } from "../../components/common/permissions";
 
 import PageMeta from "../../components/common/PageMeta";
@@ -84,7 +82,7 @@ interface SpecParameter {
 }
 
 
-export default function InspectionDataEntry() {
+function LegacyInspectionDataEntry() {
   const [machines, setMachines] = useState<MachineItem[]>([]);
   const readOnly = isReadOnlyRole(StorageService.getRole());
   const [selectedMachineId, setSelectedMachineId] = useState<string>("");
@@ -284,6 +282,9 @@ const PRESET_COMPONENT_TEMPLATES: Array<{
   const [customFieldsState, setCustomFieldsState] = useState<
     Record<string, Array<{ id: string; name: string; value: string }>>
   >({});
+
+  return null;
+}
 
 export default function InspectionDataEntry() {
   const inspectionSectionRef = useRef<HTMLDivElement>(null);
@@ -527,25 +528,6 @@ export default function InspectionDataEntry() {
     const fetchMasterCatalog = async () => {
       setLoading(true);
       try {
-
-        const res: any =
-          await componentService.getComponentsByMachineId(selectedMachineId);
-        let list: any[] = [];
-        if (Array.isArray(res)) {
-          list = res;
-        } else if (res && Array.isArray(res.data)) {
-          list = res.data;
-        }
-
-        const mapped = list.map((c: any) => ({
-          ...c,
-          displayName: deriveComponentName(c),
-          serialNumber: String(c.serialNumber || c.serial_number || "").replace(
-            /^DEMO-/i,
-            "",
-          ),
-        }));
-
         const res: any = await apiRequest("/machines/master-catalog?limit=all");
         const catalogData = res?.data?.catalog || res?.catalog || [];
 
@@ -721,10 +703,9 @@ export default function InspectionDataEntry() {
           status: l.status || "Healthy"
         };
       }
+    });
 
-    };
-
-    loadCategories();
+    return map;
   }, []);
 
   // Helper to determine component-specific manual reading fields
@@ -956,10 +937,36 @@ export default function InspectionDataEntry() {
           type: "text",
           placeholder: "None",
         },
+      ];
+    }
 
-    });
-    return map;
-  }, [selectedMachine, historyLogs]);
+    return [
+      {
+        key: "operatingPressure",
+        label: "Operating Pressure (bar)",
+        type: "number",
+        placeholder: "e.g. 10",
+      },
+      {
+        key: "operatingTemp",
+        label: "Operating Temperature (°C)",
+        type: "number",
+        placeholder: "e.g. 60",
+      },
+      {
+        key: "coolantTemp",
+        label: "Coolant / System Temp (°C)",
+        type: "number",
+        placeholder: "e.g. 75",
+      },
+      {
+        key: "faultCodes",
+        label: "Diagnostic Fault Codes (DTCs)",
+        type: "text",
+        placeholder: "None",
+      },
+    ];
+  };
 
   const paginatedFleetMachines = useMemo(() => {
     const startIndex = (fleetCurrentPage - 1) * fleetPageSize;
@@ -1244,8 +1251,12 @@ export default function InspectionDataEntry() {
     value: string,
   ) => {
     setReadingsState((prev) => ({
-
-    fetchMachineExistingData(m.id || m.machineId || "heh-cat-777");
+      ...prev,
+      [tabName]: {
+        ...(prev[tabName] || {}),
+        [fieldKey]: value,
+      },
+    }));
   };
 
   // Preset Template Quick Loader
@@ -1692,108 +1703,72 @@ export default function InspectionDataEntry() {
     });
 
     try {
-
-      const readingsPayload: Record<string, string> = {};
-      const checklistPayload: Record<string, string> = {};
-
-      const customFields = (customFieldsState[activeComponentTab] || []).filter(
-        (f) => f.name.trim() !== "",
-      );
-
-
       const payload = {
         componentCategory: activeTab,
         componentName: activeTab,
         customFields,
-        brand: selectedMachine.brand || selectedBrand || "Caterpillar",
-        category: selectedMachine.equipmentType || selectedCategory || "General",
-        modelName: selectedMachine.model || selectedMachine.modelName || selectedMachine.name || "",
-        serialNumber: selectedMachine.serialNumber || "SN-AUTO-001",
+        brand: selectedMachine.brand || selectedMachine.manufacturer || "",
+        category: selectedMachine.equipmentType || selectedMachine.category || "",
+        modelName: selectedMachine.model || selectedMachine.modelName || "",
+        serialNumber: selectedMachine.serialNumber || "",
         machineName: selectedMachine.name || selectedMachine.model || "",
-        companyId: currentUser?.companyId || StorageService.getCompanyId() || "",
-        companyName: currentUser?.companyName || "HME Mining Corp",
-        userId: currentUser?.id || null,
-        userName: currentUser?.name || "Company Admin",
-        userRole: currentUser?.role || "COMPANY_ADMIN",
-        userEmail: currentUser?.email || "admin@hmemining.com",
+        companyId: currentUser.companyId,
+        companyName: currentUser.companyName,
+        userId: currentUser.id,
+        userName: currentUser.name,
+        userRole: currentUser.role,
+        userEmail: currentUser.email,
       };
 
-      const res: any = await machineService.saveManualInspectionData(
-        selectedMachineId,
+      const targetId = selectedMachine.id || selectedMachine.machineId;
+      if (!targetId) {
+        throw new Error("Selected machine ID is required");
+      }
+
+      const response: any = await machineService.saveManualInspectionData(
+        targetId,
         payload,
       );
+      const data = response?.data || response;
+      const componentHealth = data?.componentHealth || data?.component || null;
+      const machineHealth = data?.machineHealth || data?.machine || null;
+      const healthScore = componentHealth?.healthScore ?? null;
+      const machineScore = machineHealth?.overallMachineHealth ?? machineHealth?.healthScore ?? null;
+      const machineStatus = machineHealth?.machineStatus ?? machineHealth?.status ?? null;
 
-      if (res && (res.success !== false || res.status === 200 || res.data)) {
-        const responseData = res.data || res;
-        const compObj =
-          responseData?.component || responseData?.componentHealth;
-        const healthObj = responseData?.health || responseData;
-
-        if (compObj?.healthScore !== undefined) {
-          setComponentHealthMap((prev) => ({
-            ...prev,
-            [activeComponentTab]: {
-              healthScore: compObj.healthScore,
-              status: compObj.status || "Healthy",
-            },
-          }));
-        }
-
-        if (healthObj) {
-          setCalcResult({
-            status: healthObj.status || healthObj.machineStatus || "Healthy",
-            healthScore:
-              healthObj.healthScore !== undefined ? healthObj.healthScore : 100,
-            issues: healthObj.issues || [],
-            message:
-              res.message || "Manual inspection data saved successfully.",
-          });
-
-      const targetId = selectedMachine.id || selectedMachine.machineId || "heh-cat-777";
-      const res: any = await apiRequest(`/machines/${targetId}/manual-data`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = res?.data || res;
-
-      setHealthResult(data?.componentHealth || data?.health || data);
-      
-      const compScore = data?.componentHealth?.healthScore ?? data?.component?.healthScore ?? 100;
-      const compStatus = data?.componentHealth?.status || "Healthy";
-      const overallHealth = data?.machineHealth?.overallMachineHealth ?? data?.machine?.healthScore ?? null;
-      const machineStatus = data?.machineHealth?.machineStatus ?? data?.machine?.status ?? null;
-      const actionType = data?.actionType === "INITIAL_INSPECTION" ? "New Entry Created" : "Routine Update Logged";
-
-      if (overallHealth !== null && machineStatus !== null) {
-        setSelectedMachine((prev) => prev ? {
+      if (healthScore !== null) {
+        setComponentHealthMap((prev) => ({
           ...prev,
-          healthScore: overallHealth,
-          status: machineStatus
-        } : prev);
+          [activeComponentTab]: {
+            healthScore,
+            status: componentHealth?.status || "",
+          },
+        }));
+      }
 
+      setHealthResult(data);
+
+      if (machineScore !== null || machineStatus) {
+        setSelectedMachine((prev) =>
+          prev
+            ? { ...prev, healthScore: machineScore ?? prev.healthScore, status: machineStatus ?? prev.status }
+            : prev,
+        );
         setCompanyFleet((prevFleet) =>
-          prevFleet.map((fm) =>
-            fm.id === targetId || (selectedMachine?.serialNumber && fm.serialNumber === selectedMachine.serialNumber)
-              ? {
-                  ...fm,
-                  healthScore: overallHealth,
-                  status: machineStatus
-                }
-              : fm
-          )
+          prevFleet.map((fleetMachine) =>
+            fleetMachine.id === targetId
+              ? { ...fleetMachine, healthScore: machineScore ?? fleetMachine.healthScore, status: machineStatus ?? fleetMachine.status }
+              : fleetMachine,
+          ),
         );
       }
 
-      setSuccessMsg(
-        `✅ ${actionType} for ${activeTab}! Status: ${compStatus} (${compScore}%). Saved to PostgreSQL Audit Log & Component Health Database.`
-      );
-      
-      fetchMachineExistingData(targetId);
-      fetchCompanyFleet();
+      setSuccessMsg(response?.message || "Inspection data saved successfully.");
+      await fetchMachineExistingData(targetId);
+      await fetchCompanyFleet();
     } catch (err: any) {
       console.error("Failed to save inspection:", err);
-      alert(err?.message || "Failed to save inspection readings");
+      showErrorToast(err?.message || "Failed to save inspection readings");
     } finally {
       setSubmitting(false);
     }
@@ -1810,19 +1785,6 @@ export default function InspectionDataEntry() {
         (fm.model && selectedMachine?.model && fm.model.toLowerCase() === selectedMachine.model.toLowerCase()) ||
         (fm.id && fm.id === selectedMachine?.id)
     );
-
-
-          // Update local selected machine status
-          if (selectedMachine) {
-            setSelectedMachine({
-              ...selectedMachine,
-              status: healthObj.status || healthObj.machineStatus || "Healthy",
-            });
-          }
-        }
-      } else {
-        showErrorToast(
-          `Failed to save inspection: ${res?.message || "Server Error"}`,
 
     if (!isAssigned) {
       showToast(`Please mark "${formatCleanModelName(selectedMachine)}" as owned ("⭐ Mark as Owned") first before saving inspection logs.`, "warning");
@@ -1958,84 +1920,12 @@ export default function InspectionDataEntry() {
     );
   };
 
-
-  return (
-    <div className="min-h-screen bg-slate-100 p-4 font-sans text-slate-900 dark:bg-[#07111f] dark:text-white sm:p-6 lg:p-8">
-      <div className="mx-auto max-w-[1500px] space-y-6">
-        {/* Premium Header Banner */}
-        <div className="relative overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-r from-[#1D4ED8] via-[#2563EB] to-[#3B82F6] p-6 text-white shadow-xl dark:border-slate-800">
-          <div className="relative z-10 flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
-            <div>
-              <div className="mb-3 inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-bold uppercase tracking-wider backdrop-blur-md">
-                <Building2 size={14} />
-                Company Admin Inspection Master
-              </div>
-              <h1 className="text-3xl font-black tracking-tight">
-                Inspection & Manual Data Capture
-              </h1>
-              <p className="mt-2 max-w-2xl text-sm leading-relaxed text-blue-100">
-                Select any fleet machine and enter manual operating parameters
-                and physical inspection checklists. Component Categories are
-                dynamically fetched live from your Category Master.
-              </p>
-            </div>
-
   const activeCompSpec = specComponents.find((c) => c.name === activeTab);
-
 
   if (loading) {
     return (
-      <div className="flex min-h-[70vh] flex-col items-center justify-center p-8 text-center space-y-4">
-        <div className="relative">
-          <div className="h-16 w-16 rounded-full border-4 border-blue-200 border-t-blue-600 animate-spin dark:border-blue-950 dark:border-t-blue-400" />
-          <div className="absolute inset-0 flex items-center justify-center text-blue-600 dark:text-blue-400">
-            <Truck size={24} className="animate-pulse" />
-          </div>
-        </div>
-
-
-        {/* Machine Selector Bar */}
-        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-[#0b1728]">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="w-full sm:w-72 md:w-80 shrink-0">
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
-                Select Fleet Machine *
-              </label>
-              {loadingMachines ? (
-                <div className="mt-1.5 flex items-center gap-2 text-sm text-slate-500">
-                  <Loader2 size={16} className="animate-spin" /> Loading fleet
-                  machines...
-                </div>
-              ) : (
-                <select
-                  value={selectedMachineId}
-                  onChange={(e) => handleMachineChange(e.target.value)}
-                  className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 text-sm font-semibold text-slate-900 shadow-sm outline-none transition focus:border-blue-500 focus:bg-white dark:border-slate-800 dark:bg-[#101f33] dark:text-white"
-                >
-                  {machines.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
-
-            {/* Fleet Overview & Machine Stats Badges */}
-            <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-[#101f33]">
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-bold text-slate-700 shadow-xs dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
-                <Truck size={13} className="text-blue-500" /> {machines.length}{" "}
-                Fleet Machines
-              </span>
-
-        <div className="space-y-1">
-          <h3 className="text-lg font-black text-slate-900 dark:text-white">
-            Loading Company Equipment Database...
-          </h3>
-          <p className="text-xs font-medium text-slate-500 max-w-sm">
-            Fetching 9,742+ Machines, 55 Categories &amp; 91 Brands from PostgreSQL Master Equipment Catalog
-          </p>
-        </div>
+      <div className="flex min-h-[70vh] items-center justify-center p-8">
+        <Loader2 size={32} className="animate-spin text-blue-600" />
       </div>
     );
   }

@@ -4,13 +4,12 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import PhoneField from "../../common/PhoneField";
 import AppSelect from "../../ui/dropdown/AppSelect";
 
-
 import {
   superAdminMachineService,
   type SuperAdminCompany,
 } from "../../../services/SuperAdmin/machineService";
 
-import { Eye, Lock, Pencil, Trash2, X } from "lucide-react";
+import { Eye, Lock, LogIn, Pencil, Trash2, X } from "lucide-react";
 
 import { z } from "zod";
 
@@ -22,6 +21,10 @@ import {
 } from "../../../services/Auth/userService";
 import { getRoles, type ApiRole } from "../../../services/Auth/roleService";
 import { showErrorToast, showSuccessToast } from "../../../utils/toastUtils";
+import { authService } from "../../../services/Auth/authService";
+import StorageService, {
+  STORAGE_KEYS,
+} from "../../../services/storage.service";
 
 export type UserStatus = "active" | "inactive";
 export type ModalMode = "add" | "edit";
@@ -297,10 +300,10 @@ const formatDate = (date?: string) => {
   return isNaN(d.getTime())
     ? "—"
     : d.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
 };
 
 const formatLastLogin = (
@@ -529,14 +532,14 @@ type FormFieldProps = {
   colSpan?: boolean;
   error?: string;
 } & (
-    | ({
+  | ({
       as?: "input";
     } & React.InputHTMLAttributes<HTMLInputElement>)
-    | ({
+  | ({
       as: "select";
       children: React.ReactNode;
     } & React.SelectHTMLAttributes<HTMLSelectElement>)
-  );
+);
 
 function FormField({
   label,
@@ -807,8 +810,15 @@ export default function Users() {
 
   const filteredUsers = useMemo(() => {
     const s = normalizeText(search);
+    const noFiltersApplied =
+      !s &&
+      companyFilter === ALL_COMPANIES &&
+      roleFilter === ALL_ROLES &&
+      statusFilter === ALL_STATUS;
+
     return allUsersForFilters.filter((u) => {
-      if (u.role === "Super Admin") return false;
+      // Default view (no filters touched): show only Company Admins
+      if (noFiltersApplied && u.role !== "Admin") return false;
 
       const matchSearch =
         !s ||
@@ -842,8 +852,8 @@ export default function Users() {
     totalFilteredUsers === 0
       ? 0
       : pageSize === "all"
-      ? 1
-      : (currentPage - 1) * limitNumber + 1;
+        ? 1
+        : (currentPage - 1) * limitNumber + 1;
   const endItem =
     pageSize === "all"
       ? totalFilteredUsers
@@ -855,17 +865,23 @@ export default function Users() {
   // HANDLERS
   // ========================
 
-  const [togglingUserId, setTogglingUserId] = useState<string | number | null>(null);
+  const [togglingUserId, setTogglingUserId] = useState<string | number | null>(
+    null,
+  );
+  const [loggingInUserId, setLoggingInUserId] = useState<
+    string | number | null
+  >(null);
 
   const handleToggleUserStatus = async (user: User) => {
     if (togglingUserId) return;
 
-    const nextStatus: UserStatus = user.status === "active" ? "inactive" : "active";
+    const nextStatus: UserStatus =
+      user.status === "active" ? "inactive" : "active";
     const previousUsers = allUsersForFilters;
 
     // Optimistic update
     setAllUsersForFilters((prev) =>
-      prev.map((u) => (u.id === user.id ? { ...u, status: nextStatus } : u))
+      prev.map((u) => (u.id === user.id ? { ...u, status: nextStatus } : u)),
     );
     setTogglingUserId(user.id);
 
@@ -873,13 +889,72 @@ export default function Users() {
       await userService.updateUser(user.id, {
         is_active: nextStatus === "active",
       });
-      showSuccessToast(`${user.name} is now ${nextStatus === "active" ? "Active" : "Inactive"}`);
+      showSuccessToast(
+        `${user.name} is now ${nextStatus === "active" ? "Active" : "Inactive"}`,
+      );
     } catch (err: any) {
       console.error("User status toggle error:", err);
       setAllUsersForFilters(previousUsers);
       showErrorToast(err?.message || "Failed to update user status");
     } finally {
       setTogglingUserId(null);
+    }
+  };
+
+  const handleLoginAsUser = async (user: ExtendedUser) => {
+    try {
+      setLoggingInUserId(user.id);
+
+      const response: any = await authService.impersonate({
+        userId: user.id,
+        companyId: user.companyId,
+        email: user.email && user.email !== "—" ? user.email : undefined,
+      });
+
+      const loginData = response?.data || response;
+      const token = loginData?.token || loginData?.accessToken;
+      const targetUser = loginData?.user;
+
+      if (!token || !targetUser) {
+        throw new Error(
+          response?.message || "Failed to generate login session.",
+        );
+      }
+
+      const normalizedRole = user.role.toLowerCase().replace(/\s+/g, "_");
+      const finalUser = {
+        id: targetUser.id,
+        role: normalizedRole,
+        role_name: user.role,
+        companyId: targetUser.companyId || user.companyId,
+        isActive: targetUser.isActive !== false,
+        email: targetUser.email || user.email,
+        name: targetUser.name || user.name,
+        companyName: targetUser.companyName || user.company,
+        company: targetUser.companyName || user.company,
+      };
+
+      StorageService.set(STORAGE_KEYS.TOKEN, token);
+      StorageService.set(STORAGE_KEYS.USER, finalUser);
+      StorageService.set(STORAGE_KEYS.ROLE, normalizedRole);
+      StorageService.set(STORAGE_KEYS.EMAIL, finalUser.email || "");
+      StorageService.set(STORAGE_KEYS.NAME, finalUser.name || "");
+      if (finalUser.companyId) {
+        StorageService.set(STORAGE_KEYS.COMPANY_ID, finalUser.companyId);
+      }
+
+      showSuccessToast(`Logged in as ${user.name} successfully!`, {
+        duration: 3000,
+      });
+
+      setTimeout(() => {
+        window.location.href = "/company-admin/dashboard";
+      }, 500);
+    } catch (err: any) {
+      console.error("Login as user failed:", err);
+      showErrorToast(err?.message || "Failed to log in as this user.");
+    } finally {
+      setLoggingInUserId(null);
     }
   };
 
@@ -1065,6 +1140,8 @@ export default function Users() {
           onDelete={openDeleteModal}
           onToggleStatus={handleToggleUserStatus}
           togglingUserId={togglingUserId}
+          onLogin={handleLoginAsUser}
+          loggingInUserId={loggingInUserId}
         />
 
         <Pagination
@@ -1237,6 +1314,8 @@ function UsersTable({
   onDelete,
   onToggleStatus,
   togglingUserId,
+  onLogin,
+  loggingInUserId,
 }: {
   users: User[];
   startItem?: number;
@@ -1247,6 +1326,8 @@ function UsersTable({
   onDelete: (u: User) => void;
   onToggleStatus?: (u: User) => void;
   togglingUserId?: string | number | null;
+  onLogin?: (u: User) => void;
+  loggingInUserId?: string | number | null;
 }) {
   if (loading)
     return (
@@ -1298,7 +1379,7 @@ function UsersTable({
                 {h}
               </th>
             ))}
-            <th className={`${thClass} text-right`}>Actions</th>
+            <th className={`${thClass} text-center`}>Actions</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -1339,8 +1420,14 @@ function UsersTable({
                 </span>
               </td>
               <td className="px-6 py-5 text-sm text-slate-600 dark:text-slate-300">
-                {(user.role || "").toString().toLowerCase().includes("sub super") ||
-                (user.role || "").toString().toLowerCase().includes("sub_super") ? (
+                {(user.role || "")
+                  .toString()
+                  .toLowerCase()
+                  .includes("sub super") ||
+                (user.role || "")
+                  .toString()
+                  .toLowerCase()
+                  .includes("sub_super") ? (
                   <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-400">
                     Platform Admin (No Company)
                   </span>
@@ -1388,7 +1475,23 @@ function UsersTable({
                 )}
               </td>
               <td className="px-6 py-5">
-                <div className="flex items-center justify-end gap-2">
+                <div className="flex items-center justify-center gap-2">
+                  {onLogin && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onLogin(user);
+                      }}
+                      disabled={loggingInUserId === user.id}
+                      title={`Login as ${user.name}`}
+                      className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-600 transition hover:bg-blue-100 disabled:opacity-50 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-400 dark:hover:bg-blue-500/20"
+                    >
+                      {loggingInUserId === user.id ? "Logging in..." : "Login"}
+                    </button>
+                  )}
+
                   <button
                     type="button"
                     onClick={(e) => {
@@ -1528,7 +1631,9 @@ function UserModal({
     try {
       setLoading(true);
       const selectedRoleStr = (form.role || "").toString().toLowerCase();
-      const isSubSuperAdmin = selectedRoleStr.includes("sub super") || selectedRoleStr.includes("sub_super");
+      const isSubSuperAdmin =
+        selectedRoleStr.includes("sub super") ||
+        selectedRoleStr.includes("sub_super");
 
       if (mode === "add") {
         const payload: AddUserPayload = {
@@ -1541,7 +1646,10 @@ function UserModal({
             flowType === "existing"
               ? getApiRoleName(form.role ?? "Operator")
               : "admin",
-          company_id: (flowType === "existing" && !isSubSuperAdmin) ? form.companyId : undefined,
+          company_id:
+            flowType === "existing" && !isSubSuperAdmin
+              ? form.companyId
+              : undefined,
         };
 
         await userService.addUser(payload);
@@ -1556,7 +1664,10 @@ function UserModal({
             flowType === "existing"
               ? getApiRoleName(form.role ?? "Operator")
               : "admin",
-          company_id: (flowType === "existing" && !isSubSuperAdmin) ? form.companyId : undefined,
+          company_id:
+            flowType === "existing" && !isSubSuperAdmin
+              ? form.companyId
+              : undefined,
         };
 
         await userService.updateUser(editingUserId, payload);
@@ -1662,10 +1773,11 @@ function UserModal({
                 type="button"
                 onClick={() => switchFlow("existing")}
                 disabled={isLoading}
-                className={`flex flex-col gap-1.5 rounded-2xl border-2 px-4 py-4 text-left transition-all ${!isNewCompanyAdmin
+                className={`flex flex-col gap-1.5 rounded-2xl border-2 px-4 py-4 text-left transition-all ${
+                  !isNewCompanyAdmin
                     ? "border-blue-500 bg-blue-50 dark:border-blue-500 dark:bg-blue-500/10"
                     : "border-slate-200 bg-white hover:border-slate-300 dark:border-slate-700 dark:bg-[#0B1739] dark:hover:border-slate-600"
-                  }`}
+                }`}
               >
                 <div className="flex items-center gap-2">
                   <span
@@ -1692,10 +1804,11 @@ function UserModal({
                 type="button"
                 onClick={() => switchFlow("new_company_admin")}
                 disabled={isLoading}
-                className={`flex flex-col gap-1.5 rounded-2xl border-2 px-4 py-4 text-left transition-all ${isNewCompanyAdmin
+                className={`flex flex-col gap-1.5 rounded-2xl border-2 px-4 py-4 text-left transition-all ${
+                  isNewCompanyAdmin
                     ? "border-blue-500 bg-blue-50 dark:border-blue-500 dark:bg-blue-500/10"
                     : "border-slate-200 bg-white hover:border-slate-300 dark:border-slate-700 dark:bg-[#0B1739] dark:hover:border-slate-600"
-                  }`}
+                }`}
               >
                 <div className="flex items-center gap-2">
                   <span
@@ -1723,7 +1836,16 @@ function UserModal({
         {/* ── Company Selector (existing flow only) ── */}
         {!isNewCompanyAdmin && (
           <div>
-            {watch("role") === "Sub Super Admin" || watch("role") === "sub_super_admin" || (watch("role") || "").toString().toLowerCase().includes("sub super") || (watch("role") || "").toString().toLowerCase().includes("sub_super") ? (
+            {watch("role") === "Sub Super Admin" ||
+            watch("role") === "sub_super_admin" ||
+            (watch("role") || "")
+              .toString()
+              .toLowerCase()
+              .includes("sub super") ||
+            (watch("role") || "")
+              .toString()
+              .toLowerCase()
+              .includes("sub_super") ? (
               <div>
                 <label className="mb-1.5 flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                   <span>Company</span>
@@ -1752,9 +1874,9 @@ function UserModal({
                   setValue(
                     "company",
                     selectedCompany?.name ||
-                    selectedCompany?.company_name ||
-                    selectedCompany?.companyName ||
-                    "",
+                      selectedCompany?.company_name ||
+                      selectedCompany?.companyName ||
+                      "",
                     {
                       shouldValidate: true,
                       shouldDirty: true,

@@ -28,8 +28,7 @@ import {
 } from "../../config/equipmentIcons.config";
 import { getApiBaseUrl } from "../../services/api";
 import StorageService from "../../services/storage.service";
-import Pagination from "../../components/common/Pagination";
-import StorageService from "../../services/storage.service";
+import Pagination from "../../components/common/Pagination";  
 import { isReadOnlyRole } from "../../components/common/permissions";
 
 const API_BASE = getApiBaseUrl().replace(/\/$/, "");
@@ -39,11 +38,28 @@ const NAME_MIN_LENGTH = 3;
 const NAME_MAX_LENGTH = 50;
 const DESC_MAX_LENGTH = 250;
 
+const getApiList = (payload: any): any[] => {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.data)) return payload.data;
+  return [];
+};
+
 type EquipmentTypeItem = {
   id: string;
   name: string;
   description: string;
   icon: string;
+  isActive: boolean;
+  companyName: string;
+  companyId: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type ComponentCategoryItem = {
+  id: string;
+  name: string;
+  description: string;
   isActive: boolean;
   companyName: string;
   companyId: string;
@@ -93,9 +109,6 @@ export default function CategoryManagement() {
     description?: string;
   }>({});
 
-  // Validation Error State
-  const [eqErrors, setEqErrors] = useState<{ name?: string; description?: string }>({});
-
 
   // Delete Confirmation Modal State
   const [deleteTarget, setDeleteTarget] = useState<{
@@ -112,9 +125,6 @@ export default function CategoryManagement() {
     icon: "Truck",
   });
   const [ccForm, setCcForm] = useState({ name: "", description: "" });
-
-  const [eqForm, setEqForm] = useState({ name: "", description: "", icon: "Truck" });
-
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -153,94 +163,58 @@ export default function CategoryManagement() {
     return headers;
   };
 
-  // --- 1. GET API: Fetch Real Records from DB (Custom Categories + Active Company Fleet Machine Categories) ---
+  // --- 1. GET API: Fetch categories from the database ---
   const fetchRealDbData = async () => {
     setLoading(true);
     setApiError(null);
     try {
       const headers = getHeaders();
-      const user = StorageService.getUser();
-      const companyId = user?.companyId || user?.company_id || StorageService.getCompanyId() || "";
-      const query = companyId ? `?companyId=${encodeURIComponent(companyId)}` : "";
-
-
-      // Fetch Machine Equipment Types
+      // Fetch machine equipment types.
       const eqRes = await fetch(
         `${API_BASE}/machines/categories?includeInactive=true`,
         { headers },
       );
-      if (eqRes.ok) {
-        const eqData = await eqRes.json();
-        if (eqData && Array.isArray(eqData.data)) {
-          setEquipmentTypes(
-            eqData.data.map((item: any) => ({
-              id: item.id,
-              name: item.name,
-              description: item.description || "",
-              icon: item.icon || "Truck",
-              isActive: item.isActive !== undefined ? item.isActive : true,
-              companyName: item.companyName || "Mining Operations Ltd",
-              companyId: item.companyId || "COMP-101",
-              createdAt: item.createdAt
-                ? item.createdAt.split("T")[0]
-                : new Date().toISOString().split("T")[0],
-              updatedAt: item.updatedAt
-                ? item.updatedAt.split("T")[0]
-                : item.createdAt
-                  ? item.createdAt.split("T")[0]
-                  : new Date().toISOString().split("T")[0],
-            })),
-          );
-        }
+      const eqData = await eqRes.json();
+      if (!eqRes.ok) {
+        throw new Error(eqData?.message || "Failed to load equipment types.");
       }
+      const equipmentItems = getApiList(eqData);
+      setEquipmentTypes(
+        equipmentItems.map((item: any) => ({
+          id: String(item.id ?? ""),
+          name: String(item.name ?? ""),
+          description: String(item.description ?? ""),
+          icon: String(item.icon ?? ""),
+          isActive: item.isActive !== false,
+          companyName: String(item.companyName ?? ""),
+          companyId: String(item.companyId ?? ""),
+          createdAt: item.createdAt ? item.createdAt.split("T")[0] : "",
+          updatedAt: item.updatedAt ? item.updatedAt.split("T")[0] : "",
+        })),
+      );
 
-      // Fetch Component Categories
+      // Fetch component categories.
       const compRes = await fetch(
         `${API_BASE}/components/categories?includeInactive=true`,
         { headers },
       );
-      if (compRes.ok) {
-        const compData = await compRes.json();
-        if (compData && Array.isArray(compData.data)) {
-          setComponentCategories(
-            compData.data.map((item: any) => ({
-              id: item.id,
-              name: item.name,
-              description: item.description || "",
-              isActive: item.isActive !== undefined ? item.isActive : true,
-              companyName: item.companyName || "Mining Operations Ltd",
-              companyId: item.companyId || "COMP-101",
-              createdAt: item.createdAt
-                ? item.createdAt.split("T")[0]
-                : new Date().toISOString().split("T")[0],
-              updatedAt: item.updatedAt
-                ? item.updatedAt.split("T")[0]
-                : item.createdAt
-                  ? item.createdAt.split("T")[0]
-                  : new Date().toISOString().split("T")[0],
-            })),
-          );
-        }
-
-      const res = await fetch(`${API_BASE}/machines/categories${query}`, { headers });
-      const resJson = await res.json();
-
-      if (resJson && Array.isArray(resJson.data)) {
-        setEquipmentTypes(
-          resJson.data.map((item: any) => ({
-            id: item.id,
-            name: item.name,
-            description: item.description || "Company Equipment Type",
-            icon: item.icon || "Truck",
-            isActive: item.isActive !== undefined ? item.isActive : true,
-            companyName: item.companyName || user?.companyName || "Mining Operations Ltd",
-            companyId: item.companyId || companyId || "COMP-101",
-            createdAt: item.createdAt ? item.createdAt.split("T")[0] : new Date().toISOString().split("T")[0],
-            updatedAt: item.updatedAt ? item.updatedAt.split("T")[0] : new Date().toISOString().split("T")[0],
-          }))
-        );
-
+      const compData = await compRes.json();
+      if (!compRes.ok) {
+        throw new Error(compData?.message || "Failed to load component categories.");
       }
+      const componentItems = getApiList(compData);
+      setComponentCategories(
+        componentItems.map((item: any) => ({
+          id: String(item.id ?? ""),
+          name: String(item.name ?? ""),
+          description: String(item.description ?? ""),
+          isActive: item.isActive !== false,
+          companyName: String(item.companyName ?? ""),
+          companyId: String(item.companyId ?? ""),
+          createdAt: item.createdAt ? item.createdAt.split("T")[0] : "",
+          updatedAt: item.updatedAt ? item.updatedAt.split("T")[0] : "",
+        })),
+      );
     } catch (err: any) {
       console.error("Error fetching categories:", err);
       setApiError("Failed to load categories from server.");
@@ -516,8 +490,6 @@ export default function CategoryManagement() {
           );
         }
 
-        setEquipmentTypes((prev) => prev.filter((item) => item.id !== deleteTarget.id));
-
         showSuccessToast(`'${deleteTarget.name}' deleted successfully!`);
         setDeleteTarget(null);
       } else {
@@ -583,8 +555,6 @@ export default function CategoryManagement() {
     activeTab === "equipment" ? filteredEq.length : filteredCc.length;
 
   // Pagination Logic
-  const currentTotal = filteredEq.length;
-
   const isShowAll = pageSize === "all";
   const numericPageSize = isShowAll ? currentTotal || 1 : pageSize;
   const totalPages = isShowAll
@@ -603,9 +573,6 @@ export default function CategoryManagement() {
   const paginatedCc = isShowAll
     ? filteredCc
     : filteredCc.slice(startIndex, endIndex);
-
-  const paginatedEq = isShowAll ? filteredEq : filteredEq.slice(startIndex, endIndex);
-
 
   return (
     <div className="min-h-screen bg-slate-100 p-4 font-sans text-slate-900 dark:bg-[#07111f] dark:text-white sm:p-6 lg:p-8">
@@ -756,7 +723,7 @@ export default function CategoryManagement() {
                         </td>
 
                         <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-300">
-                          {item.description || "N/A"}
+                          {item.description}
                         </td>
 
                         <td className="px-6 py-4">

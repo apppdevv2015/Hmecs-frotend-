@@ -27,9 +27,13 @@ import StorageService, { STORAGE_KEYS } from "../../services/storage.service";
 import Pagination from "../../components/common/Pagination";
 import { machineService } from "../../services/companyadmin/machineService";
 import { componentService } from "../../services/companyadmin/componentService";
-import { userService, normalizeUsersResponse } from "../../services/Auth/userService";
-import SupervisorUserDetailModal, { type UserDetailData } from "../../components/supervisor/SupervisorUserDetailModal";
-
+import {
+  userService,
+  normalizeUsersResponse,
+} from "../../services/Auth/userService";
+import SupervisorUserDetailModal, {
+  type UserDetailData,
+} from "../../components/supervisor/SupervisorUserDetailModal";
 
 import {
   fetchArtisanAssignments,
@@ -73,8 +77,10 @@ export default function SupervisorAssignedArtisans() {
 
   // Machine, Component & Artisan Selection Filters (Default to "all" for all!)
   const [selectedMachineId, setSelectedMachineId] = useState<string>("all");
-  const [selectedComponentFilter, setSelectedComponentFilter] = useState<string>("all");
-  const [selectedArtisanFilter, setSelectedArtisanFilter] = useState<string>("all");
+  const [selectedComponentFilter, setSelectedComponentFilter] =
+    useState<string>("all");
+  const [selectedArtisanFilter, setSelectedArtisanFilter] =
+    useState<string>("all");
 
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState<number | "all">(5);
@@ -87,9 +93,15 @@ export default function SupervisorAssignedArtisans() {
   const [loadingModalComponents, setLoadingModalComponents] = useState(false);
   const [modalArtisanId, setModalArtisanId] = useState("");
   const [modalWorkScope, setModalWorkScope] = useState("");
-  const [modalPriority, setModalPriority] = useState<"High" | "Medium" | "Low">("Medium");
-  const [modalStartDate, setModalStartDate] = useState(new Date().toISOString().split("T")[0]);
-  const [modalDueDate, setModalDueDate] = useState(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]);
+  const [modalPriority, setModalPriority] = useState<"High" | "Medium" | "Low">(
+    "Medium",
+  );
+  const [modalStartDate, setModalStartDate] = useState(
+    new Date().toISOString().split("T")[0],
+  );
+  const [modalDueDate, setModalDueDate] = useState(
+    new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+  );
 
   // Dynamic Component Fetch GET API for Selected Machine
   useEffect(() => {
@@ -97,8 +109,11 @@ export default function SupervisorAssignedArtisans() {
       if (!modalMachineId) return;
       try {
         setLoadingModalComponents(true);
-        const res = await componentService.getComponentsByMachineId(modalMachineId);
-        const list = Array.isArray(res) ? res : res?.data || res?.components || [];
+        const res =
+          await componentService.getComponentsByMachineId(modalMachineId);
+        const list = Array.isArray(res)
+          ? res
+          : res?.data || res?.components || [];
         if (list.length > 0) {
           const formatted = list.map((c: any) => ({
             label: c.displayName || c.name || c.category || "Component",
@@ -109,11 +124,15 @@ export default function SupervisorAssignedArtisans() {
             setModalComponentName(formatted[0].value);
           }
         } else {
-          setModalComponents(DEFAULT_COMPONENTS.map((c) => ({ label: c, value: c })));
+          setModalComponents(
+            DEFAULT_COMPONENTS.map((c) => ({ label: c, value: c })),
+          );
         }
       } catch (err) {
         console.warn("Failed to fetch machine components:", err);
-        setModalComponents(DEFAULT_COMPONENTS.map((c) => ({ label: c, value: c })));
+        setModalComponents(
+          DEFAULT_COMPONENTS.map((c) => ({ label: c, value: c })),
+        );
       } finally {
         setLoadingModalComponents(false);
       }
@@ -124,14 +143,23 @@ export default function SupervisorAssignedArtisans() {
     }
   }, [modalMachineId, isModalOpen]);
 
-  const [selectedUserDetail, setSelectedUserDetail] = useState<UserDetailData | null>(null);
+  const [selectedUserDetail, setSelectedUserDetail] =
+    useState<UserDetailData | null>(null);
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
 
   const loading = directoryLoading || assignmentsLoading;
 
   const getOperatorForMachine = (machineId: string, machineName = "") => {
-    const found = machines.find((m) => m.id === machineId || (machineName && m.name && m.name.includes(machineName)));
-    return (found as any)?.assignedOperatorName || (found as any)?.operatorName || "Operator Assigned";
+    const found = machines.find(
+      (m) =>
+        m.id === machineId ||
+        (machineName && m.name && m.name.includes(machineName)),
+    );
+    return (
+      (found as any)?.assignedOperatorName ||
+      (found as any)?.operatorName ||
+      "Operator Assigned"
+    );
   };
 
   const getTaskDurationText = (assignedAt: string) => {
@@ -141,7 +169,9 @@ export default function SupervisorAssignedArtisans() {
       const now = new Date();
       const diffMs = now.getTime() - assignedDate.getTime();
       const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-      const diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const diffHours = Math.floor(
+        (diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60),
+      );
 
       if (diffDays <= 0) {
         if (diffHours <= 1) return "Just Started";
@@ -154,7 +184,12 @@ export default function SupervisorAssignedArtisans() {
     }
   };
 
-  const handleOpenArtisanModal = (artisanName: string, specialization = "", machineName = "", workScope = "") => {
+  const handleOpenArtisanModal = (
+    artisanName: string,
+    specialization = "",
+    machineName = "",
+    workScope = "",
+  ) => {
     const detail: UserDetailData = {
       id: artisanName.toLowerCase().replace(/\s+/g, "_"),
       name: artisanName,
@@ -173,7 +208,9 @@ export default function SupervisorAssignedArtisans() {
           assignedAt: "Today",
         },
       ],
-      workScope: workScope || "Specialized mechanical & component maintenance inspection, pressure testing, and component overhaul.",
+      workScope:
+        workScope ||
+        "Specialized mechanical & component maintenance inspection, pressure testing, and component overhaul.",
     };
     setSelectedUserDetail(detail);
     setIsUserModalOpen(true);
@@ -208,27 +245,28 @@ export default function SupervisorAssignedArtisans() {
 
       // Filter Artisans / Engineers
       const artisanUsers = userList.filter((u: any) => {
-  const roleValue =
-    typeof u.role === "string"
-      ? u.role
-      : u.role?.name ??
-        u.role?.role ??
-        u.role?.value ??
-        u.role_name ??
-        u.roleName ??
-        "";
+        const roleValue =
+          typeof u.role === "string"
+            ? u.role
+            : (u.role?.name ??
+              u.role?.role ??
+              u.role?.value ??
+              u.role_name ??
+              u.roleName ??
+              "");
 
-  const role = String(roleValue).toLowerCase().trim();
+        const role = String(roleValue).toLowerCase().trim();
 
-  return role === "artisan" || role.includes("artisan");
-});
+        return role === "artisan" || role.includes("artisan");
+      });
 
       // Normalize Artisans
       const normalizedArtisans = artisanUsers
         .map((u, idx) => {
           const first = u.firstName || u.first_name || "";
           const last = u.lastName || u.last_name || "";
-          const name = `${first} ${last}`.trim() || u.name || `Artisan ${idx + 1}`;
+          const name =
+            `${first} ${last}`.trim() || u.name || `Artisan ${idx + 1}`;
           const rawSpec =
             (typeof u.role === "string" ? u.role : u.role?.name) ||
             "Equipment Maintenance Specialist";
@@ -241,7 +279,11 @@ export default function SupervisorAssignedArtisans() {
             specialization: spec,
           };
         })
-        .filter((a) => !a.name.toLowerCase().includes("engineer") && !a.specialization.toLowerCase().includes("engineer"));
+        .filter(
+          (a) =>
+            !a.name.toLowerCase().includes("engineer") &&
+            !a.specialization.toLowerCase().includes("engineer"),
+        );
 
       setMachines(rawMachines);
       setArtisans(normalizedArtisans);
@@ -264,14 +306,21 @@ export default function SupervisorAssignedArtisans() {
 
   // Open Modal for a specific Machine & Component
   const handleOpenModal = (machineId = "", componentName = "") => {
-    const targetMachineId = machineId || (selectedMachineId !== "all" ? selectedMachineId : machines[0]?.id) || "";
+    const targetMachineId =
+      machineId ||
+      (selectedMachineId !== "all" ? selectedMachineId : machines[0]?.id) ||
+      "";
     setModalMachineId(targetMachineId);
     setModalComponentName(componentName || DEFAULT_COMPONENTS[0]);
     setModalArtisanId(artisans[0]?.id || "");
     setModalWorkScope("");
     setModalPriority("Medium");
     setModalStartDate(new Date().toISOString().split("T")[0]);
-    setModalDueDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]);
+    setModalDueDate(
+      new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+        .toISOString()
+        .split("T")[0],
+    );
     setIsModalOpen(true);
   };
 
@@ -279,7 +328,9 @@ export default function SupervisorAssignedArtisans() {
   const existingAssignmentForModal = useMemo(() => {
     if (!modalMachineId || !modalComponentName) return null;
     return assignments.find(
-      (a) => a.machineId === modalMachineId && a.componentName === modalComponentName
+      (a) =>
+        a.machineId === modalMachineId &&
+        a.componentName === modalComponentName,
     );
   }, [modalMachineId, modalComponentName, assignments]);
 
@@ -287,7 +338,7 @@ export default function SupervisorAssignedArtisans() {
   const activeTaskForSelectedArtisan = useMemo(() => {
     if (!modalArtisanId) return null;
     return assignments.find(
-      (a) => a.artisanId === modalArtisanId && a.status === "Active"
+      (a) => a.artisanId === modalArtisanId && a.status === "Active",
     );
   }, [modalArtisanId, assignments]);
 
@@ -315,7 +366,7 @@ export default function SupervisorAssignedArtisans() {
           priority: item.priority,
           startDate: item.startDate,
           dueDate: item.dueDate,
-        })
+        }),
       );
     }
   };
@@ -334,7 +385,9 @@ export default function SupervisorAssignedArtisans() {
         const raw = localStorage.getItem("hme_user");
         if (raw) {
           const p = JSON.parse(raw);
-          const n = `${p.firstName || p.first_name || ""} ${p.lastName || p.last_name || ""}`.trim() || p.name;
+          const n =
+            `${p.firstName || p.first_name || ""} ${p.lastName || p.last_name || ""}`.trim() ||
+            p.name;
           if (n) return n;
         }
       } catch {}
@@ -354,7 +407,6 @@ export default function SupervisorAssignedArtisans() {
 
     const generatedTaskId = `TSK-${Math.floor(100000 + Math.random() * 900000)}`;
 
-
     const result = await dispatch(
       assignArtisanToMachine({
         machineId: modalMachineId,
@@ -366,13 +418,14 @@ export default function SupervisorAssignedArtisans() {
         taskId: generatedTaskId,
         componentId: `comp-${Date.now()}`,
         componentName: modalComponentName || "Full Machine",
-        workScope: modalWorkScope || "General machine maintenance inspection & diagnostic.",
+        workScope:
+          modalWorkScope ||
+          "General machine maintenance inspection & diagnostic.",
         priority: modalPriority,
         startDate: modalStartDate,
         dueDate: modalDueDate,
-      })
+      }),
     );
-
 
     const newEntry: ComponentArtisanAssignment = {
       id: `ASGN-${Date.now()}`,
@@ -383,18 +436,26 @@ export default function SupervisorAssignedArtisans() {
       componentName: modalComponentName,
       artisanId: modalArtisanId,
       artisanName: selectedArtisan?.name || "Assigned Artisan",
-      artisanSpecialization: selectedArtisan?.specialization || "Maintenance Specialist",
+      artisanSpecialization:
+        selectedArtisan?.specialization || "Maintenance Specialist",
       supervisorName: (() => {
         try {
           const user = StorageService.getUser();
           if (user) {
-            const n = user.name || user.fullName || `${user.firstName || user.first_name || ""} ${user.lastName || user.last_name || ""}`.trim();
+            const n =
+              user.name ||
+              user.fullName ||
+              `${user.firstName || user.first_name || ""} ${user.lastName || user.last_name || ""}`.trim();
             if (n) return n;
           }
         } catch {}
-        return StorageService.get<string>(STORAGE_KEYS.USER_NAME) || "Supervisor";
+        return (
+          StorageService.get<string>(STORAGE_KEYS.USER_NAME) || "Supervisor"
+        );
       })(),
-      workScope: modalWorkScope || "General component maintenance inspection & diagnostic.",
+      workScope:
+        modalWorkScope ||
+        "General component maintenance inspection & diagnostic.",
       priority: modalPriority,
       startDate: modalStartDate,
       dueDate: modalDueDate,
@@ -409,9 +470,9 @@ export default function SupervisorAssignedArtisans() {
     };
 
     const existingIndex = assignments.findIndex(
-      (a) => a.machineId === modalMachineId && a.componentName === modalComponentName
-
-
+      (a) =>
+        a.machineId === modalMachineId &&
+        a.componentName === modalComponentName,
     );
 
     if (assignArtisanToMachine.fulfilled.match(result)) {
@@ -470,14 +531,23 @@ export default function SupervisorAssignedArtisans() {
         item.machineName.toLowerCase().includes(q) ||
         (item.workScope || "").toLowerCase().includes(q);
 
-      const matchesMachine = selectedMachineId === "all" || item.machineId === selectedMachineId;
-      const matchesArtisan = selectedArtisanFilter === "all" || item.artisanId === selectedArtisanFilter;
+      const matchesMachine =
+        selectedMachineId === "all" || item.machineId === selectedMachineId;
+      const matchesArtisan =
+        selectedArtisanFilter === "all" ||
+        item.artisanId === selectedArtisanFilter;
 
       return matchesSearch && matchesMachine && matchesArtisan;
     });
   }, [assignments, search, selectedMachineId, selectedArtisanFilter]);
 
-  type ArtisanSortField = "machine" | "component" | "artisan" | "supervisor" | "priority" | "status";
+  type ArtisanSortField =
+    | "machine"
+    | "component"
+    | "artisan"
+    | "supervisor"
+    | "priority"
+    | "status";
   const [sortField, setSortField] = useState<ArtisanSortField>("machine");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
@@ -524,12 +594,21 @@ export default function SupervisorAssignedArtisans() {
   }, [filteredAssignments, sortField, sortOrder]);
 
   const isShowAll = itemsPerPage === "all";
-  const effectivePageSize = isShowAll ? Math.max(1, sortedAssignments.length) : itemsPerPage;
-  const totalPages = isShowAll ? 1 : Math.max(1, Math.ceil(sortedAssignments.length / effectivePageSize));
+  const effectivePageSize = isShowAll
+    ? Math.max(1, sortedAssignments.length)
+    : itemsPerPage;
+  const totalPages = isShowAll
+    ? 1
+    : Math.max(1, Math.ceil(sortedAssignments.length / effectivePageSize));
   const startIndex = (currentPage - 1) * effectivePageSize;
-  const paginatedAssignments = isShowAll ? sortedAssignments : sortedAssignments.slice(startIndex, startIndex + effectivePageSize);
-  const startItem = filteredAssignments.length === 0 ? 0 : isShowAll ? 1 : startIndex + 1;
-  const endItem = isShowAll ? filteredAssignments.length : Math.min(startIndex + effectivePageSize, filteredAssignments.length);
+  const paginatedAssignments = isShowAll
+    ? sortedAssignments
+    : sortedAssignments.slice(startIndex, startIndex + effectivePageSize);
+  const startItem =
+    filteredAssignments.length === 0 ? 0 : isShowAll ? 1 : startIndex + 1;
+  const endItem = isShowAll
+    ? filteredAssignments.length
+    : Math.min(startIndex + effectivePageSize, filteredAssignments.length);
 
   return (
     <div className="space-y-6 p-4 md:p-6 font-sans">
@@ -551,7 +630,8 @@ export default function SupervisorAssignedArtisans() {
             </h1>
 
             <p className="mt-2 max-w-2xl text-sm leading-6 text-blue-100">
-              Select a machine, assign specialized Artisans, and manage fleet maintenance operations.
+              Select a machine, assign specialized Artisans, and manage fleet
+              maintenance operations.
             </p>
           </div>
 
@@ -596,13 +676,22 @@ export default function SupervisorAssignedArtisans() {
                 All Specialized Fleet Artisans ({artisans.length})
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Live artisan directory, specialization roster, and real-time availability.
+                Live artisan directory, specialization roster, and real-time
+                availability.
               </p>
             </div>
           </div>
 
           <span className="self-start sm:self-auto rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-bold text-indigo-700 dark:border-indigo-800/60 dark:bg-indigo-950/40 dark:text-indigo-300">
-            {artisans.filter((a) => !assignments.some((as) => as.artisanId === a.id && as.status === "Active")).length} Free / Available
+            {
+              artisans.filter(
+                (a) =>
+                  !assignments.some(
+                    (as) => as.artisanId === a.id && as.status === "Active",
+                  ),
+              ).length
+            }{" "}
+            Free / Available
           </span>
         </div>
 
@@ -610,7 +699,7 @@ export default function SupervisorAssignedArtisans() {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {artisans.map((artisan) => {
             const activeAssignment = assignments.find(
-              (a) => a.artisanId === artisan.id && a.status === "Active"
+              (a) => a.artisanId === artisan.id && a.status === "Active",
             );
             const isBusy = Boolean(activeAssignment);
 
@@ -622,7 +711,7 @@ export default function SupervisorAssignedArtisans() {
                     artisan.name,
                     artisan.specialization,
                     activeAssignment?.machineName,
-                    activeAssignment?.workScope
+                    activeAssignment?.workScope,
                   )
                 }
                 className="group cursor-pointer rounded-2xl border border-slate-200 bg-slate-50/70 p-4 transition hover:-translate-y-0.5 hover:border-indigo-400 hover:bg-white hover:shadow-md dark:border-slate-800 dark:bg-slate-950/50 dark:hover:border-indigo-500/50 dark:hover:bg-slate-900"
@@ -656,7 +745,8 @@ export default function SupervisorAssignedArtisans() {
                 <div className="mt-3 pt-2.5 border-t border-slate-200/60 dark:border-slate-800/80 flex items-center justify-between gap-2 text-[11px]">
                   {activeAssignment ? (
                     <span className="text-amber-700 dark:text-amber-300 font-semibold line-clamp-1 text-[10px]">
-                      📍 {activeAssignment.machineName} ({(activeAssignment.componentName || "").split(" ")[0]})
+                      📍 {activeAssignment.machineName} (
+                      {(activeAssignment.componentName || "").split(" ")[0]})
                     </span>
                   ) : (
                     <span className="text-emerald-600 dark:text-emerald-400 font-semibold text-[10px]">
@@ -703,7 +793,10 @@ export default function SupervisorAssignedArtisans() {
           {/* Artisan Dropdown (Supports "All Fleet Artisans") */}
           <div className="space-y-1.5">
             <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-              <UserCheck size={16} className="text-emerald-600 dark:text-emerald-400" />
+              <UserCheck
+                size={16}
+                className="text-emerald-600 dark:text-emerald-400"
+              />
               2. Filter Artisan (All or Specific)
             </label>
             <AppSelect
@@ -754,25 +847,45 @@ export default function SupervisorAssignedArtisans() {
                   className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 cursor-pointer select-none transition hover:text-blue-600 dark:hover:text-blue-400"
                   onClick={() => handleSort("machine")}
                 >
-                  Task ID & Machine {sortField === "machine" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
+                  Task ID & Machine{" "}
+                  {sortField === "machine"
+                    ? sortOrder === "asc"
+                      ? "▲"
+                      : "▼"
+                    : "↕"}
                 </th>
                 <th
                   className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 cursor-pointer select-none transition hover:text-blue-600 dark:hover:text-blue-400"
                   onClick={() => handleSort("artisan")}
                 >
-                  Assigned Artisan {sortField === "artisan" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
+                  Assigned Artisan{" "}
+                  {sortField === "artisan"
+                    ? sortOrder === "asc"
+                      ? "▲"
+                      : "▼"
+                    : "↕"}
                 </th>
                 <th
                   className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 cursor-pointer select-none transition hover:text-blue-600 dark:hover:text-blue-400"
                   onClick={() => handleSort("supervisor")}
                 >
-                  Assigned By (Supervisor) {sortField === "supervisor" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
+                  Assigned By (Supervisor){" "}
+                  {sortField === "supervisor"
+                    ? sortOrder === "asc"
+                      ? "▲"
+                      : "▼"
+                    : "↕"}
                 </th>
                 <th
                   className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 cursor-pointer select-none transition hover:text-blue-600 dark:hover:text-blue-400"
                   onClick={() => handleSort("priority")}
                 >
-                  Work Scope & Priority {sortField === "priority" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
+                  Work Scope & Priority{" "}
+                  {sortField === "priority"
+                    ? sortOrder === "asc"
+                      ? "▲"
+                      : "▼"
+                    : "↕"}
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                   Schedule (Start ➔ Due)
@@ -781,7 +894,12 @@ export default function SupervisorAssignedArtisans() {
                   className="px-6 py-4 text-center text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 cursor-pointer select-none transition hover:text-blue-600 dark:hover:text-blue-400"
                   onClick={() => handleSort("status")}
                 >
-                  Status {sortField === "status" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
+                  Status{" "}
+                  {sortField === "status"
+                    ? sortOrder === "asc"
+                      ? "▲"
+                      : "▼"
+                    : "↕"}
                 </th>
                 <th className="px-6 py-4 text-center text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                   Action
@@ -802,13 +920,19 @@ export default function SupervisorAssignedArtisans() {
                 </tr>
               ) : paginatedAssignments.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-sm font-semibold text-slate-500 dark:text-slate-400">
+                  <td
+                    colSpan={7}
+                    className="px-6 py-12 text-center text-sm font-semibold text-slate-500 dark:text-slate-400"
+                  >
                     No machine artisan assignments found matching your search.
                   </td>
                 </tr>
               ) : (
                 paginatedAssignments.map((item) => (
-                  <tr key={item.id} className="transition hover:bg-slate-50/50 dark:hover:bg-slate-800/50">
+                  <tr
+                    key={item.id}
+                    className="transition hover:bg-slate-50/50 dark:hover:bg-slate-800/50"
+                  >
                     <td className="whitespace-nowrap px-6 py-4">
                       <div className="flex items-center gap-3">
                         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 font-bold dark:bg-blue-950/40 dark:text-blue-400">
@@ -825,7 +949,11 @@ export default function SupervisorAssignedArtisans() {
                           </div>
                           <div className="mt-1 flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
                             <User size={12} />
-                            Operator: {getOperatorForMachine(item.machineId, item.machineName)}
+                            Operator:{" "}
+                            {getOperatorForMachine(
+                              item.machineId,
+                              item.machineName,
+                            )}
                           </div>
                         </div>
                       </div>
@@ -841,7 +969,8 @@ export default function SupervisorAssignedArtisans() {
                             {item.artisanName}
                           </p>
                           <p className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
-                            {artisans.find((a) => a.id === item.artisanId)?.specialization || ""}
+                            {artisans.find((a) => a.id === item.artisanId)
+                              ?.specialization || ""}
                           </p>
                         </div>
                       </div>
@@ -852,18 +981,15 @@ export default function SupervisorAssignedArtisans() {
                       <span className="inline-flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700 dark:border-blue-800/60 dark:bg-blue-950/40 dark:text-blue-300">
                         <ShieldCheck size={14} />
 
-
-                        {item.supervisorName || "—"}
-
-                        {item.supervisorName && item.supervisorName !== "Marcus Supervisor"
+                        {item.supervisorName &&
+                        item.supervisorName !== "Marcus Supervisor"
                           ? item.supervisorName
-                          : (StorageService.getUser()?.name || StorageService.getUser()?.fullName || StorageService.get<string>(STORAGE_KEYS.USER_NAME) || "Supervisor")}
-
-
-                        {item.supervisorName && item.supervisorName !== "Marcus Supervisor"
-                          ? item.supervisorName
-                          : (StorageService.getUser()?.name || StorageService.getUser()?.fullName || StorageService.get<string>(STORAGE_KEYS.USER_NAME) || "Supervisor")}
-
+                          : StorageService.getUser()?.name ||
+                            StorageService.getUser()?.fullName ||
+                            StorageService.get<string>(
+                              STORAGE_KEYS.USER_NAME,
+                            ) ||
+                            "Supervisor"}
                       </span>
                     </td>
 
@@ -873,11 +999,13 @@ export default function SupervisorAssignedArtisans() {
                           {item.workScope}
                         </p>
                         {item.priority && (
-                          <span className={`inline-block rounded-md px-2 py-0.5 text-[10px] font-bold ${
-                            item.priority === "High"
-                              ? "bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400"
-                              : "bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400"
-                          }`}>
+                          <span
+                            className={`inline-block rounded-md px-2 py-0.5 text-[10px] font-bold ${
+                              item.priority === "High"
+                                ? "bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400"
+                                : "bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400"
+                            }`}
+                          >
                             Priority: {item.priority}
                           </span>
                         )}
@@ -886,7 +1014,9 @@ export default function SupervisorAssignedArtisans() {
 
                     <td className="whitespace-nowrap px-6 py-4 text-xs">
                       <div>
-                        <p className="font-semibold text-slate-700 dark:text-slate-300">{item.assignedAt}</p>
+                        <p className="font-semibold text-slate-700 dark:text-slate-300">
+                          {item.assignedAt}
+                        </p>
                         {(item.startDate || item.dueDate) && (
                           <div className="mt-1 flex items-center gap-1.5 text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-800/60 px-2 py-1 rounded-lg">
                             <Calendar size={12} />
@@ -897,7 +1027,20 @@ export default function SupervisorAssignedArtisans() {
                                   if (dateStr.includes("-")) {
                                     const parts = dateStr.split("-");
                                     if (parts.length === 3) {
-                                      const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+                                      const months = [
+                                        "Jan",
+                                        "Feb",
+                                        "Mar",
+                                        "Apr",
+                                        "May",
+                                        "Jun",
+                                        "Jul",
+                                        "Aug",
+                                        "Sep",
+                                        "Oct",
+                                        "Nov",
+                                        "Dec",
+                                      ];
                                       const m = parseInt(parts[1], 10) - 1;
                                       return `${parseInt(parts[2], 10)} ${months[m] || ""}  ${parts[0]}`;
                                     }
@@ -943,7 +1086,9 @@ export default function SupervisorAssignedArtisans() {
                     <td className="whitespace-nowrap px-6 py-4 text-center">
                       <div className="flex items-center justify-center gap-2">
                         <button
-                          onClick={() => handleOpenModal(item.machineId, item.componentName)}
+                          onClick={() =>
+                            handleOpenModal(item.machineId, item.componentName)
+                          }
                           title="Edit Component Artisan Assignment"
                           className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-xs transition hover:border-blue-500 hover:bg-blue-50 hover:text-blue-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-blue-500 dark:hover:bg-blue-950/40"
                         >
@@ -1009,18 +1154,38 @@ export default function SupervisorAssignedArtisans() {
             {/* Modal Scrollable Body */}
             <div className="flex-1 overflow-y-auto p-5 space-y-3.5 text-xs">
               {/* Component Conflict / Status Warning Banner */}
-              {existingAssignmentForModal && (
-                existingAssignmentForModal.status === "Active" ? (
+              {existingAssignmentForModal &&
+                (existingAssignmentForModal.status === "Active" ? (
                   <div className="rounded-2xl border border-amber-300 bg-amber-50 p-3 dark:border-amber-500/40 dark:bg-amber-950/40">
                     <div className="flex items-start gap-2.5">
                       <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                       <div>
                         <h4 className="text-[11px] font-bold uppercase tracking-wider text-amber-900 dark:text-amber-200">
-                          ⚠️ COMPONENT LOCKED — ACTIVE TASK ({existingAssignmentForModal.taskId || "TSK-ACTIVE"})
+                          ⚠️ COMPONENT LOCKED — ACTIVE TASK (
+                          {existingAssignmentForModal.taskId || "TSK-ACTIVE"})
                         </h4>
                         <p className="mt-0.5 text-[11px] leading-tight text-amber-800 dark:text-amber-300">
-                          Component <strong>"{modalComponentName}"</strong> on <strong>{existingAssignmentForModal.machineName}</strong> is ASSIGNED to <strong>{existingAssignmentForModal.artisanName}</strong> by <strong>{existingAssignmentForModal.supervisorName || "Supervisor"}</strong> (<strong>{getTaskDurationText(existingAssignmentForModal.assignedAt)}</strong>).
-                          Cannot re-assign until marked <em>Completed / Closed</em>.
+                          Component <strong>"{modalComponentName}"</strong> on{" "}
+                          <strong>
+                            {existingAssignmentForModal.machineName}
+                          </strong>{" "}
+                          is ASSIGNED to{" "}
+                          <strong>
+                            {existingAssignmentForModal.artisanName}
+                          </strong>{" "}
+                          by{" "}
+                          <strong>
+                            {existingAssignmentForModal.supervisorName ||
+                              "Supervisor"}
+                          </strong>{" "}
+                          (
+                          <strong>
+                            {getTaskDurationText(
+                              existingAssignmentForModal.assignedAt,
+                            )}
+                          </strong>
+                          ). Cannot re-assign until marked{" "}
+                          <em>Completed / Closed</em>.
                         </p>
                       </div>
                     </div>
@@ -1034,13 +1199,18 @@ export default function SupervisorAssignedArtisans() {
                           ✓ COMPONENT FREE FOR ASSIGNMENT
                         </h4>
                         <p className="mt-0.5 text-[11px] leading-tight text-emerald-800 dark:text-emerald-300">
-                          Previous task (<strong>{existingAssignmentForModal.taskId || "TSK-CLOSED"}</strong>) for component <strong>"{modalComponentName}"</strong> was marked <strong>COMPLETED</strong>. Ready for new assignment!
+                          Previous task (
+                          <strong>
+                            {existingAssignmentForModal.taskId || "TSK-CLOSED"}
+                          </strong>
+                          ) for component{" "}
+                          <strong>"{modalComponentName}"</strong> was marked{" "}
+                          <strong>COMPLETED</strong>. Ready for new assignment!
                         </p>
                       </div>
                     </div>
                   </div>
-                )
-              )}
+                ))}
 
               {/* Artisan Busy Active Task Warning Banner */}
               {activeTaskForSelectedArtisan && (
@@ -1052,7 +1222,15 @@ export default function SupervisorAssignedArtisans() {
                         ⚠️ Artisan Currently Busy Alert
                       </h4>
                       <p className="mt-0.5 text-[11px] leading-tight text-orange-800 dark:text-orange-300">
-                        Artisan <strong>{activeTaskForSelectedArtisan.artisanName}</strong> has an <strong>ACTIVE TASK</strong> on <strong>{activeTaskForSelectedArtisan.machineName}</strong> ({activeTaskForSelectedArtisan.componentName}).
+                        Artisan{" "}
+                        <strong>
+                          {activeTaskForSelectedArtisan.artisanName}
+                        </strong>{" "}
+                        has an <strong>ACTIVE TASK</strong> on{" "}
+                        <strong>
+                          {activeTaskForSelectedArtisan.machineName}
+                        </strong>{" "}
+                        ({activeTaskForSelectedArtisan.componentName}).
                       </p>
                     </div>
                   </div>
@@ -1118,13 +1296,16 @@ export default function SupervisorAssignedArtisans() {
                       type="date"
                       value={modalStartDate}
                       onChange={(e) => setModalStartDate(e.target.value)}
-                      onClick={(e) => (e.target as HTMLInputElement).showPicker?.()}
+                      onClick={(e) =>
+                        (e.target as HTMLInputElement).showPicker?.()
+                      }
                       className="w-full cursor-pointer rounded-xl border border-slate-200 bg-white p-2.5 pr-9 text-xs font-semibold text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-800 dark:bg-slate-950 dark:text-white"
                     />
                     <button
                       type="button"
                       onClick={(e) => {
-                        const input = (e.currentTarget.previousElementSibling as HTMLInputElement);
+                        const input = e.currentTarget
+                          .previousElementSibling as HTMLInputElement;
                         input?.showPicker?.() || input?.focus();
                       }}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400"
@@ -1144,13 +1325,16 @@ export default function SupervisorAssignedArtisans() {
                       type="date"
                       value={modalDueDate}
                       onChange={(e) => setModalDueDate(e.target.value)}
-                      onClick={(e) => (e.target as HTMLInputElement).showPicker?.()}
+                      onClick={(e) =>
+                        (e.target as HTMLInputElement).showPicker?.()
+                      }
                       className="w-full cursor-pointer rounded-xl border border-slate-200 bg-white p-2.5 pr-9 text-xs font-semibold text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-800 dark:bg-slate-950 dark:text-white"
                     />
                     <button
                       type="button"
                       onClick={(e) => {
-                        const input = (e.currentTarget.previousElementSibling as HTMLInputElement);
+                        const input = e.currentTarget
+                          .previousElementSibling as HTMLInputElement;
                         input?.showPicker?.() || input?.focus();
                       }}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400"
@@ -1190,7 +1374,11 @@ export default function SupervisorAssignedArtisans() {
                 onClick={handleSaveAssignment}
                 className="inline-flex items-center gap-2 rounded-xl bg-[#3B37E6] px-5 py-2 text-xs font-bold text-white shadow-md shadow-blue-600/30 hover:bg-blue-700 disabled:opacity-50"
               >
-                {assigning ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserCheck className="h-4 w-4" />}
+                {assigning ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <UserCheck className="h-4 w-4" />
+                )}
                 Save Assignment
               </button>
             </div>

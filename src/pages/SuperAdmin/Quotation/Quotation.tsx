@@ -1,23 +1,17 @@
 import { type FC, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
-import {
-  ClipboardList,
-  MessageSquareCheck,
-  PlusCircle,
-} from "lucide-react";
+import { ClipboardList, MessageSquareCheck, PlusCircle } from "lucide-react";
 
 import QuotationInquiry from "./QuotationInquiry";
 import QuotationResponses from "./QuotationResponses";
 import { AddonQuotationBuilder } from "./AddonQuotationBuilder";
+import FormCard from "../../../components/common/SignupCard";
 
 /* ============================================================
    TYPES
 ============================================================ */
 
-type QuotationTabId =
-  | "inquiry"
-  | "addon-builder"
-  | "responses";
+type QuotationTabId = "inquiry" | "addon-builder" | "responses";
 
 interface QuotationTabConfig {
   readonly id: QuotationTabId;
@@ -35,37 +29,19 @@ const QUOTATION_TABS: readonly QuotationTabConfig[] = [
     id: "inquiry",
     label: "Quotation Inquiry",
     description: "Review and manage customer quotation inquiries",
-    icon: (
-      <ClipboardList
-        size={21}
-        strokeWidth={2}
-        aria-hidden="true"
-      />
-    ),
+    icon: <ClipboardList size={21} strokeWidth={2} aria-hidden="true" />,
   },
   {
     id: "addon-builder",
     label: "Create Quote / Add-On",
     description: "Machine add-ons, pricing engine & EFT payments",
-    icon: (
-      <PlusCircle
-        size={21}
-        strokeWidth={2}
-        aria-hidden="true"
-      />
-    ),
+    icon: <PlusCircle size={21} strokeWidth={2} aria-hidden="true" />,
   },
   {
     id: "responses",
     label: "Quotation Responses",
     description: "Track official quotation responses & proposals",
-    icon: (
-      <MessageSquareCheck
-        size={21}
-        strokeWidth={2}
-        aria-hidden="true"
-      />
-    ),
+    icon: <MessageSquareCheck size={21} strokeWidth={2} aria-hidden="true" />,
   },
 ];
 
@@ -73,13 +49,9 @@ const QUOTATION_TABS: readonly QuotationTabConfig[] = [
    TAB VALIDATION
 ============================================================ */
 
-const isQuotationTab = (
-  value: string | null,
-): value is QuotationTabId => {
+const isQuotationTab = (value: string | null): value is QuotationTabId => {
   return (
-    value === "inquiry" ||
-    value === "addon-builder" ||
-    value === "responses"
+    value === "inquiry" || value === "addon-builder" || value === "responses"
   );
 };
 
@@ -88,8 +60,7 @@ const isQuotationTab = (
 ============================================================ */
 
 const Quotation: FC = () => {
-  const [searchParams, setSearchParams] =
-    useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   /*
    * URL is the single source of truth for the active tab.
@@ -103,9 +74,7 @@ const Quotation: FC = () => {
 
   const tabParam = searchParams.get("tab");
 
-  const activeTab: QuotationTabId = isQuotationTab(
-    tabParam,
-  )
+  const activeTab: QuotationTabId = isQuotationTab(tabParam)
     ? tabParam
     : "inquiry";
 
@@ -113,12 +82,8 @@ const Quotation: FC = () => {
      TAB CHANGE
   ========================================================== */
 
-  const handleTabChange = (
-    tab: QuotationTabId,
-  ): void => {
-    const nextParams = new URLSearchParams(
-      searchParams,
-    );
+  const handleTabChange = (tab: QuotationTabId): void => {
+    const nextParams = new URLSearchParams(searchParams);
 
     nextParams.set("tab", tab);
 
@@ -174,6 +139,54 @@ const Quotation: FC = () => {
           lg:px-8
         "
       >
+        {/* ==================================================
+            PAGE HEADER
+        ================================================== */}
+
+        <div
+          className="
+            mb-5
+            flex
+            flex-col
+            gap-3
+            sm:flex-row
+            sm:items-center
+            sm:justify-between
+          "
+        >
+          <div>
+            <h1
+              className="
+                text-xl
+                font-black
+                tracking-tight
+                text-slate-950
+
+                dark:text-white
+              "
+            >
+              Quotation Management
+            </h1>
+            <p
+              className="
+                mt-1
+                text-sm
+                text-slate-500
+
+                dark:text-slate-400
+              "
+            >
+              Manage inquiries, add-ons and responses in one place
+            </p>
+          </div>
+
+          <FormCard
+            onInquirySubmitted={() => {
+              // Optional: refresh inquiry list after successful submission
+              // e.g. call a refetch function passed down or via context
+            }}
+          />
+        </div>
 
         {/* ==================================================
             QUOTATION NAVIGATION
@@ -215,37 +228,31 @@ const Quotation: FC = () => {
                 w-full
               "
             >
-              {QUOTATION_TABS.map(
-                (tab, index) => {
-                  const isActive =
-                    activeTab === tab.id;
+              {QUOTATION_TABS.map((tab, index) => {
+                const isActive = activeTab === tab.id;
 
-                  return (
-                    <div
-                      key={tab.id}
-                      className="
+                return (
+                  <div
+                    key={tab.id}
+                    className="
                         flex
                         flex-1
                         items-stretch
                       "
-                    >
-                      {/* ==================================================
+                  >
+                    {/* ==================================================
                           TAB BUTTON
                       ================================================== */}
 
-                      <button
-                        type="button"
-                        role="tab"
-                        aria-selected={isActive}
-                        aria-controls={`quotation-panel-${tab.id}`}
-                        id={`quotation-tab-${tab.id}`}
-                        tabIndex={
-                          isActive ? 0 : -1
-                        }
-                        onClick={() =>
-                          handleTabChange(tab.id)
-                        }
-                        className={`
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={isActive}
+                      aria-controls={`quotation-panel-${tab.id}`}
+                      id={`quotation-tab-${tab.id}`}
+                      tabIndex={isActive ? 0 : -1}
+                      onClick={() => handleTabChange(tab.id)}
+                      className={`
                           group
                           relative
                           flex
@@ -282,13 +289,13 @@ const Quotation: FC = () => {
                               `
                           }
                         `}
-                      >
-                        {/* ==================================================
+                    >
+                      {/* ==================================================
                             ICON
                         ================================================== */}
 
-                        <span
-                          className={`
+                      <span
+                        className={`
                             flex
                             h-11
                             w-11
@@ -328,18 +335,18 @@ const Quotation: FC = () => {
                                 `
                             }
                           `}
-                          aria-hidden="true"
-                        >
-                          {tab.icon}
-                        </span>
+                        aria-hidden="true"
+                      >
+                        {tab.icon}
+                      </span>
 
-                        {/* ==================================================
+                      {/* ==================================================
                             LABEL + DESCRIPTION
                         ================================================== */}
 
-                        <span className="min-w-0">
-                          <span
-                            className={`
+                      <span className="min-w-0">
+                        <span
+                          className={`
                               block
                               whitespace-nowrap
                               text-sm
@@ -363,12 +370,12 @@ const Quotation: FC = () => {
                                   `
                               }
                             `}
-                          >
-                            {tab.label}
-                          </span>
+                        >
+                          {tab.label}
+                        </span>
 
-                          <span
-                            className="
+                        <span
+                          className="
                               mt-1
                               block
                               whitespace-nowrap
@@ -377,18 +384,18 @@ const Quotation: FC = () => {
 
                               dark:text-slate-400
                             "
-                          >
-                            {tab.description}
-                          </span>
+                        >
+                          {tab.description}
                         </span>
+                      </span>
 
-                        {/* ==================================================
+                      {/* ==================================================
                             ACTIVE INDICATOR
                         ================================================== */}
 
-                        <span
-                          aria-hidden="true"
-                          className={`
+                      <span
+                        aria-hidden="true"
+                        className={`
                             absolute
                             inset-x-6
                             bottom-0
@@ -406,19 +413,17 @@ const Quotation: FC = () => {
                                 : "bg-transparent"
                             }
                           `}
-                        />
-                      </button>
+                      />
+                    </button>
 
-                      {/* ==================================================
+                    {/* ==================================================
                           TAB DIVIDER
                       ================================================== */}
 
-                      {index <
-                        QUOTATION_TABS.length -
-                          1 && (
-                        <span
-                          aria-hidden="true"
-                          className="
+                    {index < QUOTATION_TABS.length - 1 && (
+                      <span
+                        aria-hidden="true"
+                        className="
                             my-5
                             w-px
                             shrink-0
@@ -426,12 +431,11 @@ const Quotation: FC = () => {
 
                             dark:bg-slate-800
                           "
-                        />
-                      )}
-                    </div>
-                  );
-                },
-              )}
+                      />
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </nav>
