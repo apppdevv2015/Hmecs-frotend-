@@ -72,6 +72,7 @@ export type QuotationRequestStatus =
   | "PENDING"
   | "DRAFT"
   | "SENT"
+  | "APPROVED"
   | "ACCEPTED"
   | "REJECTED"
   | "EXPIRED";

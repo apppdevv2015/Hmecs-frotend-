@@ -173,11 +173,6 @@ const companyAdminNavGroups: NavGroup[] = [
         icon: <User className={sidebarIconClass} />,
       },
       {
-        name: "Subscriptions",
-        path: "/company-admin/subscriptions",
-        icon: <CreditCard className={sidebarIconClass} />,
-      },
-      {
         name: "Settings",
         path: "/company-admin/coming-soon/settings",
         icon: <Settings className={sidebarIconClass} />,
@@ -438,11 +433,6 @@ export const sidebarConfig: Record<
             icon: <User className={sidebarIconClass} />,
           },
           {
-            name: "Subscriptions",
-            path: "/company-admin/subscriptions",
-            icon: <CreditCard className={sidebarIconClass} />,
-          },
-          {
             name: "Settings",
             path: "/company-admin/coming-soon/settings",
             icon: <Settings className={sidebarIconClass} />,
@@ -491,11 +481,6 @@ export const sidebarConfig: Record<
             name: "Profile",
             path: "/company-admin/profile",
             icon: <User className={sidebarIconClass} />,
-          },
-          {
-            name: "Subscriptions",
-            path: "/company-admin/subscriptions",
-            icon: <CreditCard className={sidebarIconClass} />,
           },
         ],
       },
@@ -1014,11 +999,6 @@ export const sidebarConfig: Record<
       {
         title: "Settings",
         items: [
-          {
-            name: "Plans & Billing",
-            path: "/sub-super-admin/plans-billing",
-            icon: <CreditCard className={sidebarIconClass} />,
-          },
           {
             name: "System Settings",
             path: "/sub-super-admin/settings",
