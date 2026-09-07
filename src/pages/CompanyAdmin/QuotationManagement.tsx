@@ -4,6 +4,7 @@ import {
   ClipboardCheck,
   FileText,
   Plus,
+  Sparkles,
   type LucideIcon,
 } from "lucide-react";
 
@@ -12,6 +13,7 @@ import QuotationDetails from "./QuotationDetailsPage";
 import QuotationAction from "./QuotationActionPage";
 
 import AdminQuotationForm from "../../components/common/AdminQuotationForm";
+import DemoPlanModal from "../../components/company-admin/DemoPlanModal";
 
 /* ============================================================
    TYPES
@@ -54,10 +56,12 @@ const quotationTabs: QuotationTab[] = [
 const QuotationManagement: React.FC = () => {
   const [activeTab, setActiveTab] = useState<QuotationTabId>("details");
   const [isNewQuotationOpen, setIsNewQuotationOpen] = useState<boolean>(false);
+  const [isDemoModalOpen, setIsDemoModalOpen] = useState<boolean>(false);
   const [refreshToken, setRefreshToken] = useState<number>(0);
 
   const handleQuotationCreated = (): void => {
     setIsNewQuotationOpen(false);
+    setIsDemoModalOpen(false);
     setRefreshToken((previous) => previous + 1);
     setActiveTab("details");
   };
@@ -90,27 +94,38 @@ const QuotationManagement: React.FC = () => {
     <div className="min-h-screen w-full bg-slate-50">
       <div className="mx-auto w-full max-w-[1600px] px-4 py-5 sm:px-6 lg:px-8">
         {/* ==================================================
-            HEADER — TITLE + NEW QUOTATION BUTTON
+            HEADER — TITLE + DEMO & NEW QUOTATION BUTTONS
         ================================================== */}
 
         <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-xl font-bold tracking-tight text-slate-900">
+            <h1 className="text-xl font-bold tracking-tight text-slate-950">
               Quotation Management
             </h1>
             <p className="mt-0.5 text-sm text-slate-500">
-              Submit new quotation requests and track their status
+              Submit new quotation requests, request free demo evaluations, and track status
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setIsNewQuotationOpen(true)}
-            className="inline-flex h-11 w-fit shrink-0 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-blue-700"
-          >
-            <Plus size={18} strokeWidth={2.4} />
-            New Quotation
-          </button>
+          <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => setIsDemoModalOpen(true)}
+              className="inline-flex h-11 w-fit shrink-0 items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50/80 px-4 text-sm font-bold text-blue-700 shadow-sm transition hover:bg-blue-100 hover:shadow"
+            >
+              <Sparkles size={16} strokeWidth={2.4} className="text-blue-600" />
+              Request Demo / Trial
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsNewQuotationOpen(true)}
+              className="inline-flex h-11 w-fit shrink-0 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-blue-700"
+            >
+              <Plus size={18} strokeWidth={2.4} />
+              New Quotation
+            </button>
+          </div>
         </div>
 
         {/* ==================================================
@@ -267,10 +282,22 @@ const QuotationManagement: React.FC = () => {
       </div>
 
       {/* ==================================================
+          DEMO PLAN PREVIEW MODAL (READ-ONLY)
+          Displays live template configured by Super Admin.
+      ================================================== */}
+
+      {isDemoModalOpen ? (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
+          <DemoPlanModal
+            onSuccess={handleQuotationCreated}
+            onClose={() => setIsDemoModalOpen(false)}
+          />
+        </div>
+      ) : null}
+
+      {/* ==================================================
           NEW QUOTATION MODAL
-          Uses AdminQuotationForm — the quotation-only form,
-          API-connected via createQuotationRequest. No signup
-          or company-details step here.
+          Uses AdminQuotationForm for commercial requests.
       ================================================== */}
 
       {isNewQuotationOpen ? (
@@ -279,6 +306,7 @@ const QuotationManagement: React.FC = () => {
             <AdminQuotationForm
               onSuccess={handleQuotationCreated}
               onClose={() => setIsNewQuotationOpen(false)}
+              initialQuotationType="Commercial Quotation"
             />
           </div>
         </div>

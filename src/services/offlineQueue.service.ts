@@ -225,7 +225,10 @@ class OfflineQueueService {
           }
         }
       } catch (error) {
-        console.warn("[Offline Sync] Network retry failed:", error);
+        item.retryCount = (item.retryCount || 0) + 1;
+        if ((item.retryCount || 0) >= MAX_RETRIES || !item.endpoint?.startsWith("http")) {
+          await this.removeRequest(item.id);
+        }
       }
     }
   }

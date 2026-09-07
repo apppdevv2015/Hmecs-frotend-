@@ -208,21 +208,23 @@ const QuotationPlanManagement: FC = () => {
   const handleOpenEdit = (plan: QuotationPlan) => {
     setModalMode("EDIT");
     setSelectedPlanId(plan.id);
-    const months =
-      plan.durationMonths ||
-      plan.durationOptions ||
-      (Array.isArray(plan.durations) ? plan.durations.map((d) => d.months) : [1, 3, 6, 12, 24]);
+    const isPlanTrial = Boolean(plan.isTrial || plan.tierCode === "TRIAL");
+    const months = isPlanTrial
+      ? []
+      : plan.durationMonths ||
+        plan.durationOptions ||
+        (Array.isArray(plan.durations) ? plan.durations.map((d) => d.months) : [1, 3, 6, 12, 24]);
 
     setFormData({
       name: plan.name,
-      tierCode: plan.tierCode || "TIER_1",
+      tierCode: plan.tierCode || (isPlanTrial ? "TRIAL" : "TIER_1"),
       minMachines: plan.minMachines,
       maxMachines: plan.maxMachines,
       monthlyPrice: Number(plan.monthlyPrice) || 0,
       currency: plan.currency || "ZAR",
       durationMonths: months,
-      isTrial: Boolean(plan.isTrial),
-      trialDays: plan.trialDays || 14,
+      isTrial: isPlanTrial,
+      trialDays: plan.trialDays || 5,
       isCustom: Boolean(plan.isCustom),
       features: Array.isArray(plan.features) ? [...plan.features] : [],
       newFeatureText: "",
@@ -235,8 +237,8 @@ const QuotationPlanManagement: FC = () => {
   // Toggle Duration Month selection
   const toggleDurationMonth = (month: number) => {
     if (formData.durationMonths.includes(month)) {
-      if (formData.durationMonths.length === 1) {
-        toast.error("At least one duration month must be selected");
+      if (!formData.isTrial && formData.durationMonths.length === 1) {
+        toast.error("For commercial plans, at least one contract duration must be selected");
         return;
       }
       setFormData({
@@ -286,7 +288,14 @@ const QuotationPlanManagement: FC = () => {
         maxMachines: Number(formData.maxMachines),
         monthlyPrice: Number(formData.monthlyPrice),
         currency: formData.currency,
-        durationOptions: formData.durationMonths,
+        durationOptions:
+          formData.isTrial
+            ? formData.durationMonths.length
+              ? formData.durationMonths
+              : [1]
+            : formData.durationMonths.length
+              ? formData.durationMonths
+              : [1, 3, 6, 12, 24],
         isTrial: formData.isTrial,
         trialDays: formData.isTrial ? Number(formData.trialDays) : null,
         isCustom: formData.isCustom,
@@ -614,7 +623,11 @@ const QuotationPlanManagement: FC = () => {
                       {/* Supported Durations */}
                       <td className="py-4 px-5">
                         <div className="flex flex-wrap gap-1 max-w-xs">
-                          {durations.length > 0 ? (
+                          {plan.isTrial ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 font-bold border border-emerald-200 dark:border-emerald-800">
+                              🎁 {plan.trialDays || 5} Days Free Trial
+                            </span>
+                          ) : durations.length > 0 ? (
                             durations.map((d, i) => (
                               <span
                                 key={i}
@@ -787,22 +800,28 @@ const QuotationPlanManagement: FC = () => {
                   <div className="space-y-1.5 pt-2 border-t border-slate-100 dark:border-slate-700/60">
                     <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1">
                       <Calendar size={12} />
-                      Contract Durations:
+                      {plan.isTrial ? "Evaluation Validity:" : "Contract Durations:"}
                     </span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {durations.length > 0 ? (
-                        durations.map((d, i) => (
-                          <span
-                            key={i}
-                            className="px-2 py-0.5 text-xs rounded bg-slate-100 dark:bg-slate-700/50 text-slate-700 dark:text-slate-300 font-medium"
-                          >
-                            {d.label}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="text-xs text-slate-400">1, 3, 6, 12, 24 Months</span>
-                      )}
-                    </div>
+                    {plan.isTrial ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 font-bold border border-emerald-200 dark:border-emerald-800">
+                        🎁 {plan.trialDays || 5} Days Free Trial
+                      </span>
+                    ) : (
+                      <div className="flex flex-wrap gap-1.5">
+                        {durations.length > 0 ? (
+                          durations.map((d, i) => (
+                            <span
+                              key={i}
+                              className="px-2 py-0.5 text-xs rounded bg-slate-100 dark:bg-slate-700/50 text-slate-700 dark:text-slate-300 font-medium"
+                            >
+                              {d.label}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-xs text-slate-400">1, 3, 6, 12, 24 Months</span>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* Feature Highlights */}
@@ -1015,9 +1034,16 @@ const QuotationPlanManagement: FC = () => {
 
               {/* Duration Options Multi-Select */}
               <div className="space-y-2">
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                  Available Contract Duration Options *
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                    Available Contract Duration Options {formData.isTrial ? "(Optional for Demo)" : "*"}
+                  </label>
+                  {formData.isTrial && (
+                    <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+                      ⚡ Demo runs on Custom Days
+                    </span>
+                  )}
+                </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {AVAILABLE_DURATION_PRESETS.map((d) => {
                     const isSelected = formData.durationMonths.includes(d.months);
@@ -1044,36 +1070,76 @@ const QuotationPlanManagement: FC = () => {
               </div>
 
               {/* Special Toggles (Free Trial / Custom Enterprise) */}
-              <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-200 dark:border-slate-800">
-                <label className="flex items-center gap-2 p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={formData.isTrial}
-                    onChange={(e) => setFormData({ ...formData, isTrial: e.target.checked })}
-                    className="w-4 h-4 text-amber-600 rounded border-slate-300"
-                  />
-                  <div>
-                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">
-                      Free Trial Tier
-                    </span>
-                    <span className="text-[10px] text-slate-500">14 Days Pilot</span>
-                  </div>
-                </label>
+              <div className="space-y-3 pt-2 border-t border-slate-200 dark:border-slate-800">
+                <div className="grid grid-cols-2 gap-4">
+                  <label className="flex items-center gap-2 p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.isTrial}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setFormData({
+                          ...formData,
+                          isTrial: checked,
+                          tierCode: checked ? "TRIAL" : (formData.tierCode === "TRIAL" ? "TIER_1" : formData.tierCode),
+                          durationMonths: checked ? [] : (formData.durationMonths.length ? formData.durationMonths : [1, 3, 6, 12, 24]),
+                          trialDays: formData.trialDays || 5,
+                        });
+                      }}
+                      className="w-4 h-4 text-amber-600 rounded border-slate-300"
+                    />
+                    <div>
+                      <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">
+                        Free Trial / Demo Tier
+                      </span>
+                      <span className="text-[10px] text-slate-500">
+                        {formData.isTrial ? `${formData.trialDays || 5} Days Evaluation` : "Evaluation Pilot"}
+                      </span>
+                    </div>
+                  </label>
 
-                <label className="flex items-center gap-2 p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={formData.isCustom}
-                    onChange={(e) => setFormData({ ...formData, isCustom: e.target.checked })}
-                    className="w-4 h-4 text-amber-600 rounded border-slate-300"
-                  />
-                  <div>
-                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">
-                      Custom Enterprise
-                    </span>
-                    <span className="text-[10px] text-slate-500">Priced on request</span>
+                  <label className="flex items-center gap-2 p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.isCustom}
+                      onChange={(e) => setFormData({ ...formData, isCustom: e.target.checked })}
+                      className="w-4 h-4 text-amber-600 rounded border-slate-300"
+                    />
+                    <div>
+                      <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">
+                        Custom Enterprise
+                      </span>
+                      <span className="text-[10px] text-slate-500">Priced on request</span>
+                    </div>
+                  </label>
+                </div>
+
+                {formData.isTrial && (
+                  <div className="p-3.5 rounded-xl border border-amber-200 bg-amber-50/70 dark:border-amber-900/50 dark:bg-amber-950/30">
+                    <label className="block text-xs font-bold text-amber-900 dark:text-amber-200 uppercase tracking-wider mb-1.5">
+                      Custom Demo Duration (Days) *
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min={1}
+                        max={90}
+                        value={formData.trialDays}
+                        onChange={(e) =>
+                          setFormData({ ...formData, trialDays: parseInt(e.target.value) || 5 })
+                        }
+                        className="w-32 px-3 py-2 text-sm font-bold rounded-lg bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500"
+                        placeholder="e.g. 5"
+                      />
+                      <span className="text-xs font-bold text-amber-800 dark:text-amber-300">
+                        Days Evaluation Period
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-amber-700 dark:text-amber-400 mt-1">
+                      Client will get exactly this number of trial days upon Super Admin approval.
+                    </p>
                   </div>
-                </label>
+                )}
               </div>
 
               {/* Features List Editor */}
