@@ -11,6 +11,7 @@ import { createPortal } from "react-dom";
 
 import AppSelect from "../../../components/ui/dropdown/AppSelect";
 import CommonPagination from "../../../components/common/Pagination";
+import { Sparkles, Zap, CheckCircle2, ShieldCheck } from "lucide-react";
 import {
   getQuotationRequests,
   type ApiQuotationRequest,
@@ -297,6 +298,7 @@ const STATUS_LABEL: Record<QuotationRequestStatus, string> = {
   PENDING: "Pending",
   DRAFT: "Draft",
   SENT: "Sent",
+  APPROVED: "Approved",
   ACCEPTED: "Accepted",
   REJECTED: "Rejected",
   EXPIRED: "Expired",
@@ -308,6 +310,8 @@ const STATUS_BADGE_STYLES: Record<QuotationRequestStatus, string> = {
   DRAFT:
     "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700",
   SENT: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-900",
+  APPROVED:
+    "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-900",
   ACCEPTED:
     "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-900",
   REJECTED:
@@ -594,26 +598,21 @@ const quotationService = {
             inquiryDate: req.createdAt || new Date().toISOString(),
             company: {
               companyId: req.companyId || req.id,
-              name: req.companyName || "Registered Company",
-              contactPerson: req.contactPerson || "Contact Person",
+              name: req.companyName || "-",
+              contactPerson: req.contactPerson || "-",
               email: req.email || "-",
               phone: req.phone || "-",
-              location: req.siteLocation || "Main Mining Site",
+              location: req.siteLocation || "-",
             },
             requirement: {
               quotationType: req.quotationType || "Commercial Quotation",
               numberOfSites: Number(req.numberOfSites) || 1,
-              siteNames:
-                siteNamesList.length > 0 ? siteNamesList : ["Main Site"],
+              siteNames: siteNamesList,
               activeMachines: Number(req.activeMachines) || 1,
-              equipmentTypes:
-                equipmentTypesList.length > 0
-                  ? equipmentTypesList
-                  : ["Excavators"],
+              equipmentTypes: equipmentTypesList,
               requestedServiceIds: optionalServicesList,
               requirementDescription:
-                req.implementationRequirements ||
-                "Customer submitted quotation inquiry via portal.",
+                req.implementationRequirements || "-",
               otherRequirements: req.additionalRequirements || null,
             },
             trial: {
@@ -1602,6 +1601,48 @@ function ErrorState({
  * 14. INQUIRY TABLE
  * ==========================================================================*/
 
+function getPeriodDates(inquiryDateStr?: string | null, durationStr?: string | null) {
+  const start = inquiryDateStr ? new Date(inquiryDateStr) : new Date();
+  const validStart = !isNaN(start.getTime()) ? start : new Date();
+
+  let days = 5;
+  if (durationStr) {
+    const matchDays = durationStr.match(/(\d+)\s*Day/i);
+    const matchMonths = durationStr.match(/(\d+)\s*Month/i);
+    if (matchDays) {
+      days = parseInt(matchDays[1], 10);
+    } else if (matchMonths) {
+      days = parseInt(matchMonths[1], 10) * 30;
+    } else {
+      const parsedNum = parseInt(durationStr, 10);
+      if (!isNaN(parsedNum) && parsedNum > 0) {
+        days = parsedNum;
+      }
+    }
+  }
+
+  const end = new Date(validStart.getTime() + days * 24 * 60 * 60 * 1000);
+
+  const startFormatted = validStart.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+  const endFormatted = end.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+
+  const durationLabel = durationStr
+    ? durationStr.toLowerCase().includes("day") || durationStr.toLowerCase().includes("month")
+      ? durationStr
+      : `${durationStr} Days`
+    : `${days} Days`;
+
+  return { startFormatted, endFormatted, days, durationLabel };
+}
+
 function InquiryTable({
   inquiries,
   onView,
@@ -1632,6 +1673,9 @@ function InquiryTable({
               Received Date
             </th>
             <th scope="col" className="whitespace-nowrap px-4 py-3">
+              Start & End Date
+            </th>
+            <th scope="col" className="whitespace-nowrap px-4 py-3">
               Status
             </th>
             <th scope="col" className="whitespace-nowrap px-4 py-3 text-right">
@@ -1642,6 +1686,11 @@ function InquiryTable({
         <tbody className="divide-y divide-slate-100 bg-white dark:divide-slate-800 dark:bg-slate-900">
           {inquiries.map((inquiry) => {
             const isOpen = OPEN_STATUSES.includes(inquiry.status);
+            const period = getPeriodDates(
+              inquiry.inquiryDate,
+              inquiry.requirement.contractDuration
+            );
+
             return (
               <tr
                 key={inquiry.id}
@@ -1682,6 +1731,16 @@ function InquiryTable({
                   {formatDateTime(inquiry.inquiryDate)}
                 </td>
                 <td className="whitespace-nowrap px-4 py-3">
+                  <div className="flex flex-col">
+                    <span className="font-semibold text-slate-800 dark:text-slate-200">
+                      {period.startFormatted}
+                    </span>
+                    <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
+                      to {period.endFormatted} ({period.durationLabel})
+                    </span>
+                  </div>
+                </td>
+                <td className="whitespace-nowrap px-4 py-3">
                   <StatusBadge status={inquiry.status} />
                 </td>
                 <td className="whitespace-nowrap px-4 py-3">
@@ -1692,15 +1751,37 @@ function InquiryTable({
                     >
                       <IconEye className="h-4 w-4" />
                     </IconButton>
-                    <button
-                      type="button"
-                      onClick={() => onSendQuotation(inquiry)}
-                      disabled={!isOpen}
-                      className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      <IconSend className="h-3.5 w-3.5" />
-                      {isOpen ? "Send Quotation" : "View Quotation"}
-                    </button>
+                    {(() => {
+                      const isTrial =
+                        inquiry.requirement.quotationType
+                          ?.toLowerCase()
+                          .includes("trial") ||
+                        inquiry.requirement.quotationType
+                          ?.toLowerCase()
+                          .includes("demo");
+
+                      return isTrial ? (
+                        <button
+                          type="button"
+                          onClick={() => onSendQuotation(inquiry)}
+                          disabled={!isOpen}
+                          className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40 shadow-sm transition-all"
+                        >
+                          <Sparkles className="h-3.5 w-3.5 text-yellow-300" />
+                          {isOpen ? "Approve Demo" : "View Demo"}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => onSendQuotation(inquiry)}
+                          disabled={!isOpen}
+                          className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40 shadow-sm transition-all"
+                        >
+                          <IconSend className="h-3.5 w-3.5" />
+                          {isOpen ? "Send Quotation" : "View Quotation"}
+                        </button>
+                      );
+                    })()}
                   </div>
                 </td>
               </tr>
@@ -1992,14 +2073,32 @@ function InquiryDetailsDrawer({
               {requirement.activeMachines}
             </dd>
           </div>
+          <div>
+            <dt className="text-xs font-medium text-slate-400">
+              Evaluation / Contract Period
+            </dt>
+            <dd className="mt-0.5 text-slate-800 dark:text-slate-200">
+              {(() => {
+                const p = getPeriodDates(
+                  inquiry.inquiryDate,
+                  inquiry.requirement.contractDuration
+                );
+                return `${p.startFormatted} to ${p.endFormatted} (${p.durationLabel})`;
+              })()}
+            </dd>
+          </div>
           <div className="sm:col-span-2">
             <dt className="text-xs font-medium text-slate-400">
               Equipment Types
             </dt>
             <dd className="mt-1 flex flex-wrap gap-1.5">
-              {requirement.equipmentTypes.map((e) => (
-                <Chip key={e}>{e}</Chip>
-              ))}
+              {requirement.equipmentTypes.length > 0 ? (
+                requirement.equipmentTypes.map((e) => (
+                  <Chip key={e}>{e}</Chip>
+                ))
+              ) : (
+                <span className="text-sm text-slate-400">—</span>
+              )}
             </dd>
           </div>
           <div className="sm:col-span-2">
@@ -2535,9 +2634,16 @@ function SendQuotationDrawer({
 
   function handleSendClick() {
     if (!draft) return;
-    const validation = validateDraft(draft);
-    setErrors(validation);
-    if (Object.keys(validation).length > 0) return;
+    const isTrial =
+      inquiry.requirement.quotationType?.toLowerCase().includes("trial") ||
+      inquiry.requirement.quotationType?.toLowerCase().includes("demo");
+
+    if (!isTrial) {
+      const validation = validateDraft(draft);
+      setErrors(validation);
+      if (Object.keys(validation).length > 0) return;
+    }
+
     onRequestSend(draft);
   }
 
@@ -2546,8 +2652,24 @@ function SendQuotationDrawer({
       open={open}
       widthClassName="max-w-3xl"
       onClose={onClose}
-      headerIcon={<IconSend className="h-4 w-4" />}
-      title={readOnly ? "Quotation Details" : "Send Quotation"}
+      headerIcon={
+        inquiry.requirement.quotationType?.toLowerCase().includes("trial") ||
+        inquiry.requirement.quotationType?.toLowerCase().includes("demo") ? (
+          <Sparkles className="h-4 w-4 text-yellow-500" />
+        ) : (
+          <IconSend className="h-4 w-4" />
+        )
+      }
+      title={
+        inquiry.requirement.quotationType?.toLowerCase().includes("trial") ||
+        inquiry.requirement.quotationType?.toLowerCase().includes("demo")
+          ? readOnly
+            ? "Demo Evaluation Details"
+            : "Approve Demo Evaluation"
+          : readOnly
+            ? "Quotation Details"
+            : "Send Quotation"
+      }
       subtitle={`${inquiry.inquiryId} · ${inquiry.company.name}`}
       footer={
         readOnly ? (
@@ -2594,30 +2716,54 @@ function SendQuotationDrawer({
             >
               Cancel
             </button>
-            <button
-              type="button"
-              onClick={handleSaveDraft}
-              disabled={isBusy}
-              className="inline-flex items-center gap-2 rounded-lg border border-blue-200 px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-blue-900 dark:text-blue-400 dark:hover:bg-blue-950"
-            >
-              {savingState === "draft" && <IconSpinner className="h-4 w-4" />}
-              Save as Draft
-            </button>
-            <button
-              type="button"
-              onClick={handleSendClick}
-              disabled={isBusy}
-              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {savingState === "send" ? (
-                <IconSpinner className="h-4 w-4" />
-              ) : (
-                <IconSend className="h-4 w-4" />
-              )}
-              {savingState === "send"
-                ? MESSAGES.confirmSending
-                : "Send Quotation"}
-            </button>
+            {!(
+              inquiry.requirement.quotationType?.toLowerCase().includes("trial") ||
+              inquiry.requirement.quotationType?.toLowerCase().includes("demo")
+            ) && (
+              <button
+                type="button"
+                onClick={handleSaveDraft}
+                disabled={isBusy}
+                className="inline-flex items-center gap-2 rounded-lg border border-blue-200 px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-blue-900 dark:text-blue-400 dark:hover:bg-blue-950"
+              >
+                {savingState === "draft" && <IconSpinner className="h-4 w-4" />}
+                Save as Draft
+              </button>
+            )}
+            {inquiry.requirement.quotationType?.toLowerCase().includes("trial") ||
+            inquiry.requirement.quotationType?.toLowerCase().includes("demo") ? (
+              <button
+                type="button"
+                onClick={handleSendClick}
+                disabled={isBusy}
+                className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60 shadow-md transition-all"
+              >
+                {savingState === "send" ? (
+                  <IconSpinner className="h-4 w-4" />
+                ) : (
+                  <Sparkles className="h-4 w-4 text-yellow-300" />
+                )}
+                {savingState === "send"
+                  ? "Activating Demo..."
+                  : "Approve & Activate Demo"}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleSendClick}
+                disabled={isBusy}
+                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 shadow-md transition-all"
+              >
+                {savingState === "send" ? (
+                  <IconSpinner className="h-4 w-4" />
+                ) : (
+                  <IconSend className="h-4 w-4" />
+                )}
+                {savingState === "send"
+                  ? MESSAGES.confirmSending
+                  : "Send Quotation"}
+              </button>
+            )}
           </>
         )
       }
@@ -2639,6 +2785,19 @@ function SendQuotationDrawer({
               label="Quotation Type"
               value={inquiry.requirement.quotationType}
             />
+            {(() => {
+              const p = getPeriodDates(
+                inquiry.inquiryDate,
+                inquiry.requirement.contractDuration
+              );
+              return (
+                <>
+                  <ReadOnlyField label="Start Date" value={p.startFormatted} />
+                  <ReadOnlyField label="End Date" value={p.endFormatted} />
+                  <ReadOnlyField label="Duration" value={p.durationLabel} />
+                </>
+              );
+            })()}
             <ReadOnlyField
               label="Sites"
               value={inquiry.requirement.numberOfSites}
@@ -2650,51 +2809,124 @@ function SendQuotationDrawer({
           </div>
         </section>
 
-        <hr className="border-slate-100 dark:border-slate-800" />
+        {inquiry.requirement.quotationType?.toLowerCase().includes("trial") ||
+        inquiry.requirement.quotationType?.toLowerCase().includes("demo") ? (
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-5 dark:border-emerald-800/60 dark:bg-emerald-950/20">
+              <div className="flex items-center gap-2 text-emerald-800 dark:text-emerald-300 font-bold text-sm mb-3">
+                <Sparkles className="h-4 w-4 text-emerald-600" />
+                Free Trial Evaluation Package (R0 / No Contract Required)
+              </div>
 
-        <CommercialDetailsSection
-          draft={draft}
-          errors={errors}
-          readOnly={readOnly}
-          onChange={patchDraft}
-        />
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-emerald-100 dark:border-emerald-900">
+                  <span className="text-[11px] font-semibold text-slate-400 block uppercase">
+                    Duration
+                  </span>
+                  <span className="text-base font-black text-slate-900 dark:text-white">
+                    {inquiry.requirement.contractDuration || "5 Days"}
+                  </span>
+                </div>
+                <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-emerald-100 dark:border-emerald-900">
+                  <span className="text-[11px] font-semibold text-slate-400 block uppercase">
+                    Machine Limit
+                  </span>
+                  <span className="text-base font-black text-slate-900 dark:text-white">
+                    Max {inquiry.requirement.activeMachines} Machines
+                  </span>
+                </div>
+                <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-emerald-100 dark:border-emerald-900">
+                  <span className="text-[11px] font-semibold text-slate-400 block uppercase">
+                    Staff Limit
+                  </span>
+                  <span className="text-base font-black text-slate-900 dark:text-white">
+                    Max 3 Staff
+                  </span>
+                </div>
+              </div>
 
-        <hr className="border-slate-100 dark:border-slate-800" />
+              {Array.isArray(inquiry.requirement.optionalServices) &&
+                inquiry.requirement.optionalServices.length > 0 && (
+                  <div className="mt-4 pt-3 border-t border-emerald-100 dark:border-emerald-900/60">
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-2">
+                      Included Modules & Features:
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {inquiry.requirement.optionalServices.map((feat, i) => (
+                        <span
+                          key={i}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 text-xs font-medium border border-emerald-100 dark:border-emerald-900"
+                        >
+                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                          {feat}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+            </div>
 
-        <TrialOptionSection
-          draft={draft}
-          errors={errors}
-          readOnly={readOnly}
-          onChange={patchDraft}
-        />
+            <div className="flex items-start gap-3 rounded-2xl border border-blue-200/80 bg-blue-50/60 p-4 text-xs text-blue-900 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-200">
+              <Zap className="h-4 w-4 shrink-0 text-blue-600 mt-0.5" />
+              <div>
+                <p className="font-bold text-blue-950 dark:text-blue-100">
+                  Zero-Friction Free Trial Workflow:
+                </p>
+                <p className="mt-0.5 text-blue-800 dark:text-blue-300">
+                  Demo requests do not require commercial pricing proposals, legal contracts, or billing invoices. Clicking <strong>Approve & Activate Demo</strong> will instantly activate evaluation mode for <strong>{inquiry.company.name}</strong>.
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <>
+            <hr className="border-slate-100 dark:border-slate-800" />
 
-        <hr className="border-slate-100 dark:border-slate-800" />
+            <CommercialDetailsSection
+              draft={draft}
+              errors={errors}
+              readOnly={readOnly}
+              onChange={patchDraft}
+            />
 
-        <AdditionalServicesSection
-          services={draft.services}
-          readOnly={readOnly}
-          onToggle={toggleService}
-          onPriceChange={changeServicePrice}
-          total={servicesTotal}
-        />
+            <hr className="border-slate-100 dark:border-slate-800" />
 
-        <hr className="border-slate-100 dark:border-slate-800" />
+            <TrialOptionSection
+              draft={draft}
+              errors={errors}
+              readOnly={readOnly}
+              onChange={patchDraft}
+            />
 
-        <section aria-labelledby="description-notes-heading">
-          <SectionHeading>Description / Notes</SectionHeading>
-          <textarea
-            value={draft.notes}
-            disabled={readOnly}
-            onChange={(e) => patchDraft({ notes: e.target.value })}
-            rows={4}
-            placeholder="Quotation description, implementation notes, special conditions..."
-            className={`${inputClasses} mt-2`}
-          />
-        </section>
+            <hr className="border-slate-100 dark:border-slate-800" />
 
-        <hr className="border-slate-100 dark:border-slate-800" />
+            <AdditionalServicesSection
+              services={draft.services}
+              readOnly={readOnly}
+              onToggle={toggleService}
+              onPriceChange={changeServicePrice}
+              total={servicesTotal}
+            />
 
-        <QuotationSummarySection draft={draft} />
+            <hr className="border-slate-100 dark:border-slate-800" />
+
+            <section aria-labelledby="description-notes-heading">
+              <SectionHeading>Description / Notes</SectionHeading>
+              <textarea
+                value={draft.notes}
+                disabled={readOnly}
+                onChange={(e) => patchDraft({ notes: e.target.value })}
+                rows={4}
+                placeholder="Quotation description, implementation notes, special conditions..."
+                className={`${inputClasses} mt-2`}
+              />
+            </section>
+
+            <hr className="border-slate-100 dark:border-slate-800" />
+
+            <QuotationSummarySection draft={draft} />
+          </>
+        )}
       </div>
     </DrawerShell>
   );
@@ -3346,10 +3578,22 @@ export default function QuotationManagementPage() {
     if (!selectedInquiry || !pendingSendDraft) return;
     setSavingState("send");
     try {
+      const isTrial =
+        selectedInquiry.requirement.quotationType
+          ?.toLowerCase()
+          .includes("trial") ||
+        selectedInquiry.requirement.quotationType
+          ?.toLowerCase()
+          .includes("demo");
+
       const result = await updateQuotationRequest(selectedInquiry.id, {
-        status: "SENT",
+        status: isTrial ? "APPROVED" : "SENT",
       });
-      toast.success(result.message || MESSAGES.sendSuccess);
+      toast.success(
+        isTrial
+          ? `Demo evaluation plan approved & activated for ${selectedInquiry.company.name}!`
+          : result.message || MESSAGES.sendSuccess
+      );
       setPendingSendDraft(null);
       setIsSendQuotationOpen(false);
       setSelectedInquiry(null);

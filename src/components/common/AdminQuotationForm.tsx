@@ -495,27 +495,43 @@ interface QuotationRequestFormProps {
    * rendered and the form behaves as a standalone page section.
    */
   onClose?: () => void;
+
+  /** Pre-selected quotation type (e.g. "Free Trial (14 Days)" or "Commercial Quotation"). */
+  initialQuotationType?: string;
 }
 
 export default function QuotationRequestForm({
   onSuccess,
   onClose,
+  initialQuotationType,
 }: QuotationRequestFormProps) {
   const [submitStatus, setSubmitStatus] = useState<SubmitStatus | null>(null);
+
+  const isDemoTrial =
+    initialQuotationType === "Free Trial (14 Days)" ||
+    initialQuotationType?.toLowerCase().includes("trial");
 
   const {
     control,
     register,
     handleSubmit,
     reset,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<QuotationFormData>({
     resolver: zodResolver(quotationFormSchema),
-    defaultValues: DEFAULT_VALUES,
+    defaultValues: {
+      ...DEFAULT_VALUES,
+      quotationType: initialQuotationType || DEFAULT_VALUES.quotationType,
+      contractDuration: isDemoTrial ? "12 Months" : DEFAULT_VALUES.contractDuration,
+    },
     mode: "onTouched",
     reValidateMode: "onChange",
     shouldFocusError: true,
   });
+
+  const selectedType = watch("quotationType");
+  const isTrialSelected = selectedType === "Free Trial (14 Days)" || selectedType?.toLowerCase().includes("trial");
 
   const {
     fields: siteNameFields,
@@ -621,11 +637,24 @@ export default function QuotationRequestForm({
     <div className="w-full min-w-0 rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-7 lg:p-8">
       <div className="mb-5 flex items-start justify-between gap-4">
         <div>
+          <div className="mb-1 flex items-center gap-2">
+            {isTrialSelected ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-3 py-1 text-xs font-black uppercase tracking-wider text-blue-700">
+                ✨ 14-Day Free Evaluation Trial
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-xs font-black uppercase tracking-wider text-slate-700">
+                Formal Request
+              </span>
+            )}
+          </div>
           <h1 className="text-2xl font-black tracking-tight text-slate-950">
-            Request a Quotation
+            {isTrialSelected ? "Request Free Demo / Evaluation Trial" : "Request a Quotation"}
           </h1>
           <p className="mt-1.5 text-sm text-slate-500">
-            Tell us about your fleet and requirements.
+            {isTrialSelected
+              ? "Submit your mine site details for a 14-day free demo evaluation. Super Admin will review and activate your demo fleet."
+              : "Tell us about your fleet and requirements to receive a formal commercial proposal."}
           </p>
         </div>
 
@@ -640,6 +669,20 @@ export default function QuotationRequestForm({
           </button>
         ) : null}
       </div>
+
+      {isTrialSelected && (
+        <div className="mb-5 rounded-2xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50/60 p-4 text-xs font-semibold text-blue-800">
+          <div className="flex items-start gap-2.5">
+            <span className="text-base leading-none">🚀</span>
+            <div>
+              <p className="font-bold text-blue-900">How Free Demo / Trial Works:</p>
+              <p className="mt-0.5 text-blue-700">
+                Once submitted, Super Admin will review your machinery list and approve demo telemetry access. You will be able to test live health diagnostics, alerts, and component telemetry for 14 days.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {submitStatus !== null ? <StatusBanner status={submitStatus} /> : null}
 
