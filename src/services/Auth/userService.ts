@@ -6,6 +6,30 @@ export type ApiRole = {
   name: string;
 };
 
+export type CompanySummary = {
+  id: string;
+  adminId: string;
+  adminRole: string;
+  companyName: string;
+  companyCode: string;
+  adminEmail: string;
+  adminName: string;
+  staffCount: number;
+  activePlan: string;
+  isActive: boolean;
+  status: string;
+  createdAt: string;
+};
+
+export type CompanySummariesResponse = {
+  success: boolean;
+  message: string;
+  data: CompanySummary[];
+  error: string | null;
+  timestamp: string;
+};
+
+
 export type ApiUser = {
   id: string | number;
   first_name?: string;
@@ -347,6 +371,17 @@ export const userService = {
 
     return response.data || [];
   },
+
+
+    getCompanySummaries: async (): Promise<CompanySummary[]> => {
+    const response = await apiCall<CompanySummariesResponse>(
+      "/auth/users/super-admin/companies",
+      { method: "GET" },
+    );
+
+    return response.data || [];
+  },
+
 
   registerMachine: async (machineData: any): Promise<any> => {
     return apiCall<any>(

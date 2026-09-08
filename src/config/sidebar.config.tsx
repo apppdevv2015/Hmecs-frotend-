@@ -51,7 +51,9 @@ export type UserRole =
   | "operator"
   | "supervisor"
   | "technical_support"
-  | "engineers";
+  | "engineers"
+  | "sub_admin"
+  | "sub_super_admin";
 
 export type NavLinkItem = {
   name: string;
@@ -828,17 +830,13 @@ export const sidebarConfig: Record<
       },
     ],
 
-    profile: {
+       profile: {
       shortName: "EN",
       title: "Engineer",
       subtitle: "engineer@hme.com",
       email: "engineer@hme.com",
     },
   },
-
-};
-
-},
 
   sub_admin: {
     dashboardItem: {

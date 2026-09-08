@@ -25,7 +25,7 @@ import Pagination from "../../components/common/Pagination";
 import StorageService from "../../services/storage.service";
 import { isReadOnlyRole } from "../../components/common/permissions";
 
-import { componentSchema } from "../../validations/companyAdminValidation";
+// import { componentSchema } from "../../validations/companyAdminValidation";
 
 
 type MachineStatus = "good" | "warning" | "critical";
@@ -625,7 +625,7 @@ const ComponentManagement: React.FC = () => {
     ];
   }, [machines]);
 
-  const selectedMachineComponents = useMemo(() => {
+    const selectedMachineComponents = useMemo(() => {
     if (!selectedMachine) return components;
 
     const machIds = new Set(
@@ -636,15 +636,10 @@ const ComponentManagement: React.FC = () => {
         machIds.has(component.machineId) ||
         (component.machineId &&
           selectedMachine.name &&
-
-          component.machineId.toLowerCase() ===
-            selectedMachine.name.toLowerCase()),
-
           component.machineId.toLowerCase() === selectedMachine.name.toLowerCase()) ||
         (component.machineId &&
           selectedMachine.serialNumber &&
           component.machineId.toLowerCase() === selectedMachine.serialNumber.toLowerCase()),
-
     );
   }, [components, selectedMachine]);
 
@@ -1526,18 +1521,11 @@ const ComponentManagement: React.FC = () => {
 
               {/* Desktop / large-screen table */}
               <div className="hidden w-full overflow-x-auto hme-hide-scrollbar lg:block">
-                <table className="w-full min-w-[1000px] border-collapse text-left">
+
+                                <table className="w-full min-w-[1000px] border-collapse text-left">
                   <thead>
                     <tr className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-[0.14em] text-slate-500 dark:border-slate-800 dark:bg-slate-950/60">
-
-                      <th className="px-4 py-4 text-center font-bold w-14">
-                        S.No.
-                      </th>
-                      <th className="px-6 py-4 font-bold">Machine / Type</th>
-                      <th className="px-6 py-4 font-bold">
-                        Component Name / Serial
-
-                     <th className="px-4 py-4 text-center font-bold w-14">S.No.</th>
+                      <th className="px-4 py-4 text-center font-bold w-14">S.No.</th>
                       <th
                         className="px-6 py-4 font-bold cursor-pointer select-none transition hover:text-blue-600 dark:hover:text-blue-400"
                         onClick={() => handleSort("machine")}
@@ -1562,11 +1550,8 @@ const ComponentManagement: React.FC = () => {
                         onClick={() => handleSort("updatedAt")}
                       >
                         Date & Time {sortField === "updatedAt" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
-
                       </th>
-                      <th className="px-6 py-4 text-center font-bold">
-                        Actions
-                      </th>
+                      <th className="px-6 py-4 text-center font-bold">Actions</th>
                     </tr>
                   </thead>
 
