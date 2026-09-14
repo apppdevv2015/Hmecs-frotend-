@@ -3,8 +3,11 @@ import { useSearchParams } from "react-router-dom";
 import { ClipboardList, MessageSquareCheck, PlusCircle } from "lucide-react";
 
 import QuotationInquiry from "./QuotationInquiry";
-import QuotationResponses from "./QuotationResponses";
+import QuotationResponses from "./QuotationResponses";<<<<<<< quotation-flow-complete-integration
 import AddonQuotationBuilder from "./AddonQuotationBuilder";
+
+import { AddonQuotationBuilder } from "./AddonQuotationBuilder";
+
 import FormCard from "../../../components/common/SignupCard";
 
 /* ============================================================
@@ -61,6 +64,10 @@ const isQuotationTab = (value: string | null): value is QuotationTabId => {
 
 const Quotation: FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
+
+
+
+  
 
   const tabParam = searchParams.get("tab");
 
@@ -171,6 +178,14 @@ const Quotation: FC = () => {
           </div>
 
           <FormCard onInquirySubmitted={() => {}} />
+
+          <FormCard
+            onInquirySubmitted={() => {
+              // Optional: refresh inquiry list after successful submission
+              // e.g. call a refetch function passed down or via context
+            }}
+          />
+
         </div>
 
         {/* ==================================================
