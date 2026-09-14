@@ -173,6 +173,10 @@ const SuperAdminInvoiceManagement = lazy(
   () => import("./pages/SuperAdmin/Quotation/InvoiceManagement"),
 );
 
+const GenerateInvoicePage = lazy(
+  () => import("./pages/SuperAdmin/Quotation/GenerateInvoiceForm"),
+);
+
 const SuperAdminAccessManagement = lazy(
   () => import("./pages/SuperAdmin/Quotation/AccessManagement"),
 );
@@ -422,9 +426,6 @@ const EngineersDashboard = lazy(
   () => import("./pages/EngineersDashboard/EngineersDashboard"),
 );
 
-
-
-
 import AuthInitializer from "./routes/AuthInitializer";
 
 export default function App() {
@@ -652,6 +653,15 @@ export default function App() {
                   element={
                     <Suspense fallback={<PageSkeleton />}>
                       <SuperAdminInvoiceManagement />
+                    </Suspense>
+                  }
+                />
+
+                <Route
+                  path="/super-admin/invoices/generate"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <GenerateInvoicePage />
                     </Suspense>
                   }
                 />
@@ -1233,10 +1243,7 @@ export default function App() {
                   path="/sub-admin/categories"
                   element={<CategoryManagement />}
                 />
-                <Route
-                  path="/sub-admin/heatmap"
-                  element={<FleetHeatMap />}
-                />
+                <Route path="/sub-admin/heatmap" element={<FleetHeatMap />} />
                 <Route
                   path="/sub-admin/heat-map"
                   element={<Navigate to="/sub-admin/heatmap" replace />}
@@ -1257,10 +1264,7 @@ export default function App() {
                     </Suspense>
                   }
                 />
-                <Route
-                  path="/sub-admin/staff"
-                  element={<StaffManagement />}
-                />
+                <Route path="/sub-admin/staff" element={<StaffManagement />} />
                 <Route
                   path="/sub-admin/machines"
                   element={<MachineManagement />}
@@ -1277,14 +1281,8 @@ export default function App() {
                   path="/sub-admin/reporting"
                   element={<ReportingManagement />}
                 />
-                <Route
-                  path="/sub-admin/profile"
-                  element={<UserProfiles />}
-                />
-                <Route
-                  path="/sub-admin/alerts"
-                  element={<AlertsPage />}
-                />
+                <Route path="/sub-admin/profile" element={<UserProfiles />} />
+                <Route path="/sub-admin/alerts" element={<AlertsPage />} />
                 <Route
                   path="/sub-admin/notifications"
                   element={
@@ -1715,7 +1713,7 @@ export default function App() {
               </Route>
             </Route>
 
-                       {/* Engineers Routes */}
+            {/* Engineers Routes */}
             <Route
               element={
                 <RoleProtectedRoute allowedRoles={["engineers", "engineer"]} />
@@ -1736,10 +1734,7 @@ export default function App() {
                 />
                 <Route path="/engineers/profile" element={<UserProfiles />} />
 
-                <Route
-                  path="/engineers/staff"
-                  element={<StaffManagement />}
-                />
+                <Route path="/engineers/staff" element={<StaffManagement />} />
                 <Route
                   path="/engineers/machines"
                   element={<MachineManagement />}
@@ -1835,15 +1830,6 @@ export default function App() {
                 />
               </Route>
             </Route>
-
-
-
-
-
-
-
-
-
 
             {/* Coming Soon Routes */}
             <Route

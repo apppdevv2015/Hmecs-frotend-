@@ -25,13 +25,13 @@ import Input from "../form/input/InputField";
 import {
   submitQuotationRequest,
   type ApiQuotationRequest,
-} from "../../services/SuperAdmin/quotationInquiryService";
+} from "../../services/SuperAdmin/quotation/quotationInquiryService";
 import { showLoadingToast, updateToast } from "../../utils/toastUtils";
 import StorageService from "../../services/storage.service";
 import {
   getEquipmentTypes,
   getPublicOptionalServices,
-} from "../../services/SuperAdmin/optionalService";
+} from "../../services/SuperAdmin/quotation/optionalService";
 
 import {
   userService,

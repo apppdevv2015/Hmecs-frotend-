@@ -1,4 +1,4 @@
-import { apiCall } from "../apiHandler";
+import { apiCall } from "../../apiHandler";
 
 // ----------------------------------------------------
 // Types (matches real backend response exactly)

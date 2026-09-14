@@ -1,24 +1,5 @@
-/**
- * quotationService.ts
- * -----------------------------------------------------------------------
- * Single source of truth for all HTTP communication with the quotation
- * backend. No component should call fetch/axios directly for quotations —
- * everything goes through the functions exported here.
- *
- * Base endpoint: /quotations/requests
- *
- * MESSAGE POLICY:
- * - Backend success/error messages are handled by the shared apiHandler.
- * - This service never calls toast directly.
- * - Mutation APIs explicitly enable the centralized success Toast through
- *   apiCall({ showSuccess: true }).
- * - GET APIs do not show success Toasts.
- * - No fallback error messages are generated in this service.
- * - If the backend does not provide an error message, no message is returned.
- * -----------------------------------------------------------------------
- */
-
 import { apiCall } from "../apiHandler";
+import { showErrorToast } from "../../utils/toastUtils"; 
 
 /* ============================================================================
  * 1. ERROR NORMALIZATION
@@ -39,15 +20,6 @@ export interface ApiErrorShape {
   readonly name?: string;
 }
 
-/**
- * Extracts only a message that actually exists on the backend/thrown error.
- *
- * No fallback message is generated here.
- *
- * Returns:
- * - string -> when a usable error message exists
- * - undefined -> when no usable message exists
- */
 export function extractApiError(error: unknown): string | undefined {
   if (error instanceof DOMException && error.name === "AbortError") {
     return undefined;
@@ -77,9 +49,7 @@ export type QuotationRequestStatus =
   | "REJECTED"
   | "EXPIRED";
 
-/**
- * Exact shape of one item in GET /quotations/requests `data[]`.
- */
+
 export interface QuotationRequest {
   readonly id: string;
   readonly requestId: string;
@@ -146,11 +116,10 @@ export interface CreateQuotationRequestPayload {
 export type QuotationRequestPayload = CreateQuotationRequestPayload;
 
 export type UpdateQuotationRequestPayload = Partial<
-  CreateQuotationRequestPayload & {
-    readonly status: QuotationRequestStatus;
-  }
->;
-
+  CreateQuotationRequestPayload
+> & {
+  readonly status: QuotationRequestStatus;
+};
 export interface AddonQuotationPayload {
   companyId?: string;
   companyName: string;
@@ -220,12 +189,47 @@ export interface OfficialQuotation {
   updatedAt: string;
 }
 
+export interface QuotationServiceItem {
+  serviceId: string;
+  name: string;
+  price: number;
+}
+
+export interface SendQuotationPayload {
+  companyId: string;
+  companyName: string;
+  contactPerson: string;
+  contactEmail: string;
+  contactPhone: string;
+  tier: string;
+  machineCount: number;
+  licensedMachineAllowance: number;
+  contractDuration: string;
+  billingFrequency: string;
+  implementationFee: number;
+  monthlySiteLicence: number;
+  additionalMachineCharge: number;
+  baseAmount: number;
+  optionalServicesAmount: number;
+  discountAmount: number;
+  totalAmount: number;
+  optionalServices: QuotationServiceItem[];
+  paymentTerms: string;
+  notes: string;
+  trialRequested?: boolean;
+  trialDuration?: string | null;
+  trialMachines?: number | null;
+  trialDescription?: string | null;
+  validUntil: string;
+}
+
 /* ============================================================================
  * 3. HELPERS
  * ==========================================================================*/
 
 function assertValidId(id: string): void {
   if (typeof id !== "string" || id.trim().length === 0) {
+    showErrorToast("Invalid ID provided");
     throw new Error("Invalid ID provided");
   }
 }
@@ -375,7 +379,27 @@ export const createAddonQuotation = async (
     },
     {
       showSuccess: true,
-      showError: true,
+    },
+  );
+
+  return response.data;
+};
+
+/**
+ * Super Admin - Create and send formal quotation proposal.
+ * POST /quotations/send
+ */
+export const sendQuotation = async (
+  payload: SendQuotationPayload,
+): Promise<OfficialQuotation> => {
+  const response = await apiCall<ApiEnvelope<OfficialQuotation>>(
+    "/quotations/send",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+    {
+      showSuccess: true,
     },
   );
 
@@ -394,7 +418,6 @@ export const submitEftPayment = async (
     },
     {
       showSuccess: true,
-      showError: true,
     },
   );
 
@@ -413,7 +436,6 @@ export const verifyEftPayment = async (
     },
     {
       showSuccess: true,
-      showError: true,
     },
   );
 
@@ -428,9 +450,6 @@ export const getOfficialQuotations = async (
     `/quotations${query}`,
     {
       method: "GET",
-    },
-    {
-      showError: false,
     },
   );
 

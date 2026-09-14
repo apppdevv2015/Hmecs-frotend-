@@ -69,7 +69,7 @@ const parseApiError = async (response: Response) => {
   try {
     const data = await response.json();
 
-    return data?.message || data?.error || "Something went wrong";
+    return data?.message || data?.error ;
   } catch {
     return "Something went wrong";
   }

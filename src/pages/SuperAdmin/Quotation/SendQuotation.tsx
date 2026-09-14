@@ -21,6 +21,7 @@ import {
   Users,
   X,
 } from "lucide-react";
+import { sendQuotation } from "../../../services/Quotation/quotationService";
 
 /* ============================================================
    TYPES
@@ -36,6 +37,7 @@ type OptionalService = {
 
 type AcceptedInquiry = {
   id: string;
+  companyId: string;
   companyName: string;
   contactPerson: string;
   email: string;
@@ -70,6 +72,7 @@ type QuotationTotals = {
 const ACCEPTED_INQUIRIES: AcceptedInquiry[] = [
   {
     id: "QIN-000124",
+    companyId: "3fa85f64-5717-4562-b3fc-2c963f66afa6",
     companyName: "ABC Mining Pvt Ltd",
     contactPerson: "John Doe",
     email: "john@abcmining.com",
@@ -356,28 +359,34 @@ const SendQuotation: FC = () => {
   ============================================================ */
 
   const handleSendQuotation = async (): Promise<void> => {
+    if (selectedInquiry === undefined || quotationTotals === undefined) {
+      return;
+    }
+
     setIsSending(true);
-
-    /*
-      Production API integration:
-
-      await quotationService.sendQuotation({
-        inquiryId: selectedInquiry.id,
-        contractDuration,
-        licensedMachineAllowance,
-        implementationFee,
-        monthlySiteLicence,
-        additionalMachineCharge,
-        paymentTerms,
-        optionalServices: selectedServiceLineItems,
-        totals: quotationTotals,
-      });
-
-      Backend response should control success/error handling.
-    */
     try {
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, 800);
+      await sendQuotation({
+        companyId: selectedInquiry.companyId,
+        companyName: selectedInquiry.companyName,
+        contactPerson: selectedInquiry.contactPerson,
+        contactEmail: selectedInquiry.email,
+        contactPhone: selectedInquiry.phone,
+        tier: "Enterprise",
+        machineCount: selectedInquiry.activeMachines,
+        contractDuration,
+        billingFrequency: paymentTerms,
+        baseAmount: quotationTotals.totalOneTimeCharges,
+        optionalServicesAmount: quotationTotals.selectedServicesTotal,
+        discountAmount: 0,
+        totalAmount: quotationTotals.totalContractValue,
+        optionalServices: selectedServiceLineItems.map((lineItem) => ({
+          serviceId: lineItem.id,
+          serviceName: lineItem.name,
+          quantity: 1,
+          amount: lineItem.amount,
+        })),
+        paymentTerms,
+        validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
       });
     } finally {
       setIsSending(false);

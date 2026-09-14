@@ -87,15 +87,15 @@ const engineersIconClass = "h-5 w-5 stroke-[2.2] text-current";
 
 const companyAdminNavGroups: NavGroup[] = [
   {
-    title: "Quotation Inquiry",
+    title: "Inquiry Management",
     items: [
       {
-        name: "Quotation Inquiry",
+        name: "Inquiry Management",
         path: "/company-admin/quotation",
         icon: <FileText className={sidebarIconClass} />,
       },
       {
-        name: "Contract",
+        name: "Contracts",
         path: "/company-admin/contracts",
         icon: <FileSignature className={sidebarIconClass} />,
       },
@@ -215,7 +215,7 @@ export const sidebarConfig: Record<
         title: "Inquiry Management",
         items: [
           {
-            name: "Quotation Inquiry",
+            name: "Inquiry Management",
             path: "/super-admin/quotation",
             icon: <FileText className={sidebarIconClass} />,
           },
@@ -225,7 +225,7 @@ export const sidebarConfig: Record<
             icon: <Layers className={sidebarIconClass} />,
           },
           {
-            name: "Contract",
+            name: "Contracts",
             path: "/super-admin/contracts",
             icon: <FileSignature className={sidebarIconClass} />,
           },
@@ -333,24 +333,18 @@ export const sidebarConfig: Record<
       path: "/company-admin/dashboard",
     },
 
-    // --------------------------------------------------
-    // FULL ACCESS
-    // Shown when Company Admin isActive === true
-    // --------------------------------------------------
     navGroups: [
-      // --------------------------------------------------
-      // QUOTATION INQUIRY
-      // --------------------------------------------------
+   
       {
-        title: "Quotation Inquiry",
+        title: "Inquiry Management",
         items: [
           {
-            name: "Quotation Inquiry",
+            name: "Inquiry Management",
             path: "/company-admin/quotation",
             icon: <FileText className={sidebarIconClass} />,
           },
           {
-            name: "Contract",
+            name: "Contracts",
             path: "/company-admin/contracts",
             icon: <FileSignature className={sidebarIconClass} />,
           },
@@ -453,15 +447,15 @@ export const sidebarConfig: Record<
       // QUOTATION INQUIRY
       // --------------------------------------------------
       {
-        title: "Quotation Inquiry",
+        title: "Inquiry Management",
         items: [
           {
-            name: "Quotation Inquiry",
+            name: "Inquiry Management",
             path: "/company-admin/quotation",
             icon: <FileText className={sidebarIconClass} />,
           },
           {
-            name: "Contract",
+            name: "Contracts",
             path: "/company-admin/contracts",
             icon: <FileSignature className={sidebarIconClass} />,
           },

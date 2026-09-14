@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   AlertCircle,
   Building2,
@@ -9,11 +9,10 @@ import {
   Cpu,
   FileCheck,
   FileText,
-  HelpCircle,
   Layers,
   Loader2,
-  MapPin,
-  MessageSquare,
+  Mail,
+  Phone,
   ShieldCheck,
   Sparkles,
   User,
@@ -22,100 +21,22 @@ import {
   Zap,
 } from "lucide-react";
 
-/* ============================================================
-   TYPES
-   ============================================================ */
+import { extractApiError, getOfficialQuotations } from "../../services/Quotation/quotationService";
+import {
+  acceptQuotation,
+  rejectQuotation,
+} from "../../services/companyadmin/Quotations/QuotationService";
+import type { CompanyQuotation } from "../../services/companyadmin/Quotations/QuotationService";
+import StorageService from "../../services/storage.service";
+import { showErrorToast } from "../../utils/toastUtils";
 
-type QuotationStatus =
-  | "AWAITING_RESPONSE"
-  | "ACCEPTED"
-  | "REJECTED"
-  | "EXPIRED"
-  | "CANCELLED";
+
 
 type Decision = "accept" | "reject";
 
-interface OptionalService {
-  id: string;
-  name: string;
-  amount: number;
-}
-
-interface CommercialProposal {
-  implementationFee: number;
-  monthlyLicence: number;
-  additionalMachineCharges: number;
-  optionalServices: OptionalService[];
-  totalProposalValue: number;
-  currency: "ZAR";
-}
-
-interface QuotationActionData {
-  id: string;
-  quotationNumber: string;
-  status: QuotationStatus;
-  companyName: string;
-  companyAdmin: string;
-  sites: string[];
-  machinePlan: string;
-  activeMachines: number;
-  contractDuration: string;
-  quotationDate: string;
-  commercials: CommercialProposal;
-}
-
-interface DecisionPayload {
-  quotationId: string;
-  decision: Decision;
-  note: string;
-  rejectionReason: string;
-}
-
-interface DecisionResponse {
-  quotation: QuotationActionData;
-  message: string;
-}
-
 /* ============================================================
-   MOCK / PREVIEW DATA
+   HELPERS
    ============================================================ */
-
-const DUMMY_QUOTATION: QuotationActionData = {
-  id: "QT-DEMO-2026-000124",
-  quotationNumber: "HME-QT-2026-001",
-  status: "AWAITING_RESPONSE",
-  companyName: "ABC Mining Corporation",
-  companyAdmin: "Aniket Kumar",
-  sites: ["ABC Main Mining Site", "North Valley Mining Site"],
-  machinePlan: "26–75 Machines",
-  activeMachines: 48,
-  contractDuration: "12 Months",
-  quotationDate: "2026-08-22",
-  commercials: {
-    implementationFee: 85_000,
-    monthlyLicence: 95_000,
-    additionalMachineCharges: 0,
-    optionalServices: [
-      {
-        id: "telematics-ecu",
-        name: "Telematics / ECU Integration",
-        amount: 25_000,
-      },
-      {
-        id: "custom-reports",
-        name: "Custom Reports & API Access",
-        amount: 15_000,
-      },
-      {
-        id: "additional-training",
-        name: "On-site Field Staff Training",
-        amount: 10_000,
-      },
-    ],
-    totalProposalValue: 230_000,
-    currency: "ZAR",
-  },
-};
 
 const formatZAR = (amount: number): string =>
   new Intl.NumberFormat("en-ZA", {
@@ -125,7 +46,7 @@ const formatZAR = (amount: number): string =>
     maximumFractionDigits: 2,
   }).format(amount);
 
-const formatDate = (value: string): string => {
+const formatDate = (value?: string | null): string => {
   if (!value) return "—";
   const date = new Date(value);
   return Number.isNaN(date.getTime())
@@ -137,64 +58,254 @@ const formatDate = (value: string): string => {
       }).format(date);
 };
 
+
+const toAmount = (value: string | number | undefined | null): number => {
+  if (value === undefined || value === null) return 0;
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) ? n : 0;
+};
+
 /* ============================================================
    MAIN COMPONENT
    ============================================================ */
 
 const QuotationActionPage: React.FC = () => {
-  const [quotation, setQuotation] =
-    useState<QuotationActionData>(DUMMY_QUOTATION);
-  const [decision, setDecision] = useState<Decision | null>(null);
-  const [rejectionReason, setRejectionReason] = useState<string>("");
-  const [note, setNote] = useState<string>("");
-  const [includeNote, setIncludeNote] = useState<boolean>(false);
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const [showConfirmModal, setShowConfirmModal] = useState<boolean>(false);
-  const [actionSuccessMessage, setActionSuccessMessage] = useState<
+  // There is no per-record route/prop for this page (confirmed against the
+  // parent QuotationManagement tab component — it renders <QuotationAction />
+  // with no id). Multiple quotations can be "SENT" (pending decision) at
+  // once, so we fetch the full list, filter to pending ones, and let the
+  // user pick which one to act on when there's more than one.
+  const [pendingQuotations, setPendingQuotations] = useState<
+    CompanyQuotation[]
+  >([]);
+  const [selectedQuotationId, setSelectedQuotationId] = useState<
     string | null
   >(null);
-  const [copied, setCopied] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [loadError, setLoadError] = useState<string | undefined>(undefined);
 
-  const isAccepted = quotation.status === "ACCEPTED";
-  const isRejected = quotation.status === "REJECTED";
-  const isAwaiting = quotation.status === "AWAITING_RESPONSE";
+ const [decision, setDecision] = useState<Decision | null>(null);
+const [rejectionReason, setRejectionReason] = useState<string>("");
+const [note, setNote] = useState<string>("");
+const [includeNote, setIncludeNote] = useState<boolean>(false);
+const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+const [showConfirmModal, setShowConfirmModal] = useState<boolean>(false);
+const [copied, setCopied] = useState<boolean>(false);
+  /* ------------------------------------------------------------
+     FETCH — GET /quotations (role-filtered list)
+  ------------------------------------------------------------ */
+  const fetchQuotation = useCallback(async (signal?: AbortSignal) => {
+    setIsLoading(true);
+    setLoadError(undefined);
+
+    try {
+      const list = (await getOfficialQuotations()) as unknown as CompanyQuotation[];
+      if (signal?.aborted) return;
+
+      const pending = (list ?? []).filter(
+        (q) => q.status?.toUpperCase() === "SENT",
+      );
+
+      setPendingQuotations(pending);
+      // Auto-select when there's exactly one — otherwise leave unselected
+      // so the picker view renders and the user chooses.
+      setSelectedQuotationId(pending.length === 1 ? pending[0].id : null);
+    } catch (err) {
+      if (signal?.aborted) return;
+      const message = extractApiError(err);
+      setLoadError(message);
+      setPendingQuotations([]);
+      setSelectedQuotationId(null);
+    } finally {
+      if (!signal?.aborted) {
+        setIsLoading(false);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchQuotation(controller.signal);
+    return () => controller.abort();
+  }, [fetchQuotation]);
+
+  const quotation =
+    pendingQuotations.find((q) => q.id === selectedQuotationId) ?? null;
 
   const handleCopyId = () => {
+    if (!quotation) return;
     navigator.clipboard.writeText(quotation.quotationNumber);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
+
   const handleConfirmSubmit = async () => {
-    if (!decision) return;
-    setIsSubmitting(true);
+    if (!decision || !quotation) return;
+
+    if (decision === "reject" && rejectionReason.trim().length === 0) {
+  setShowConfirmModal(false);
+  showErrorToast("Please select a reason before submitting a rejection.");
+  return;
+}
+
     setShowConfirmModal(false);
+    setIsSubmitting(true);
 
     try {
-      // Simulate API call
-      await new Promise((r) => setTimeout(r, 600));
-      const nextStatus: QuotationStatus =
-        decision === "accept" ? "ACCEPTED" : "REJECTED";
-
-      setQuotation((prev) => ({
-        ...prev,
-        status: nextStatus,
-      }));
-
-      setActionSuccessMessage(
+            const envelope =
         decision === "accept"
-          ? "🎉 Commercial quotation approved & accepted! The enterprise contract agreement is now active."
-          : "Quotation has been rejected. Notification sent to Super Admin.",
+          ? await acceptQuotation(quotation.id, {
+              signedBy: StorageService.getUser()?.name || "Authorized Signatory",
+              ...(includeNote && note.trim() ? { note: note.trim() } : {}),
+            })
+          : await rejectQuotation(quotation.id, {
+              rejectionReason,
+              ...(includeNote && note.trim() ? { note: note.trim() } : {}),
+            }); 
+
+      setPendingQuotations((prev) =>
+        prev.map((q) => (q.id === envelope.data.id ? envelope.data : q)),
       );
-    } catch {
-      // Handle error
-    } finally {
+    }  catch {
+
+} finally {
       setIsSubmitting(false);
     }
   };
 
+  /* ============================================================
+     LOADING STATE
+     ============================================================ */
+  if (isLoading) {
+    return (
+      <div className="flex w-full items-center justify-center rounded-2xl border border-slate-200/80 bg-white p-16">
+        <div className="flex flex-col items-center gap-3 text-slate-500">
+          <Loader2 className="h-6 w-6 animate-spin" />
+          <p className="text-sm font-medium">Loading quotation…</p>
+        </div>
+      </div>
+    );
+  }
+
+  /* ============================================================
+     GENUINE ERROR STATE (network/auth/backend failure)
+     ============================================================ */
+  if (loadError) {
+    return (
+      <div className="flex w-full flex-col items-center gap-4 rounded-2xl border border-rose-200 bg-rose-50 p-10 text-center">
+        <AlertCircle className="h-8 w-8 text-rose-600" />
+        <div>
+          <p className="text-sm font-bold text-rose-800">
+            Couldn&apos;t load your quotations
+          </p>
+          <p className="mt-1 text-xs text-rose-700">{loadError}</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => fetchQuotation()}
+          className="rounded-xl border border-rose-300 bg-white px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-100"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  /* ============================================================
+     NO PENDING QUOTATION (fetch succeeded, nothing to decide on)
+     ============================================================ */
+  if (pendingQuotations.length === 0) {
+    return (
+      <div className="flex w-full flex-col items-center gap-4 rounded-2xl border border-slate-200 bg-white p-10 text-center">
+        <CheckCircle2 className="h-8 w-8 text-slate-400" />
+        <div>
+          <p className="text-sm font-bold text-slate-800">
+            No quotation is currently awaiting your decision
+          </p>
+          <p className="mt-1 text-xs text-slate-500">
+            Once Super Admin sends a formal commercial quotation, it will
+            appear here for you to accept or reject.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => fetchQuotation()}
+          className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+        >
+          Refresh
+        </button>
+      </div>
+    );
+  }
+
+  /* ============================================================
+     PICKER — multiple quotations awaiting a decision, none chosen yet
+     ============================================================ */
+  if (!quotation) {
+    return (
+      <div className="w-full space-y-4">
+        <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-sm">
+          <h2 className="text-base font-bold text-slate-900">
+            Select a quotation to review
+          </h2>
+          <p className="mt-1 text-xs text-slate-500">
+            You have {pendingQuotations.length} quotations awaiting a
+            decision. Choose one to view its details and accept or reject.
+          </p>
+        </div>
+
+        <div className="space-y-3">
+          {pendingQuotations.map((q) => (
+            <button
+              key={q.id}
+              type="button"
+              onClick={() => setSelectedQuotationId(q.id)}
+              className="flex w-full items-center justify-between rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:border-blue-300 hover:shadow-md"
+            >
+              <div>
+                <p className="text-sm font-bold text-slate-900">
+                  {q.quotationNumber}
+                </p>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  {q.companyName} · {q.tier} · {q.machineCount} machines
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-sm font-bold text-emerald-700">
+                  {formatZAR(toAmount(q.totalAmount))}
+                </p>
+                <p className="mt-0.5 text-xs text-slate-400">
+                  Sent {formatDate(q.sentAt ?? q.createdAt)}
+                </p>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  const isAccepted = quotation.status === "ACCEPTED";
+  const isRejected = quotation.status === "REJECTED";
+  const isAwaiting = !isAccepted && !isRejected; // e.g. "SENT"
+  // Backend already computes the total — use it directly rather than
+  // re-deriving it client-side (avoids drifting from discounts/tax logic
+  // that lives on the server).
+  const totalProposalValue = toAmount(quotation.totalAmount);
+  const optionalServices = quotation.optionalServices ?? [];
+
   return (
     <div className="w-full space-y-6">
+      {pendingQuotations.length > 1 && (
+        <button
+          type="button"
+          onClick={() => setSelectedQuotationId(null)}
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-800"
+        >
+          ← Back to all pending quotations
+        </button>
+      )}
       {/* ============================================================
           EXECUTIVE HERO HEADER
       ============================================================ */}
@@ -223,7 +334,9 @@ const QuotationActionPage: React.FC = () => {
               ) : (
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/20 px-3.5 py-1 text-xs font-bold text-amber-300 ring-1 ring-amber-400/40">
                   <Clock className="h-3.5 w-3.5" />
-                  Awaiting Your Decision
+                  {quotation.status === "SENT"
+                    ? "Awaiting Your Decision"
+                    : quotation.status}
                 </span>
               )}
             </div>
@@ -251,7 +364,7 @@ const QuotationActionPage: React.FC = () => {
               <span className="font-bold text-white">
                 {quotation.companyName}
               </span>{" "}
-              · Date: {formatDate(quotation.quotationDate)}
+              · Date: {formatDate(quotation.sentAt ?? quotation.createdAt)}
             </p>
           </div>
 
@@ -263,7 +376,7 @@ const QuotationActionPage: React.FC = () => {
                 Capacity
               </div>
               <p className="mt-1 text-lg font-bold text-white">
-                {quotation.activeMachines} Units
+                {quotation.machineCount} Units
               </p>
             </div>
 
@@ -283,28 +396,15 @@ const QuotationActionPage: React.FC = () => {
                 Total Value
               </div>
               <p className="mt-1 text-lg font-bold text-emerald-300">
-                {formatZAR(quotation.commercials.totalProposalValue)}
+                {formatZAR(totalProposalValue)}
               </p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Success Notification */}
-      {actionSuccessMessage && (
-        <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-800 shadow-sm dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-300">
-          <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" />
-          <p className="text-sm font-semibold">{actionSuccessMessage}</p>
-        </div>
-      )}
-
-      {/* ============================================================
-          MAIN TWO COLUMN DECK
-      ============================================================ */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* LEFT COLUMN: 2 Cols */}
         <div className="space-y-6 lg:col-span-2">
-          {/* Card 1: Commercial Proposal Breakdown Table */}
           <section className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <div className="mb-6 flex items-center justify-between border-b border-slate-100 pb-4 dark:border-slate-800">
               <div className="flex items-center gap-3">
@@ -325,50 +425,75 @@ const QuotationActionPage: React.FC = () => {
               </span>
             </div>
 
-            {/* Pricing Line Items */}
             <div className="space-y-3">
-              <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50/70 p-4 dark:border-slate-800/80 dark:bg-slate-800/40">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-slate-700 shadow-sm dark:bg-slate-700 dark:text-slate-200">
-                    <Wrench className="h-4 w-4" />
+              {quotation.implementationFee !== undefined && (
+                <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50/70 p-4 dark:border-slate-800/80 dark:bg-slate-800/40">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-slate-700 shadow-sm dark:bg-slate-700 dark:text-slate-200">
+                      <Wrench className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-slate-900 dark:text-white">
+                        Once-Off Implementation & Setup Fee
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        System deployment, hardware calibration, and initial
+                        onboarding
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm font-bold text-slate-900 dark:text-white">
-                      Once-Off Implementation & Setup Fee
-                    </p>
-                    <p className="text-xs text-slate-500">
-                      System deployment, hardware calibration, and initial onboarding
-                    </p>
-                  </div>
+                  <span className="text-sm font-bold text-slate-900 dark:text-white">
+                    {formatZAR(toAmount(quotation.implementationFee))}
+                  </span>
                 </div>
-                <span className="text-sm font-bold text-slate-900 dark:text-white">
-                  {formatZAR(quotation.commercials.implementationFee)}
-                </span>
-              </div>
+              )}
 
-              <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50/70 p-4 dark:border-slate-800/80 dark:bg-slate-800/40">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-slate-700 shadow-sm dark:bg-slate-700 dark:text-slate-200">
-                    <Zap className="h-4 w-4 text-blue-500" />
+              {quotation.monthlySiteLicence !== undefined && (
+                <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50/70 p-4 dark:border-slate-800/80 dark:bg-slate-800/40">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-slate-700 shadow-sm dark:bg-slate-700 dark:text-slate-200">
+                      <Zap className="h-4 w-4 text-blue-500" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-slate-900 dark:text-white">
+                        Site Telemetry Licence ({quotation.billingFrequency})
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        Multi-site live machine monitoring ({quotation.tier})
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm font-bold text-slate-900 dark:text-white">
-                      Annual / Monthly Site Telemetry Licence
-                    </p>
-                    <p className="text-xs text-slate-500">
-                      Multi-site live machine monitoring ({quotation.machinePlan})
-                    </p>
-                  </div>
+                  <span className="text-sm font-bold text-slate-900 dark:text-white">
+                    {formatZAR(toAmount(quotation.monthlySiteLicence))}
+                  </span>
                 </div>
-                <span className="text-sm font-bold text-slate-900 dark:text-white">
-                  {formatZAR(quotation.commercials.monthlyLicence)}
-                </span>
-              </div>
+              )}
 
-              {/* Optional Services */}
-              {quotation.commercials.optionalServices.map((svc) => (
+              {toAmount(quotation.additionalMachineCharge) > 0 && (
+                <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50/70 p-4 dark:border-slate-800/80 dark:bg-slate-800/40">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-slate-700 shadow-sm dark:bg-slate-700 dark:text-slate-200">
+                      <Cpu className="h-4 w-4 text-blue-500" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-slate-900 dark:text-white">
+                        Additional Machine Charges
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        Charges for machines beyond licensed allowance
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-sm font-bold text-slate-900 dark:text-white">
+                    {formatZAR(toAmount(quotation.additionalMachineCharge))}
+                  </span>
+                </div>
+              )}
+
+              {/* Optional services included on this quotation */}
+              {optionalServices.map((svc) => (
                 <div
-                  key={svc.id}
+                  key={svc.serviceId}
                   className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50/70 p-4 dark:border-slate-800/80 dark:bg-slate-800/40"
                 >
                   <div className="flex items-center gap-3">
@@ -380,15 +505,37 @@ const QuotationActionPage: React.FC = () => {
                         {svc.name}
                       </p>
                       <p className="text-xs text-slate-500">
-                        Selected add-on service
+                        Optional add-on service
                       </p>
                     </div>
                   </div>
                   <span className="text-sm font-bold text-slate-900 dark:text-white">
-                    {formatZAR(svc.amount)}
+                    {formatZAR(svc.price)}
                   </span>
                 </div>
               ))}
+
+              {toAmount(quotation.discountAmount) > 0 && (
+                <div className="flex items-center justify-between rounded-xl border border-emerald-100 bg-emerald-50/70 p-4 dark:border-emerald-900/40 dark:bg-emerald-950/20">
+                  <p className="text-sm font-bold text-emerald-800 dark:text-emerald-300">
+                    Discount Applied
+                  </p>
+                  <span className="text-sm font-bold text-emerald-700 dark:text-emerald-300">
+                    − {formatZAR(toAmount(quotation.discountAmount))}
+                  </span>
+                </div>
+              )}
+
+              {toAmount(quotation.taxAmount) > 0 && (
+                <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50/70 p-4 dark:border-slate-800/80 dark:bg-slate-800/40">
+                  <p className="text-sm font-bold text-slate-900 dark:text-white">
+                    Tax
+                  </p>
+                  <span className="text-sm font-bold text-slate-900 dark:text-white">
+                    {formatZAR(toAmount(quotation.taxAmount))}
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Total Grand Value Callout */}
@@ -397,13 +544,14 @@ const QuotationActionPage: React.FC = () => {
                 <p className="text-xs font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-400">
                   Total Contract Commitment
                 </p>
-                <p className="text-xs text-slate-600 dark:text-slate-400 font-medium">
-                  Final commercial proposal value (incl. all setup and service modules)
+                <p className="text-xs font-medium text-slate-600 dark:text-slate-400">
+                  Final commercial proposal value (incl. all setup and service
+                  modules)
                 </p>
               </div>
               <div className="text-right">
                 <span className="text-2xl font-black text-indigo-950 dark:text-white sm:text-3xl">
-                  {formatZAR(quotation.commercials.totalProposalValue)}
+                  {formatZAR(totalProposalValue)}
                 </span>
               </div>
             </div>
@@ -421,14 +569,14 @@ const QuotationActionPage: React.FC = () => {
                     Executive Contract Decision
                   </h2>
                   <p className="text-xs text-slate-500">
-                    Accept this proposal to execute the enterprise agreement, or request revisions
+                    Accept this proposal to execute the enterprise agreement,
+                    or request revisions
                   </p>
                 </div>
               </div>
 
               {/* Accept vs Reject Choice Cards */}
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                {/* Accept Option Card */}
                 <button
                   type="button"
                   onClick={() => setDecision("accept")}
@@ -457,12 +605,12 @@ const QuotationActionPage: React.FC = () => {
                   <h3 className="mt-4 text-base font-bold text-slate-900 dark:text-white">
                     Accept & Execute Contract
                   </h3>
-                  <p className="mt-1 text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                    Approve the commercial terms, generate binding contract documentation, and initiate deployment.
+                  <p className="mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-400">
+                    Approve the commercial terms, generate binding contract
+                    documentation, and initiate deployment.
                   </p>
                 </button>
 
-                {/* Reject Option Card */}
                 <button
                   type="button"
                   onClick={() => setDecision("reject")}
@@ -491,13 +639,13 @@ const QuotationActionPage: React.FC = () => {
                   <h3 className="mt-4 text-base font-bold text-slate-900 dark:text-white">
                     Decline / Request Revision
                   </h3>
-                  <p className="mt-1 text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                    Decline the proposal or ask for changes in machine quota, duration, or optional features.
+                  <p className="mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-400">
+                    Decline the proposal or ask for changes in machine quota,
+                    duration, or optional features.
                   </p>
                 </button>
               </div>
 
-              {/* Rejection Reason Selector (if Reject selected) */}
               {decision === "reject" && (
                 <div className="mt-5 space-y-2 rounded-xl border border-rose-200 bg-rose-50/50 p-4 dark:border-rose-900/40 dark:bg-rose-950/20">
                   <label className="text-xs font-bold uppercase tracking-wider text-rose-800 dark:text-rose-300">
@@ -509,16 +657,23 @@ const QuotationActionPage: React.FC = () => {
                     className="w-full rounded-lg border border-rose-300 bg-white p-2.5 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500 dark:bg-slate-800 dark:text-white"
                   >
                     <option value="">-- Choose reason --</option>
-                    <option value="Budget Constraint">Budget / Pricing too high</option>
-                    <option value="Machine Quota Adjustment">Need different machine capacity quota</option>
-                    <option value="Contract Duration">Duration terms need adjustment</option>
-                    <option value="Feature Scope">Required specific features missing</option>
+                    <option value="Budget Constraint">
+                      Budget / Pricing too high
+                    </option>
+                    <option value="Machine Quota Adjustment">
+                      Need different machine capacity quota
+                    </option>
+                    <option value="Contract Duration">
+                      Duration terms need adjustment
+                    </option>
+                    <option value="Feature Scope">
+                      Required specific features missing
+                    </option>
                     <option value="Other">Other / Requesting revision</option>
                   </select>
                 </div>
               )}
 
-              {/* Optional Response Notes */}
               <div className="mt-5 space-y-2">
                 <div className="flex items-center gap-2">
                   <input
@@ -530,7 +685,7 @@ const QuotationActionPage: React.FC = () => {
                   />
                   <label
                     htmlFor="add-note"
-                    className="text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer"
+                    className="cursor-pointer text-xs font-bold text-slate-700 dark:text-slate-300"
                   >
                     Attach an executive comment or specific instruction
                   </label>
@@ -547,7 +702,6 @@ const QuotationActionPage: React.FC = () => {
                 )}
               </div>
 
-              {/* Submit Action Button */}
               <div className="mt-6 flex justify-end">
                 <button
                   type="button"
@@ -558,7 +712,7 @@ const QuotationActionPage: React.FC = () => {
                       ? "bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
                       : decision === "reject"
                         ? "bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-50"
-                        : "bg-slate-200 text-slate-400 cursor-not-allowed dark:bg-slate-800"
+                        : "cursor-not-allowed bg-slate-200 text-slate-400 dark:bg-slate-800"
                   }`}
                 >
                   {isSubmitting ? (
@@ -581,7 +735,7 @@ const QuotationActionPage: React.FC = () => {
 
         {/* RIGHT COLUMN: 1 Col (Sidebar Summary) */}
         <div className="space-y-6">
-          {/* Scope Card */}
+          {/* Contracting Entity Card */}
           <section className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <div className="mb-4 flex items-center gap-3 border-b border-slate-100 pb-4 dark:border-slate-800">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400">
@@ -609,29 +763,45 @@ const QuotationActionPage: React.FC = () => {
 
               <div>
                 <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                  Authorised Admin
+                  Contact Person
                 </p>
-                <p className="mt-1 text-sm font-medium text-slate-800 dark:text-slate-200">
-                  {quotation.companyAdmin}
+                <p className="mt-1 flex items-center gap-1.5 text-sm font-medium text-slate-800 dark:text-slate-200">
+                  <User className="h-3.5 w-3.5 text-slate-400" />
+                  {quotation.contactPerson}
                 </p>
               </div>
 
-              <div>
-                <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                  Designated Mining Sites
-                </p>
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {quotation.sites.map((s, i) => (
-                    <span
-                      key={i}
-                      className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300"
-                    >
-                      <MapPin className="h-3 w-3 text-emerald-500" />
-                      {s}
-                    </span>
-                  ))}
+              {quotation.contactEmail && (
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                    Email
+                  </p>
+                  <p className="mt-1 flex items-center gap-1.5 text-sm font-medium text-slate-800 dark:text-slate-200">
+                    <Mail className="h-3.5 w-3.5 text-slate-400" />
+                    {quotation.contactEmail}
+                  </p>
                 </div>
-              </div>
+              )}
+
+              {quotation.contactPhone && (
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                    Phone
+                  </p>
+                  <p className="mt-1 flex items-center gap-1.5 text-sm font-medium text-slate-800 dark:text-slate-200">
+                    <Phone className="h-3.5 w-3.5 text-slate-400" />
+                    {quotation.contactPhone}
+                  </p>
+                </div>
+              )}
+
+              {/*
+                NOTE: The original static UI showed a list of "Designated
+                Mining Sites" here. CompanyQuotation has no `sites` field,
+                so nothing is rendered here rather than showing fake data.
+                If sites should come from another endpoint/field, let me
+                know and I'll wire it in.
+              */}
             </div>
           </section>
 
@@ -651,25 +821,31 @@ const QuotationActionPage: React.FC = () => {
               </div>
             </div>
 
-            <ul className="space-y-2 text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-              <li className="flex items-start gap-2">
-                <span className="mt-0.5 text-blue-500">•</span>
-                <span>
-                  Acceptance initiates immediate contract document generation and invoicing.
-                </span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="mt-0.5 text-blue-500">•</span>
-                <span>
-                  Full machine telemetry access will transition smoothly without interruption.
-                </span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="mt-0.5 text-blue-500">•</span>
-                <span>
-                  Payment terms are 14 days from contract execution.
-                </span>
-              </li>
+            <ul className="space-y-2 text-xs leading-relaxed text-slate-600 dark:text-slate-400">
+              {quotation.validUntil && (
+                <li className="flex items-start gap-2">
+                  <span className="mt-0.5 text-blue-500">•</span>
+                  <span>Valid until {formatDate(quotation.validUntil)}.</span>
+                </li>
+              )}
+              {quotation.paymentTerms && (
+                <li className="flex items-start gap-2">
+                  <span className="mt-0.5 text-blue-500">•</span>
+                  <span>Payment terms: {quotation.paymentTerms}.</span>
+                </li>
+              )}
+              {quotation.trialRequested && (
+                <li className="flex items-start gap-2">
+                  <span className="mt-0.5 text-blue-500">•</span>
+                  <span>A trial period was requested for this account.</span>
+                </li>
+              )}
+              {quotation.notes && (
+                <li className="flex items-start gap-2">
+                  <span className="mt-0.5 text-blue-500">•</span>
+                  <span>{quotation.notes}</span>
+                </li>
+              )}
             </ul>
           </section>
         </div>
@@ -707,10 +883,10 @@ const QuotationActionPage: React.FC = () => {
               </div>
             </div>
 
-            <p className="mt-4 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+            <p className="mt-4 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
               {decision === "accept"
                 ? `Are you sure you want to approve and execute the commercial contract for ${formatZAR(
-                    quotation.commercials.totalProposalValue,
+                    totalProposalValue,
                   )}?`
                 : `Are you sure you want to decline this quotation proposal?`}
             </p>

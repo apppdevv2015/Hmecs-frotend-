@@ -1,4 +1,4 @@
-import { apiRequest } from "./api";
+import { apiRequest, type ApiRequestOptions } from "./api";
 import { showErrorToast, showSuccessToast } from "../utils/toastUtils";
 
 type ToastOptions = {
@@ -10,7 +10,7 @@ type ToastOptions = {
 
 export async function apiCall<T>(
   endpoint: string,
-  options: RequestInit = {},
+  options: ApiRequestOptions = {},
   toastOptions: ToastOptions = {},
 ): Promise<T> {
   const {
@@ -23,12 +23,12 @@ export async function apiCall<T>(
   try {
     const response = await apiRequest<T>(endpoint, options);
 
-    if (showSuccess) {
-      const msg =
-        successMessage || (response as any)?.message 
+  if (showSuccess) {
+  const msg =
+    successMessage || (response as any)?.message || "Success";
 
-      showSuccessToast(msg);
-    }
+  showSuccessToast(msg);
+}
 
     return response;
   } catch (error: any) {
