@@ -846,7 +846,7 @@ export const sidebarConfig: Record<
       },
     ],
 
-    profile: {
+       profile: {
       shortName: "EN",
       title: "Engineer",
       subtitle: "engineer@hme.com",

@@ -75,7 +75,12 @@ export default function SupervisorAssignedArtisans() {
 
   // Machine, Component & Artisan Selection Filters (Default to "all" for all!)
   const [selectedMachineId, setSelectedMachineId] = useState<string>("all");
+
   useState<string>("all");
+
+  const [selectedComponentFilter, setSelectedComponentFilter] =
+    useState<string>("all");
+
   const [selectedArtisanFilter, setSelectedArtisanFilter] =
     useState<string>("all");
 
@@ -197,6 +202,17 @@ export default function SupervisorAssignedArtisans() {
       status: "Active",
       shift: "Day Shift (08:00 - 16:00)",
 
+
+      assignedMachines: [
+        {
+          name: machineName || "Heavy Fleet Equipment Unit",
+          health: 88,
+          status: "Healthy",
+          location: "Site A - Workshop",
+          assignedAt: "Today",
+        },
+      ],
+
       workScope:
         workScope ||
         "Specialized mechanical & component maintenance inspection, pressure testing, and component overhaul.",
@@ -293,17 +309,23 @@ export default function SupervisorAssignedArtisans() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+
   const handleOpenModal = (
     machineId = "",
     componentName = "",
     artisanId = "",
     existingAssignment: ComponentArtisanAssignment | null = null,
   ) => {
+
+  // Open Modal for a specific Machine & Component
+  const handleOpenModal = (machineId = "", componentName = "") => {
+
     const targetMachineId =
       machineId ||
       (selectedMachineId !== "all" ? selectedMachineId : machines[0]?.id) ||
       "";
     setModalMachineId(targetMachineId);
+
     setModalComponentName(
       existingAssignment?.componentName ||
         componentName ||
@@ -322,6 +344,17 @@ export default function SupervisorAssignedArtisans() {
         new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
           .toISOString()
           .split("T")[0],
+
+    setModalComponentName(componentName || DEFAULT_COMPONENTS[0]);
+    setModalArtisanId(artisans[0]?.id || "");
+    setModalWorkScope("");
+    setModalPriority("Medium");
+    setModalStartDate(new Date().toISOString().split("T")[0]);
+    setModalDueDate(
+      new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+        .toISOString()
+        .split("T")[0],
+
     );
     setIsModalOpen(true);
   };
@@ -427,7 +460,58 @@ export default function SupervisorAssignedArtisans() {
         priority: modalPriority,
         startDate: modalStartDate,
         dueDate: modalDueDate,
+
       }),
+
+      }),
+    );
+
+    const newEntry: ComponentArtisanAssignment = {
+      id: `ASGN-${Date.now()}`,
+      taskId: generatedTaskId,
+      machineId: modalMachineId,
+      machineName: mName,
+      componentId: `comp-${Date.now()}`,
+      componentName: modalComponentName,
+      artisanId: modalArtisanId,
+      artisanName: selectedArtisan?.name || "Assigned Artisan",
+      artisanSpecialization:
+        selectedArtisan?.specialization || "Maintenance Specialist",
+      supervisorName: (() => {
+        try {
+          const user = StorageService.getUser();
+          if (user) {
+            const n =
+              user.name ||
+              user.fullName ||
+              `${user.firstName || user.first_name || ""} ${user.lastName || user.last_name || ""}`.trim();
+            if (n) return n;
+          }
+        } catch {}
+        return (
+          StorageService.get<string>(STORAGE_KEYS.USER_NAME) || "Supervisor"
+        );
+      })(),
+      workScope:
+        modalWorkScope ||
+        "General component maintenance inspection & diagnostic.",
+      priority: modalPriority,
+      startDate: modalStartDate,
+      dueDate: modalDueDate,
+      assignedAt: new Date().toLocaleString("en-GB", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      status: "Active",
+    };
+
+    const existingIndex = assignments.findIndex(
+      (a) =>
+        a.machineId === modalMachineId &&
+        a.componentName === modalComponentName,
     );
 
     if (assignArtisanToMachine.fulfilled.match(result)) {
@@ -942,7 +1026,19 @@ export default function SupervisorAssignedArtisans() {
                       <span className="inline-flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700 dark:border-blue-800/60 dark:bg-blue-950/40 dark:text-blue-300">
                         <ShieldCheck size={14} />
 
+
                         {item.supervisorName || "Supervisor"}
+
+                        {item.supervisorName &&
+                        item.supervisorName !== "Marcus Supervisor"
+                          ? item.supervisorName
+                          : StorageService.getUser()?.name ||
+                            StorageService.getUser()?.fullName ||
+                            StorageService.get<string>(
+                              STORAGE_KEYS.USER_NAME,
+                            ) ||
+                            "Supervisor"}
+
                       </span>
                     </td>
 
@@ -1040,12 +1136,16 @@ export default function SupervisorAssignedArtisans() {
                       <div className="flex items-center justify-center gap-2">
                         <button
                           onClick={() =>
+
                             handleOpenModal(
                               item.machineId,
                               item.componentName,
                               item.artisanId,
                               item,
                             )
+
+                            handleOpenModal(item.machineId, item.componentName)
+
                           }
                           title="Edit Component Artisan Assignment"
                           className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-xs transition hover:border-blue-500 hover:bg-blue-50 hover:text-blue-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-blue-500 dark:hover:bg-blue-950/40"
