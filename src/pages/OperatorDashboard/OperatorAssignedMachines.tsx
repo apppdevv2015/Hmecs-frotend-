@@ -60,8 +60,6 @@ const getOverallHealth = (components: MachineComponent[], fallbackHealth?: numbe
   return Math.round(total / components.length);
 };
 
-// Raw single-assignment API response ko normalize karta hai
-// (ye redux se nahi, seedha machineService.getMachineAssignment se aata hai)
 const normalizeAssignmentDetails = (item: any): AssignmentDetails => ({
   id: String(item?.id ?? item?.assignmentId ?? item?.assignment_id ?? ""),
   machineName: String(item?.machineName ?? item?.machine_name ?? ""),
@@ -152,7 +150,6 @@ const OperatorAssignedMachines: React.FC = () => {
 
       setSelectedDetails(normalizeAssignmentDetails(raw));
     } catch {
-      // apiCall centralized error toast already handles this
     } finally {
       setViewingMachineId(null);
     }
@@ -162,7 +159,6 @@ const OperatorAssignedMachines: React.FC = () => {
     dispatch(fetchOperatorAssignments());
   };
 
-  // Step 1: current + history dono ek hi call se aate hain
   useEffect(() => {
     dispatch(fetchOperatorAssignments());
   }, [dispatch]);

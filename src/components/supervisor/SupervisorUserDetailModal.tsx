@@ -76,13 +76,12 @@ type SupervisorUserDetailModalProps = {
   onAddComment?: (userIdOrName: string, comment: UserDetailComment) => void;
 };
 
-export const SupervisorUserDetailModal: React.FC<SupervisorUserDetailModalProps> = ({
-  isOpen,
-  onClose,
-  userDetail,
-  onAddComment,
-}) => {
-  const [activeTab, setActiveTab] = useState<"profile" | "machines" | "comments" | "workscope">("profile");
+export const SupervisorUserDetailModal: React.FC<
+  SupervisorUserDetailModalProps
+> = ({ isOpen, onClose, userDetail, onAddComment }) => {
+  const [activeTab, setActiveTab] = useState<
+    "profile" | "machines" | "comments" | "workscope"
+  >("profile");
   const [comments, setComments] = useState<UserDetailComment[]>([]);
   const [newCommentText, setNewCommentText] = useState("");
   const [addingComment, setAddingComment] = useState(false);
@@ -135,25 +134,25 @@ export const SupervisorUserDetailModal: React.FC<SupervisorUserDetailModalProps>
     .toUpperCase();
 
   const getHealthBadge = (health = 85) => {
-    if (health >= 80) return "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800";
-    if (health >= 60) return "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800";
+    if (health >= 80)
+      return "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800";
+    if (health >= 60)
+      return "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800";
     return "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-800";
   };
 
   return (
     <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 p-4 backdrop-blur-md transition-all animate-in fade-in duration-200">
       <div className="relative flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900">
-        
         {/* Modal Header Banner */}
         <div className="relative overflow-hidden bg-gradient-to-r from-[#3B37E6] via-[#3730D9] to-[#2E2AD9] px-6 py-6 text-white dark:from-[#1E3A8A] dark:via-[#1D4ED8] dark:to-[#2563EB]">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.15),transparent_45%)]" />
           <button
             onClick={onClose}
-            className="absolute right-5 top-5 flex h-9 w-9 items-center justify-center rounded-2xl border border-white/20 bg-white/10 text-white backdrop-blur-md transition hover:bg-white/25 active:scale-95"
+            className="absolute right-5 top-5 z-20 flex h-9 w-9 items-center justify-center rounded-2xl border border-white/20 bg-white/10 text-white backdrop-blur-md transition hover:bg-white/25 active:scale-95"
           >
             <X size={18} />
           </button>
-
           <div className="relative z-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-4">
               <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border-2 border-white/30 bg-white/20 text-2xl font-black text-white shadow-lg backdrop-blur-md">
@@ -213,7 +212,11 @@ export const SupervisorUserDetailModal: React.FC<SupervisorUserDetailModalProps>
               label: `Comments & Remarks (${comments.length})`,
               icon: MessageSquare,
             },
-            { id: "workscope", label: "Work Scope & Tasks", icon: ClipboardList },
+            {
+              id: "workscope",
+              label: "Work Scope & Tasks",
+              icon: ClipboardList,
+            },
           ].map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -275,7 +278,8 @@ export const SupervisorUserDetailModal: React.FC<SupervisorUserDetailModalProps>
                     Contact Email
                   </p>
                   <p className="mt-1 text-sm font-bold text-slate-900 dark:text-white truncate">
-                    {userDetail.email || `${userDetail.name.toLowerCase().replace(/\s+/g, ".")}@hme.com`}
+                    {userDetail.email ||
+                      `${userDetail.name.toLowerCase().replace(/\s+/g, ".")}@hme.com`}
                   </p>
                 </div>
 
@@ -301,7 +305,10 @@ export const SupervisorUserDetailModal: React.FC<SupervisorUserDetailModalProps>
               {/* Machine Summary Overview */}
               <div className="rounded-2xl border border-blue-100 bg-blue-50/50 p-5 dark:border-blue-900/40 dark:bg-blue-950/20">
                 <h4 className="flex items-center gap-2 text-sm font-bold text-blue-900 dark:text-blue-200">
-                  <Truck size={16} className="text-blue-600 dark:text-blue-400" />
+                  <Truck
+                    size={16}
+                    className="text-blue-600 dark:text-blue-400"
+                  />
                   Assigned Heavy Equipment Overview
                 </h4>
                 <p className="mt-1 text-xs text-blue-700 dark:text-blue-300">
@@ -333,7 +340,7 @@ export const SupervisorUserDetailModal: React.FC<SupervisorUserDetailModalProps>
 
                         <span
                           className={`rounded-full border px-2.5 py-0.5 text-[11px] font-bold ${getHealthBadge(
-                            m.health
+                            m.health,
                           )}`}
                         >
                           Health: {m.health || 85}%
@@ -371,21 +378,28 @@ export const SupervisorUserDetailModal: React.FC<SupervisorUserDetailModalProps>
                             </h4>
                             <span
                               className={`rounded-full border px-2.5 py-0.5 text-[10px] font-bold ${getHealthBadge(
-                                machine.health
+                                machine.health,
                               )}`}
                             >
                               {machine.status || "Healthy"}
                             </span>
                           </div>
                           <p className="text-xs text-slate-500 dark:text-slate-400">
-                            Serial: <span className="font-semibold">{machine.code || `SN-${100 + index}`}</span> • Site: {machine.location || "Site A - Mine Segment 3"}
+                            Serial:{" "}
+                            <span className="font-semibold">
+                              {machine.code || `SN-${100 + index}`}
+                            </span>{" "}
+                            • Site:{" "}
+                            {machine.location || "Site A - Mine Segment 3"}
                           </p>
                         </div>
                       </div>
 
                       <div className="flex items-center gap-3">
                         <div className="text-right">
-                          <p className="text-[11px] text-slate-400 font-medium">Machine Health</p>
+                          <p className="text-[11px] text-slate-400 font-medium">
+                            Machine Health
+                          </p>
                           <p className="text-lg font-black text-slate-900 dark:text-white">
                             {machine.health || 85}%
                           </p>
@@ -398,30 +412,60 @@ export const SupervisorUserDetailModal: React.FC<SupervisorUserDetailModalProps>
                       <div className="flex items-center justify-between">
                         <p className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
                           <Activity size={14} className="text-blue-600" />
-                          Machine Component Telemetry Health & Live Sensor Metrics
+                          Machine Component Telemetry Health & Live Sensor
+                          Metrics
                         </p>
                         <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
                           Live Telemetry
                         </span>
                       </div>
-                      
+
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         {[
-                          { name: "Engine & Turbocharger", health: Math.min(100, (machine.health || 85) + 5), param: "Temp: 90°C • Oil: 100%" },
-                          { name: "Hydraulic Pump Station", health: machine.health || 85, param: "Pressure: 2100bar • Oil: 100%" },
-                          { name: "Tyre & Axle System", health: 100, param: "Air: 32PSI • Temp: 45°C" },
-                          { name: "Suspension System", health: 100, param: "Oil: 100% • Temp: 60°C" },
+                          {
+                            name: "Engine & Turbocharger",
+                            health: Math.min(100, (machine.health || 85) + 5),
+                            param: "Temp: 90°C • Oil: 100%",
+                          },
+                          {
+                            name: "Hydraulic Pump Station",
+                            health: machine.health || 85,
+                            param: "Pressure: 2100bar • Oil: 100%",
+                          },
+                          {
+                            name: "Tyre & Axle System",
+                            health: 100,
+                            param: "Air: 32PSI • Temp: 45°C",
+                          },
+                          {
+                            name: "Suspension System",
+                            health: 100,
+                            param: "Oil: 100% • Temp: 60°C",
+                          },
                         ].map((c) => (
-                          <div key={c.name} className="rounded-xl border border-slate-100 bg-slate-50/50 p-3 dark:border-slate-800 dark:bg-slate-800/30">
+                          <div
+                            key={c.name}
+                            className="rounded-xl border border-slate-100 bg-slate-50/50 p-3 dark:border-slate-800 dark:bg-slate-800/30"
+                          >
                             <div className="flex items-center justify-between text-xs mb-1">
-                              <span className="font-bold text-slate-800 dark:text-slate-200">{c.name}</span>
-                              <span className="font-extrabold text-slate-900 dark:text-white">{c.health}%</span>
+                              <span className="font-bold text-slate-800 dark:text-slate-200">
+                                {c.name}
+                              </span>
+                              <span className="font-extrabold text-slate-900 dark:text-white">
+                                {c.health}%
+                              </span>
                             </div>
-                            <p className="text-[10px] text-slate-500 dark:text-slate-400 mb-1.5">{c.param}</p>
+                            <p className="text-[10px] text-slate-500 dark:text-slate-400 mb-1.5">
+                              {c.param}
+                            </p>
                             <div className="h-1.5 w-full rounded-full bg-slate-200 dark:bg-slate-700">
                               <div
                                 className={`h-1.5 rounded-full ${
-                                  c.health >= 80 ? "bg-emerald-500" : c.health >= 60 ? "bg-amber-500" : "bg-red-500"
+                                  c.health >= 80
+                                    ? "bg-emerald-500"
+                                    : c.health >= 60
+                                      ? "bg-amber-500"
+                                      : "bg-red-500"
                                 }`}
                                 style={{ width: `${c.health}%` }}
                               />
@@ -434,10 +478,16 @@ export const SupervisorUserDetailModal: React.FC<SupervisorUserDetailModalProps>
                       <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/60 p-4 dark:border-slate-800 dark:bg-slate-950">
                         <div className="flex items-center justify-between mb-3">
                           <p className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                            <TrendingUp size={14} className="text-indigo-600 dark:text-indigo-400" />
-                            Machine Component Telemetry Graph (Health % vs Sensor Thresholds)
+                            <TrendingUp
+                              size={14}
+                              className="text-indigo-600 dark:text-indigo-400"
+                            />
+                            Machine Component Telemetry Graph (Health % vs
+                            Sensor Thresholds)
                           </p>
-                          <span className="text-[10px] text-slate-400 font-semibold">Real-Time Sensor Graph</span>
+                          <span className="text-[10px] text-slate-400 font-semibold">
+                            Real-Time Sensor Graph
+                          </span>
                         </div>
 
                         <div className="h-44 w-full">
@@ -445,17 +495,61 @@ export const SupervisorUserDetailModal: React.FC<SupervisorUserDetailModalProps>
                             <BarChart
                               data={[
                                 { name: "Tyre", health: 100, pressure: 32 },
-                                { name: "Engine", health: Math.min(100, (machine.health || 85) + 5), pressure: 75 },
-                                { name: "Hydraulic", health: machine.health || 85, pressure: 90 },
-                                { name: "Suspension", health: 100, pressure: 85 },
-                                { name: "Transmission", health: Math.max(50, (machine.health || 85) - 8), pressure: 65 },
-                                { name: "Brakes", health: Math.min(100, (machine.health || 85) + 2), pressure: 95 },
+                                {
+                                  name: "Engine",
+                                  health: Math.min(
+                                    100,
+                                    (machine.health || 85) + 5,
+                                  ),
+                                  pressure: 75,
+                                },
+                                {
+                                  name: "Hydraulic",
+                                  health: machine.health || 85,
+                                  pressure: 90,
+                                },
+                                {
+                                  name: "Suspension",
+                                  health: 100,
+                                  pressure: 85,
+                                },
+                                {
+                                  name: "Transmission",
+                                  health: Math.max(
+                                    50,
+                                    (machine.health || 85) - 8,
+                                  ),
+                                  pressure: 65,
+                                },
+                                {
+                                  name: "Brakes",
+                                  health: Math.min(
+                                    100,
+                                    (machine.health || 85) + 2,
+                                  ),
+                                  pressure: 95,
+                                },
                               ]}
-                              margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                              margin={{
+                                top: 10,
+                                right: 10,
+                                left: -20,
+                                bottom: 0,
+                              }}
                             >
-                              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                              <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#64748b" }} />
-                              <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: "#64748b" }} />
+                              <CartesianGrid
+                                strokeDasharray="3 3"
+                                stroke="#e2e8f0"
+                                vertical={false}
+                              />
+                              <XAxis
+                                dataKey="name"
+                                tick={{ fontSize: 10, fill: "#64748b" }}
+                              />
+                              <YAxis
+                                domain={[0, 100]}
+                                tick={{ fontSize: 10, fill: "#64748b" }}
+                              />
                               <Tooltip
                                 contentStyle={{
                                   background: "#0f172a",
@@ -465,11 +559,28 @@ export const SupervisorUserDetailModal: React.FC<SupervisorUserDetailModalProps>
                                   fontSize: "11px",
                                 }}
                               />
-                              <Bar dataKey="health" name="Health %" radius={[6, 6, 0, 0]}>
-                                {[100, (machine.health || 85) + 5, machine.health || 85, 100, (machine.health || 85) - 8, (machine.health || 85) + 2].map((val, idx) => (
+                              <Bar
+                                dataKey="health"
+                                name="Health %"
+                                radius={[6, 6, 0, 0]}
+                              >
+                                {[
+                                  100,
+                                  (machine.health || 85) + 5,
+                                  machine.health || 85,
+                                  100,
+                                  (machine.health || 85) - 8,
+                                  (machine.health || 85) + 2,
+                                ].map((val, idx) => (
                                   <Cell
                                     key={idx}
-                                    fill={val >= 80 ? "#10b981" : val >= 60 ? "#f59e0b" : "#ef4444"}
+                                    fill={
+                                      val >= 80
+                                        ? "#10b981"
+                                        : val >= 60
+                                          ? "#f59e0b"
+                                          : "#ef4444"
+                                    }
                                   />
                                 ))}
                               </Bar>
@@ -488,7 +599,10 @@ export const SupervisorUserDetailModal: React.FC<SupervisorUserDetailModalProps>
           {activeTab === "comments" && (
             <div className="space-y-6">
               {/* Add Comment Form */}
-              <form onSubmit={handleAddCommentSubmit} className="rounded-2xl border border-slate-200 bg-slate-50 p-4 shadow-xs dark:border-slate-800 dark:bg-slate-950">
+              <form
+                onSubmit={handleAddCommentSubmit}
+                className="rounded-2xl border border-slate-200 bg-slate-50 p-4 shadow-xs dark:border-slate-800 dark:bg-slate-950"
+              >
                 <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
                   <MessageSquare size={14} className="text-blue-600" />
                   Add Supervisor Comment / Remark for {userDetail.name}

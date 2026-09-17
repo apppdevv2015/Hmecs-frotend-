@@ -32,7 +32,7 @@ import {
 import {
   acceptContract,
   rejectContract,
-  type Contract,  
+  type Contract,
 } from "../../services/companyadmin/Quotations/ContractActionService";
 
 /* ============================================================
@@ -195,18 +195,17 @@ const QuotationContract: React.FC = () => {
       setLoading(true);
       setError(null);
       try {
-      try {
-  const data = await getContractsList({ signal: controller.signal });
-  if (!data || data.length === 0) {
-    setError("Contract not found.");
-  } else {
-    setContracts([...data] as unknown as Contract[]);
-  }
-} catch (err) {
-  setError(extractContractError(err) ?? "Failed to load contract.");
-} finally {
-  setLoading(false);
-}
+        const data = await getContractsList({ signal: controller.signal });
+        if (!data || data.length === 0) {
+          setError("Contract not found.");
+        } else {
+          setContracts([...data] as unknown as Contract[]);
+        }
+      } catch (err) {
+        setError(extractContractError(err) ?? "Failed to load contract.");
+      } finally {
+        setLoading(false);
+      }
     })();
 
     return () => controller.abort();
@@ -518,7 +517,6 @@ const QuotationContract: React.FC = () => {
             </div>
           </div>
         </section>
-
         {/* CUSTOMER */}
         <Section title="Customer" icon={<Building2 size={18} />}>
           <div className="rounded-xl border border-blue-100 bg-blue-50/40 p-5 dark:border-slate-800 dark:bg-slate-950/40">
@@ -552,8 +550,6 @@ const QuotationContract: React.FC = () => {
             </div>
           </div>
         </Section>
-
-       
         <Section title="Quotation Summary" icon={<MonitorCog size={18} />}>
           <div className="divide-y divide-slate-100 dark:divide-slate-800">
             <DetailRow label="Quotation Number">
@@ -573,8 +569,6 @@ const QuotationContract: React.FC = () => {
             </DetailRow>
           </div>
         </Section>
-
-   
         <Section title="Commercial Details" icon={<ReceiptText size={18} />}>
           <div className="overflow-x-auto">
             <div className="min-w-[520px]">
@@ -639,8 +633,7 @@ const QuotationContract: React.FC = () => {
             </div>
           </div>
         </Section>
-
-\
+        \
         <Section title="Digital Signatures" icon={<ShieldCheck size={18} />}>
           {contract.status === "ACCEPTED" ? (
             <div className="space-y-4">
@@ -838,7 +831,6 @@ const QuotationContract: React.FC = () => {
             </div>
           )}
         </Section>
-
         {/* CONTRACT DOCUMENT */}
         <Section title="Contract Document" icon={<FileText size={18} />}>
           {contract.status === "ACCEPTED" ? (
