@@ -1,690 +1,445 @@
-import React, { useState } from "react";
-import toast from "react-hot-toast";
-import DigitalSignature from "../../components/common/DigitalSignature";
+import React, { useEffect, useRef, useState } from "react";
+import { showErrorToast } from "../../utils/toastUtils";
 import {
   AlertCircle,
   Building2,
   CalendarDays,
   CheckCircle2,
   Download,
+  Eraser,
   Eye,
   FileSignature,
   FileText,
   Loader2,
   Mail,
-  MapPin,
   MonitorCog,
   Phone,
   ReceiptText,
+  RefreshCw,
   ShieldCheck,
   UserRound,
+  X,
   XCircle,
 } from "lucide-react";
+import {
+  getContractsList,
+  getContractPdfBlobUrl,
+  downloadContractPdf,
+  extractContractError,
+  type ContractStatus,
+} from "../../services/SuperAdmin/quotation/contractService";
 
-/* ============================================================
-   TYPES
-============================================================ */
-
-type ContractStatus = "active" | "pending" | "completed" | "cancelled";
-
-interface Party {
-  name: string;
-  email: string;
-  phone: string;
-  address: string;
-}
-
-interface Machine {
-  name: string;
-  type: string;
-  site: string;
-}
-
-interface ContractPricing {
-  planAmount: number;
-  applicableTax: number;
-  additionalCharges: number;
-  totalContractValue: number;
-  currency: string;
-}
-
-interface ContractSignature {
-  partyName: string;
-  role: string;
-  signed: boolean;
-  signedDate: string;
-}
-
-interface ContractDocument {
-  fileName: string;
-  version: string;
-  fileType: string;
-}
-
-interface ContractData {
-  contractNumber: string;
-  quotationNumber: string;
-  status: ContractStatus;
-
-  contractStartDate: string;
-  contractDuration: string;
-  contractEndDate: string;
-
-  customer: Party;
-  supplier: Party;
-
-  planName: string;
-  planDescription: string;
-
-  sites: string[];
-  machines: Machine[];
-
-  pricing: ContractPricing;
-
-  signatures: ContractSignature[];
-
-  document: ContractDocument;
-}
+import {
+  acceptContract,
+  rejectContract,
+  type Contract,
+} from "../../services/companyadmin/Quotations/ContractActionService";
 
 /* ============================================================
    HELPERS
 ============================================================ */
 
 const EMPTY_TEXT = "—";
+const API_ORIGIN = new URL(import.meta.env.VITE_API_BASE_URL).origin;
+
+const resolveFileUrl = (path?: string | null): string | undefined => {
+  if (!path) return undefined;
+  if (/^https?:\/\//i.test(path)) return path;
+  return `${API_ORIGIN}${path.startsWith("/") ? path : `/${path}`}`;
+};
 
 const displayText = (value?: string | null): string =>
   value && value.trim().length > 0 ? value : EMPTY_TEXT;
 
-const formatCurrency = (amount?: number, currency?: string): string => {
-  if (typeof amount !== "number" || !currency) {
+const formatCurrency = (amount?: number | string): string => {
+  const numeric = typeof amount === "string" ? Number(amount) : amount;
+
+  if (typeof numeric !== "number" || Number.isNaN(numeric)) {
     return EMPTY_TEXT;
   }
 
-  return new Intl.NumberFormat("en-IN", {
+  return new Intl.NumberFormat("en-ZA", {
     style: "currency",
-    currency,
+    currency: "ZAR",
     maximumFractionDigits: 0,
-  }).format(amount);
+  }).format(numeric);
+};
+
+const formatDate = (value?: string | null): string => {
+  if (!value) return EMPTY_TEXT;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return EMPTY_TEXT;
+  return date.toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
 };
 
 const getStatusLabel = (status?: ContractStatus): string => {
-  if (!status) {
-    return EMPTY_TEXT;
-  }
-
-  const statusLabels: Record<ContractStatus, string> = {
-    active: "Contract Active",
-    pending: "Contract Pending",
-    completed: "Contract Completed",
-    cancelled: "Contract Cancelled",
+  if (!status) return EMPTY_TEXT;
+  const labels: Record<ContractStatus, string> = {
+    SENT: "Sent — Awaiting Response",
+    ACCEPTED: "Contract Active",
+    REJECTED: "Contract Rejected",
+    EXPIRED: "Contract Expired",
   };
-
-  return statusLabels[status];
+  return labels[status];
 };
 
 const getStatusClasses = (status?: ContractStatus): string => {
   if (!status) {
     return "border-slate-200 bg-slate-50 text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400";
   }
-
-  const statusClasses: Record<ContractStatus, string> = {
-    active:
+  const classes: Record<ContractStatus, string> = {
+    SENT: "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900/50 dark:bg-blue-950/40 dark:text-blue-400",
+    ACCEPTED:
       "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-400",
-
-    pending:
-      "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-400",
-
-    completed:
-      "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900/50 dark:bg-blue-950/40 dark:text-blue-400",
-
-    cancelled:
+    REJECTED:
       "border-red-200 bg-red-50 text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-400",
+    EXPIRED:
+      "border-slate-200 bg-slate-50 text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400",
   };
-
-  return statusClasses[status];
+  return classes[status];
 };
 
-/* ============================================================
-   DUMMY DATA
-   ------------------------------------------------------------
-   TEMPORARY: This is placeholder data only, wired in directly
-   so the page renders fully without depending on an API yet.
-   BACKEND TODO: once the contract API is ready, replace this
-   constant + the accept/reject handlers below with real
-   network calls (fetch on mount, POST on accept/reject) and
-   drop this constant entirely.
-============================================================ */
-
-const DUMMY_CONTRACT: ContractData = {
-  contractNumber: "CT-2026-000124",
-  quotationNumber: "QT-2026-000891",
-  status: "pending",
-
-  contractStartDate: "01 Sep 2026",
-  contractDuration: "12 Months",
-  contractEndDate: "31 Aug 2027",
-
-  customer: {
-    name: "Vantage Infra Projects Pvt. Ltd.",
-    email: "procurement@vantageinfra.com",
-    phone: "+91 98765 43210",
-    address: "Plot No. 14, Sector 44, Gurugram, Haryana 122003",
-  },
-
-  supplier: {
-    name: "HME Machine Health Monitoring Services",
-    email: "contracts@hme-monitoring.com",
-    phone: "+91 11 4567 8900",
-    address: "Tower B, DLF Cyber City, Gurugram, Haryana 122002",
-  },
-
-  planName: "Predictive Health Monitoring — Standard Plan",
-  planDescription:
-    "Continuous condition monitoring for rotating and static machinery, including vibration analysis, thermal imaging, oil analysis alerts and monthly health reports across all listed sites.",
-
-  sites: ["Gurugram Manufacturing Unit", "Manesar Assembly Plant", "Neemrana Warehouse"],
-
-  machines: [
-    { name: "CNC Lathe M-101", type: "CNC Machine", site: "Gurugram Manufacturing Unit" },
-    { name: "Hydraulic Press H-220", type: "Hydraulic Press", site: "Manesar Assembly Plant" },
-    { name: "Conveyor Motor C-305", type: "Induction Motor", site: "Neemrana Warehouse" },
-    { name: "Air Compressor AC-410", type: "Rotary Compressor", site: "Gurugram Manufacturing Unit" },
-  ],
-
-  pricing: {
-    planAmount: 480000,
-    applicableTax: 86400,
-    additionalCharges: 15000,
-    totalContractValue: 581400,
-    currency: "INR",
-  },
-
-  signatures: [
-    {
-      partyName: "Vantage Infra Projects Pvt. Ltd.",
-      role: "Customer",
-      signed: false,
-      signedDate: EMPTY_TEXT,
-    },
-    {
-      partyName: "HME Machine Health Monitoring Services",
-      role: "Supplier",
-      signed: true,
-      signedDate: "18 Aug 2026",
-    },
-  ],
-
-  document: {
-    fileName: "HME-Contract-CT-2026-000124.pdf",
-    version: "v1.0",
-    fileType: "PDF Document",
-  },
-};
-
-/* ============================================================
-   ACCEPT / REJECT HANDLERS
-   ------------------------------------------------------------
-   BACKEND TODO: replace the body of each function below with
-   the real network call once the contract API is connected.
-============================================================ */
-
-const acceptContractById = async (contractId: string): Promise<void> => {
-  // BACKEND TODO:
-  // await apiClient.post(`/contracts/${contractId}/accept`);
-  await new Promise((resolve) => setTimeout(resolve, 600));
-};
-
-const rejectContractById = async (contractId: string): Promise<void> => {
-  // BACKEND TODO:
-  // await apiClient.post(`/contracts/${contractId}/reject`);
-  await new Promise((resolve) => setTimeout(resolve, 600));
-};
-
-/* ============================================================
-   PDF HELPERS
-   ------------------------------------------------------------
-   Lightweight browser-side PDF generator built from the fetched
-   ContractData. When a backend document URL/API is available,
-   this can be replaced with the actual document endpoint.
-============================================================ */
-
-const escapePdfText = (value: string): string => {
-  return value.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
-};
-
-const createContractPdf = (contract: ContractData): Blob => {
-  const lines: string[] = [
-    "HME MACHINE HEALTH MONITORING CONTRACT",
-    "",
-    `Contract Number: ${contract.contractNumber}`,
-    `Quotation Number: ${contract.quotationNumber}`,
-    `Status: ${getStatusLabel(contract.status)}`,
-    "",
-    "CONTRACT PERIOD",
-    `Start Date: ${contract.contractStartDate}`,
-    `Duration: ${contract.contractDuration}`,
-    `End Date: ${contract.contractEndDate}`,
-    "",
-    "CUSTOMER",
-    contract.customer.name,
-    contract.customer.email,
-    contract.customer.phone,
-    contract.customer.address,
-    "",
-    "SUPPLIER",
-    contract.supplier.name,
-    contract.supplier.email,
-    contract.supplier.phone,
-    contract.supplier.address,
-    "",
-    "MONITORING PLAN",
-    contract.planName,
-    contract.planDescription,
-    "",
-    "MONITORING SITES",
-    ...contract.sites.map((site) => `- ${site}`),
-    "",
-    "MONITORED MACHINES",
-    ...contract.machines.map(
-      (machine) => `- ${machine.name} | ${machine.type} | ${machine.site}`,
-    ),
-    "",
-    "COMMERCIAL DETAILS",
-    `Monitoring Plan Amount: ${contract.pricing.currency} ${contract.pricing.planAmount}`,
-    `Applicable Tax: ${contract.pricing.currency} ${contract.pricing.applicableTax}`,
-    `Additional Charges: ${contract.pricing.currency} ${contract.pricing.additionalCharges}`,
-    `Total Contract Value: ${contract.pricing.currency} ${contract.pricing.totalContractValue}`,
-    "",
-    "DIGITAL SIGNATURES",
-    ...contract.signatures.map(
-      (signature) =>
-        `${signature.role}: ${signature.partyName} | ${
-          signature.signed ? `Signed on ${signature.signedDate}` : "Pending Signature"
-        }`,
-    ),
-  ];
-
-  const pageWidth = 595;
-  const pageHeight = 842;
-  const leftMargin = 50;
-  const topPosition = 790;
-  const fontSize = 10;
-  const lineHeight = 15;
-  const linesPerPage = 48;
-
-  const pages: string[][] = [];
-
-  for (let index = 0; index < lines.length; index += linesPerPage) {
-    pages.push(lines.slice(index, index + linesPerPage));
-  }
-
-  const objects: string[] = [];
-
-  objects.push("<< /Type /Catalog /Pages 2 0 R >>");
-
-  objects.push(
-    "<< /Type /Pages /Kids [" +
-      pages.map((_, index) => `${4 + index * 2} 0 R`).join(" ") +
-      `] /Count ${pages.length} >>`,
+const computeTotal = (contract: Contract): number => {
+  const q = contract.quotation;
+  const base =
+    Number(q.implementationFee || 0) +
+    Number(q.monthlySiteLicence || 0) +
+    Number(q.additionalMachineCharge || 0);
+  const optionalTotal = (q.optionalServices || []).reduce(
+    (sum, s) => sum + (Number(s.price) || 0),
+    0,
   );
-
-  objects.push("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>");
-
-  pages.forEach((pageLines, pageIndex) => {
-    const pageObjectNumber = 4 + pageIndex * 2;
-    const contentObjectNumber = pageObjectNumber + 1;
-
-    const textCommands: string[] = [];
-
-    textCommands.push("BT", `/F1 ${fontSize} Tf`, `${leftMargin} ${topPosition} Td`);
-
-    pageLines.forEach((line, lineIndex) => {
-      if (lineIndex > 0) {
-        textCommands.push(`0 -${lineHeight} Td`);
-      }
-
-      textCommands.push(`(${escapePdfText(line)}) Tj`);
-    });
-
-    textCommands.push("ET");
-
-    const stream = textCommands.join("\n");
-
-    objects.push(
-      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /Font << /F1 3 0 R >> >> /Contents ${contentObjectNumber} 0 R >>`,
-    );
-
-    objects.push(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
-  });
-
-  let pdf = "%PDF-1.4\n";
-  const offsets: number[] = [0];
-
-  objects.forEach((object, index) => {
-    offsets[index + 1] = pdf.length;
-    pdf += `${index + 1} 0 obj\n`;
-    pdf += `${object}\n`;
-    pdf += "endobj\n";
-  });
-
-  const xrefPosition = pdf.length;
-
-  pdf += `xref\n`;
-  pdf += `0 ${objects.length + 1}\n`;
-  pdf += `0000000000 65535 f \n`;
-
-  for (let index = 1; index <= objects.length; index += 1) {
-    pdf += `${String(offsets[index]).padStart(10, "0")} 00000 n \n`;
-  }
-
-  pdf += `trailer\n`;
-  pdf += `<< /Size ${objects.length + 1} /Root 1 0 R >>\n`;
-  pdf += `startxref\n`;
-  pdf += `${xrefPosition}\n`;
-  pdf += "%%EOF";
-
-  return new Blob([pdf], { type: "application/pdf" });
+  return base + optionalTotal;
 };
 
 /* ============================================================
-   REUSABLE SECTION
+   REUSABLE SECTION / DETAIL ROW
 ============================================================ */
 
-interface SectionProps {
+const Section: React.FC<{
   title: string;
   icon: React.ReactNode;
   children: React.ReactNode;
-}
-
-const Section: React.FC<SectionProps> = ({ title, icon, children }) => {
-  return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
-      <div className="flex items-center gap-3 border-b border-slate-100 px-5 py-4 dark:border-slate-800 sm:px-6">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400">
-          {icon}
-        </div>
-
-        <h2 className="text-sm font-bold tracking-tight text-slate-900 dark:text-slate-100 sm:text-base">
-          {title}
-        </h2>
+}> = ({ title, icon, children }) => (
+  <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+    <div className="flex items-center gap-3 border-b border-slate-100 px-5 py-4 dark:border-slate-800 sm:px-6">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400">
+        {icon}
       </div>
-
-      <div className="p-5 sm:p-6">{children}</div>
-    </section>
-  );
-};
-
-/* ============================================================
-   PARTY CARD
-============================================================ */
-
-interface PartyCardProps {
-  title: string;
-  party?: Party;
-  icon: React.ReactNode;
-}
-
-const PartyCard: React.FC<PartyCardProps> = ({ title, party, icon }) => {
-  return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-5 dark:border-slate-800 dark:bg-slate-950/40">
-      <div className="mb-5 flex items-center gap-3">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-blue-600 ring-1 ring-slate-200 dark:bg-slate-900 dark:text-blue-400 dark:ring-slate-800">
-          {icon}
-        </div>
-
-        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-          {title}
-        </h3>
-      </div>
-
-      <div className="space-y-3.5">
-        <p className="text-base font-bold text-slate-900 dark:text-slate-100">
-          {displayText(party?.name)}
-        </p>
-
-        <div className="flex items-start gap-2.5">
-          <Mail size={15} className="mt-0.5 shrink-0 text-slate-400" />
-          <p className="break-all text-sm text-slate-600 dark:text-slate-300">
-            {displayText(party?.email)}
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2.5">
-          <Phone size={15} className="shrink-0 text-slate-400" />
-          <p className="text-sm text-slate-600 dark:text-slate-300">
-            {displayText(party?.phone)}
-          </p>
-        </div>
-
-        <div className="flex items-start gap-2.5">
-          <MapPin size={15} className="mt-0.5 shrink-0 text-slate-400" />
-          <p className="text-sm leading-5 text-slate-600 dark:text-slate-300">
-            {displayText(party?.address)}
-          </p>
-        </div>
-      </div>
+      <h2 className="text-sm font-bold tracking-tight text-slate-900 dark:text-slate-100 sm:text-base">
+        {title}
+      </h2>
     </div>
-  );
-};
+    <div className="p-5 sm:p-6">{children}</div>
+  </section>
+);
 
-/* ============================================================
-   DETAIL ROW
-============================================================ */
-
-interface DetailRowProps {
-  label: string;
-  children: React.ReactNode;
-}
-
-const DetailRow: React.FC<DetailRowProps> = ({ label, children }) => {
-  return (
-    <div className="grid grid-cols-1 gap-1 border-b border-slate-100 py-3.5 last:border-b-0 dark:border-slate-800 sm:grid-cols-[180px_minmax(0,1fr)] sm:gap-6">
-      <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-        {label}
-      </span>
-
-      <div className="min-w-0 text-sm font-semibold text-slate-800 dark:text-slate-200">
-        {children}
-      </div>
+const DetailRow: React.FC<{ label: string; children: React.ReactNode }> = ({
+  label,
+  children,
+}) => (
+  <div className="grid grid-cols-1 gap-1 border-b border-slate-100 py-3.5 last:border-b-0 dark:border-slate-800 sm:grid-cols-[180px_minmax(0,1fr)] sm:gap-6">
+    <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+      {label}
+    </span>
+    <div className="min-w-0 text-sm font-semibold text-slate-800 dark:text-slate-200">
+      {children}
     </div>
-  );
-};
-
-/* ============================================================
-   SIGNATURE CARD
-============================================================ */
-
-interface SignatureCardProps {
-  signature: ContractSignature;
-  signatureData?: string;
-  onSave?: (signature: string) => void;
-}
-
-const SignatureCard: React.FC<SignatureCardProps> = ({
-  signature,
-  signatureData,
-  onSave,
-}) => {
-  const isCustomer = signature.role.toLowerCase() === "customer";
-  const isSigned = signature.signed || Boolean(signatureData);
-
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-950/30">
-      <div className="mb-5 flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
-            {displayText(signature.role)}
-          </p>
-
-          <p className="mt-1 truncate text-sm font-bold text-slate-900 dark:text-slate-100">
-            {displayText(signature.partyName)}
-          </p>
-        </div>
-
-        <span
-          className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold ${
-            isSigned
-              ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"
-              : "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
-          }`}
-        >
-          <CheckCircle2 size={13} />
-          {isSigned ? "Signed" : "Pending"}
-        </span>
-      </div>
-
-      {isCustomer && !isSigned && onSave ? (
-        <DigitalSignature onSave={onSave} />
-      ) : (
-        <div className="flex min-h-[100px] items-center justify-center overflow-hidden rounded-xl border border-dashed border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900">
-          {signatureData ? (
-            <img
-              src={signatureData}
-              alt={`${signature.partyName} digital signature`}
-              className="max-h-[90px] max-w-[90%] object-contain"
-            />
-          ) : (
-            <div className="text-center">
-              <div
-                className={`mx-auto flex h-10 w-10 items-center justify-center rounded-full ${
-                  isSigned
-                    ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400"
-                    : "bg-slate-100 text-slate-400 dark:bg-slate-800"
-                }`}
-              >
-                <ShieldCheck size={20} />
-              </div>
-
-              <p className="mt-2 text-sm font-semibold text-slate-700 dark:text-slate-300">
-                {isSigned ? "Digitally Signed" : "Signature Pending"}
-              </p>
-            </div>
-          )}
-        </div>
-      )}
-
-      <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 dark:border-slate-800">
-        <span className="text-xs font-medium text-slate-400">Signed Date</span>
-
-        <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-          {signatureData ? "Awaiting backend confirmation" : displayText(signature.signedDate)}
-        </span>
-      </div>
-    </div>
-  );
-};
+  </div>
+);
 
 /* ============================================================
    MAIN COMPONENT
 ============================================================ */
 
 const QuotationContract: React.FC = () => {
-  const [contract, setContract] = useState<ContractData>(DUMMY_CONTRACT);
-  const [customerSignature, setCustomerSignature] = useState<string>();
-  const [approvalRemark, setApprovalRemark] = useState("");
-  const [actionState, setActionState] = useState<"idle" | "accepting" | "rejecting">(
-    "idle",
-  );
+  const [contracts, setContracts] = useState<Contract[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSaveCustomerSignature = (signature: string): void => {
-    setCustomerSignature(signature);
-  };
+  const contract = contracts[0] ?? null;
 
-  const createPdfBlob = (): Blob => {
-    const documentSignatures = contract.signatures.map((signature) => {
-      if (signature.role.toLowerCase() !== "customer" || !customerSignature) {
-        return signature;
+  // Accept/Reject action state
+  const [showAcceptConfirm, setShowAcceptConfirm] = useState(false);
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [signedBy, setSignedBy] = useState("");
+  const [acceptanceDescription, setAcceptanceDescription] = useState("");
+  const [rejectionReason, setRejectionReason] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [hasSignature, setHasSignature] = useState(false);
+  const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);
+  const [signatureConfirmed, setSignatureConfirmed] = useState(false);
+  const [signedSignatureLoadFailed, setSignedSignatureLoadFailed] =
+    useState(false);
+
+  const [pdfBusyAction, setPdfBusyAction] = useState<
+    "view" | "download" | null
+  >(null);
+
+  const [pdfViewer, setPdfViewer] = useState<{
+    url: string;
+    title: string;
+  } | null>(null);
+
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const isDrawingRef = useRef(false);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await getContractsList({ signal: controller.signal });
+        if (!data || data.length === 0) {
+          setError("Contract not found.");
+        } else {
+          setContracts([...data] as unknown as Contract[]);
+        }
+      } catch (err) {
+        setError(extractContractError(err) ?? "Failed to load contract.");
+      } finally {
+        setLoading(false);
       }
+    })();
 
-      return {
-        ...signature,
-        signed: true,
-        signedDate: new Date().toLocaleDateString("en-GB", {
-          day: "2-digit",
-          month: "short",
-          year: "numeric",
-        }),
-      };
-    });
+    return () => controller.abort();
+  }, []);
 
-    return createContractPdf({
-      ...contract,
-      signatures: documentSignatures,
-    });
+  useEffect(() => {
+    return () => {
+      if (pdfViewer) {
+        window.URL.revokeObjectURL(pdfViewer.url);
+      }
+    };
+  }, [pdfViewer]);
+
+  /* ------------------------------------------------------------
+     SIGNATURE CANVAS — mouse/touch drawing helpers
+  ------------------------------------------------------------ */
+  const getCanvasPoint = (
+    canvas: HTMLCanvasElement,
+    clientX: number,
+    clientY: number,
+  ) => {
+    const rect = canvas.getBoundingClientRect();
+    return { x: clientX - rect.left, y: clientY - rect.top };
   };
 
-  const handleViewContract = (): void => {
-    const pdfBlob = createPdfBlob();
-    const pdfUrl = URL.createObjectURL(pdfBlob);
-
-    window.open(pdfUrl, "_blank", "noopener,noreferrer");
-
-    window.setTimeout(() => {
-      URL.revokeObjectURL(pdfUrl);
-    }, 60_000);
+  const startDrawing = (clientX: number, clientY: number) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    isDrawingRef.current = true;
+    const { x, y } = getCanvasPoint(canvas, clientX, clientY);
+    ctx.beginPath();
+    ctx.moveTo(x, y);
   };
 
-  const handleDownloadContract = (): void => {
-    const pdfBlob = createPdfBlob();
-    const pdfUrl = URL.createObjectURL(pdfBlob);
-    const anchor = document.createElement("a");
-
-    anchor.href = pdfUrl;
-    anchor.download = contract.document.fileName;
-
-    document.body.appendChild(anchor);
-    anchor.click();
-    document.body.removeChild(anchor);
-
-    window.setTimeout(() => {
-      URL.revokeObjectURL(pdfUrl);
-    }, 1_000);
+  const drawTo = (clientX: number, clientY: number) => {
+    if (!isDrawingRef.current) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const { x, y } = getCanvasPoint(canvas, clientX, clientY);
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+    ctx.strokeStyle = "#1d4ed8";
+    ctx.lineTo(x, y);
+    ctx.stroke();
+    setHasSignature(true);
   };
 
-  const handleAcceptContract = async (): Promise<void> => {
-    setActionState("accepting");
+  const stopDrawing = () => {
+    isDrawingRef.current = false;
+  };
 
-    try {
-      await acceptContractById(contract.contractNumber);
-      setContract((previous) => ({ ...previous, status: "active" }));
-      toast.success("Contract accepted successfully.");
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to accept the contract.",
+  const clearSignature = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    setHasSignature(false);
+    setSignatureDataUrl(null);
+    setSignatureConfirmed(false);
+  };
+
+  // "OK" button — locks the drawn strokes in as a real signature image
+  const handleConfirmSignature = () => {
+    const canvas = canvasRef.current;
+    if (!canvas || !hasSignature) {
+      showErrorToast("Please draw your signature first.");
+      return;
+    }
+    const url = canvas.toDataURL("image/png");
+    setSignatureDataUrl(url);
+    setSignatureConfirmed(true);
+  };
+
+  const handleEditSignature = () => {
+    setSignatureConfirmed(false);
+  };
+
+  const getSignatureBlob = async (): Promise<Blob | null> => {
+    if (signatureDataUrl) {
+      const res = await fetch(signatureDataUrl);
+      return await res.blob();
+    }
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    return new Promise((resolve) =>
+      canvas.toBlob((blob) => resolve(blob), "image/png"),
+    );
+  };
+
+  /* ------------------------------------------------------------
+     ACCEPT — validate on page, then open confirm popup
+  ------------------------------------------------------------ */
+  const handleOpenAcceptConfirm = () => {
+    if (!signatureConfirmed) {
+      showErrorToast(
+        "Please confirm your signature (tap OK) before accepting.",
       );
+      return;
+    }
+    if (!signedBy.trim()) {
+      showErrorToast("Please enter the signer's name.");
+      return;
+    }
+    setShowAcceptConfirm(true);
+  };
+
+  const handleConfirmAccept = async () => {
+    if (!contract) return;
+
+    const signatureBlob = await getSignatureBlob();
+    if (!signatureBlob) {
+      showErrorToast("Could not capture signature. Please try again.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const envelope = await acceptContract(contract.id, {
+        signatureFile: signatureBlob,
+        signedBy: signedBy.trim(),
+        acceptanceDescription: acceptanceDescription.trim() || undefined,
+      });
+
+      setContracts((prev) =>
+        prev.map((c) => (c.id === envelope.data.id ? envelope.data : c)),
+      );
+      setShowAcceptConfirm(false);
+      setSignedBy("");
+      setAcceptanceDescription("");
+      setSignatureDataUrl(null);
+      setSignatureConfirmed(false);
+      clearSignature();
+    } catch {
+      // apiHandler already shows the backend error toast
     } finally {
-      setActionState("idle");
+      setIsSubmitting(false);
     }
   };
 
-  const handleRejectContract = async (): Promise<void> => {
-    setActionState("rejecting");
+  /* ------------------------------------------------------------
+     REJECT — requires rejectionReason
+  ------------------------------------------------------------ */
+  const handleSubmitReject = async () => {
+    if (!contract) return;
 
+    if (!rejectionReason.trim()) {
+      showErrorToast("Please provide a rejection reason.");
+      return;
+    }
+
+    setIsSubmitting(true);
     try {
-      await rejectContractById(contract.contractNumber);
-      setContract((previous) => ({ ...previous, status: "cancelled" }));
-      toast.success("Contract has been rejected.");
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to reject the contract.",
+      const envelope = await rejectContract(contract.id, {
+        rejectionReason: rejectionReason.trim(),
+      });
+
+      setContracts((prev) =>
+        prev.map((c) => (c.id === envelope.data.id ? envelope.data : c)),
       );
+      setShowRejectModal(false);
+      setRejectionReason("");
+    } catch {
+      // apiHandler already shows the backend error toast
     } finally {
-      setActionState("idle");
+      setIsSubmitting(false);
     }
   };
 
-  const sites = contract.sites;
-  const machines = contract.machines;
-  const signatures = contract.signatures;
-  const actionsDisabled = actionState !== "idle";
+  /* ------------------------------------------------------------
+   CONTRACT PDF — view (blob preview) & download
+------------------------------------------------------------ */
+  const handleViewContractPdf = async () => {
+    if (!contract) return;
+    setPdfBusyAction("view");
+    try {
+      const url = await getContractPdfBlobUrl(contract.id);
+      setPdfViewer({ url, title: contract.contractNumber });
+    } catch {
+    } finally {
+      setPdfBusyAction(null);
+    }
+  };
+
+  const handleDownloadContractPdf = async () => {
+    if (!contract) return;
+    setPdfBusyAction("download");
+    try {
+      await downloadContractPdf(contract.id, `${contract.contractNumber}.pdf`);
+    } catch {
+    } finally {
+      setPdfBusyAction(null);
+    }
+  };
+
+  const closePdfViewer = () => {
+    setPdfViewer((current) => {
+      if (current) {
+        window.URL.revokeObjectURL(current.url);
+      }
+      return null;
+    });
+  };
+
+  if (loading) {
+    return (
+      <div className="flex h-64 items-center justify-center gap-2 text-slate-500">
+        <Loader2 className="animate-spin" size={20} />
+        Loading contract...
+      </div>
+    );
+  }
+
+  if (error || !contract) {
+    return (
+      <div className="flex h-64 flex-col items-center justify-center gap-2 text-slate-500">
+        <AlertCircle size={24} />
+        <p>{error ?? "Contract not found."}</p>
+      </div>
+    );
+  }
+
+  const q = contract.quotation;
+  const total = computeTotal(contract);
+  const isPendingResponse = contract.status === "SENT";
 
   return (
     <div className="w-full min-w-0 pb-8">
       <div className="mx-auto w-full max-w-[1200px] space-y-5">
-        {/* ==================================================
-            CONTRACT HEADER
-        ================================================== */}
-
+        {/* HEADER */}
         <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
           <div className="border-b border-slate-100 px-5 py-5 dark:border-slate-800 sm:px-6 sm:py-6">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
@@ -694,20 +449,17 @@ const QuotationContract: React.FC = () => {
                     size={18}
                     className="shrink-0 text-blue-600 dark:text-blue-400"
                   />
-
                   <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
                     Contract
                   </span>
                 </div>
-
                 <h1 className="break-all text-xl font-bold tracking-tight text-slate-900 dark:text-slate-100 sm:text-2xl">
                   {displayText(contract.contractNumber)}
                 </h1>
-
                 <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                   Quotation:{" "}
                   <span className="font-semibold text-slate-700 dark:text-slate-300">
-                    {displayText(contract.quotationNumber)}
+                    {displayText(q.quotationNumber)}
                   </span>
                 </p>
               </div>
@@ -718,7 +470,6 @@ const QuotationContract: React.FC = () => {
                 )}`}
               >
                 <span className="h-2.5 w-2.5 rounded-full bg-current" />
-
                 <span className="text-xs font-bold sm:text-sm">
                   {getStatusLabel(contract.status)}
                 </span>
@@ -726,173 +477,98 @@ const QuotationContract: React.FC = () => {
             </div>
           </div>
 
-          {/* CONTRACT PERIOD */}
-
           <div className="grid grid-cols-1 divide-y divide-slate-100 dark:divide-slate-800 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
             <div className="flex items-center gap-3 px-5 py-4 sm:px-6">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-50 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
                 <CalendarDays size={17} />
               </div>
-
               <div>
-                <p className="text-xs font-medium text-slate-400">Contract Start</p>
-
+                <p className="text-xs font-medium text-slate-400">
+                  Contract Start
+                </p>
                 <p className="mt-0.5 text-sm font-semibold text-slate-800 dark:text-slate-200">
-                  {displayText(contract.contractStartDate)}
+                  {formatDate(contract.startDate)}
                 </p>
               </div>
             </div>
-
             <div className="flex items-center gap-3 px-5 py-4 sm:px-6">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-50 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
                 <CalendarDays size={17} />
               </div>
-
               <div>
-                <p className="text-xs font-medium text-slate-400">Contract Duration</p>
-
+                <p className="text-xs font-medium text-slate-400">
+                  Contract End
+                </p>
                 <p className="mt-0.5 text-sm font-semibold text-slate-800 dark:text-slate-200">
-                  {displayText(contract.contractDuration)}
+                  {formatDate(contract.endDate)}
                 </p>
               </div>
             </div>
-
             <div className="flex items-center gap-3 px-5 py-4 sm:px-6">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-50 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-                <CalendarDays size={17} />
+                <FileText size={17} />
               </div>
-
               <div>
-                <p className="text-xs font-medium text-slate-400">Contract End</p>
-
+                <p className="text-xs font-medium text-slate-400">PO Number</p>
                 <p className="mt-0.5 text-sm font-semibold text-slate-800 dark:text-slate-200">
-                  {displayText(contract.contractEndDate)}
+                  {displayText(contract.poNumber)}
                 </p>
               </div>
             </div>
           </div>
         </section>
-
-        {/* ==================================================
-            PARTIES
-        ================================================== */}
-
-        <Section title="Parties" icon={<Building2 size={18} />}>
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <PartyCard
-              title="Customer"
-              party={contract.customer}
-              icon={<UserRound size={16} />}
-            />
-
-            <PartyCard
-              title="HME / Supplier"
-              party={contract.supplier}
-              icon={<Building2 size={16} />}
-            />
+        {/* CUSTOMER */}
+        <Section title="Customer" icon={<Building2 size={18} />}>
+          <div className="rounded-xl border border-blue-100 bg-blue-50/40 p-5 dark:border-slate-800 dark:bg-slate-950/40">
+            <div className="mb-5 flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-blue-600 ring-1 ring-blue-100 dark:bg-slate-900 dark:text-blue-400 dark:ring-slate-800">
+                <UserRound size={16} />
+              </div>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                Company Details
+              </h3>
+            </div>
+            <div className="space-y-3.5">
+              <p className="text-base font-bold text-slate-900 dark:text-slate-100">
+                {displayText(q.companyName)}
+              </p>
+              <p className="text-sm text-slate-600 dark:text-slate-300">
+                Contact: {displayText(q.contactPerson)}
+              </p>
+              <div className="flex items-start gap-2.5">
+                <Mail size={15} className="mt-0.5 shrink-0 text-blue-400" />
+                <p className="break-all text-sm text-slate-600 dark:text-slate-300">
+                  {displayText(q.contactEmail)}
+                </p>
+              </div>
+              <div className="flex items-center gap-2.5">
+                <Phone size={15} className="shrink-0 text-blue-400" />
+                <p className="text-sm text-slate-600 dark:text-slate-300">
+                  {displayText(q.contactPhone)}
+                </p>
+              </div>
+            </div>
           </div>
         </Section>
-
-        {/* ==================================================
-            HEALTH MONITORING PLAN
-        ================================================== */}
-
-        <Section title="Health Monitoring Plan" icon={<MonitorCog size={18} />}>
+        <Section title="Quotation Summary" icon={<MonitorCog size={18} />}>
           <div className="divide-y divide-slate-100 dark:divide-slate-800">
-            <DetailRow label="Plan">{displayText(contract.planName)}</DetailRow>
-
+            <DetailRow label="Quotation Number">
+              {displayText(q.quotationNumber)}
+            </DetailRow>
+            <DetailRow label="Total Machines">{q.machineCount}</DetailRow>
+            <DetailRow label="Licensed Machine Allowance">
+              {q.licensedMachineAllowance}
+            </DetailRow>
+            <DetailRow label="Payment Terms">
+              {displayText(q.paymentTerms)}
+            </DetailRow>
             <DetailRow label="Description">
               <span className="font-normal leading-6 text-slate-600 dark:text-slate-300">
-                {displayText(contract.planDescription)}
+                {displayText(contract.description)}
               </span>
             </DetailRow>
-
-            <DetailRow label="Contract Duration">
-              {displayText(contract.contractDuration)}
-            </DetailRow>
-
-            <DetailRow label="Monitoring Sites">
-              {sites.length > 0 ? (
-                <div className="space-y-2">
-                  {sites.map((site) => (
-                    <div key={site} className="flex items-center gap-2">
-                      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-slate-400" />
-
-                      <span className="font-normal text-slate-700 dark:text-slate-300">
-                        {site}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <span className="font-normal text-slate-400">{EMPTY_TEXT}</span>
-              )}
-            </DetailRow>
           </div>
         </Section>
-
-        {/* ==================================================
-            MONITORED MACHINES
-        ================================================== */}
-
-        <Section title="Monitored Machines" icon={<MonitorCog size={18} />}>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[620px] border-collapse">
-              <thead>
-                <tr className="border-b border-slate-200 dark:border-slate-800">
-                  <th className="px-3 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-400">
-                    Machine
-                  </th>
-
-                  <th className="px-3 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-400">
-                    Machine Type
-                  </th>
-
-                  <th className="px-3 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-400">
-                    Monitoring Site
-                  </th>
-                </tr>
-              </thead>
-
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {machines.length > 0 ? (
-                  machines.map((machine) => (
-                    <tr
-                      key={`${machine.name}-${machine.site}`}
-                      className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/40"
-                    >
-                      <td className="px-3 py-4 text-sm font-semibold text-slate-800 dark:text-slate-200">
-                        {machine.name}
-                      </td>
-
-                      <td className="px-3 py-4 text-sm text-slate-600 dark:text-slate-300">
-                        {machine.type}
-                      </td>
-
-                      <td className="px-3 py-4 text-sm text-slate-600 dark:text-slate-300">
-                        {machine.site}
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td
-                      colSpan={3}
-                      className="px-3 py-6 text-center text-sm text-slate-400"
-                    >
-                      {EMPTY_TEXT}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </Section>
-
-        {/* ==================================================
-            COMMERCIAL DETAILS
-        ================================================== */}
-
         <Section title="Commercial Details" icon={<ReceiptText size={18} />}>
           <div className="overflow-x-auto">
             <div className="min-w-[520px]">
@@ -900,7 +576,6 @@ const QuotationContract: React.FC = () => {
                 <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
                   Description
                 </span>
-
                 <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
                   Amount
                 </span>
@@ -909,214 +584,419 @@ const QuotationContract: React.FC = () => {
               <div className="divide-y divide-slate-100 dark:divide-slate-800">
                 <div className="grid grid-cols-[1fr_auto] items-center px-1 py-4">
                   <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                    Health Monitoring Plan
+                    Implementation Fee
                   </span>
-
                   <span className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-                    {formatCurrency(
-                      contract.pricing.planAmount,
-                      contract.pricing.currency,
-                    )}
+                    {formatCurrency(q.implementationFee)}
                   </span>
                 </div>
-
                 <div className="grid grid-cols-[1fr_auto] items-center px-1 py-4">
                   <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                    Applicable Tax
+                    Monthly Site Licence
                   </span>
-
                   <span className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-                    {formatCurrency(
-                      contract.pricing.applicableTax,
-                      contract.pricing.currency,
-                    )}
+                    {formatCurrency(q.monthlySiteLicence)}
                   </span>
                 </div>
-
                 <div className="grid grid-cols-[1fr_auto] items-center px-1 py-4">
                   <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                    Additional Charges
+                    Additional Machine Charge
                   </span>
-
                   <span className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-                    {formatCurrency(
-                      contract.pricing.additionalCharges,
-                      contract.pricing.currency,
-                    )}
+                    {formatCurrency(q.additionalMachineCharge)}
                   </span>
                 </div>
+
+                {(q.optionalServices || []).map((service) => (
+                  <div
+                    key={service.serviceId}
+                    className="grid grid-cols-[1fr_auto] items-center px-1 py-4"
+                  >
+                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                      {service.name}
+                    </span>
+                    <span className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+                      {formatCurrency(service.price)}
+                    </span>
+                  </div>
+                ))}
 
                 <div className="grid grid-cols-[1fr_auto] items-center px-1 pt-5">
                   <span className="text-sm font-bold text-slate-900 dark:text-slate-100">
                     Total Contract Value
                   </span>
-
                   <span className="text-lg font-bold text-blue-600 dark:text-blue-400">
-                    {formatCurrency(
-                      contract.pricing.totalContractValue,
-                      contract.pricing.currency,
-                    )}
+                    {formatCurrency(total)}
                   </span>
                 </div>
               </div>
             </div>
           </div>
         </Section>
-
-        {/* ==================================================
-            DIGITAL SIGNATURES
-        ================================================== */}
-
+        \
         <Section title="Digital Signatures" icon={<ShieldCheck size={18} />}>
-          {signatures.length > 0 ? (
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-              {signatures.map((signature) => {
-                const isCustomer = signature.role.toLowerCase() === "customer";
-
-                return (
-                  <SignatureCard
-                    key={`${signature.role}-${signature.partyName}`}
-                    signature={signature}
-                    signatureData={isCustomer ? customerSignature : undefined}
-                    onSave={isCustomer ? handleSaveCustomerSignature : undefined}
+          {contract.status === "ACCEPTED" ? (
+            <div className="space-y-4">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="space-y-1.5">
+                  <p className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                    {displayText(contract.signedBy)}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    Signed on {formatDate(contract.signedAt)}
+                  </p>
+                  {contract.acceptanceDescription && (
+                    <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                      {contract.acceptanceDescription}
+                    </p>
+                  )}
+                </div>
+                {contract.signatureUrl && !signedSignatureLoadFailed ? (
+                  <img
+                    src={resolveFileUrl(contract.signatureUrl)}
+                    alt="Signature"
+                    onError={() => setSignedSignatureLoadFailed(true)}
+                    className="h-20 w-40 rounded-lg border border-blue-100 bg-white object-contain dark:border-slate-800"
                   />
-                );
-              })}
+                ) : contract.signatureUrl ? (
+                  <div className="flex h-20 w-40 items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50 text-center text-xs text-slate-400 dark:border-slate-800 dark:bg-slate-900">
+                    Signature image unavailable
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="flex items-start gap-3 rounded-xl border border-blue-100 bg-blue-50/60 p-4 dark:border-blue-900/40 dark:bg-blue-950/20">
+                <CheckCircle2
+                  size={18}
+                  className="mt-0.5 shrink-0 text-blue-600 dark:text-blue-400"
+                />
+                <p className="text-sm leading-6 text-slate-600 dark:text-slate-300">
+                  This contract has been digitally signed and accepted. A
+                  confirmation record has been saved, and both parties can now
+                  proceed as per the agreed terms.
+                </p>
+              </div>
+            </div>
+          ) : contract.status === "REJECTED" ? (
+            <div className="space-y-1.5">
+              <p className="text-sm font-bold text-red-700 dark:text-red-400">
+                Rejected by {displayText(contract.rejectedBy)}
+              </p>
+              <p className="text-xs text-slate-500">
+                Rejected on {formatDate(contract.rejectedAt)}
+              </p>
+              {contract.rejectionReason && (
+                <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                  {contract.rejectionReason}
+                </p>
+              )}
+            </div>
+          ) : isPendingResponse ? (
+            <div className="space-y-4">
+              <p className="text-xs leading-5 text-slate-500 dark:text-slate-400">
+                Sign below to accept for{" "}
+                <span className="font-semibold text-slate-900 dark:text-slate-100">
+                  {formatCurrency(total)}
+                </span>
+                , or reject with a reason.
+              </p>
+
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+                    Signature
+                  </label>
+                  {!signatureConfirmed && (
+                    <button
+                      type="button"
+                      onClick={clearSignature}
+                      className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-800"
+                    >
+                      <Eraser size={12} />
+                      Clear
+                    </button>
+                  )}
+                </div>
+
+                {signatureConfirmed && signatureDataUrl ? (
+                  <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50/50 p-3 dark:border-emerald-900/50 dark:bg-emerald-950/20">
+                    <img
+                      src={signatureDataUrl}
+                      alt="Your signature"
+                      className="h-16 w-40 shrink-0 rounded-lg border border-slate-200 bg-white object-contain dark:border-slate-700"
+                    />
+                    <div className="flex flex-1 items-center justify-between gap-2">
+                      <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                        <CheckCircle2 size={14} />
+                        Signature confirmed
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleEditSignature}
+                        className="text-xs font-medium text-blue-600 hover:text-blue-800"
+                      >
+                        Edit
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <canvas
+                      ref={canvasRef}
+                      width={800}
+                      height={110}
+                      className="w-full touch-none rounded-lg border-2 border-dashed border-blue-200 bg-blue-50/30 dark:border-slate-700 dark:bg-slate-950"
+                      onMouseDown={(e) => startDrawing(e.clientX, e.clientY)}
+                      onMouseMove={(e) => drawTo(e.clientX, e.clientY)}
+                      onMouseUp={stopDrawing}
+                      onMouseLeave={stopDrawing}
+                      onTouchStart={(e) => {
+                        const t = e.touches[0];
+                        startDrawing(t.clientX, t.clientY);
+                      }}
+                      onTouchMove={(e) => {
+                        const t = e.touches[0];
+                        drawTo(t.clientX, t.clientY);
+                      }}
+                      onTouchEnd={stopDrawing}
+                    />
+                    <div className="flex items-center justify-between pt-1">
+                      <p className="text-xs text-slate-400">
+                        Draw your signature above.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={handleConfirmSignature}
+                        className="inline-flex h-7 items-center justify-center gap-1 rounded-md bg-blue-600 px-3 text-xs font-bold text-white transition hover:bg-blue-700"
+                      >
+                        OK
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+                    Signed By
+                  </label>
+                  <input
+                    type="text"
+                    value={signedBy}
+                    onChange={(e) => setSignedBy(e.target.value)}
+                    placeholder="Full name and title"
+                    className="w-full rounded-lg border border-slate-200 p-2 text-sm text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+                    Description (optional)
+                  </label>
+                  <textarea
+                    rows={1}
+                    value={acceptanceDescription}
+                    onChange={(e) => setAcceptanceDescription(e.target.value)}
+                    placeholder="Add any notes about this acceptance..."
+                    className="w-full resize-none rounded-lg border border-slate-200 p-2 text-sm text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  />
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex flex-col gap-2 border-t border-slate-100 pt-4 dark:border-slate-800 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowRejectModal(true)}
+                  className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-red-200 bg-white px-4 text-sm font-semibold text-red-600 transition hover:bg-red-50 dark:border-red-900/50 dark:bg-slate-900 dark:text-red-400 dark:hover:bg-red-950/30"
+                >
+                  <XCircle size={15} />
+                  Reject Contract
+                </button>
+                <button
+                  type="button"
+                  onClick={handleOpenAcceptConfirm}
+                  className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700"
+                >
+                  <CheckCircle2 size={15} />
+                  Accept Contract
+                </button>
+              </div>
             </div>
           ) : (
-            <p className="text-sm text-slate-400">{EMPTY_TEXT}</p>
+            <div className="flex items-center gap-3 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900">
+              <AlertCircle size={16} />
+              Signature will appear here once the contract is accepted.
+            </div>
           )}
         </Section>
-
-        {/* ==================================================
-            CONTRACT APPROVAL
-            Visible only while the contract is pending. Includes
-            a description of what accepting/rejecting means, an
-            optional remark input, and the action buttons — kept
-            as its own section, separate from Contract Document.
-        ================================================== */}
-
-        {contract.status === "pending" && (
-          <Section title="Contract Approval" icon={<AlertCircle size={18} />}>
-            <div className="flex items-start gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400">
-                <AlertCircle size={18} />
-              </div>
-
-              <div className="min-w-0">
-                <p className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                  Contract Approval Required
-                </p>
-
-                <p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-300">
-                  Please review the contract terms above before proceeding. Accepting
-                  this contract will activate the {displayText(contract.planName)} for{" "}
-                  {formatCurrency(
-                    contract.pricing.totalContractValue,
-                    contract.pricing.currency,
-                  )}{" "}
-                  and monitoring will begin for the listed sites and machines.
-                  Rejecting it will cancel this agreement and no services will be
-                  provisioned.
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-5">
-              <label
-                htmlFor="approval-remark"
-                className="text-xs font-semibold uppercase tracking-wide text-slate-400"
-              >
-                Add a Note (Optional)
-              </label>
-
-              <textarea
-                id="approval-remark"
-                value={approvalRemark}
-                onChange={(event) => setApprovalRemark(event.target.value)}
-                placeholder="Add a comment for this decision, e.g. reason for rejection or any special instructions..."
-                rows={3}
-                className="mt-2 w-full resize-none rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:placeholder:text-slate-500"
-              />
-            </div>
-
-            <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
-              <button
-                type="button"
-                onClick={handleRejectContract}
-                disabled={actionsDisabled}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-red-200 bg-white px-4 text-sm font-semibold text-red-600 transition hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-900/50 dark:bg-slate-900 dark:text-red-400 dark:hover:bg-red-950/30"
-              >
-                {actionState === "rejecting" ? (
-                  <Loader2 size={16} className="animate-spin" />
-                ) : (
-                  <XCircle size={16} />
-                )}
-                Reject Contract
-              </button>
-
-              <button
-                type="button"
-                onClick={handleAcceptContract}
-                disabled={actionsDisabled}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 text-sm font-semibold text-white transition hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {actionState === "accepting" ? (
-                  <Loader2 size={16} className="animate-spin" />
-                ) : (
-                  <CheckCircle2 size={16} />
-                )}
-                Accept Contract
-              </button>
-            </div>
-          </Section>
-        )}
-
-        {/* ==================================================
-            CONTRACT DOCUMENT
-        ================================================== */}
-
+        {/* CONTRACT DOCUMENT */}
         <Section title="Contract Document" icon={<FileText size={18} />}>
-          <div className="flex flex-col gap-5 rounded-xl border border-slate-200 bg-slate-50/70 p-5 dark:border-slate-800 dark:bg-slate-950/40 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex min-w-0 items-center gap-4">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white text-red-500 shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800">
-                <FileText size={24} />
-              </div>
-
-              <div className="min-w-0">
-                <p className="truncate text-sm font-bold text-slate-900 dark:text-slate-100 sm:text-base">
-                  {displayText(contract.document.fileName)}
+          {contract.status === "ACCEPTED" ? (
+            <div className="space-y-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  View the signed contract PDF, or download a copy for your
+                  records.
                 </p>
 
-                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                  {displayText(contract.document.fileType)} • Version{" "}
-                  {displayText(contract.document.version)}
-                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void handleViewContractPdf()}
+                    disabled={pdfBusyAction !== null}
+                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                  >
+                    {pdfBusyAction === "view" ? (
+                      <RefreshCw size={14} className="animate-spin" />
+                    ) : (
+                      <Eye size={14} />
+                    )}
+                    View PDF
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => void handleDownloadContractPdf()}
+                    disabled={pdfBusyAction !== null}
+                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3.5 text-xs font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {pdfBusyAction === "download" ? (
+                      <RefreshCw size={14} className="animate-spin" />
+                    ) : (
+                      <Download size={14} />
+                    )}
+                    Download PDF
+                  </button>
+                </div>
               </div>
             </div>
+          ) : (
+            <div className="flex items-center gap-3 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900">
+              <AlertCircle size={16} />
+              The contract PDF will be available once the contract is accepted
+              and digitally signed.
+            </div>
+          )}
+        </Section>
+      </div>
 
-            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+      {/* ACCEPT CONFIRMATION POPUP — small, no canvas here */}
+      {showAcceptConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl dark:bg-slate-900">
+            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400">
+              <CheckCircle2 size={22} />
+            </div>
+            <h3 className="mt-4 text-base font-bold text-slate-900 dark:text-white">
+              Confirm Acceptance
+            </h3>
+            <p className="mt-1.5 text-sm leading-6 text-slate-500">
+              You're about to accept this contract as{" "}
+              <span className="font-semibold text-slate-700 dark:text-slate-300">
+                {signedBy}
+              </span>{" "}
+              for{" "}
+              <span className="font-semibold text-blue-600 dark:text-blue-400">
+                {formatCurrency(total)}
+              </span>
+              . This action cannot be undone.
+            </p>
+
+            <div className="mt-6 flex items-center justify-end gap-3">
               <button
                 type="button"
-                onClick={handleViewContract}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-slate-600 dark:hover:bg-slate-800"
+                onClick={() => setShowAcceptConfirm(false)}
+                disabled={isSubmitting}
+                className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-300"
               >
-                <Eye size={16} />
-                View Contract
+                Cancel
               </button>
-
               <button
                 type="button"
-                onClick={handleDownloadContract}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-blue-600 dark:hover:bg-blue-500"
+                onClick={handleConfirmAccept}
+                disabled={isSubmitting}
+                className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2 text-sm font-bold text-white shadow hover:bg-blue-700 disabled:opacity-50"
               >
-                <Download size={16} />
-                Download PDF
+                {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
+                Confirm Accept
               </button>
             </div>
           </div>
-        </Section>
-      </div>
+        </div>
+      )}
+
+      {/* REJECT MODAL */}
+      {showRejectModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl dark:bg-slate-900">
+            <h3 className="text-base font-bold text-slate-900 dark:text-white">
+              Reject Contract
+            </h3>
+            <p className="mt-1 text-xs text-slate-500">
+              Please provide a reason for rejecting this contract.
+            </p>
+
+            <div className="mt-4 space-y-1.5">
+              <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+                Rejection Reason
+              </label>
+              <textarea
+                rows={4}
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+                placeholder="Explain why this contract is being rejected..."
+                className="w-full rounded-lg border border-slate-200 p-2.5 text-sm text-slate-800 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+              />
+            </div>
+
+            <div className="mt-6 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowRejectModal(false)}
+                className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmitReject}
+                disabled={isSubmitting}
+                className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-5 py-2 text-sm font-bold text-white shadow hover:bg-red-700 disabled:opacity-50"
+              >
+                {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
+                Confirm Reject
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CONTRACT PDF VIEWER MODAL */}
+      {pdfViewer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="flex h-[85vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl bg-white dark:bg-slate-900">
+            <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-800">
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
+                {pdfViewer.title}
+              </h3>
+              <button
+                type="button"
+                onClick={closePdfViewer}
+                className="rounded-md p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <iframe
+              src={pdfViewer.url}
+              title={pdfViewer.title}
+              className="w-full flex-1"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

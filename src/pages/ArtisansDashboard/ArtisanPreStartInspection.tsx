@@ -795,7 +795,7 @@ export default function ArtisanPreStartInspection() {
                     <p className="font-bold text-white">{activeMachine.currentHours > 0 ? `${activeMachine.currentHours.toLocaleString()} hrs` : "0 hrs"}</p>
                   </div>
                   <div>
-                    <span className="text-blue-200 text-[10px] uppercase font-bold">Health Verdict</span>
+                    <span className="text-blue-200 text-[10px] uppercase font-bold">Health Prediction</span>
                     <p className="font-bold text-emerald-300">✓ {activeMachine.healthScore ?? 100}% Optimal</p>
                   </div>
                 </div>

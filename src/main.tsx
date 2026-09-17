@@ -14,6 +14,7 @@ import "flatpickr/dist/flatpickr.css";
 import App from "./App.tsx";
 import { ThemeProvider } from "./context/ThemeContext.tsx";
 import { registerSW } from "virtual:pwa-register";
+import AppToaster from "./components/common/AppToaster.tsx";
 
 const updateSW = registerSW({
   onNeedRefresh() {
@@ -26,12 +27,10 @@ const updateSW = registerSW({
   },
 });
 
-// Sync on app startup if online
 if (navigator.onLine) {
   setTimeout(() => {
     offlineQueueService.syncRequests();
 
-    // Signal Service Worker to sync too
     if (navigator.serviceWorker?.controller) {
       navigator.serviceWorker.controller.postMessage({
         type: "SYNC_OFFLINE_REQUESTS",
@@ -42,10 +41,8 @@ if (navigator.onLine) {
 
 window.addEventListener("online", async () => {
 
-  // Sync app-level queue
   await offlineQueueService.syncRequests();
 
-  // Signal Service Worker to sync its queue
   if (navigator.serviceWorker?.controller) {
     navigator.serviceWorker.controller.postMessage({
       type: "SYNC_OFFLINE_REQUESTS",
@@ -54,14 +51,14 @@ window.addEventListener("online", async () => {
 });
 
 createRoot(document.getElementById("root")!).render(
-  
-    <Provider store={store}>
-      <HelmetProvider>
-        <ThemeProvider>
-          <NotificationProvider>
-            <App />
-          </NotificationProvider>
-        </ThemeProvider>
-      </HelmetProvider>
-    </Provider>
+  <Provider store={store}>
+    <HelmetProvider>
+      <ThemeProvider>
+        <NotificationProvider>
+          <App />
+          <AppToaster />
+        </NotificationProvider>
+      </ThemeProvider>
+    </HelmetProvider>
+  </Provider>
 );

@@ -51,6 +51,43 @@ export type ComponentPayload = {
   condition: number;
 };
 
+export interface EngineerDashboardComponentIntelligence {
+  hoursRun: number;
+  lifeUsedPercent: number;
+  remainingHours: number;
+  riskStatus: string;
+  riskColor: string;
+  riskDriver: string;
+  estimatedSavings: string;
+}
+
+export interface EngineerDashboardComponentMachine {
+  id: string;
+  name: string | null;
+  manufacturer: string | null;
+  model: string | null;
+  serialNumber: string | null;
+  equipmentType: string | null;
+}
+
+export interface EngineerDashboardComponent {
+  id: string;
+  name: string | null;
+  machineId: string;
+  companyId: string | null;
+  category: string | null;
+  componentType: string | null;
+  description: string | null;
+  serialNumber: string | null;
+  installHours: number;
+  currentHours: number;
+  plannedLife: number;
+  replacementCost: string;
+  condition: number;
+  machine: EngineerDashboardComponentMachine | null;
+  intelligence: EngineerDashboardComponentIntelligence;
+}
+
 export const componentService = {
   getCategories: () => {
     return Promise.resolve({ success: true, data: [] });
@@ -81,12 +118,23 @@ export const componentService = {
     }).catch(() => apiCall<any[]>(`/components/register?machineId=${encodeURIComponent(machineId)}`, { method: "GET" })).catch(() => []);
   },
 
+    getEngineerDashboardComponents: () => {
+    return apiCall<EngineerDashboardComponent[]>(
+      "/components/engineer-dashboard",
+      {
+        method: "GET",
+      },
+    );
+  },
+
   getMachineComponents: (machineId: string) => {
     if (!machineId) return Promise.resolve([]);
     return apiCall<any[]>(`/machines/${encodeURIComponent(machineId)}/components`, {
       method: "GET",
     }).catch(() => []);
   },
+
+  
 
   createComponent: (payload: ComponentPayload) => {
     return apiCall<any>(

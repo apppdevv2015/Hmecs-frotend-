@@ -4,7 +4,11 @@ import { ClipboardList, MessageSquareCheck, PlusCircle } from "lucide-react";
 
 import QuotationInquiry from "./QuotationInquiry";
 import QuotationResponses from "./QuotationResponses";
+
+import AddonQuotationBuilder from "./AddonQuotationBuilder";
+
 import { AddonQuotationBuilder } from "./AddonQuotationBuilder";
+
 import FormCard from "../../../components/common/SignupCard";
 
 /* ============================================================
@@ -62,6 +66,8 @@ const isQuotationTab = (value: string | null): value is QuotationTabId => {
 const Quotation: FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
 
+
+
   /*
    * URL is the single source of truth for the active tab.
    *
@@ -71,6 +77,7 @@ const Quotation: FC = () => {
    * /super-admin/quotation?tab=addon-builder
    * /super-admin/quotation?tab=responses
    */
+
 
   const tabParam = searchParams.get("tab");
 
@@ -180,12 +187,16 @@ const Quotation: FC = () => {
             </p>
           </div>
 
+
+          <FormCard onInquirySubmitted={() => {}} />
+
           <FormCard
             onInquirySubmitted={() => {
               // Optional: refresh inquiry list after successful submission
               // e.g. call a refetch function passed down or via context
             }}
           />
+
         </div>
 
         {/* ==================================================

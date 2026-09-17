@@ -39,15 +39,6 @@ import {
   X,
 } from "lucide-react";
 
-// ============================================================================
-// TYPES
-// ============================================================================
-
-// ============================================================================
-// Pre-Start Inspection — Type Definitions
-// Keep UI and data separated so future API integration doesn't touch the UI.
-// ============================================================================
-
 export type MachineStatus = "Online" | "Offline" | "Maintenance";
 
 export interface Machine {
@@ -79,7 +70,7 @@ export type IssueSeverity = "Low" | "Medium" | "High" | "Critical";
 
 export interface IssueImage {
   id: string;
-  file: File | null; // null for pre-seeded mock previews
+  file: File | null; 
   previewUrl: string;
   name: string;
   sizeKb: number;
@@ -104,7 +95,7 @@ export type InspectionStatus = "OK" | "Issue" | "N/A" | "Pending";
 export interface InspectionItem {
   id: string;
   label: string;
-  icon: string; // key mapped to a lucide icon in the component
+  icon: string; 
   status: InspectionStatus;
   value?: string;
   unit?: string;
@@ -113,11 +104,6 @@ export interface InspectionItem {
   imageUrl: string | null;
 }
 
-// ---------------------------------------------------------------------------
-// Component Health
-// ---------------------------------------------------------------------------
-// Categories now come directly from real backend data instead of a fixed
-// list, so any category the API returns will show up correctly.
 export type ComponentCategory = string;
 
 export type ComponentHealthStatus = "Healthy" | "Good" | "Warning" | "Critical";
@@ -144,9 +130,9 @@ export interface MachineComponent {
   id: string;
   category: ComponentCategory;
   name: string;
-  health: number; // 0-100
+  health: number; 
   status: ComponentHealthStatus;
-  currentReading: string; // e.g. "68°C" or "—"
+  currentReading: string;
   parameters?: ComponentParameter[];
 }
 
@@ -160,10 +146,6 @@ export interface ComponentUpdate {
   images: IssueImage[];
 }
 
-// ---------------------------------------------------------------------------
-// Future API contract (not wired up yet — kept here so the shape is obvious
-// when the real endpoints are ready to be dropped in)
-// ---------------------------------------------------------------------------
 
 export interface PreStartInspectionApi {
   getAssignedMachine: (operatorId: string) => Promise<Machine>;
@@ -179,15 +161,6 @@ export interface PreStartInspectionApi {
   postCompleteInspection: (machineId: string) => Promise<void>;
 }
 
-// ============================================================================
-// MOCK DATA — swap for real API responses later
-// ============================================================================
-
-// ============================================================================
-// Mock Data — replace with real API responses later.
-// Shape mirrors what the future endpoints (see PreStartInspectionApi) return,
-// so swapping these for `await api.getX()` calls will not require UI changes.
-// ============================================================================
 
 export const mockMachine: Machine = {
   id: "m-dt102",
@@ -2765,8 +2738,6 @@ const PreStartInspection: React.FC = () => {
       });
       return next;
     });
-
-    toast.success(`✓ Updated ${updateTarget.name} (${updates.health}%) & sent to supervisor!`);
     setUpdateTarget(null);
   };
 
@@ -2826,7 +2797,6 @@ const PreStartInspection: React.FC = () => {
       return next;
     });
 
-    toast.success(`✓ Added custom component "${newComp.name}" to machine!`);
     setIsAddComponentModalOpen(false);
   };
 
@@ -3076,8 +3046,6 @@ const PreStartInspection: React.FC = () => {
                 } catch (err) {
                   console.warn("Database sync notice:", err);
                 }
-
-                toast.success(`✓ Pre-Start Inspection completed by ${opName} & sent to supervisor!`);
               }}
             />
           ) : (

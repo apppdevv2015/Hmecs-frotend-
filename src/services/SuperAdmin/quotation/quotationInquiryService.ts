@@ -1,4 +1,4 @@
-import { apiCall } from "../apiHandler";
+import { apiCall } from "../../apiHandler";
 
 export interface QuotationRequestPayload {
   companyName: string;

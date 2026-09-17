@@ -25,7 +25,7 @@ import {
   toggleOptionalServiceStatus,
   type OptionalService,
   type OptionalServicePayload,
-} from "../../services/SuperAdmin/optionalService";
+} from "../../services/SuperAdmin/quotation/optionalService";
 
 // ----------------------------------------------------
 // Local types

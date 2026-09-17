@@ -21,8 +21,8 @@ import {
   getEquipmentTypes,
   getOptionalServices,
   type OptionalService,
-} from "../../services/SuperAdmin/optionalService";
-import { submitQuotationRequest } from "../../services/SuperAdmin/quotationInquiryService";
+} from "../../services/SuperAdmin/quotation/optionalService";
+import { submitQuotationRequest } from "../../services/SuperAdmin/quotation/quotationInquiryService";
 
 import {
   signUpSchema,

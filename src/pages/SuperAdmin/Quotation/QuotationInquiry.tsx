@@ -11,31 +11,22 @@ import { createPortal } from "react-dom";
 
 import AppSelect from "../../../components/ui/dropdown/AppSelect";
 import CommonPagination from "../../../components/common/Pagination";
+import { showErrorToast } from "../../../utils/toastUtils";
 import { Sparkles, Zap, CheckCircle2, ShieldCheck } from "lucide-react";
-import {
-  getQuotationRequests,
-  type ApiQuotationRequest,
-} from "../../../services/SuperAdmin/quotationInquiryService";
 
 import {
   deleteQuotationRequest,
   extractApiError,
   getQuotationRequestById,
   getQuotationRequestsWithMeta,
+  sendQuotation,
   updateQuotationRequest,
   type QuotationRequest,
   type QuotationRequestStatus,
+  type SendQuotationPayload,
 } from "../../../services/Quotation/quotationService";
 
-/* ============================================================================
- * 1. VIEW-MODEL TYPES
- *
- * `status` on QuotationInquiry is the RAW backend status
- * (QuotationRequestStatus) — there is no second, derived "Active/Inactive"
- * concept layered on top of it. Whatever the backend calls a request's
- * status is what the whole UI treats as its status, end to end.
- * ==========================================================================*/
-
+import { getPublicOptionalServices } from "../../../services/SuperAdmin/quotation/optionalService";
 export interface CompanyInfo {
   readonly companyId: string;
   readonly name: string;
@@ -45,12 +36,6 @@ export interface CompanyInfo {
   readonly location: string;
 }
 
-/**
- * The current GET /quotations/requests contract does not include
- * trial-request fields. This shape is kept so the drawer UI has something
- * to bind to, but every value is honestly `false`/`null` until the
- * backend adds these fields — nothing here is invented per-record data.
- */
 export interface TrialRequest {
   readonly requested: boolean;
   readonly duration: string | null;
@@ -64,18 +49,14 @@ export interface ClientRequirement {
   readonly siteNames: readonly string[];
   readonly activeMachines: number;
   readonly equipmentTypes: readonly string[];
-  /** Display-ready service names requested by the client (from `optionalServices`). */
   readonly requestedServiceNames: readonly string[];
   readonly requirementDescription: string;
   readonly otherRequirements: string | null;
 }
 
 export interface QuotationInquiry {
-  /** Real backend primary key — required for detail/update/delete calls. */
   readonly id: string;
-  /** Human-friendly reference shown throughout the UI. */
   readonly inquiryId: string;
-  /** Raw backend lifecycle status — single source of truth, no derived flag. */
   readonly status: QuotationRequestStatus;
   readonly inquiryDate: string;
   readonly company: CompanyInfo;
@@ -99,7 +80,9 @@ export interface SelectedService {
 
 export interface QuotationDraft {
   readonly inquiryId: string;
+  readonly tier: string;
   readonly contractDuration: string;
+  readonly billingFrequency: string;
   readonly licensedMachineAllowance: number;
   readonly onceOffImplementationFee: number;
   readonly monthlySiteLicence: number;
@@ -127,14 +110,6 @@ export interface InquirySummary {
   readonly sent: number;
 }
 
-/* ============================================================================
- * 2. CENTRALIZED TEXT — the ONLY place literal user-facing copy lives in
- * this file. Every toast, empty-state and error fallback pulls from here
- * instead of a string typed inline at the call site. The backend's own
- * `message` field always wins where one is available (see usages below);
- * these are last-resort fallbacks only.
- * ==========================================================================*/
-
 export const MESSAGES = {
   inquiriesLoadError: "Unable to load quotation inquiries.",
   inquiryDetailLoadError: "Unable to load inquiry details.",
@@ -161,22 +136,6 @@ export const MESSAGES = {
   confirmDeleting: "Deleting...",
 } as const;
 
-/* ============================================================================
- * 3. BUSINESS CONFIGURATION
- *
- * These are static configuration values (available contract lengths,
- * trial-window lengths, payment terms, and the additional-services
- * catalogue with its starting price) — not per-record data. The backend
- * contract in hand (see quotationService.ts) has no `/quotations/config`
- * or `/quotations/services` endpoint, so these live here as the single
- * source of truth for now.
- *
- * TODO(backend): once a config endpoint exists, replace this block with a
- * fetch (e.g. `getQuotationConfig()`) and delete the constants below —
- * every component in this file already reads them by name only, so the
- * swap is contained to this section.
- * ==========================================================================*/
-
 export const CONTRACT_DURATION_OPTIONS = [
   "6 Months",
   "12 Months",
@@ -198,13 +157,21 @@ export const PAYMENT_TERMS_OPTIONS = [
   "Net 30",
 ] as const;
 
+export const TIER_OPTIONS = [
+  "Once-Off Implementation Fee",
+  "Fixed Monthly Site Licence",
+] as const;
+
+export const BILLING_FREQUENCY_OPTIONS = [
+  "Monthly in Advance",
+  "Quarterly in Advance",
+  "Annually in Advance",
+] as const;
+
 export const DEFAULT_TRIAL_MACHINES = 15;
 export const DEFAULT_TRIAL_DURATION = "30 Days";
+export const QUOTATION_VALIDITY_DAYS = 30;
 
-/**
- * Matches the `status` dropdown values on GET /quotations/requests exactly.
- * If the backend adds/renames a status, update this one array only.
- */
 export const STATUS_SELECT_OPTIONS = [
   { label: "All Statuses", value: "" },
   { label: "Pending", value: "PENDING" },
@@ -215,7 +182,6 @@ export const STATUS_SELECT_OPTIONS = [
   { label: "Expired", value: "EXPIRED" },
 ] as const;
 
-/** Responses tab only ever shows requests past the Pending/Draft stage. */
 export const RESPONSE_STATUS_SELECT_OPTIONS = [
   { label: "All Statuses", value: "" },
   { label: "Sent", value: "SENT" },
@@ -234,63 +200,27 @@ export const PAYMENT_TERMS_SELECT_OPTIONS = PAYMENT_TERMS_OPTIONS.map((p) => ({
   label: p,
   value: p,
 }));
+export const TIER_SELECT_OPTIONS = TIER_OPTIONS.map((t) => ({
+  label: t,
+  value: t,
+}));
+export const BILLING_FREQUENCY_SELECT_OPTIONS = BILLING_FREQUENCY_OPTIONS.map(
+  (b) => ({ label: b, value: b }),
+);
 
-/**
- * Additional-services catalogue used to price a quotation. The backend
- * contract only returns service *names* per request (`optionalServices`);
- * it does not yet expose a services/pricing endpoint. Until one exists,
- * this catalogue is the source of truth for available services and their
- * starting price, and is used to pre-select whichever services the client
- * already asked for in their original inquiry.
- */
-export const QUOTATION_SERVICES: readonly AdditionalService[] = [
-  {
-    id: "telematics-ecu",
-    name: "Telematics / ECU Integration",
-    description: "Integration with machine telematics and ECU data.",
-    defaultPrice: 0,
-  },
-  {
-    id: "sap-erp",
-    name: "SAP / ERP Integration",
-    description: "Integration with existing ERP systems.",
-    defaultPrice: 25000,
-  },
-  {
-    id: "custom-reports",
-    name: "Custom Reports",
-    description: "Custom reporting and dashboard requirements.",
-    defaultPrice: 10000,
-  },
-  {
-    id: "historical-migration",
-    name: "Historical Data Migration",
-    description: "Migration and preparation of historical machine data.",
-    defaultPrice: 15000,
-  },
-  {
-    id: "training",
-    name: "Additional Training",
-    description: "Additional user or operational training.",
-    defaultPrice: 8000,
-  },
-  {
-    id: "onsite-support",
-    name: "On-site Technical Support",
-    description: "On-site technical support services.",
-    defaultPrice: 20000,
-  },
-];
-
-function getServiceById(id: string): AdditionalService | undefined {
-  return QUOTATION_SERVICES.find((s) => s.id === id);
+function getServiceById(
+  id: string,
+  catalog: readonly AdditionalService[],
+): AdditionalService | undefined {
+  return catalog.find((s) => s.id === id);
 }
 
-function findServiceIdByName(name: string): string | undefined {
+function findServiceIdByName(
+  name: string,
+  catalog: readonly AdditionalService[],
+): string | undefined {
   const normalized = name.trim().toLowerCase();
-  return QUOTATION_SERVICES.find(
-    (s) => s.name.trim().toLowerCase() === normalized,
-  )?.id;
+  return catalog.find((s) => s.name.trim().toLowerCase() === normalized)?.id;
 }
 
 /** Single label + style source for every status badge in the UI. */
@@ -383,15 +313,20 @@ export function mapRequestToInquiry(raw: QuotationRequest): QuotationInquiry {
   };
 }
 
-function buildDefaultDraft(inquiry: QuotationInquiry): QuotationDraft {
+function buildDefaultDraft(
+  inquiry: QuotationInquiry,
+  catalog: readonly AdditionalService[],
+): QuotationDraft {
   const requestedIds = new Set(
     inquiry.requirement.requestedServiceNames
-      .map(findServiceIdByName)
+      .map((n) => findServiceIdByName(n, catalog))
       .filter((id): id is string => Boolean(id)),
   );
   return {
     inquiryId: inquiry.inquiryId,
+    tier: TIER_OPTIONS[0],
     contractDuration: CONTRACT_DURATION_OPTIONS[1],
+    billingFrequency: BILLING_FREQUENCY_OPTIONS[0],
     licensedMachineAllowance: inquiry.requirement.activeMachines,
     onceOffImplementationFee: 0,
     monthlySiteLicence: 0,
@@ -401,7 +336,7 @@ function buildDefaultDraft(inquiry: QuotationInquiry): QuotationDraft {
     trialDuration: inquiry.trial.duration ?? DEFAULT_TRIAL_DURATION,
     trialMachines: inquiry.trial.machines ?? DEFAULT_TRIAL_MACHINES,
     trialDescription: inquiry.trial.description ?? "",
-    services: QUOTATION_SERVICES.map((s) => ({
+    services: catalog.map((s) => ({
       serviceId: s.id,
       selected: requestedIds.has(s.id),
       price: s.defaultPrice,
@@ -409,422 +344,6 @@ function buildDefaultDraft(inquiry: QuotationInquiry): QuotationDraft {
     notes: "",
   };
 }
-
-function buildMockInquiry(index: number): QuotationInquiry {
-  const companies = [
-    { name: "Anglo American Platinum", contact: "David Ndlovu", email: "d.ndlovu@angloamerican.co.za", phone: "+27 11 373 6111", loc: "Rustenburg, North West" },
-    { name: "Glencore Coal Operations", contact: "Sarah Jenkins", email: "s.jenkins@glencore.com", phone: "+27 13 656 7000", loc: "Witbank, Mpumalanga" },
-    { name: "Exxaro Resources Ltd", contact: "Kagiso Molefe", email: "k.molefe@exxaro.com", phone: "+27 12 307 5000", loc: "Grootegeluk Mine, Lephalale" },
-    { name: "Sibanye-Stillwater Mining", contact: "Johan van der Merwe", email: "johan.vdm@sibanyestillwater.com", phone: "+27 11 278 9600", loc: "Kroondal Platinum Mine" },
-    { name: "Sasol Mining Secunda", contact: "Thabo Mokoena", email: "thabo.mokoena@sasol.com", phone: "+27 17 614 1111", loc: "Secunda Complex, Mpumalanga" },
-    { name: "Kumba Iron Ore Ltd", contact: "Francois Botha", email: "francois.botha@angloamerican.com", phone: "+27 53 723 8111", loc: "Sishen Mine, Kathu" },
-  ];
-  const c = companies[index % companies.length];
-  const statuses: QuotationRequestStatus[] = ["PENDING", "DRAFT", "SENT", "ACCEPTED", "REJECTED", "EXPIRED"];
-  const status = statuses[index % statuses.length];
-  const quotationTypes = ["Fleet Management", "Predictive Maintenance", "Component Intelligence", "Machine Telemetry Ingestion"];
-  const equipLists = [
-    ["Hydraulic Excavators", "Heavy Haul Trucks"],
-    ["Rotary Drill Rigs", "Track Bulldozers", "Wheel Loaders"],
-    ["Motor Graders", "Hydraulic Excavators"],
-    ["Underground Loaders", "Heavy Haul Trucks"],
-  ];
-
-  return {
-    id: `req-mock-${index + 1}`,
-    inquiryId: `QIN-2026-${String(index + 1).padStart(4, "0")}`,
-    status,
-    inquiryDate: new Date(Date.now() - index * 86_400_000 * 2).toISOString(),
-    company: {
-      companyId: `COMP-${String(index + 1).padStart(3, "0")}`,
-      name: c.name,
-      contactPerson: c.contact,
-      email: c.email,
-      phone: c.phone,
-      location: c.loc,
-    },
-    requirement: {
-      quotationType: quotationTypes[index % quotationTypes.length],
-      numberOfSites: (index % 3) + 1,
-      siteNames: [`${c.loc.split(",")[0]} Site 1`],
-      activeMachines: 10 + (index * 5),
-      equipmentTypes: equipLists[index % equipLists.length],
-      requestedServiceNames: ["Telematics / ECU Integration", "SAP / ERP Integration"],
-      requirementDescription: "Full machine health monitoring and predictive analytics required.",
-      otherRequirements: null,
-    },
-    trial: {
-      requested: index % 3 === 0,
-      duration: "30 Days",
-      machines: 15,
-      description: "Evaluation trial for fleet diagnostics.",
-    },
-    attachmentUrl: null,
-  };
-}
-
-/** In-memory "database" — mutated by save-draft / send-quotation. */
-const mockInquiries: QuotationInquiry[] = Array.from({ length: 24 }, (_, i) =>
-  buildMockInquiry(i),
-);
-const draftsByInquiryId = new Map<string, QuotationDraft>();
-const mockResponses: QuotationResponse[] = [];
-
-/** Seed a handful of inquiries as already quoted, so Quotation Responses has data on first load. */
-function seedSentQuotations(): void {
-  mockInquiries.slice(0, 4).forEach((inquiry, i) => {
-    const draft = buildDefaultDraft(inquiry);
-    const seededDraft: QuotationDraft = {
-      ...draft,
-      onceOffImplementationFee: 15000,
-      monthlySiteLicence: 8000 + i * 1000,
-      additionalMachineCharge: 500,
-      services: draft.services.map((s, idx) =>
-        idx < 2 ? { ...s, selected: true } : s,
-      ),
-      notes:
-        "Proposal covers predictive maintenance monitoring with monthly health reporting.",
-    };
-    const totals = computeQuotationTotals(seededDraft);
-    const idx = mockInquiries.findIndex(
-      (q) => q.inquiryId === inquiry.inquiryId,
-    );
-    const statusCycle: QuotationStatus[] = [
-      "SENT",
-      "ACCEPTED",
-      "REJECTED",
-      "SENT",
-    ];
-    const quotationStatus = statusCycle[i % statusCycle.length];
-    mockInquiries[idx] = { ...mockInquiries[idx], quotationStatus };
-    draftsByInquiryId.set(inquiry.inquiryId, seededDraft);
-    const sentDate = new Date(
-      Date.now() - (i + 1) * 2 * 86_400_000,
-    ).toISOString();
-    mockResponses.push({
-      quotationId: `QUO-${String(1000 + i)}`,
-      inquiryId: inquiry.inquiryId,
-      company: inquiry.company,
-      sentDate,
-      quotationAmount: totals.contractValue,
-      status: quotationStatus,
-      responseDate:
-        quotationStatus === "SENT"
-          ? null
-          : new Date(Date.now() - i * 86_400_000).toISOString(),
-      draft: seededDraft,
-      inquirySnapshot: mockInquiries[idx],
-    });
-  });
-}
-seedSentQuotations();
-
-function maybeThrowSimulatedError(): void {
-  /* Flip this to a small probability locally to exercise the error + retry state. */
-  const SIMULATE_ERROR_RATE = 0;
-  if (SIMULATE_ERROR_RATE > 0 && Math.random() < SIMULATE_ERROR_RATE) {
-    const err: ApiErrorShape = {
-      response: {
-        data: {
-          message:
-            "The quotation service is temporarily unavailable. Please try again.",
-        },
-      },
-    };
-    throw err;
-  }
-}
-
-export interface InquiryListParams {
-  readonly page: number;
-  readonly limit: number;
-  readonly search?: string;
-  readonly status?: InquiryStatus;
-  readonly quotationType?: string;
-  readonly dateFrom?: string;
-  readonly dateTo?: string;
-}
-
-export interface ResponseListParams {
-  readonly page: number;
-  readonly limit: number;
-  readonly search?: string;
-  readonly status?: QuotationStatus;
-}
-
-const quotationService = {
-  async getInquiries(
-    params: InquiryListParams,
-  ): Promise<ApiResponse<QuotationInquiry[]>> {
-    let apiInquiries: QuotationInquiry[] = [];
-
-    try {
-      const apiReqs = await getQuotationRequests({
-        search: params.search,
-        status: params.status,
-      });
-
-      if (Array.isArray(apiReqs) && apiReqs.length > 0) {
-        apiInquiries = apiReqs.map((req: ApiQuotationRequest) => {
-          const isTrial = (req.quotationType || "")
-            .toLowerCase()
-            .includes("trial");
-
-          const siteNamesList = Array.isArray(req.siteNames)
-            ? req.siteNames
-            : typeof req.siteNames === "string"
-              ? [req.siteNames]
-              : [];
-
-          const equipmentTypesList = Array.isArray(req.equipmentTypes)
-            ? req.equipmentTypes
-            : typeof req.equipmentTypes === "string"
-              ? [req.equipmentTypes]
-              : [];
-
-          const optionalServicesList = Array.isArray(req.optionalServices)
-            ? req.optionalServices
-            : typeof req.optionalServices === "string"
-              ? [req.optionalServices]
-              : [];
-
-          return {
-            inquiryId:
-              req.requestId ||
-              `QIN-${(req.id || "").substring(0, 8).toUpperCase()}`,
-            status: (req.status === "INACTIVE"
-              ? "INACTIVE"
-              : "ACTIVE") as InquiryStatus,
-            inquiryDate: req.createdAt || new Date().toISOString(),
-            company: {
-              companyId: req.companyId || req.id,
-              name: req.companyName || "-",
-              contactPerson: req.contactPerson || "-",
-              email: req.email || "-",
-              phone: req.phone || "-",
-              location: req.siteLocation || "-",
-            },
-            requirement: {
-              quotationType: req.quotationType || "Commercial Quotation",
-              numberOfSites: Number(req.numberOfSites) || 1,
-              siteNames: siteNamesList,
-              activeMachines: Number(req.activeMachines) || 1,
-              equipmentTypes: equipmentTypesList,
-              requestedServiceIds: optionalServicesList,
-              requirementDescription:
-                req.implementationRequirements || "-",
-              otherRequirements: req.additionalRequirements || null,
-            },
-            trial: {
-              requested: isTrial,
-              duration: isTrial
-                ? req.contractDuration || DEFAULT_TRIAL_DURATION
-                : null,
-              machines: isTrial
-                ? Number(req.activeMachines) || DEFAULT_TRIAL_MACHINES
-                : null,
-              description: isTrial ? "Evaluation requested." : null,
-            },
-            quotationStatus: (req.quotationStatus as QuotationStatus) || null,
-          };
-        });
-      }
-    } catch (apiErr) {
-      console.warn("Notice: Fetching quotation requests:", apiErr);
-    }
-
-    const combinedInquiries = [
-      ...apiInquiries,
-      ...mockInquiries.filter(
-        (m) => !apiInquiries.some((a) => a.inquiryId === m.inquiryId),
-      ),
-    ];
-
-    let rows = [...combinedInquiries];
-
-    if (params.search) {
-      const q = params.search.toLowerCase();
-      rows = rows.filter(
-        (inq) =>
-          inq.inquiryId.toLowerCase().includes(q) ||
-          inq.company.name.toLowerCase().includes(q) ||
-          inq.company.contactPerson.toLowerCase().includes(q) ||
-          inq.company.email.toLowerCase().includes(q),
-      );
-    }
-    if (params.status) {
-      rows = rows.filter((inq) => inq.status === params.status);
-    }
-    if (params.quotationType) {
-      rows = rows.filter(
-        (inq) => inq.requirement.quotationType === params.quotationType,
-      );
-    }
-    if (params.dateFrom) {
-      const from = new Date(params.dateFrom).getTime();
-      rows = rows.filter((inq) => new Date(inq.inquiryDate).getTime() >= from);
-    }
-    if (params.dateTo) {
-      const to = new Date(params.dateTo).getTime() + 86_400_000 - 1;
-      rows = rows.filter((inq) => new Date(inq.inquiryDate).getTime() <= to);
-    }
-
-    rows.sort((a, b) => (a.inquiryDate < b.inquiryDate ? 1 : -1));
-
-    const totalRecords = rows.length;
-    const totalPages = Math.max(1, Math.ceil(totalRecords / params.limit));
-    const start = (params.page - 1) * params.limit;
-    const pageRows = rows.slice(start, start + params.limit);
-
-    const summary: InquirySummary = {
-      totalInquiries: combinedInquiries.length,
-      pending: combinedInquiries.filter((i) => i.quotationStatus === null).length,
-      readyToQuote: combinedInquiries.filter(
-        (i) => i.quotationStatus === "DRAFT",
-      ).length,
-      sent: combinedInquiries.filter(
-        (i) => i.quotationStatus !== null && i.quotationStatus !== "DRAFT",
-      ).length,
-    };
-
-    return {
-      data: pageRows,
-      pagination: {
-        page: params.page,
-        limit: params.limit,
-        totalRecords,
-        totalPages,
-      },
-      summary,
-    };
-  },
-
-  async getInquiryById(id: string): Promise<ApiResponse<QuotationInquiry>> {
-    await wait(NETWORK_DELAY_MS / 2);
-    maybeThrowSimulatedError();
-    const found = mockInquiries.find((i) => i.inquiryId === id);
-    if (!found) {
-      const err: ApiErrorShape = {
-        response: { data: { message: `Inquiry ${id} was not found.` } },
-      };
-      throw err;
-    }
-    return { data: found };
-  },
-
-  async getDraftForInquiry(inquiry: QuotationInquiry): Promise<QuotationDraft> {
-    await wait(200);
-    return (
-      draftsByInquiryId.get(inquiry.inquiryId) ?? buildDefaultDraft(inquiry)
-    );
-  },
-
-  async saveQuotationDraft(
-    draft: QuotationDraft,
-  ): Promise<ApiResponse<QuotationInquiry>> {
-    await wait(NETWORK_DELAY_MS);
-    maybeThrowSimulatedError();
-    draftsByInquiryId.set(draft.inquiryId, draft);
-    const idx = mockInquiries.findIndex((i) => i.inquiryId === draft.inquiryId);
-    if (idx === -1) {
-      const err: ApiErrorShape = {
-        response: {
-          data: { message: `Inquiry ${draft.inquiryId} was not found.` },
-        },
-      };
-      throw err;
-    }
-    if (mockInquiries[idx].quotationStatus === null) {
-      mockInquiries[idx] = { ...mockInquiries[idx], quotationStatus: "DRAFT" };
-    }
-    return {
-      data: mockInquiries[idx],
-      message: `Quotation for ${draft.inquiryId} saved as draft.`,
-    };
-  },
-
-  async sendQuotation(
-    inquiry: QuotationInquiry,
-    draft: QuotationDraft,
-  ): Promise<ApiResponse<QuotationResponse>> {
-    await wait(NETWORK_DELAY_MS);
-    maybeThrowSimulatedError();
-    draftsByInquiryId.set(draft.inquiryId, draft);
-    const idx = mockInquiries.findIndex((i) => i.inquiryId === draft.inquiryId);
-    if (idx === -1) {
-      const err: ApiErrorShape = {
-        response: {
-          data: { message: `Inquiry ${draft.inquiryId} was not found.` },
-        },
-      };
-      throw err;
-    }
-    mockInquiries[idx] = { ...mockInquiries[idx], quotationStatus: "SENT" };
-    const totals = computeQuotationTotals(draft);
-    const response: QuotationResponse = {
-      quotationId: `QUO-${String(1000 + mockResponses.length)}`,
-      inquiryId: inquiry.inquiryId,
-      company: inquiry.company,
-      sentDate: new Date().toISOString(),
-      quotationAmount: totals.contractValue,
-      status: "SENT",
-      responseDate: null,
-      draft,
-      inquirySnapshot: mockInquiries[idx],
-    };
-    mockResponses.unshift(response);
-    return {
-      data: response,
-      message: `Quotation sent to ${inquiry.company.name}.`,
-    };
-  },
-
-  async getResponses(
-    params: ResponseListParams,
-  ): Promise<ApiResponse<QuotationResponse[]>> {
-    await wait(NETWORK_DELAY_MS);
-    maybeThrowSimulatedError();
-
-    let rows = [...mockResponses];
-    if (params.search) {
-      const q = params.search.toLowerCase();
-      rows = rows.filter(
-        (r) =>
-          r.quotationId.toLowerCase().includes(q) ||
-          r.inquiryId.toLowerCase().includes(q) ||
-          r.company.name.toLowerCase().includes(q),
-      );
-    }
-    if (params.status) {
-      rows = rows.filter((r) => r.status === params.status);
-    }
-    rows.sort((a, b) => (a.sentDate < b.sentDate ? 1 : -1));
-
-    const totalRecords = rows.length;
-    const totalPages = Math.max(1, Math.ceil(totalRecords / params.limit));
-    const start = (params.page - 1) * params.limit;
-    const pageRows = rows.slice(start, start + params.limit);
-
-    return {
-      data: pageRows,
-      pagination: {
-        page: params.page,
-        limit: params.limit,
-        totalRecords,
-        totalPages,
-      },
-    };
-  },
-};
-
-function getApiErrorMessage(error: unknown, fallback: string): string {
-  const shaped = error as ApiErrorShape | undefined;
-  const backendMessage = shaped?.response?.data?.message ?? shaped?.message;
-  return backendMessage && backendMessage.trim().length > 0
-    ? backendMessage
-    : fallback;
-}
-
 
 /* ============================================================================
  * 5. CALCULATION UTILITIES
@@ -913,94 +432,11 @@ function validateDraft(draft: QuotationDraft): DraftErrors {
   return errors;
 }
 
-/* ============================================================================
- * 7. TOAST SYSTEM
- * ==========================================================================*/
-
-interface ToastItem {
-  readonly id: number;
-  readonly kind: "success" | "error";
-  readonly message: string;
-}
-
-function useToastState() {
-  const [toasts, setToasts] = useState<readonly ToastItem[]>([]);
-  const idRef = useRef(0);
-
-  const push = useCallback((kind: ToastItem["kind"], message: string) => {
-    const id = ++idRef.current;
-    setToasts((prev) => [...prev, { id, kind, message }]);
-    window.setTimeout(
-      () => setToasts((prev) => prev.filter((t) => t.id !== id)),
-      5000,
-    );
-  }, []);
-
-  const dismiss = useCallback(
-    (id: number) => setToasts((prev) => prev.filter((t) => t.id !== id)),
-    [],
-  );
-  const success = useCallback(
-    (message: string) => push("success", message),
-    [push],
-  );
-  const error = useCallback(
-    (message: string) => push("error", message),
-    [push],
-  );
-
-  return useMemo(
-    () => ({ toasts, success, error, dismiss }),
-    [toasts, success, error, dismiss],
-  );
-}
-
 function Portal({ children }: { readonly children: ReactNode }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   if (!mounted) return null;
   return createPortal(children, document.body);
-}
-
-function ToastViewport({
-  toasts,
-  onDismiss,
-}: {
-  readonly toasts: readonly ToastItem[];
-  readonly onDismiss: (id: number) => void;
-}) {
-  if (toasts.length === 0) return null;
-  return (
-    <Portal>
-      <div
-        className="fixed bottom-4 right-4 z-[200] flex w-full max-w-sm flex-col gap-2"
-        role="region"
-        aria-label="Notifications"
-      >
-        {toasts.map((t) => (
-          <div
-            key={t.id}
-            role="status"
-            className={`flex items-start justify-between gap-3 rounded-lg border px-4 py-3 text-sm shadow-lg ${
-              t.kind === "success"
-                ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-200"
-                : "border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200"
-            }`}
-          >
-            <span>{t.message}</span>
-            <button
-              type="button"
-              onClick={() => onDismiss(t.id)}
-              aria-label="Dismiss notification"
-              className="shrink-0 rounded p-0.5 text-current/70 hover:text-current focus-visible:outline focus-visible:outline-2"
-            >
-              <IconX className="h-4 w-4" />
-            </button>
-          </div>
-        ))}
-      </div>
-    </Portal>
-  );
 }
 
 /* ============================================================================
@@ -1358,13 +794,6 @@ function QuotationTabs({
   );
 }
 
-/* ============================================================================
- * 11. SUMMARY CARDS — computed client-side from the fetched, filtered
- * result set, since the backend envelope does not currently include a
- * summary object. All four numbers come straight from real `status`
- * values — nothing here is a guess.
- * ==========================================================================*/
-
 function computeSummary(
   inquiries: readonly QuotationInquiry[],
 ): InquirySummary {
@@ -1597,15 +1026,14 @@ function ErrorState({
   );
 }
 
-/* ============================================================================
- * 14. INQUIRY TABLE
- * ==========================================================================*/
-
-function getPeriodDates(inquiryDateStr?: string | null, durationStr?: string | null) {
+function getPeriodDates(
+  inquiryDateStr?: string | null,
+  durationStr?: string | null,
+) {
   const start = inquiryDateStr ? new Date(inquiryDateStr) : new Date();
   const validStart = !isNaN(start.getTime()) ? start : new Date();
 
-  let days = 5;
+  let days: number | null = null;
   if (durationStr) {
     const matchDays = durationStr.match(/(\d+)\s*Day/i);
     const matchMonths = durationStr.match(/(\d+)\s*Month/i);
@@ -1621,24 +1049,33 @@ function getPeriodDates(inquiryDateStr?: string | null, durationStr?: string | n
     }
   }
 
-  const end = new Date(validStart.getTime() + days * 24 * 60 * 60 * 1000);
-
   const startFormatted = validStart.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
   });
+
+  if (days === null) {
+    return {
+      startFormatted,
+      endFormatted: "—",
+      days: null,
+      durationLabel: "—",
+    };
+  }
+
+  const end = new Date(validStart.getTime() + days * 24 * 60 * 60 * 1000);
   const endFormatted = end.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
   });
 
-  const durationLabel = durationStr
-    ? durationStr.toLowerCase().includes("day") || durationStr.toLowerCase().includes("month")
-      ? durationStr
-      : `${durationStr} Days`
-    : `${days} Days`;
+  const durationLabel =
+    durationStr!.toLowerCase().includes("day") ||
+    durationStr!.toLowerCase().includes("month")
+      ? durationStr!
+      : `${durationStr} Days`;
 
   return { startFormatted, endFormatted, days, durationLabel };
 }
@@ -1688,7 +1125,7 @@ function InquiryTable({
             const isOpen = OPEN_STATUSES.includes(inquiry.status);
             const period = getPeriodDates(
               inquiry.inquiryDate,
-              inquiry.requirement.contractDuration
+              inquiry.requirement.contractDuration,
             );
 
             return (
@@ -1735,9 +1172,11 @@ function InquiryTable({
                     <span className="font-semibold text-slate-800 dark:text-slate-200">
                       {period.startFormatted}
                     </span>
-                    <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
-                      to {period.endFormatted} ({period.durationLabel})
-                    </span>
+                    {period.days !== null && (
+                      <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
+                        to {period.endFormatted} ({period.durationLabel})
+                      </span>
+                    )}
                   </div>
                 </td>
                 <td className="whitespace-nowrap px-4 py-3">
@@ -2081,7 +1520,7 @@ function InquiryDetailsDrawer({
               {(() => {
                 const p = getPeriodDates(
                   inquiry.inquiryDate,
-                  inquiry.requirement.contractDuration
+                  inquiry.requirement.contractDuration,
                 );
                 return `${p.startFormatted} to ${p.endFormatted} (${p.durationLabel})`;
               })()}
@@ -2093,9 +1532,7 @@ function InquiryDetailsDrawer({
             </dt>
             <dd className="mt-1 flex flex-wrap gap-1.5">
               {requirement.equipmentTypes.length > 0 ? (
-                requirement.equipmentTypes.map((e) => (
-                  <Chip key={e}>{e}</Chip>
-                ))
+                requirement.equipmentTypes.map((e) => <Chip key={e}>{e}</Chip>)
               ) : (
                 <span className="text-sm text-slate-400">—</span>
               )}
@@ -2203,6 +1640,26 @@ function CommercialDetailsSection({
     <section aria-labelledby="commercial-details-heading">
       <SectionHeading>Commercial Details</SectionHeading>
       <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div>
+          <FieldLabel required>Tier</FieldLabel>
+          <AppSelect
+            value={draft.tier}
+            disabled={readOnly}
+            onChange={(value) => onChange({ tier: value })}
+            options={TIER_SELECT_OPTIONS}
+          />
+        </div>
+
+        <div>
+          <FieldLabel required>Billing Frequency</FieldLabel>
+          <AppSelect
+            value={draft.billingFrequency}
+            disabled={readOnly}
+            onChange={(value) => onChange({ billingFrequency: value })}
+            options={BILLING_FREQUENCY_SELECT_OPTIONS}
+          />
+        </div>
+
         <div>
           <FieldLabel required>Contract Duration</FieldLabel>
           <AppSelect
@@ -2401,51 +1858,59 @@ function TrialOptionSection({
 
 function AdditionalServicesSection({
   services,
+  catalog,
+  loading,
   readOnly,
   onToggle,
   onPriceChange,
   total,
 }: {
   readonly services: readonly SelectedService[];
+  readonly catalog: readonly AdditionalService[];
+  readonly loading: boolean;
   readonly readOnly: boolean;
   readonly onToggle: (serviceId: string) => void;
   readonly onPriceChange: (serviceId: string, price: number) => void;
   readonly total: number;
 }) {
+  if (loading) {
+    return (
+      <section aria-labelledby="additional-services-heading">
+        <SectionHeading>Additional Services</SectionHeading>
+        <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
+          <TableSkeleton rows={4} cols={4} />
+        </div>
+      </section>
+    );
+  }
   return (
     <section aria-labelledby="additional-services-heading">
       <SectionHeading>Additional Services</SectionHeading>
-      <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
-        <table className="w-full border-collapse text-left text-sm">
+      <div className="mt-3 overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+        <table className="w-full min-w-[500px] border-collapse text-left text-sm">
           <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
             <tr>
               <th scope="col" className="px-4 py-2.5">
                 Service
               </th>
-              <th scope="col" className="px-4 py-2.5">
-                Description
-              </th>
-              <th scope="col" className="px-4 py-2.5 text-center">
+              <th scope="col" className="px-4 py-2.5 text-center w-24">
                 Select
               </th>
-              <th scope="col" className="px-4 py-2.5 text-right">
+              <th scope="col" className="px-4 py-2.5 text-right w-40">
                 Price (R)
               </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 bg-white dark:divide-slate-800 dark:bg-slate-900">
             {services.map((selection) => {
-              const service = getServiceById(selection.serviceId);
+              const service = getServiceById(selection.serviceId, catalog);
               if (!service) return null;
               return (
                 <tr key={service.id}>
-                  <td className="whitespace-nowrap px-4 py-3 font-medium text-slate-800 dark:text-slate-100">
+                  <td className="px-4 py-3 font-medium text-slate-800 dark:text-slate-100">
                     {service.name}
                   </td>
-                  <td className="px-4 py-3 text-slate-500 dark:text-slate-400">
-                    {service.description}
-                  </td>
-                  <td className="px-4 py-3 text-center">
+                  <td className="px-4 py-3 text-center w-24">
                     <input
                       type="checkbox"
                       checked={selection.selected}
@@ -2455,7 +1920,7 @@ function AdditionalServicesSection({
                       className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                     />
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 w-40">
                     <input
                       type="number"
                       min={0}
@@ -2467,7 +1932,7 @@ function AdditionalServicesSection({
                           clampNonNegative(Number(e.target.value)),
                         )
                       }
-                      className={`${inputClasses} text-right`}
+                      className={`${inputClasses} w-full text-right`}
                     />
                   </td>
                 </tr>
@@ -2477,7 +1942,7 @@ function AdditionalServicesSection({
           <tfoot>
             <tr className="border-t border-slate-200 dark:border-slate-800">
               <td
-                colSpan={3}
+                colSpan={2}
                 className="px-4 py-3 text-right text-sm font-semibold text-slate-700 dark:text-slate-200"
               >
                 Total Additional Services
@@ -2562,6 +2027,8 @@ function SendQuotationDrawer({
   inquiry,
   open,
   mode,
+  serviceCatalog,
+  servicesLoading,
   onClose,
   onSaveDraft,
   onRequestSend,
@@ -2571,6 +2038,8 @@ function SendQuotationDrawer({
   readonly inquiry: QuotationInquiry | null;
   readonly open: boolean;
   readonly mode: "edit" | "view";
+  readonly serviceCatalog: readonly AdditionalService[];
+  readonly servicesLoading: boolean;
   readonly onClose: () => void;
   readonly onSaveDraft: (draft: QuotationDraft) => void;
   readonly onRequestSend: (draft: QuotationDraft) => void;
@@ -2581,17 +2050,13 @@ function SendQuotationDrawer({
   const [errors, setErrors] = useState<DraftErrors>({});
 
   useEffect(() => {
-    if (!inquiry || !open) {
+    if (!inquiry || !open || servicesLoading) {
       setDraft(null);
       return;
     }
-    // No dedicated pricing/draft-persistence endpoint exists in the current
-    // API contract, so the commercial draft is built locally from the
-    // inquiry every time the drawer opens. Swap this for a real fetch
-    // (e.g. getQuotationDraft(inquiry.id)) once the backend adds one.
-    setDraft(buildDefaultDraft(inquiry));
+    setDraft(buildDefaultDraft(inquiry, serviceCatalog));
     setErrors({});
-  }, [inquiry, open]);
+  }, [inquiry, open, serviceCatalog, servicesLoading]);
 
   const patchDraft = useCallback((patch: Partial<QuotationDraft>) => {
     setDraft((prev) => (prev ? { ...prev, ...patch } : prev));
@@ -2717,7 +2182,9 @@ function SendQuotationDrawer({
               Cancel
             </button>
             {!(
-              inquiry.requirement.quotationType?.toLowerCase().includes("trial") ||
+              inquiry.requirement.quotationType
+                ?.toLowerCase()
+                .includes("trial") ||
               inquiry.requirement.quotationType?.toLowerCase().includes("demo")
             ) && (
               <button
@@ -2730,8 +2197,12 @@ function SendQuotationDrawer({
                 Save as Draft
               </button>
             )}
-            {inquiry.requirement.quotationType?.toLowerCase().includes("trial") ||
-            inquiry.requirement.quotationType?.toLowerCase().includes("demo") ? (
+            {inquiry.requirement.quotationType
+              ?.toLowerCase()
+              .includes("trial") ||
+            inquiry.requirement.quotationType
+              ?.toLowerCase()
+              .includes("demo") ? (
               <button
                 type="button"
                 onClick={handleSendClick}
@@ -2788,7 +2259,7 @@ function SendQuotationDrawer({
             {(() => {
               const p = getPeriodDates(
                 inquiry.inquiryDate,
-                inquiry.requirement.contractDuration
+                inquiry.requirement.contractDuration,
               );
               return (
                 <>
@@ -2818,13 +2289,13 @@ function SendQuotationDrawer({
                 Free Trial Evaluation Package (R0 / No Contract Required)
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-emerald-100 dark:border-emerald-900">
                   <span className="text-[11px] font-semibold text-slate-400 block uppercase">
                     Duration
                   </span>
                   <span className="text-base font-black text-slate-900 dark:text-white">
-                    {inquiry.requirement.contractDuration || "5 Days"}
+                    {inquiry.requirement.contractDuration || "Not specified"}
                   </span>
                 </div>
                 <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-emerald-100 dark:border-emerald-900">
@@ -2833,14 +2304,6 @@ function SendQuotationDrawer({
                   </span>
                   <span className="text-base font-black text-slate-900 dark:text-white">
                     Max {inquiry.requirement.activeMachines} Machines
-                  </span>
-                </div>
-                <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-emerald-100 dark:border-emerald-900">
-                  <span className="text-[11px] font-semibold text-slate-400 block uppercase">
-                    Staff Limit
-                  </span>
-                  <span className="text-base font-black text-slate-900 dark:text-white">
-                    Max 3 Staff
                   </span>
                 </div>
               </div>
@@ -2873,7 +2336,11 @@ function SendQuotationDrawer({
                   Zero-Friction Free Trial Workflow:
                 </p>
                 <p className="mt-0.5 text-blue-800 dark:text-blue-300">
-                  Demo requests do not require commercial pricing proposals, legal contracts, or billing invoices. Clicking <strong>Approve & Activate Demo</strong> will instantly activate evaluation mode for <strong>{inquiry.company.name}</strong>.
+                  Demo requests do not require commercial pricing proposals,
+                  legal contracts, or billing invoices. Clicking{" "}
+                  <strong>Approve & Activate Demo</strong> will instantly
+                  activate evaluation mode for{" "}
+                  <strong>{inquiry.company.name}</strong>.
                 </p>
               </div>
             </div>
@@ -2902,6 +2369,8 @@ function SendQuotationDrawer({
 
             <AdditionalServicesSection
               services={draft.services}
+              catalog={serviceCatalog}
+              loading={servicesLoading}
               readOnly={readOnly}
               onToggle={toggleService}
               onPriceChange={changeServicePrice}
@@ -3025,16 +2494,6 @@ function ConfirmationDialog({
     </Portal>
   );
 }
-
-/* ============================================================================
- * 19. QUOTATION RESPONSES TAB
- *
- * The API contract only exposes a single `/quotations/requests` resource
- * (no dedicated "responses" endpoint), so this tab is derived from the
- * same resource: any request past the Pending/Draft stage is shown here.
- * `quotationAmount` isn't part of the contract, so it renders as "—"
- * rather than a fabricated number — documented, not invented.
- * ==========================================================================*/
 
 interface ResponseFilterState {
   readonly search: string;
@@ -3276,19 +2735,17 @@ function QuotationInquiryTabContent({
   }, [debouncedSearch, filters.status, filters.quotationType, refreshTick]);
 
   const allInquiries = listState.status === "success" ? listState.data : [];
-  const totalRecords = allInquiries.length;
+  const visibleInquiries = useMemo(
+    () => allInquiries.filter((i) => OPEN_STATUSES.includes(i.status)),
+    [allInquiries],
+  );
+  const totalRecords = visibleInquiries.length;
   const totalPages = Math.max(1, Math.ceil(totalRecords / PAGE_SIZE));
   const pageInquiries = useMemo(
-    () => allInquiries.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
-    [allInquiries, page],
+    () => visibleInquiries.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [visibleInquiries, page],
   );
   const summary = useMemo(() => computeSummary(allInquiries), [allInquiries]);
-
-  // Derived from the currently-loaded (filtered) page of real backend data.
-  // TODO(backend): once a dedicated `/quotations/quotation-types` (or
-  // similar) endpoint exists, replace this derivation with a real fetch so
-  // the dropdown always shows every type in the system, not just the ones
-  // present in the current result set.
   const quotationTypeOptions = useMemo(() => {
     const unique = Array.from(
       new Set(allInquiries.map((i) => i.requirement.quotationType)),
@@ -3346,10 +2803,19 @@ function QuotationInquiryTabContent({
         {body}
         {listState.status === "success" && pageInquiries.length > 0 && (
           <CommonPagination
-            page={page}
+            currentPage={page}
             totalPages={totalPages}
-            totalRecords={totalRecords}
+            startItem={(page - 1) * PAGE_SIZE + 1}
+            endItem={Math.min(page * PAGE_SIZE, totalRecords)}
+            totalItems={totalRecords}
+            itemsPerPage={PAGE_SIZE}
             onPageChange={setPage}
+            onPrev={() =>
+              setPage((currentPage) => Math.max(1, currentPage - 1))
+            }
+            onNext={() =>
+              setPage((currentPage) => Math.min(totalPages, currentPage + 1))
+            }
           />
         )}
       </div>
@@ -3510,7 +2976,29 @@ export default function QuotationManagementPage() {
   const [pendingDelete, setPendingDelete] = useState(false);
   const [refreshTick, setRefreshTick] = useState(0);
 
-  const toast = useToastState();
+  const [serviceCatalog, setServiceCatalog] = useState<AdditionalService[]>([]);
+  const [servicesLoading, setServicesLoading] = useState(true);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    (async () => {
+      try {
+        const res = await getPublicOptionalServices(controller.signal);
+        setServiceCatalog(
+          (res ?? []).map((s: any) => ({
+            id: s.id,
+            name: s.name,
+            description: s.description,
+            defaultPrice: 0,
+          })),
+        );
+      } catch {
+      } finally {
+        setServicesLoading(false);
+      }
+    })();
+    return () => controller.abort();
+  }, []);
 
   const handleView = useCallback((inquiry: QuotationInquiry) => {
     setDetailsInquiryId(inquiry.id);
@@ -3544,30 +3032,18 @@ export default function QuotationManagementPage() {
       if (!selectedInquiry) return;
       setSavingState("draft");
       try {
-        // The pricing fields on `draft` (fees, licence, services, notes)
-        // aren't part of the current request contract — only its
-        // lifecycle `status` is (see UpdateQuotationRequestPayload in
-        // quotationService.ts). Persisting the full commercial draft
-        // needs a dedicated backend field/endpoint; until then this call
-        // moves the request into the "Draft" state so it shows up as
-        // Ready to Quote. See CONTRACT_DURATION_OPTIONS etc. above for the
-        // same limitation on the commercial-config side.
-        const result = await updateQuotationRequest(selectedInquiry.id, {
+        await updateQuotationRequest(selectedInquiry.id, {
           status: "DRAFT",
         });
-        toast.success(result.message || MESSAGES.draftSaveSuccess);
         setIsSendQuotationOpen(false);
         setSelectedInquiry(null);
         setRefreshTick((t) => t + 1);
-      } catch (error) {
-       toast.error(
-  extractApiError(error) ?? MESSAGES.draftSaveError
-);
+      } catch {
       } finally {
         setSavingState("idle");
       }
     },
-    [selectedInquiry, toast],
+    [selectedInquiry],
   );
 
   const handleRequestSend = useCallback((draft: QuotationDraft) => {
@@ -3576,6 +3052,16 @@ export default function QuotationManagementPage() {
 
   const handleConfirmSend = useCallback(async () => {
     if (!selectedInquiry || !pendingSendDraft) return;
+
+    if (
+      selectedInquiry.company.contactPerson === "—" ||
+      selectedInquiry.company.email === "—" ||
+      selectedInquiry.company.phone === "—" ||
+      selectedInquiry.company.location === "—"
+    ) {
+      return;
+    }
+
     setSavingState("send");
     try {
       const isTrial =
@@ -3586,26 +3072,77 @@ export default function QuotationManagementPage() {
           ?.toLowerCase()
           .includes("demo");
 
-      const result = await updateQuotationRequest(selectedInquiry.id, {
-        status: isTrial ? "APPROVED" : "SENT",
-      });
-      toast.success(
-        isTrial
-          ? `Demo evaluation plan approved & activated for ${selectedInquiry.company.name}!`
-          : result.message || MESSAGES.sendSuccess
-      );
+      if (isTrial) {
+        await updateQuotationRequest(selectedInquiry.id, {
+          status: "APPROVED",
+        });
+      } else {
+        const totals = computeQuotationTotals(pendingSendDraft);
+        const baseAmount =
+          totals.contractValue - totals.additionalServicesTotal;
+        const optionalServicesAmount = totals.additionalServicesTotal;
+        // No discount input exists in the UI yet — defaults to 0.
+        const discountAmount = 0;
+        const totalAmount =
+          baseAmount + optionalServicesAmount - discountAmount;
+
+        const payload: SendQuotationPayload = {
+          companyId: selectedInquiry.company.companyId,
+          companyName: selectedInquiry.company.name,
+          contactPerson: selectedInquiry.company.contactPerson,
+          contactEmail: selectedInquiry.company.email,
+          contactPhone: selectedInquiry.company.phone,
+          tier: pendingSendDraft.tier,
+          machineCount: selectedInquiry.requirement.activeMachines,
+          licensedMachineAllowance: pendingSendDraft.licensedMachineAllowance,
+          contractDuration: pendingSendDraft.contractDuration,
+          billingFrequency: pendingSendDraft.billingFrequency,
+          implementationFee: pendingSendDraft.onceOffImplementationFee,
+          monthlySiteLicence: pendingSendDraft.monthlySiteLicence,
+          additionalMachineCharge: pendingSendDraft.additionalMachineCharge,
+          baseAmount,
+          optionalServicesAmount,
+          discountAmount,
+          totalAmount,
+          optionalServices: pendingSendDraft.services
+            .filter((s) => s.selected)
+            .map((s) => {
+              const catalogService = getServiceById(
+                s.serviceId,
+                serviceCatalog,
+              );
+              if (!catalogService) {
+                throw new Error(
+                  `Unknown service id "${s.serviceId}" — cannot build quotation payload.`,
+                );
+              }
+              return {
+                serviceId: s.serviceId,
+                name: catalogService.name,
+                price: s.price,
+              };
+            }),
+          paymentTerms: pendingSendDraft.paymentTerms,
+          notes: pendingSendDraft.notes,
+          validUntil: new Date(
+            Date.now() + QUOTATION_VALIDITY_DAYS * 24 * 60 * 60 * 1000,
+          ).toISOString(),
+        };
+
+        await sendQuotation(payload);
+        await updateQuotationRequest(selectedInquiry.id, { status: "SENT" });
+      }
       setPendingSendDraft(null);
       setIsSendQuotationOpen(false);
       setSelectedInquiry(null);
       setRefreshTick((t) => t + 1);
     } catch (error) {
-     toast.error(
-  extractApiError(error) ?? MESSAGES.sendError
-);
+      const message = extractApiError(error);
+      if (message) showErrorToast(message);
     } finally {
       setSavingState("idle");
     }
-  }, [selectedInquiry, pendingSendDraft, toast]);
+  }, [selectedInquiry, pendingSendDraft]);
 
   const handleRequestDelete = useCallback(() => {
     setPendingDelete(true);
@@ -3615,26 +3152,17 @@ export default function QuotationManagementPage() {
     if (!selectedInquiry || savingState === "delete") return;
     setSavingState("delete");
     try {
-      const result = await deleteQuotationRequest(selectedInquiry.id);
-      toast.success(result.message || MESSAGES.deleteSuccess);
+      await deleteQuotationRequest(selectedInquiry.id);
       setPendingDelete(false);
       closeAllDrawers();
       setRefreshTick((t) => t + 1);
-    } catch (error) {
-      toast.error(
-  extractApiError(error) ?? MESSAGES.deleteError
-);
+    } catch {
     } finally {
       setSavingState("idle");
     }
-  }, [selectedInquiry, savingState, toast, closeAllDrawers]);
+  }, [selectedInquiry, savingState, closeAllDrawers]);
 
-  const handleDetailsError = useCallback(
-    (message: string) => {
-      toast.error(message);
-    },
-    [toast],
-  );
+  const handleDetailsError = useCallback(() => {}, []);
 
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-6">
@@ -3665,6 +3193,8 @@ export default function QuotationManagementPage() {
         inquiry={selectedInquiry}
         open={isSendQuotationOpen}
         mode={sendDrawerMode}
+        serviceCatalog={serviceCatalog}
+        servicesLoading={servicesLoading}
         onClose={closeAllDrawers}
         onSaveDraft={handleSaveDraft}
         onRequestSend={handleRequestSend}
@@ -3700,8 +3230,6 @@ export default function QuotationManagementPage() {
           loading={savingState === "delete"}
         />
       )}
-
-      <ToastViewport toasts={toast.toasts} onDismiss={toast.dismiss} />
     </div>
   );
 }

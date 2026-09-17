@@ -1,930 +1,1054 @@
-import { useState, useMemo, type FC } from "react";
+import { useEffect, useMemo, useRef, useState, type FC } from "react";
+import { createPortal } from "react-dom";
+
 import {
-  Building2,
-  Calendar,
+  CalendarDays,
   Check,
   CheckCircle2,
+  ChevronLeft,
   ChevronRight,
+  Clock3,
+  Copy,
   CreditCard,
-  FileCheck2,
-  FileSpreadsheet,
+  Download,
+  ExternalLink,
   FileText,
-  Hash,
-  HelpCircle,
   Landmark,
-  Layers,
   Loader2,
-  Minus,
-  Percent,
-  Plus,
-  Receipt,
-  Send,
-  ShieldCheck,
-  Sparkles,
-  Truck,
-  UploadCloud,
-  Zap,
+  Mail,
+  MoreVertical,
+  RotateCcw,
+  Search,
+  Smartphone,
+  Wallet,
+  X,
 } from "lucide-react";
-import toast from "react-hot-toast";
-import { createAddonQuotation, type AddonQuotationPayload } from "../../../services/Quotation/quotationService";
+
+import AppSelect from "../../../components/ui/dropdown/AppSelect";
+
+import {
+  getPaymentProofs,
+  verifyPaymentProof,
+  extractInvoiceActionError,
+  type PaymentProof,
+} from "../../../services/Quotation/invoice.service";
 
 /* ============================================================
-   TYPES & CONSTANTS
+   CONSTANTS
 ============================================================ */
 
-interface EquipmentOption {
-  id: string;
-  name: string;
-  icon: string;
-  defaultRate: number;
+const MODAL_OVERLAY_Z_INDEX = 2147483000;
+const MODAL_CONTENT_Z_INDEX = 2147483001;
+
+const ROWS_PER_PAGE_OPTIONS = [10, 25, 50];
+
+const STATUS_FILTER_OPTIONS = [
+  { value: "ALL", label: "All Statuses" },
+  { value: "PENDING", label: "Pending" },
+  { value: "PAID", label: "Verified / Paid" },
+];
+
+const AVATAR_PALETTE = [
+  "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400",
+  "bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-400",
+  "bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-400",
+  "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400",
+  "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400",
+  "bg-cyan-100 text-cyan-700 dark:bg-cyan-500/15 dark:text-cyan-400",
+];
+
+/* ============================================================
+   HELPERS
+============================================================ */
+
+const formatCurrency = (amount: string | number): string => {
+  const value = typeof amount === "string" ? Number(amount) : amount;
+  if (!Number.isFinite(value)) {
+    return "—";
+  }
+  const formatted = new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(value);
+  return `R ${formatted}`;
+};
+
+const formatDateTime = (value: string | null): string => {
+  if (!value) {
+    return "—";
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return "—";
+  }
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(parsed);
+};
+
+const formatDateOnly = (value: string): string => {
+  if (!value) {
+    return "";
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return "";
+  }
+  return parsed.toISOString().split("T")[0];
+};
+
+const formatMethodLabel = (method: string): string =>
+  method
+    .toLowerCase()
+    .split(/[_\s]+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+
+const getMethodIcon = (method: string) => {
+  const normalized = method.toLowerCase();
+  if (normalized.includes("bank") || normalized.includes("transfer") || normalized.includes("eft")) {
+    return Landmark;
+  }
+  if (normalized.includes("upi")) {
+    return Smartphone;
+  }
+  if (normalized.includes("card")) {
+    return CreditCard;
+  }
+  return Wallet;
+};
+
+const getInitials = (name: string | null): string => {
+  if (!name || !name.trim()) {
+    return "?";
+  }
+  const parts = name.trim().split(/\s+/);
+  const first = parts[0]?.[0] ?? "";
+  const last = parts.length > 1 ? parts[parts.length - 1][0] : "";
+  return `${first}${last}`.toUpperCase();
+};
+
+const getAvatarColor = (seed: string): string => {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) {
+    hash = seed.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % AVATAR_PALETTE.length;
+  return AVATAR_PALETTE[index];
+};
+
+const getFileNameFromUrl = (url: string): string => {
+  const segments = url.split("/");
+  return segments[segments.length - 1] || "proof-file";
+};
+
+const getAbsoluteFileUrl = (proofFileUrl: string): string => {
+  const base = (import.meta.env.VITE_API_BASE_URL as string) || "";
+  const origin = base.replace(/\/api\/v1\/?$/, "");
+  if (proofFileUrl.startsWith("http")) {
+    return proofFileUrl;
+  }
+  return `${origin}${proofFileUrl}`;
+};
+
+/* ============================================================
+   SMALL UI COMPONENTS
+============================================================ */
+
+interface StatCardProps {
+  icon: React.ReactNode;
+  label: string;
+  value: number;
+  subtitle: string;
+  accent: string;
 }
 
-const EQUIPMENT_TYPES: EquipmentOption[] = [
-  { id: "excavator", name: "Hydraulic Excavators", icon: "🚜", defaultRate: 1800 },
-  { id: "haul_truck", name: "Heavy Haul Trucks", icon: "🚛", defaultRate: 2200 },
-  { id: "drill_rig", name: "Rotary Drill Rigs", icon: "🏗️", defaultRate: 2500 },
-  { id: "wheel_loader", name: "Wheel Loaders", icon: "🚜", defaultRate: 1500 },
-  { id: "bulldozer", name: "Track Bulldozers", icon: "🚜", defaultRate: 1700 },
-  { id: "grader", name: "Motor Graders", icon: "🛣️", defaultRate: 1400 },
-  { id: "underground", name: "Underground Loaders/LHD", icon: "⛏️", defaultRate: 2600 },
-];
+const StatCard: FC<StatCardProps> = ({ icon, label, value, subtitle, accent }) => (
+  <div className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-900">
+    <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${accent}`}>
+      {icon}
+    </div>
+    <div>
+      <p className="text-sm font-medium text-slate-500 dark:text-slate-400">{label}</p>
+      <p className="mt-1 text-2xl font-bold text-slate-900 dark:text-white">{value}</p>
+      <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">{subtitle}</p>
+    </div>
+  </div>
+);
 
-interface OptionalServiceItem {
-  id: string;
-  name: string;
-  description: string;
-  monthlyPrice: number;
-  badge?: string;
+interface StatusBadgeProps {
+  status: "PENDING" | "PAID";
 }
 
-const AVAILABLE_OPTIONAL_SERVICES: OptionalServiceItem[] = [
-  {
-    id: "telematics",
-    name: "Telematics & CAN-Bus Live Ingestion",
-    description: "Real-time engine, hydraulic & transmission telemetry ingestion pipeline.",
-    monthlyPrice: 3500,
-    badge: "Popular",
-  },
-  {
-    id: "erp_sync",
-    name: "SAP & Enterprise ERP Automated Sync",
-    description: "Direct bidirectional inventory and purchase order integration with SAP PM.",
-    monthlyPrice: 5000,
-  },
-  {
-    id: "ai_predictive",
-    name: "24/7 Deep Learning Component Health Prediction",
-    description: "Neural net RUL (Remaining Useful Life) estimates with 94.2% accuracy.",
-    monthlyPrice: 4200,
-    badge: "Recommended",
-  },
-  {
-    id: "dedicated_support",
-    name: "Dedicated Reliability Engineer (Remote SLA 1hr)",
-    description: "Priority triage and weekly component failure mitigation consultations.",
-    monthlyPrice: 8500,
-  },
-];
+const StatusBadge: FC<StatusBadgeProps> = ({ status }) => {
+  if (status === "PAID") {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-500/10 dark:text-emerald-400">
+        <CheckCircle2 size={13} />
+        Verified
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 dark:border-amber-900/40 dark:bg-amber-500/10 dark:text-amber-400">
+      <Clock3 size={13} />
+      Pending
+    </span>
+  );
+};
 
-const PRESET_CLIENTS = [
-  {
-    id: "COMP-001",
-    name: "Anglo American Platinum",
-    contactPerson: "David Ndlovu",
-    email: "d.ndlovu@angloamerican.co.za",
-    phone: "+27 11 373 6111",
-    activeMachines: 45,
-    contractDuration: "24",
-  },
-  {
-    id: "COMP-002",
-    name: "Glencore Coal Operations",
-    contactPerson: "Sarah Jenkins",
-    email: "s.jenkins@glencore.com",
-    phone: "+27 13 656 7000",
-    activeMachines: 80,
-    contractDuration: "12",
-  },
-  {
-    id: "COMP-003",
-    name: "Exxaro Resources Ltd",
-    contactPerson: "Kagiso Molefe",
-    email: "k.molefe@exxaro.com",
-    phone: "+27 12 307 5000",
-    activeMachines: 62,
-    contractDuration: "36",
-  },
-];
+interface DetailRowProps {
+  icon?: React.ReactNode;
+  label: string;
+  value: string;
+  copyable?: boolean;
+  onCopy?: (value: string) => void;
+  copied?: boolean;
+}
+
+const DetailRow: FC<DetailRowProps> = ({ icon, label, value, copyable, onCopy, copied }) => (
+  <div className="flex items-center justify-between gap-3 py-2.5">
+    <div className="flex min-w-0 items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+      {icon}
+      <span>{label}</span>
+    </div>
+    <div className="flex min-w-0 items-center gap-2">
+      <span className="truncate text-sm font-semibold text-slate-900 dark:text-white" title={value}>
+        {value}
+      </span>
+      {copyable && (
+        <button
+          type="button"
+          onClick={() => onCopy?.(value)}
+          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+          aria-label={`Copy ${label}`}
+        >
+          {copied ? <Check size={13} className="text-emerald-600 dark:text-emerald-400" /> : <Copy size={13} />}
+        </button>
+      )}
+    </div>
+  </div>
+);
+
+interface SectionCardProps {
+  icon: React.ReactNode;
+  title: string;
+  children: React.ReactNode;
+}
+
+const SectionCard: FC<SectionCardProps> = ({ icon, title, children }) => (
+  <div>
+    <div className="mb-2 flex items-center gap-2">
+      <span className="text-blue-600 dark:text-blue-400">{icon}</span>
+      <h4 className="text-sm font-semibold text-slate-900 dark:text-white">{title}</h4>
+    </div>
+    <div className="divide-y divide-slate-100 rounded-xl border border-slate-200 px-4 dark:divide-slate-800 dark:border-slate-700">
+      {children}
+    </div>
+  </div>
+);
+
+/* ============================================================
+   PAYMENT DETAILS SIDE PANEL
+============================================================ */
+
+interface PaymentDetailsPanelProps {
+  proof: PaymentProof;
+  onClose: () => void;
+  onVerify: (proof: PaymentProof) => void;
+  isVerifying: boolean;
+  verifyError: string;
+}
+
+const PaymentDetailsPanel: FC<PaymentDetailsPanelProps> = ({
+  proof,
+  onClose,
+  onVerify,
+  isVerifying,
+  verifyError,
+}) => {
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+
+  const handleCopy = (field: string, value: string): void => {
+    void navigator.clipboard.writeText(value);
+    setCopiedField(field);
+    window.setTimeout(() => setCopiedField((current) => (current === field ? null : current)), 1500);
+  };
+
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  const fileUrl = getAbsoluteFileUrl(proof.proofFileUrl);
+  const fileName = getFileNameFromUrl(proof.proofFileUrl);
+  const isPending = proof.status === "PENDING";
+
+  return createPortal(
+    <div
+      className="fixed inset-0 flex justify-end bg-slate-950/50 backdrop-blur-sm"
+      style={{ zIndex: MODAL_OVERLAY_Z_INDEX }}
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+    >
+      <div
+        className="flex h-full w-full max-w-md flex-col overflow-hidden border-l border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900"
+        style={{ zIndex: MODAL_CONTENT_Z_INDEX }}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-slate-700">
+          <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Payment Details</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close payment details"
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-slate-800 dark:hover:text-white"
+          >
+            <X size={19} />
+          </button>
+        </div>
+
+        <div className="flex-1 space-y-6 overflow-y-auto p-5">
+          <div
+            className={`flex items-start gap-3 rounded-xl border p-4 ${
+              isPending
+                ? "border-amber-200 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-500/10"
+                : "border-emerald-200 bg-emerald-50 dark:border-emerald-900/40 dark:bg-emerald-500/10"
+            }`}
+          >
+            {isPending ? (
+              <Clock3 size={20} className="mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" />
+            ) : (
+              <CheckCircle2 size={20} className="mt-0.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+            )}
+            <div>
+              <p
+                className={`text-sm font-semibold ${
+                  isPending ? "text-amber-800 dark:text-amber-300" : "text-emerald-800 dark:text-emerald-300"
+                }`}
+              >
+                {isPending ? "Pending Verification" : "Payment Verified"}
+              </p>
+              <p className={`mt-0.5 text-xs ${isPending ? "text-amber-700/80 dark:text-amber-400/80" : "text-emerald-700/80 dark:text-emerald-400/80"}`}>
+                {isPending
+                  ? "Review the payment details and verify."
+                  : "This payment has been confirmed and the invoice is marked as paid."}
+              </p>
+            </div>
+          </div>
+
+          <SectionCard icon={<FileText size={16} />} title="Invoice Information">
+            <DetailRow label="Invoice No." value={proof.invoiceNumber} />
+            <DetailRow
+              label="Invoice ID"
+              value={proof.invoiceId}
+              copyable
+              copied={copiedField === "invoiceId"}
+              onCopy={(value) => handleCopy("invoiceId", value)}
+            />
+            <DetailRow
+              label="Company ID"
+              value={proof.companyId}
+              copyable
+              copied={copiedField === "companyId"}
+              onCopy={(value) => handleCopy("companyId", value)}
+            />
+          </SectionCard>
+
+          <SectionCard icon={<Mail size={16} />} title="User Information">
+            <DetailRow label="Name" value={proof.submittedByName ?? "—"} />
+            <DetailRow label="Email" value={proof.submittedByEmail ?? "—"} />
+          </SectionCard>
+
+          <SectionCard icon={<CreditCard size={16} />} title="Payment Information">
+            <DetailRow label="Payment Method" value={formatMethodLabel(proof.paymentMethod)} />
+            <DetailRow label="Payment Date" value={formatDateTime(proof.paymentDate)} />
+            <DetailRow label="Amount Paid" value={formatCurrency(proof.amountPaid)} />
+            <DetailRow
+              label="Transaction Reference"
+              value={proof.transactionReference}
+              copyable
+              copied={copiedField === "txnRef"}
+              onCopy={(value) => handleCopy("txnRef", value)}
+            />
+            <DetailRow label="Submitted On" value={formatDateTime(proof.createdAt)} />
+          </SectionCard>
+
+          <div>
+            <div className="mb-2 flex items-center gap-2">
+              <span className="text-blue-600 dark:text-blue-400">
+                <FileText size={16} />
+              </span>
+              <h4 className="text-sm font-semibold text-slate-900 dark:text-white">Payment Proof</h4>
+            </div>
+
+            <div className="flex items-center gap-3 rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400">
+                <FileText size={18} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-slate-900 dark:text-white">{fileName}</p>
+                <p className="truncate text-xs text-slate-400 dark:text-slate-500">{proof.proofFileUrl}</p>
+            </div>
+              <a
+                href={fileUrl}
+                download={fileName}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                aria-label="Download payment proof"
+              >
+                <Download size={16} />
+              </a>
+                            </div>
+
+            <a
+              href={fileUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-blue-600 transition hover:bg-blue-50 dark:border-slate-600 dark:text-blue-400 dark:hover:bg-blue-500/10"
+            >
+              <ExternalLink size={16} />
+              Open Payment Proof
+            </a>
+          </div>
+
+          {!isPending && (
+            <SectionCard icon={<CheckCircle2 size={16} />} title="Verification Information">
+              <DetailRow label="Verified At" value={formatDateTime(proof.verifiedAt)} />
+              <DetailRow label="Verified By" value={proof.verifiedBy ?? "—"} />
+            </SectionCard>
+          )}
+        </div>
+
+        <div className="border-t border-slate-200 p-5 dark:border-slate-700">
+          {verifyError && (
+            <p className="mb-3 text-sm text-red-600 dark:text-red-400">{verifyError}</p>
+          )}
+
+          {isPending ? (
+            <button
+              type="button"
+              disabled={isVerifying}
+              onClick={() => onVerify(proof)}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isVerifying ? (
+                <>
+                  <Loader2 size={17} className="animate-spin" />
+                  Verifying...
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 size={17} />
+                  Mark as Verified
+                </>
+              )}
+            </button>
+          ) : (
+            <div className="flex items-center justify-center gap-2 rounded-xl bg-emerald-50 px-5 py-3 text-sm font-semibold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400">
+              <CheckCircle2 size={17} />
+              Already Verified
+            </div>
+          )}
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+};
 
 /* ============================================================
    MAIN COMPONENT
 ============================================================ */
 
-export const AddonQuotationBuilder: FC = () => {
-  // Form State
-  const [selectedClientPreset, setSelectedClientPreset] = useState<string>("");
-  const [companyName, setCompanyName] = useState("");
-  const [contactPerson, setContactPerson] = useState("");
-  const [contactEmail, setContactEmail] = useState("");
-  const [contactPhone, setContactPhone] = useState("");
-  
-  // Addon Configuration
-  const [extraMachines, setExtraMachines] = useState<number>(5);
-  const [selectedEquipment, setSelectedEquipment] = useState<string[]>(["excavator", "haul_truck"]);
-  const [ratePerMachine, setRatePerMachine] = useState<number>(1800);
-  const [extraSites, setExtraSites] = useState<number>(1);
-  const [siteNamesInput, setSiteNamesInput] = useState<string>("Rustenburg South Pit");
-  const [contractDuration, setContractDuration] = useState<string>("12");
-  const [selectedServices, setSelectedServices] = useState<string[]>(["telematics", "ai_predictive"]);
+const PaymentVerifications: FC = () => {
+  const [proofs, setProofs] = useState<readonly PaymentProof[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [errorMessage, setErrorMessage] = useState<string>("");
 
-  // Payment & EFT State
-  const [paymentMethod, setPaymentMethod] = useState<"EFT" | "PAYFAST" | "INVOICE">("EFT");
-  const [customDiscount, setCustomDiscount] = useState<number>(0);
-  const [popFileUrl, setPopFileUrl] = useState<string>("");
-  const [isPopUploading, setIsPopUploading] = useState<boolean>(false);
-  const [notes, setNotes] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [generatedSuccessQuote, setGeneratedSuccessQuote] = useState<any>(null);
+  const [searchTerm, setSearchTerm] = useState<string>("");
+  const [statusFilter, setStatusFilter] = useState<string>("ALL");
+  const [methodFilter, setMethodFilter] = useState<string>("ALL");
+  const [dateFrom, setDateFrom] = useState<string>("");
+  const [dateTo, setDateTo] = useState<string>("");
+  const [isDateRangeOpen, setIsDateRangeOpen] = useState<boolean>(false);
+  const dateRangeRef = useRef<HTMLDivElement | null>(null);
 
-  // Auto-fill client when selected from preset
-  const handleClientPresetChange = (clientId: string) => {
-    setSelectedClientPreset(clientId);
-    const client = PRESET_CLIENTS.find((c) => c.id === clientId);
-    if (client) {
-      setCompanyName(client.name);
-      setContactPerson(client.contactPerson);
-      setContactEmail(client.email);
-      setContactPhone(client.phone);
-      setContractDuration(client.contractDuration);
-    }
-  };
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [rowsPerPage, setRowsPerPage] = useState<number>(10);
 
-  // Toggle Equipment Type
-  const toggleEquipment = (id: string) => {
-    setSelectedEquipment((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
-    );
-  };
+  const [selectedProof, setSelectedProof] = useState<PaymentProof | null>(null);
+  const [isVerifying, setIsVerifying] = useState<boolean>(false);
+  const [verifyError, setVerifyError] = useState<string>("");
 
-  // Toggle Optional Service
-  const toggleService = (id: string) => {
-    setSelectedServices((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
-    );
-  };
+  const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
 
-  // Dynamic Calculation
-  const calculation = useMemo(() => {
-    const durationMonths = Number(contractDuration) || 12;
-    const machinesTotal = extraMachines * ratePerMachine * durationMonths;
+  /* ---------------- Fetch ---------------- */
 
-    const servicesMonthlySum = selectedServices.reduce((sum, serviceId) => {
-      const item = AVAILABLE_OPTIONAL_SERVICES.find((s) => s.id === serviceId);
-      return sum + (item ? item.monthlyPrice : 0);
-    }, 0);
-    const servicesTotal = servicesMonthlySum * durationMonths;
+  useEffect(() => {
+    const controller = new AbortController();
 
-    const rawSubtotal = machinesTotal + servicesTotal;
-    const discountAmount = Math.min(rawSubtotal, Number(customDiscount) || 0);
-    const taxableSubtotal = Math.max(0, rawSubtotal - discountAmount);
+    const loadProofs = async (): Promise<void> => {
+      setIsLoading(true);
+      setErrorMessage("");
 
-    const taxAmount = Math.round(taxableSubtotal * 0.15 * 100) / 100; // 15% VAT
-    const totalAmount = taxableSubtotal + taxAmount;
-
-    return {
-      durationMonths,
-      machinesTotal,
-      servicesMonthlySum,
-      servicesTotal,
-      rawSubtotal,
-      discountAmount,
-      taxableSubtotal,
-      taxAmount,
-      totalAmount,
+      try {
+        const result = await getPaymentProofs(undefined, controller.signal);
+        setProofs(result.data);
+      } catch (error: unknown) {
+        const message = extractInvoiceActionError(error);
+        if (message !== undefined) {
+          setErrorMessage(message);
+        }
+      } finally {
+        setIsLoading(false);
+      }
     };
-  }, [extraMachines, ratePerMachine, contractDuration, selectedServices, customDiscount]);
 
-  // Mock POP upload simulator
-  const handleSimulatePopUpload = () => {
-    setIsPopUploading(true);
-    setTimeout(() => {
-      setPopFileUrl("https://storage.googleapis.com/hme-invoices/pop_sample_eft.pdf");
-      setIsPopUploading(false);
-      toast.success("Proof of Payment (POP) receipt attached!");
-    }, 900);
+    void loadProofs();
+
+    return () => {
+      controller.abort();
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent): void => {
+      if (dateRangeRef.current && !dateRangeRef.current.contains(event.target as Node)) {
+        setIsDateRangeOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  /* ---------------- Derived data ---------------- */
+
+  const paymentMethodOptions = useMemo(() => {
+    const unique = Array.from(new Set(proofs.map((proof) => proof.paymentMethod)));
+    return [
+      { value: "ALL", label: "All Payment Methods" },
+      ...unique.map((method) => ({ value: method, label: formatMethodLabel(method) })),
+    ];
+  }, [proofs]);
+
+  const totalSubmissions = proofs.length;
+  const pendingCount = useMemo(
+    () => proofs.filter((proof) => proof.status === "PENDING").length,
+    [proofs],
+  );
+  const verifiedCount = useMemo(
+    () => proofs.filter((proof) => proof.status === "PAID").length,
+    [proofs],
+  );
+
+  const filteredProofs = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+
+    return proofs.filter((proof) => {
+      if (statusFilter !== "ALL" && proof.status !== statusFilter) {
+        return false;
+      }
+
+      if (methodFilter !== "ALL" && proof.paymentMethod !== methodFilter) {
+        return false;
+      }
+
+      if (dateFrom) {
+        const submitted = formatDateOnly(proof.createdAt);
+        if (submitted < dateFrom) {
+          return false;
+        }
+      }
+
+      if (dateTo) {
+        const submitted = formatDateOnly(proof.createdAt);
+        if (submitted > dateTo) {
+          return false;
+        }
+      }
+
+      if (query) {
+        const haystack = [
+          proof.invoiceNumber,
+          proof.submittedByName ?? "",
+          proof.submittedByEmail ?? "",
+          proof.transactionReference,
+        ]
+          .join(" ")
+          .toLowerCase();
+
+        if (!haystack.includes(query)) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [proofs, searchTerm, statusFilter, methodFilter, dateFrom, dateTo]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredProofs.length / rowsPerPage));
+
+  const paginatedProofs = useMemo(() => {
+    const start = (currentPage - 1) * rowsPerPage;
+    return filteredProofs.slice(start, start + rowsPerPage);
+  }, [filteredProofs, currentPage, rowsPerPage]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, statusFilter, methodFilter, dateFrom, dateTo, rowsPerPage]);
+
+  /* ---------------- Handlers ---------------- */
+
+  const handleReset = (): void => {
+    setSearchTerm("");
+    setStatusFilter("ALL");
+    setMethodFilter("ALL");
+    setDateFrom("");
+    setDateTo("");
+    setIsDateRangeOpen(false);
   };
 
-  // Submit Quotation
-  const handleSubmit = async (recordImmediateEft = false) => {
-    if (!companyName.trim()) {
-      toast.error("Please provide a Company Name");
-      return;
-    }
-    if (!contactEmail.trim()) {
-      toast.error("Please provide a Contact Email");
-      return;
-    }
+  const handleVerify = async (proof: PaymentProof): Promise<void> => {
+    setIsVerifying(true);
+    setVerifyError("");
 
-    setIsSubmitting(true);
     try {
-      const payload: AddonQuotationPayload = {
-        companyName,
-        contactPerson,
-        contactEmail,
-        contactPhone,
-        machineCount: extraMachines,
-        ratePerMachine,
-        contractDuration,
-        quotationType: "MACHINE_ADDON",
-        machineTypes: selectedEquipment,
-        extraSites,
-        siteNames: siteNamesInput ? siteNamesInput.split(",").map((s) => s.trim()) : [],
-        baseAmount: calculation.machinesTotal,
-        optionalServicesAmount: calculation.servicesTotal,
-        discountAmount: calculation.discountAmount,
-        taxAmount: calculation.taxAmount,
-        totalAmount: calculation.totalAmount,
-        optionalServices: selectedServices.map((id) => {
-          const s = AVAILABLE_OPTIONAL_SERVICES.find((srv) => srv.id === id);
-          return { id, name: s?.name, monthlyPrice: s?.monthlyPrice };
-        }),
-        paymentMethod,
-        proofOfPaymentUrl: popFileUrl || (recordImmediateEft ? "https://storage.googleapis.com/hme-invoices/manual_admin_eft.pdf" : undefined),
-        status: recordImmediateEft ? "EFT_SUBMITTED" : "ISSUED",
-        notes: notes || `Add-on quotation generated by Super Admin for ${extraMachines} machines.`,
-      };
+      const result = await verifyPaymentProof(proof.id, {});
+      const updated = result.data;
 
-      const result = await createAddonQuotation(payload);
-      setGeneratedSuccessQuote(result);
-      toast.success(
-        recordImmediateEft
-          ? `Quotation #${result.quotationNumber} created & marked for EFT Verification!`
-          : `Quotation #${result.quotationNumber} generated successfully!`
+      setProofs((current) =>
+        current.map((item) => (item.id === updated.id ? updated : item)),
       );
-    } catch (err: any) {
-      console.error(err);
-      toast.error(err?.message || "Failed to create add-on quotation");
+      setSelectedProof(updated);
+    } catch (error: unknown) {
+      setVerifyError(
+        extractInvoiceActionError(error) ?? "Unable to verify this payment. Please try again.",
+      );
     } finally {
-      setIsSubmitting(false);
+      setIsVerifying(false);
     }
   };
+
+  const dateRangeLabel =
+    dateFrom || dateTo
+      ? `${dateFrom || "…"} → ${dateTo || "…"}`
+      : "Select Date Range";
+
+  const hasActiveFilters =
+    searchTerm.trim().length > 0 ||
+    statusFilter !== "ALL" ||
+    methodFilter !== "ALL" ||
+    dateFrom.length > 0 ||
+    dateTo.length > 0;
+
+  const startIndex = filteredProofs.length === 0 ? 0 : (currentPage - 1) * rowsPerPage + 1;
+  const endIndex = Math.min(currentPage * rowsPerPage, filteredProofs.length);
+
+  /* ---------------- Render ---------------- */
 
   return (
-    <div className="space-y-6">
-      {/* Top Header Banner */}
-      <div className="relative overflow-hidden rounded-2xl border border-blue-100 bg-gradient-to-r from-blue-600 via-indigo-600 to-slate-900 p-6 text-white shadow-xl dark:border-slate-800">
-        <div className="relative z-10 flex flex-col justify-between gap-4 md:flex-row md:items-center">
-          <div>
-            <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold backdrop-blur-md">
-              <Sparkles size={14} className="text-yellow-300" />
-              Super Admin Fleet & Add-on Quotation Builder
-            </div>
-            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-              Create Quotation & Machine Add-on
-            </h1>
-            <p className="mt-1 max-w-2xl text-sm text-blue-100">
-              Provision additional machinery licenses, custom mining sites, optional AI diagnostics, and process immediate EFT or PayFast bank transfers.
-            </p>
-          </div>
-
-          <div className="flex shrink-0 items-center gap-3">
-            <button
-              type="button"
-              onClick={() => {
-                setCompanyName("");
-                setContactEmail("");
-                setContactPerson("");
-                setContactPhone("");
-                setSelectedClientPreset("");
-                setPopFileUrl("");
-                setGeneratedSuccessQuote(null);
-                toast.success("Form reset to default");
-              }}
-              className="rounded-xl border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold backdrop-blur-md hover:bg-white/20"
-            >
-              Reset Form
-            </button>
-          </div>
+    <section className="w-full">
+      {/* ============ HEADER ============ */}
+      <div className="mb-6 flex items-start gap-3">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
+          <FileText size={20} />
         </div>
-
-        {/* Ambient background decoration */}
-        <div className="pointer-events-none absolute -bottom-10 -right-10 h-64 w-64 rounded-full bg-blue-400/20 blur-3xl" />
+        <div>
+          <h2 className="text-xl font-semibold tracking-tight text-slate-900 dark:text-white">
+            Payment Verifications
+          </h2>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            Review and verify payment proofs submitted by users for generated invoices.
+          </p>
+        </div>
       </div>
 
-      {/* Success Banner if created */}
-      {generatedSuccessQuote && (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50/90 p-5 shadow-sm dark:border-emerald-800/40 dark:bg-emerald-950/30">
-          <div className="flex items-start justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500 text-white shadow-lg shadow-emerald-500/30">
-                <FileCheck2 size={24} />
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-emerald-900 dark:text-emerald-300">
-                  Quotation Created: {generatedSuccessQuote.quotationNumber}
-                </h3>
-                <p className="text-xs text-emerald-700 dark:text-emerald-400">
-                  Total Payable: <strong>R {Number(generatedSuccessQuote.totalAmount).toLocaleString()}</strong> | Client: <strong>{generatedSuccessQuote.companyName}</strong>
-                </p>
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <span className="rounded-md bg-emerald-200/60 px-2 py-0.5 text-xs font-semibold text-emerald-900 dark:bg-emerald-800/50 dark:text-emerald-200">
-                    Status: {generatedSuccessQuote.status}
-                  </span>
-                  <span className="rounded-md bg-emerald-200/60 px-2 py-0.5 text-xs font-semibold text-emerald-900 dark:bg-emerald-800/50 dark:text-emerald-200">
-                    Payment Ref: EFT-{generatedSuccessQuote.quotationNumber}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <button
-              onClick={() => setGeneratedSuccessQuote(null)}
-              className="text-xs text-emerald-700 underline hover:text-emerald-900 dark:text-emerald-400"
-            >
-              Create Another Quote
-            </button>
-          </div>
+      {errorMessage && (
+        <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-500/10 dark:text-red-400">
+          {errorMessage}
         </div>
       )}
 
-      {/* Main Grid: 2 Columns */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        {/* Left Column: Form & Configuration (8 cols) */}
-        <div className="space-y-6 lg:col-span-8">
-          
-          {/* Section 1: Client Selection */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
-                  <Building2 size={18} />
+      {/* ============ STATS ============ */}
+      <div className="mb-6 grid gap-4 sm:grid-cols-3">
+        <StatCard
+          icon={<FileText size={20} />}
+          label="Total Submissions"
+          value={totalSubmissions}
+          subtitle="All payment proofs"
+          accent="bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400"
+        />
+        <StatCard
+          icon={<Clock3 size={20} />}
+          label="Pending Verification"
+          value={pendingCount}
+          subtitle="Awaiting verification"
+          accent="bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400"
+        />
+        <StatCard
+          icon={<CheckCircle2 size={20} />}
+          label="Verified / Paid"
+          value={verifiedCount}
+          subtitle="Marked as paid"
+          accent="bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400"
+        />
+      </div>
+
+      {/* ============ FILTERS ============ */}
+      <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center">
+        <div className="relative flex-1">
+          <Search
+            size={16}
+            className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
+          />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            placeholder="Search by user name, email, invoice number..."
+            className="h-11 w-full rounded-xl border border-slate-300 bg-white pl-10 pr-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+          />
+        </div>
+
+        <div className="w-full lg:w-48">
+          <AppSelect
+            options={STATUS_FILTER_OPTIONS}
+            value={statusFilter}
+            onChange={setStatusFilter}
+            placeholder="All Statuses"
+          />
+        </div>
+
+        <div className="w-full lg:w-52">
+          <AppSelect
+            options={paymentMethodOptions}
+            value={methodFilter}
+            onChange={setMethodFilter}
+            placeholder="All Payment Methods"
+          />
+        </div>
+
+        <div className="relative w-full lg:w-56" ref={dateRangeRef}>
+          <button
+            type="button"
+            onClick={() => setIsDateRangeOpen((open) => !open)}
+            className="flex h-11 w-full items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-700 transition hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
+          >
+            <CalendarDays size={16} className="shrink-0 text-slate-400" />
+            <span className="truncate">{dateRangeLabel}</span>
+          </button>
+
+          {isDateRangeOpen && (
+            <div className="absolute right-0 top-full z-20 mt-2 w-72 rounded-xl border border-slate-200 bg-white p-4 shadow-xl dark:border-slate-700 dark:bg-slate-900">
+              <div className="space-y-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">
+                    From
+                  </label>
+                  <input
+                    type="date"
+                    value={dateFrom}
+                    onChange={(event) => setDateFrom(event.target.value)}
+                    className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none focus:border-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                  />
                 </div>
                 <div>
-                  <h2 className="text-sm font-bold text-slate-900 dark:text-white">
-                    Step 1: Client & Company Information
-                  </h2>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Select an existing enterprise account or enter new client details.
-                  </p>
+                  <label className="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">
+                    To
+                  </label>
+                  <input
+                    type="date"
+                    value={dateTo}
+                    onChange={(event) => setDateTo(event.target.value)}
+                    className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none focus:border-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                  />
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setIsDateRangeOpen(false)}
+                  className="w-full rounded-lg bg-blue-600 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
+                >
+                  Apply
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={handleReset}
+          disabled={!hasActiveFilters}
+          className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+        >
+          <RotateCcw size={15} />
+          Reset
+        </button>
+      </div>
+
+      {/* ============ TABLE ============ */}
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[900px] text-left">
+            <thead className="border-b border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60">
+              <tr>
+                <th className="w-10 px-4 py-3" />
+                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  #
+                </th>
+                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  Invoice No.
+                </th>
+                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  User
+                </th>
+                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  Amount Paid
+                </th>
+                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  Payment Method
+                </th>
+                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  Submitted On
+                </th>
+                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  Status
+                </th>
+                <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              {isLoading && (
+                <tr>
+                  <td colSpan={9} className="px-4 py-12 text-center text-sm text-slate-500 dark:text-slate-400">
+                    <Loader2 size={20} className="mx-auto mb-2 animate-spin" />
+                    Loading payment proofs...
+                  </td>
+                </tr>
+              )}
+
+              {!isLoading && paginatedProofs.length === 0 && (
+                <tr>
+                  <td colSpan={9} className="px-4 py-12 text-center text-sm text-slate-500 dark:text-slate-400">
+                    No payment proofs match your filters.
+                  </td>
+                </tr>
+              )}
+
+              {!isLoading &&
+                paginatedProofs.map((proof, index) => {
+                  const MethodIcon = getMethodIcon(proof.paymentMethod);
+                  const displayName = proof.submittedByName ?? "Unknown user";
+
+                  return (
+                    <tr key={proof.id} className="transition hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                      <td className="px-4 py-4">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 dark:border-slate-600"
+                        />
+                      </td>
+
+                      <td className="px-4 py-4 text-sm text-slate-500 dark:text-slate-400">
+                        {startIndex + index}
+                      </td>
+
+                      <td className="px-4 py-4">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedProof(proof)}
+                          className="text-sm font-semibold text-blue-600 hover:underline dark:text-blue-400"
+                        >
+                          {proof.invoiceNumber}
+                        </button>
+                      </td>
+
+                      <td className="px-4 py-4">
+                        <div className="flex items-center gap-3">
+                          <div
+                            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${getAvatarColor(
+                              displayName,
+                            )}`}
+                          >
+                            {getInitials(proof.submittedByName)}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium text-slate-900 dark:text-white">
+                              {displayName}
+                            </p>
+                            <p className="truncate text-xs text-slate-400 dark:text-slate-500">
+                              {proof.submittedByEmail ?? "—"}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="px-4 py-4 text-sm font-semibold text-slate-900 dark:text-white">
+                        {formatCurrency(proof.amountPaid)}
+                      </td>
+
+                      <td className="px-4 py-4">
+                        <span className="inline-flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-300">
+                          <MethodIcon size={15} className="text-slate-400" />
+                          {formatMethodLabel(proof.paymentMethod)}
+                        </span>
+                      </td>
+
+                      <td className="px-4 py-4 text-sm text-slate-500 dark:text-slate-400">
+                        {formatDateTime(proof.createdAt)}
+                      </td>
+
+                      <td className="px-4 py-4">
+                        <StatusBadge status={proof.status} />
+                      </td>
+
+                      <td className="px-4 py-4">
+                        <div className="relative flex items-center justify-end gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedProof(proof)}
+                            aria-label="View details"
+                            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                          >
+                            <FileText size={16} />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setOpenActionMenuId((current) =>
+                                current === proof.id ? null : proof.id,
+                              )
+                            }
+                            aria-label="More actions"
+                            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                          >
+                            <MoreVertical size={16} />
+                          </button>
+
+                          {openActionMenuId === proof.id && (
+                            <div className="absolute right-0 top-9 z-10 w-44 rounded-xl border border-slate-200 bg-white py-1 shadow-xl dark:border-slate-700 dark:bg-slate-900">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedProof(proof);
+                                  setOpenActionMenuId(null);
+                                }}
+                                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
+                              >
+                                <FileText size={14} />
+                                View Details
+                              </button>
+                              {proof.status === "PENDING" && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setOpenActionMenuId(null);
+                                    void handleVerify(proof);
+                                  }}
+                                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-500/10"
+                                >
+                                  <CheckCircle2 size={14} />
+                                  Mark as Verified
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* ============ PAGINATION ============ */}
+        {!isLoading && filteredProofs.length > 0 && (
+          <div className="flex flex-col gap-3 border-t border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-slate-700">
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              Showing {startIndex} - {endIndex} of {filteredProofs.length} results
+            </p>
+
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                  disabled={currentPage === 1}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-300 text-slate-500 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-600 dark:text-slate-400 dark:hover:bg-slate-800"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .slice(0, 5)
+                  .map((page) => (
+                    <button
+                      key={page}
+                      type="button"
+                      onClick={() => setCurrentPage(page)}
+                      className={`flex h-8 w-8 items-center justify-center rounded-lg text-sm font-medium transition ${
+                        currentPage === page
+                          ? "bg-blue-600 text-white"
+                          : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  ))}
+
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                  disabled={currentPage === totalPages}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-300 text-slate-500 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-600 dark:text-slate-400 dark:hover:bg-slate-800"
+                >
+                  <ChevronRight size={16} />
+                </button>
               </div>
 
-              {/* Quick Preset Selector */}
               <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-400">Quick Fill:</span>
+                <span className="text-sm text-slate-500 dark:text-slate-400">Rows per page</span>
                 <select
-                  value={selectedClientPreset}
-                  onChange={(e) => handleClientPresetChange(e.target.value)}
-                  className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-700 outline-none focus:border-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                  value={rowsPerPage}
+                  onChange={(event) => setRowsPerPage(Number(event.target.value))}
+                  className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-sm text-slate-700 outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
                 >
-                  <option value="">-- Choose Existing Client --</option>
-                  {PRESET_CLIENTS.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} ({c.activeMachines} Machines)
+                  {ROWS_PER_PAGE_OPTIONS.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
                     </option>
                   ))}
                 </select>
               </div>
             </div>
-
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  Company / Mine Name *
-                </label>
-                <input
-                  type="text"
-                  value={companyName}
-                  onChange={(e) => setCompanyName(e.target.value)}
-                  placeholder="e.g. Anglo American Platinum"
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-800 dark:bg-slate-800/60 dark:text-white"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  Contact Person *
-                </label>
-                <input
-                  type="text"
-                  value={contactPerson}
-                  onChange={(e) => setContactPerson(e.target.value)}
-                  placeholder="e.g. David Ndlovu (Plant Manager)"
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-800 dark:bg-slate-800/60 dark:text-white"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  Contact Email (for Quotation & Invoice) *
-                </label>
-                <input
-                  type="email"
-                  value={contactEmail}
-                  onChange={(e) => setContactEmail(e.target.value)}
-                  placeholder="e.g. d.ndlovu@angloamerican.co.za"
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-800 dark:bg-slate-800/60 dark:text-white"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  Phone Number
-                </label>
-                <input
-                  type="tel"
-                  value={contactPhone}
-                  onChange={(e) => setContactPhone(e.target.value)}
-                  placeholder="e.g. +27 11 373 6111"
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-800 dark:bg-slate-800/60 dark:text-white"
-                />
-              </div>
-            </div>
           </div>
-
-          {/* Section 2: Machine & Site Add-ons */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400">
-                  <Truck size={18} />
-                </div>
-                <div>
-                  <h2 className="text-sm font-bold text-slate-900 dark:text-white">
-                    Step 2: Machinery & Fleet Add-On Scope
-                  </h2>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Specify the number of additional mining assets and equipment types to be connected.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Counter & Rate Controls */}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              {/* Extra Machine Counter */}
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-800/40">
-                <span className="block text-xs font-semibold text-slate-500 dark:text-slate-400">
-                  Additional Machines Count
-                </span>
-                <div className="mt-2 flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setExtraMachines((m) => Math.max(1, m - 1))}
-                    className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-100 active:scale-95 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                  >
-                    <Minus size={15} />
-                  </button>
-                  <input
-                    type="number"
-                    min="1"
-                    value={extraMachines}
-                    onChange={(e) => setExtraMachines(Math.max(1, parseInt(e.target.value) || 1))}
-                    className="w-16 text-center font-mono text-xl font-extrabold text-slate-900 focus:outline-none dark:text-white"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setExtraMachines((m) => m + 1)}
-                    className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-100 active:scale-95 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                  >
-                    <Plus size={15} />
-                  </button>
-                </div>
-              </div>
-
-              {/* Rate Per Machine */}
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-800/40">
-                <span className="block text-xs font-semibold text-slate-500 dark:text-slate-400">
-                  Monthly Rate / Machine (ZAR)
-                </span>
-                <div className="mt-2 flex items-center">
-                  <span className="mr-2 text-sm font-bold text-slate-400">R</span>
-                  <input
-                    type="number"
-                    value={ratePerMachine}
-                    onChange={(e) => setRatePerMachine(Math.max(100, parseInt(e.target.value) || 0))}
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 font-bold text-slate-900 focus:border-blue-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                  />
-                </div>
-              </div>
-
-              {/* Contract Term Duration */}
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-800/40">
-                <span className="block text-xs font-semibold text-slate-500 dark:text-slate-400">
-                  Contract Duration
-                </span>
-                <select
-                  value={contractDuration}
-                  onChange={(e) => setContractDuration(e.target.value)}
-                  className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 font-semibold text-slate-900 focus:border-blue-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                >
-                  <option value="6">6 Months (Short Term)</option>
-                  <option value="12">12 Months (Standard)</option>
-                  <option value="24">24 Months (2-Year Enterprise)</option>
-                  <option value="36">36 Months (3-Year Master Service)</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Equipment Types Checklist */}
-            <div className="mt-4">
-              <label className="mb-2 block text-xs font-semibold text-slate-600 dark:text-slate-400">
-                Applicable Equipment Categories:
-              </label>
-              <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-4">
-                {EQUIPMENT_TYPES.map((eq) => {
-                  const isSelected = selectedEquipment.includes(eq.id);
-                  return (
-                    <button
-                      key={eq.id}
-                      type="button"
-                      onClick={() => toggleEquipment(eq.id)}
-                      className={`flex items-center gap-2 rounded-xl border p-2.5 text-left text-xs font-medium transition-all ${
-                        isSelected
-                          ? "border-indigo-500 bg-indigo-50/80 text-indigo-900 shadow-sm dark:border-indigo-500/50 dark:bg-indigo-950/30 dark:text-indigo-200"
-                          : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-400"
-                      }`}
-                    >
-                      <span className="text-base">{eq.icon}</span>
-                      <span className="truncate">{eq.name}</span>
-                      {isSelected && <Check size={14} className="ml-auto shrink-0 text-indigo-600 dark:text-indigo-400" />}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Sites Details */}
-            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  Additional Mine Sites Count
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  value={extraSites}
-                  onChange={(e) => setExtraSites(Math.max(0, parseInt(e.target.value) || 0))}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2 text-sm text-slate-900 focus:border-blue-500 focus:bg-white focus:outline-none dark:border-slate-800 dark:bg-slate-800/60 dark:text-white"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  Site Name(s) / Locations
-                </label>
-                <input
-                  type="text"
-                  value={siteNamesInput}
-                  onChange={(e) => setSiteNamesInput(e.target.value)}
-                  placeholder="e.g. Mogalakwena North Pit, Rustenburg Central"
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2 text-sm text-slate-900 focus:border-blue-500 focus:bg-white focus:outline-none dark:border-slate-800 dark:bg-slate-800/60 dark:text-white"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Section 3: Value-Added & Optional Services */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
-                  <Zap size={18} />
-                </div>
-                <div>
-                  <h2 className="text-sm font-bold text-slate-900 dark:text-white">
-                    Step 3: Optional Value-Added Diagnostics & AI Services
-                  </h2>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Include telemetry streams, ERP integrations, and machine health modules in this quotation.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              {AVAILABLE_OPTIONAL_SERVICES.map((srv) => {
-                const isSelected = selectedServices.includes(srv.id);
-                return (
-                  <div
-                    key={srv.id}
-                    onClick={() => toggleService(srv.id)}
-                    className={`flex cursor-pointer items-start justify-between rounded-xl border p-4 transition-all ${
-                      isSelected
-                        ? "border-emerald-500 bg-emerald-50/60 ring-1 ring-emerald-500/20 dark:border-emerald-500/50 dark:bg-emerald-950/20"
-                        : "border-slate-200 bg-white hover:border-slate-300 dark:border-slate-800 dark:bg-slate-800/50 dark:hover:border-slate-700"
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div
-                        className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${
-                          isSelected
-                            ? "border-emerald-600 bg-emerald-600 text-white"
-                            : "border-slate-300 bg-white dark:border-slate-600 dark:bg-slate-700"
-                        }`}
-                      >
-                        {isSelected && <Check size={13} strokeWidth={3} />}
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold text-slate-900 dark:text-white">{srv.name}</span>
-                          {srv.badge && (
-                            <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300">
-                              {srv.badge}
-                            </span>
-                          )}
-                        </div>
-                        <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{srv.description}</p>
-                      </div>
-                    </div>
-
-                    <div className="text-right">
-                      <span className="font-bold text-slate-900 dark:text-white">
-                        +R {srv.monthlyPrice.toLocaleString()}
-                      </span>
-                      <span className="block text-[11px] text-slate-400">/ month</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Section 4: Payment Terms & EFT Bank Details */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400">
-                  <Landmark size={18} />
-                </div>
-                <div>
-                  <h2 className="text-sm font-bold text-slate-900 dark:text-white">
-                    Step 4: Payment Mode & EFT Bank Reference
-                  </h2>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Configure payment terms, bank transfer details, and proof of payment upload.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Payment Method Selector */}
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <button
-                type="button"
-                onClick={() => setPaymentMethod("EFT")}
-                className={`flex flex-col items-center justify-center rounded-xl border p-4 text-center transition-all ${
-                  paymentMethod === "EFT"
-                    ? "border-blue-600 bg-blue-50 text-blue-900 ring-2 ring-blue-500/20 dark:border-blue-500 dark:bg-blue-950/40 dark:text-blue-200"
-                    : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-300"
-                }`}
-              >
-                <Landmark size={24} className="mb-2 text-blue-600 dark:text-blue-400" />
-                <span className="text-xs font-bold">EFT / Bank Transfer</span>
-                <span className="mt-1 text-[11px] text-slate-400">Direct Bank Deposit (POP)</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setPaymentMethod("PAYFAST")}
-                className={`flex flex-col items-center justify-center rounded-xl border p-4 text-center transition-all ${
-                  paymentMethod === "PAYFAST"
-                    ? "border-blue-600 bg-blue-50 text-blue-900 ring-2 ring-blue-500/20 dark:border-blue-500 dark:bg-blue-950/40 dark:text-blue-200"
-                    : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-300"
-                }`}
-              >
-                <CreditCard size={24} className="mb-2 text-purple-600 dark:text-purple-400" />
-                <span className="text-xs font-bold">Online Gateway (PayFast)</span>
-                <span className="mt-1 text-[11px] text-slate-400">Instant Card / Masterpass</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setPaymentMethod("INVOICE")}
-                className={`flex flex-col items-center justify-center rounded-xl border p-4 text-center transition-all ${
-                  paymentMethod === "INVOICE"
-                    ? "border-blue-600 bg-blue-50 text-blue-900 ring-2 ring-blue-500/20 dark:border-blue-500 dark:bg-blue-950/40 dark:text-blue-200"
-                    : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-300"
-                }`}
-              >
-                <FileSpreadsheet size={24} className="mb-2 text-emerald-600 dark:text-emerald-400" />
-                <span className="text-xs font-bold">Net 30 Corporate PO</span>
-                <span className="mt-1 text-[11px] text-slate-400">Enterprise Invoicing Terms</span>
-              </button>
-            </div>
-
-            {/* EFT Bank Details Card */}
-            {paymentMethod === "EFT" && (
-              <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50/40 p-4 dark:border-blue-900/30 dark:bg-blue-950/20">
-                <h3 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-blue-900 dark:text-blue-300">
-                  <ShieldCheck size={16} /> Official Company Banking Details
-                </h3>
-                <div className="grid grid-cols-2 gap-3 text-xs text-slate-700 sm:grid-cols-4 dark:text-slate-300">
-                  <div>
-                    <span className="block font-medium text-slate-400">Bank Name</span>
-                    <span className="font-semibold text-slate-900 dark:text-white">First National Bank (FNB)</span>
-                  </div>
-                  <div>
-                    <span className="block font-medium text-slate-400">Account Number</span>
-                    <span className="font-mono font-semibold text-slate-900 dark:text-white">62894109823</span>
-                  </div>
-                  <div>
-                    <span className="block font-medium text-slate-400">Branch Code</span>
-                    <span className="font-mono font-semibold text-slate-900 dark:text-white">250655</span>
-                  </div>
-                  <div>
-                    <span className="block font-medium text-slate-400">Account Type</span>
-                    <span className="font-semibold text-slate-900 dark:text-white">Current / Cheque</span>
-                  </div>
-                </div>
-
-                {/* Proof of Payment (POP) Attachment */}
-                <div className="mt-4 border-t border-blue-100 pt-3 dark:border-blue-900/30">
-                  <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
-                    <div>
-                      <span className="text-xs font-bold text-slate-900 dark:text-white">
-                        Attach Proof of Payment (POP) Receipt
-                      </span>
-                      <p className="text-[11px] text-slate-500">
-                        If the client has already transferred funds, attach the banking slip for immediate verification.
-                      </p>
-                    </div>
-
-                    {popFileUrl ? (
-                      <div className="flex items-center gap-2 rounded-lg bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
-                        <CheckCircle2 size={15} />
-                        Receipt Attached
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={handleSimulatePopUpload}
-                        disabled={isPopUploading}
-                        className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-xs font-semibold text-blue-600 shadow-sm hover:bg-blue-50 dark:border-blue-800 dark:bg-slate-800 dark:text-blue-400"
-                      >
-                        {isPopUploading ? (
-                          <Loader2 size={13} className="animate-spin" />
-                        ) : (
-                          <UploadCloud size={13} />
-                        )}
-                        Upload / Attach POP Receipt
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Custom Notes */}
-            <div className="mt-4">
-              <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
-                Quotation Notes / Terms Specifics
-              </label>
-              <textarea
-                rows={2}
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="e.g. Telematics devices to be dispatched to site within 5 working days upon EFT receipt."
-                className="w-full rounded-xl border border-slate-200 bg-slate-50/50 p-3 text-xs text-slate-900 focus:border-blue-500 focus:bg-white focus:outline-none dark:border-slate-800 dark:bg-slate-800/60 dark:text-white"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Right Column: Dynamic Price Summary & Action Deck (4 cols) */}
-        <div className="space-y-6 lg:col-span-4">
-          <div className="sticky top-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-xl dark:border-slate-800 dark:bg-slate-900">
-            <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
-              <div className="flex items-center gap-2">
-                <Receipt size={18} className="text-blue-600 dark:text-blue-400" />
-                <h3 className="font-bold text-slate-900 dark:text-white">Quotation Calculation</h3>
-              </div>
-              <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
-                {contractDuration} Months
-              </span>
-            </div>
-
-            {/* Line Items */}
-            <div className="space-y-3 text-xs">
-              <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                <span>
-                  Fleet Add-on ({extraMachines} Machines @ R{ratePerMachine.toLocaleString()}/mo × {calculation.durationMonths}m):
-                </span>
-                <span className="font-semibold text-slate-900 dark:text-white">
-                  R {calculation.machinesTotal.toLocaleString()}
-                </span>
-              </div>
-
-              {calculation.servicesTotal > 0 && (
-                <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                  <span>
-                    Selected Services ({selectedServices.length} items × {calculation.durationMonths}m):
-                  </span>
-                  <span className="font-semibold text-slate-900 dark:text-white">
-                    R {calculation.servicesTotal.toLocaleString()}
-                  </span>
-                </div>
-              )}
-
-              {/* Discount Input */}
-              <div className="flex items-center justify-between border-t border-dashed border-slate-200 pt-2 text-slate-600 dark:border-slate-800 dark:text-slate-400">
-                <span className="flex items-center gap-1">
-                  <Percent size={13} /> Custom Discount (ZAR):
-                </span>
-                <div className="flex w-24 items-center">
-                  <span className="mr-1 text-slate-400">R</span>
-                  <input
-                    type="number"
-                    min="0"
-                    value={customDiscount}
-                    onChange={(e) => setCustomDiscount(Math.max(0, parseInt(e.target.value) || 0))}
-                    className="w-full rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-right font-semibold text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-between border-t border-slate-100 pt-2 text-slate-600 dark:border-slate-800 dark:text-slate-400">
-                <span>Taxable Subtotal:</span>
-                <span className="font-semibold text-slate-900 dark:text-white">
-                  R {calculation.taxableSubtotal.toLocaleString()}
-                </span>
-              </div>
-
-              <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                <span>VAT (15% South African Standard):</span>
-                <span className="font-semibold text-slate-900 dark:text-white">
-                  R {calculation.taxAmount.toLocaleString()}
-                </span>
-              </div>
-
-              {/* Grand Total */}
-              <div className="rounded-xl border border-emerald-100 bg-emerald-50/70 p-4 dark:border-emerald-900/30 dark:bg-emerald-950/30">
-                <span className="block text-[11px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300">
-                  Total Contract Value (ZAR)
-                </span>
-                <span className="mt-1 text-2xl font-black text-emerald-700 dark:text-emerald-400 sm:text-3xl">
-                  R {calculation.totalAmount.toLocaleString()}
-                </span>
-                <span className="mt-1 block text-[10px] text-emerald-600 dark:text-emerald-400">
-                  Includes all add-on machines, sites & AI diagnostics for {calculation.durationMonths} months.
-                </span>
-              </div>
-            </div>
-
-            {/* Actions Deck */}
-            <div className="mt-6 space-y-3">
-              {/* Primary Action */}
-              <button
-                type="button"
-                disabled={isSubmitting}
-                onClick={() => handleSubmit(false)}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-3 text-xs font-bold text-white shadow-lg shadow-blue-600/20 hover:bg-blue-700 active:scale-[0.99] disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-600"
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 size={16} className="animate-spin" />
-                    Generating Quotation...
-                  </>
-                ) : (
-                  <>
-                    <Send size={16} />
-                    Generate & Send Quotation
-                  </>
-                )}
-              </button>
-
-              {/* Secondary Action: Instant Record EFT */}
-              {paymentMethod === "EFT" && (
-                <button
-                  type="button"
-                  disabled={isSubmitting}
-                  onClick={() => handleSubmit(true)}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-600/30 bg-emerald-50 py-2.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100 active:scale-[0.99] disabled:opacity-50 dark:bg-emerald-950/40 dark:text-emerald-300"
-                >
-                  <FileCheck2 size={16} />
-                  Record Immediate EFT & Activate
-                </button>
-              )}
-            </div>
-
-            {/* Quick Summary Badges */}
-            <div className="mt-4 border-t border-slate-100 pt-4 text-[11px] text-slate-500 dark:border-slate-800">
-              <div className="flex items-center gap-1.5 py-0.5">
-                <CheckCircle2 size={13} className="text-emerald-500" />
-                <span>Instant machine quota allocation</span>
-              </div>
-              <div className="flex items-center gap-1.5 py-0.5">
-                <CheckCircle2 size={13} className="text-emerald-500" />
-                <span>Unique reference tracking code embedded</span>
-              </div>
-              <div className="flex items-center gap-1.5 py-0.5">
-                <CheckCircle2 size={13} className="text-emerald-500" />
-                <span>EFT Verification workflow integrated</span>
-              </div>
-            </div>
-          </div>
-        </div>
+        )}
       </div>
-    </div>
+
+      {selectedProof && (
+        <PaymentDetailsPanel
+          proof={selectedProof}
+          onClose={() => {
+            setSelectedProof(null);
+            setVerifyError("");
+          }}
+          onVerify={(proof) => void handleVerify(proof)}
+          isVerifying={isVerifying}
+          verifyError={verifyError}
+        />
+      )}
+    </section>
   );
 };
+
+export default PaymentVerifications;

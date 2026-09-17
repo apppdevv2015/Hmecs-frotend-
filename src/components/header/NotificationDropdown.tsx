@@ -141,17 +141,28 @@ export default function NotificationDropdown() {
       .replace(/-/g, "_")
       .replace(/_+$/g, "");
 
-    const notificationRouteMap: Record<string, string> = {
+       const notificationRouteMap: Record<string, string> = {
       super_admin: "/super-admin/notifications",
       superadmin: "/super-admin/notifications",
       system_admin: "/super-admin/notifications",
+      sub_super_admin: "/sub-super-admin/notifications",
+      subsuperadmin: "/sub-super-admin/notifications",
       admin: "/company-admin/notifications",
       company_admin: "/company-admin/notifications",
       companyadmin: "/company-admin/notifications",
+      sub_admin: "/sub-admin/notifications",
+      subadmin: "/sub-admin/notifications",
       supervisor: "/supervisor/notifications",
       operator: "/operator/notifications",
       planner: "/operator/notifications",
       artisans: "/artisans/notifications",
+      artisan: "/artisans/notifications",
+      mechanic: "/artisans/notifications",
+      engineers: "/engineers/notifications",
+      engineer: "/engineers/notifications",
+      technical_support: "/support/notifications",
+      technicalsupport: "/support/notifications",
+      support: "/support/notifications",
     };
 
     const destination = notificationRouteMap[normalizedRole] || "/";

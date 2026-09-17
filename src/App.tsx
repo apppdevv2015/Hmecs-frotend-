@@ -173,6 +173,10 @@ const SuperAdminInvoiceManagement = lazy(
   () => import("./pages/SuperAdmin/Quotation/InvoiceManagement"),
 );
 
+const GenerateInvoicePage = lazy(
+  () => import("./pages/SuperAdmin/Quotation/GenerateInvoiceForm"),
+);
+
 const SuperAdminAccessManagement = lazy(
   () => import("./pages/SuperAdmin/Quotation/AccessManagement"),
 );
@@ -208,9 +212,7 @@ const StaffManagement = lazy(
 const MachineManagement = lazy(
   () => import("./pages/CompanyAdmin/MachineManagement"),
 );
-
-const AlertsPage = lazy(() => import("./pages/CompanyAdmin/AlertsPage"));
-
+const AlertsPage = lazy(() => import("./pages/Common/Alertspage"));
 const SubscriptionHistory = lazy(
   () => import("./pages/CompanyAdmin/SubscriptionHistory"),
 );
@@ -286,10 +288,6 @@ const ArtisanPreStartInspection = lazy(
 
 const ArtisanWorkOrderCapture = lazy(
   () => import("./pages/ArtisansDashboard/WorkOrderCapture"),
-);
-
-const ArtisansAlerts = lazy(
-  () => import("./pages/ArtisansDashboard/ArtisansAlerts"),
 );
 
 const ArtisansMaintenance = lazy(
@@ -388,10 +386,6 @@ const SupervisorReports = lazy(
   () => import("./pages/Supervisor/ReportingManagement"),
 );
 
-const SupervisorAlerts = lazy(
-  () => import("./pages/Supervisor/SupervisorAlerts"),
-);
-
 const SupervisorComponent = lazy(
   () => import("./pages/Supervisor/SupervisorComponent"),
 );
@@ -421,9 +415,6 @@ const SupervisorTaskReview = lazy(
 const EngineersDashboard = lazy(
   () => import("./pages/EngineersDashboard/EngineersDashboard"),
 );
-
-
-
 
 import AuthInitializer from "./routes/AuthInitializer";
 
@@ -464,6 +455,10 @@ export default function App() {
       }
     };
     refreshUser();
+
+    return () => {
+      socketService.disconnect();
+    };
   }, []);
 
   return (
@@ -652,6 +647,15 @@ export default function App() {
                   element={
                     <Suspense fallback={<PageSkeleton />}>
                       <SuperAdminInvoiceManagement />
+                    </Suspense>
+                  }
+                />
+
+                <Route
+                  path="/super-admin/invoices/generate"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <GenerateInvoicePage />
                     </Suspense>
                   }
                 />
@@ -892,6 +896,11 @@ export default function App() {
                       <NotificationsPage />
                     </Suspense>
                   }
+                />
+
+                <Route
+                  path="/sub-super-admin/alerts"
+                  element={<AlertsPage />}
                 />
 
                 <Route
@@ -1233,10 +1242,7 @@ export default function App() {
                   path="/sub-admin/categories"
                   element={<CategoryManagement />}
                 />
-                <Route
-                  path="/sub-admin/heatmap"
-                  element={<FleetHeatMap />}
-                />
+                <Route path="/sub-admin/heatmap" element={<FleetHeatMap />} />
                 <Route
                   path="/sub-admin/heat-map"
                   element={<Navigate to="/sub-admin/heatmap" replace />}
@@ -1257,10 +1263,7 @@ export default function App() {
                     </Suspense>
                   }
                 />
-                <Route
-                  path="/sub-admin/staff"
-                  element={<StaffManagement />}
-                />
+                <Route path="/sub-admin/staff" element={<StaffManagement />} />
                 <Route
                   path="/sub-admin/machines"
                   element={<MachineManagement />}
@@ -1277,14 +1280,8 @@ export default function App() {
                   path="/sub-admin/reporting"
                   element={<ReportingManagement />}
                 />
-                <Route
-                  path="/sub-admin/profile"
-                  element={<UserProfiles />}
-                />
-                <Route
-                  path="/sub-admin/alerts"
-                  element={<AlertsPage />}
-                />
+                <Route path="/sub-admin/profile" element={<UserProfiles />} />
+                <Route path="/sub-admin/alerts" element={<AlertsPage />} />
                 <Route
                   path="/sub-admin/notifications"
                   element={
@@ -1417,7 +1414,7 @@ export default function App() {
 
                 <Route path="/artisans/machines" element={<ArtisansReport />} />
 
-                <Route path="/artisans/alerts" element={<ArtisansAlerts />} />
+                <Route path="/artisans/alerts" element={<AlertsPage />} />
 
                 <Route
                   path="/artisans/maintenance"
@@ -1546,7 +1543,7 @@ export default function App() {
                   element={<OperatorRunningLogs />}
                 />
 
-                <Route path="/operator/alerts" element={<OperatorAlerts />} />
+                <Route path="/operator/alerts" element={<AlertsPage />} />
                 <Route
                   path="/operator/checklist"
                   element={<OperatorChecklist />}
@@ -1679,10 +1676,7 @@ export default function App() {
                     </Suspense>
                   }
                 />
-                <Route
-                  path="/supervisor/alerts"
-                  element={<SupervisorAlerts />}
-                />
+                <Route path="/supervisor/alerts" element={<AlertsPage />} />
                 <Route
                   path="/supervisor/artisan-history"
                   element={<ArtisanFixHistory />}
@@ -1715,7 +1709,6 @@ export default function App() {
               </Route>
             </Route>
 
-                       {/* Engineers Routes */}
             <Route
               element={
                 <RoleProtectedRoute allowedRoles={["engineers", "engineer"]} />
@@ -1734,12 +1727,18 @@ export default function App() {
                     </Suspense>
                   }
                 />
+                <Route
+                  path="/engineers/notifications"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <NotificationsPage />
+                    </Suspense>
+                  }
+                />
+
                 <Route path="/engineers/profile" element={<UserProfiles />} />
 
-                <Route
-                  path="/engineers/staff"
-                  element={<StaffManagement />}
-                />
+                <Route path="/engineers/staff" element={<StaffManagement />} />
                 <Route
                   path="/engineers/machines"
                   element={<MachineManagement />}
@@ -1835,15 +1834,6 @@ export default function App() {
                 />
               </Route>
             </Route>
-
-
-
-
-
-
-
-
-
 
             {/* Coming Soon Routes */}
             <Route

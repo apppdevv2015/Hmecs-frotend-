@@ -2,8 +2,13 @@ import offlineQueueService from "./offlineQueue.service";
 import StorageService, { STORAGE_KEYS } from "./storage.service";
 
 export const getApiBaseUrl = () => {
-  const envUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000/api/v1";
-  if (typeof window !== "undefined" && window.location && window.location.hostname) {
+  const envUrl =
+    import.meta.env.VITE_API_BASE_URL || "http://localhost:4000/api/v1";
+  if (
+    typeof window !== "undefined" &&
+    window.location &&
+    window.location.hostname
+  ) {
     const currentHost = window.location.hostname;
     if (currentHost !== "localhost" && currentHost !== "127.0.0.1") {
       return envUrl.replace(/localhost|127\.0\.0\.1/, currentHost);
@@ -16,7 +21,17 @@ export const getApiBaseUrl = () => {
 if (typeof window !== "undefined" && window.localStorage) {
   try {
     const keysToRemove: string[] = [];
-    const allowedKeys = new Set(["token", "accessToken", "refreshToken", "theme", "user", "role", "email", "companyId", "name"]);
+    const allowedKeys = new Set([
+      "token",
+      "accessToken",
+      "refreshToken",
+      "theme",
+      "user",
+      "role",
+      "email",
+      "companyId",
+      "name",
+    ]);
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
       if (k && !allowedKeys.has(k)) {
@@ -24,7 +39,7 @@ if (typeof window !== "undefined" && window.localStorage) {
       }
     }
     keysToRemove.forEach((k) => localStorage.removeItem(k));
-  } catch { }
+  } catch {}
 }
 
 const parseRequestBody = (body: any) => {
@@ -41,9 +56,13 @@ const parseRequestBody = (body: any) => {
   return body;
 };
 
+export interface ApiRequestOptions extends RequestInit {
+  responseType?: "json" | "blob";
+}
+
 export async function apiRequest<T>(
   endpoint: string,
-  options: RequestInit = {},
+  options: ApiRequestOptions = {},
 ): Promise<T> {
   const token = StorageService.get<string>(STORAGE_KEYS.TOKEN);
 
@@ -102,8 +121,15 @@ export async function apiRequest<T>(
    */
   const makeRequest = async (): Promise<T> => {
     try {
-      const rawBody = (options as any).data !== undefined ? (options as any).data : options.body;
-      const isBodyObject = rawBody && typeof rawBody === "object" && !(rawBody instanceof FormData) && !(rawBody instanceof Blob);
+      const rawBody =
+        (options as any).data !== undefined
+          ? (options as any).data
+          : options.body;
+      const isBodyObject =
+        rawBody &&
+        typeof rawBody === "object" &&
+        !(rawBody instanceof FormData) &&
+        !(rawBody instanceof Blob);
       const serializedBody = isBodyObject ? JSON.stringify(rawBody) : rawBody;
 
       const fetchHeaders: Record<string, string> = {
@@ -112,7 +138,11 @@ export async function apiRequest<T>(
         ...((options.headers as Record<string, string>) || {}),
       };
 
-      if (serializedBody !== undefined && serializedBody !== null && !(rawBody instanceof FormData)) {
+      if (
+        serializedBody !== undefined &&
+        serializedBody !== null &&
+        !(rawBody instanceof FormData)
+      ) {
         fetchHeaders["Content-Type"] = "application/json";
       }
 
@@ -122,6 +152,38 @@ export async function apiRequest<T>(
         cache: isMutationMethod ? "no-store" : "no-cache",
         headers: fetchHeaders,
       });
+
+      if (options.responseType === "blob") {
+        if (!response.ok) {
+          let errorData: any = null;
+          try {
+            const text = await response.text();
+            errorData = text ? JSON.parse(text) : null;
+          } catch {
+            errorData = null;
+          }
+
+          console.error("API Error:", {
+            status: response.status,
+            statusText: response.statusText,
+            url: finalUrl,
+            data: errorData,
+          });
+
+          const error: any = new Error(
+            errorData?.message || errorData?.error || "API Error",
+          );
+
+          error.errors = errorData?.errors || {};
+          error.status = response.status;
+          error.response = { data: errorData, status: response.status };
+
+          throw error;
+        }
+
+        const blob = await response.blob();
+        return blob as T;
+      }
 
       let data: any = null;
 
@@ -146,7 +208,7 @@ export async function apiRequest<T>(
 
         error.errors = data?.errors || {};
         error.status = response.status;
-        error.response = data;
+        error.response = { data: data, status: response.status };
 
         throw error;
       }
@@ -156,7 +218,9 @@ export async function apiRequest<T>(
       const isNetworkFailure = !navigator.onLine || !error?.status;
 
       if (isMutationMethod && !shouldSkipOfflineQueue && isNetworkFailure) {
-        console.warn(`[Offline Queue] Network offline. Queued for sync: ${endpoint}`);
+        console.warn(
+          `[Offline Queue] Network offline. Queued for sync: ${endpoint}`,
+        );
 
         await offlineQueueService.saveRequest({
           endpoint: finalUrl,
@@ -172,9 +236,5 @@ export async function apiRequest<T>(
       throw error;
     }
   };
-
-  /**
-   * Always execute direct API request without storing API responses in localStorage
-   */
   return makeRequest();
 }
