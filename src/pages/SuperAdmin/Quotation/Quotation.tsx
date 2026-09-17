@@ -3,7 +3,11 @@ import { useSearchParams } from "react-router-dom";
 import { ClipboardList, MessageSquareCheck, PlusCircle } from "lucide-react";
 
 import QuotationInquiry from "./QuotationInquiry";
+
+import QuotationResponses from "./QuotationResponses";<<<<<<< quotation-flow-complete-integration
+
 import QuotationResponses from "./QuotationResponses";
+
 
 import AddonQuotationBuilder from "./AddonQuotationBuilder";
 
@@ -68,6 +72,8 @@ const Quotation: FC = () => {
 
 
 
+  
+
   /*
    * URL is the single source of truth for the active tab.
    *
@@ -77,6 +83,7 @@ const Quotation: FC = () => {
    * /super-admin/quotation?tab=addon-builder
    * /super-admin/quotation?tab=responses
    */
+
 
 
   const tabParam = searchParams.get("tab");
