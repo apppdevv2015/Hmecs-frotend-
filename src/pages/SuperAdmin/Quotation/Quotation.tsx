@@ -3,7 +3,12 @@ import { useSearchParams } from "react-router-dom";
 import { ClipboardList, MessageSquareCheck, PlusCircle } from "lucide-react";
 
 import QuotationInquiry from "./QuotationInquiry";
+
 import QuotationResponses from "./QuotationResponses";<<<<<<< quotation-flow-complete-integration
+
+import QuotationResponses from "./QuotationResponses";
+
+
 import AddonQuotationBuilder from "./AddonQuotationBuilder";
 
 import { AddonQuotationBuilder } from "./AddonQuotationBuilder";
@@ -68,6 +73,18 @@ const Quotation: FC = () => {
 
 
   
+
+  /*
+   * URL is the single source of truth for the active tab.
+   *
+   * Examples:
+   *
+   * /super-admin/quotation?tab=inquiry
+   * /super-admin/quotation?tab=addon-builder
+   * /super-admin/quotation?tab=responses
+   */
+
+
 
   const tabParam = searchParams.get("tab");
 
@@ -176,6 +193,7 @@ const Quotation: FC = () => {
               Manage inquiries, add-ons and responses in one place
             </p>
           </div>
+
 
           <FormCard onInquirySubmitted={() => {}} />
 

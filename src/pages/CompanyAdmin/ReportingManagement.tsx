@@ -2052,7 +2052,3 @@ export default function ReportDashboard() {
   );
 }
 
-import ComingSoon from "../Common/ComingSoon";
-
-export default ComingSoon;
-

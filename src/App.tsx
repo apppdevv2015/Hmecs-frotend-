@@ -212,9 +212,7 @@ const StaffManagement = lazy(
 const MachineManagement = lazy(
   () => import("./pages/CompanyAdmin/MachineManagement"),
 );
-
-const AlertsPage = lazy(() => import("./pages/CompanyAdmin/AlertsPage"));
-
+const AlertsPage = lazy(() => import("./pages/Common/Alertspage"));
 const SubscriptionHistory = lazy(
   () => import("./pages/CompanyAdmin/SubscriptionHistory"),
 );
@@ -290,10 +288,6 @@ const ArtisanPreStartInspection = lazy(
 
 const ArtisanWorkOrderCapture = lazy(
   () => import("./pages/ArtisansDashboard/WorkOrderCapture"),
-);
-
-const ArtisansAlerts = lazy(
-  () => import("./pages/ArtisansDashboard/ArtisansAlerts"),
 );
 
 const ArtisansMaintenance = lazy(
@@ -392,10 +386,6 @@ const SupervisorReports = lazy(
   () => import("./pages/Supervisor/ReportingManagement"),
 );
 
-const SupervisorAlerts = lazy(
-  () => import("./pages/Supervisor/SupervisorAlerts"),
-);
-
 const SupervisorComponent = lazy(
   () => import("./pages/Supervisor/SupervisorComponent"),
 );
@@ -465,6 +455,10 @@ export default function App() {
       }
     };
     refreshUser();
+
+    return () => {
+      socketService.disconnect();
+    };
   }, []);
 
   return (
@@ -902,6 +896,11 @@ export default function App() {
                       <NotificationsPage />
                     </Suspense>
                   }
+                />
+
+                <Route
+                  path="/sub-super-admin/alerts"
+                  element={<AlertsPage />}
                 />
 
                 <Route
@@ -1415,7 +1414,7 @@ export default function App() {
 
                 <Route path="/artisans/machines" element={<ArtisansReport />} />
 
-                <Route path="/artisans/alerts" element={<ArtisansAlerts />} />
+                <Route path="/artisans/alerts" element={<AlertsPage />} />
 
                 <Route
                   path="/artisans/maintenance"
@@ -1544,7 +1543,7 @@ export default function App() {
                   element={<OperatorRunningLogs />}
                 />
 
-                <Route path="/operator/alerts" element={<OperatorAlerts />} />
+                <Route path="/operator/alerts" element={<AlertsPage />} />
                 <Route
                   path="/operator/checklist"
                   element={<OperatorChecklist />}
@@ -1677,10 +1676,7 @@ export default function App() {
                     </Suspense>
                   }
                 />
-                <Route
-                  path="/supervisor/alerts"
-                  element={<SupervisorAlerts />}
-                />
+                <Route path="/supervisor/alerts" element={<AlertsPage />} />
                 <Route
                   path="/supervisor/artisan-history"
                   element={<ArtisanFixHistory />}
@@ -1713,7 +1709,6 @@ export default function App() {
               </Route>
             </Route>
 
-            {/* Engineers Routes */}
             <Route
               element={
                 <RoleProtectedRoute allowedRoles={["engineers", "engineer"]} />
@@ -1732,6 +1727,15 @@ export default function App() {
                     </Suspense>
                   }
                 />
+                <Route
+                  path="/engineers/notifications"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <NotificationsPage />
+                    </Suspense>
+                  }
+                />
+
                 <Route path="/engineers/profile" element={<UserProfiles />} />
 
                 <Route path="/engineers/staff" element={<StaffManagement />} />

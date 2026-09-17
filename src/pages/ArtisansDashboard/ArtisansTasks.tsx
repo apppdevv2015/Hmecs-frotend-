@@ -4,7 +4,6 @@ import {
   CheckCircle2,
   Clock,
   Eye,
-  Filter,
   Search,
   Wrench,
   X,
@@ -18,13 +17,13 @@ import {
   FileText,
   ChevronRight,
   Cpu,
-  Gauge,
-  Settings,
   AlertCircle,
-  TrendingDown,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import { maintenanceService } from "../../services/companyadmin/maintenanceService";
+import {
+  maintenanceService,
+  type MaintenanceStatus,
+} from "../../services/companyadmin/maintenanceService";
 import { machineService } from "../../services/Operator/machineService";
 import { userService } from "../../services/Auth/userService";
 import StorageService, { STORAGE_KEYS } from "../../services/storage.service";
@@ -36,6 +35,10 @@ type ConfirmAction = "start" | "complete";
 type TaskItem = {
   id: string;
   realId?: string;
+  // BACKEND TODO: machine-assignment records (from /machines/assignments) don't
+  // have a maintenance-log id yet. When true, saving a status update must first
+  // CREATE a log (maintenanceService.createLog) instead of updating one.
+  isAssignmentOnly?: boolean;
   machine: string;
   issue: string;
   priority: TaskPriority;
@@ -46,8 +49,13 @@ type TaskItem = {
   assignedBy: string;
   location: string;
   remarks: string;
-  healthScore?: number;
+  healthScore?: number; // undefined = backend didn't send a real value, never fake this
   affectedComponents?: string[];
+  // Real values only — populated from an existing log's cost/downtime when
+  // one exists. Left undefined when there's nothing real to show yet; the
+  // technician must type these in, they are never guessed by the frontend.
+  cost?: number | string;
+  downtime?: string;
 };
 
 type ConfirmState = {
@@ -65,16 +73,20 @@ type FilterType =
 
 const ITEMS_PER_PAGE = 6;
 
-const getHealthScore = (task: TaskItem): number => {
-  if (task.healthScore !== undefined) return task.healthScore;
-  if (task.priority === "High") return Math.floor(Math.random() * 30) + 10;
-  if (task.priority === "Medium") return Math.floor(Math.random() * 30) + 40;
-  return Math.floor(Math.random() * 25) + 70;
-};
-
+/**
+ * Health score must always come from the backend. If it's missing we show
+ * "Unknown" in the UI instead of inventing a number with Math.random().
+ */
 const getMachineStatus = (
-  health: number,
-): { label: string; color: string; dot: string } => {
+  health: number | undefined,
+): { label: string; color: string; dot: string; unknown?: boolean } => {
+  if (health === undefined)
+    return {
+      label: "Unknown",
+      color: "text-slate-500 dark:text-slate-400",
+      dot: "bg-slate-400",
+      unknown: true,
+    };
   if (health < 40)
     return {
       label: "Critical",
@@ -94,27 +106,20 @@ const getMachineStatus = (
   };
 };
 
-const getHealthBarColor = (health: number): string => {
+const getHealthBarColor = (health: number | undefined): string => {
+  if (health === undefined) return "bg-slate-300 dark:bg-slate-600";
   if (health < 40) return "bg-red-500";
   if (health < 70) return "bg-amber-500";
   return "bg-emerald-500";
 };
 
-const getAffectedComponents = (task: TaskItem): string[] => {
-  if (task.affectedComponents?.length) return task.affectedComponents;
-  const all = [
-    "Engine",
-    "Hydraulic",
-    "Brake",
-    "Coolant",
-    "Gearbox",
-    "Electrical",
-    "Sensor",
-  ];
-  const count =
-    task.priority === "High" ? 3 : task.priority === "Medium" ? 2 : 1;
-  return all.slice(0, count);
-};
+/**
+ * Only ever returns components the backend actually flagged as affected
+ * (low condition / low health score). No hardcoded component-name list,
+ * no random slicing.
+ */
+const getAffectedComponents = (task: TaskItem): string[] =>
+  task.affectedComponents ?? [];
 
 const priorityClass = (priority: TaskPriority) => {
   if (priority === "High")
@@ -138,19 +143,27 @@ const statusIcon = (status: TaskStatus) => {
   return <CheckCircle2 size={13} strokeWidth={2.4} />;
 };
 
-const safeParseJson = <T = any,>(value: string | null, fallback: T): T => {
-  try {
-    if (!value) return fallback;
-    return JSON.parse(value) as T;
-  } catch {
-    return fallback;
-  }
+const formatDate = (value: any): string => {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 };
 
+/**
+ * JWTs are base64url encoded (use "-" and "_" instead of "+" and "/").
+ * Plain atob() breaks on those characters, so we normalize first.
+ */
 const getTokenPayload = (token: string) => {
   try {
     const payloadPart = token.split(".")[1] || "";
-    return JSON.parse(atob(payloadPart));
+    const base64 = payloadPart.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
+    return JSON.parse(atob(padded));
   } catch {
     return {} as any;
   }
@@ -185,6 +198,10 @@ const getLocalStorageUser = () =>
 export default function ArtisansTasks() {
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  // Real logged-in artisan's name — used as the "technician" field when
+  // saving a maintenance log. Never a placeholder; if this is empty the
+  // save is blocked instead of sending a fake technician name.
+  const [currentUserName, setCurrentUserName] = useState("");
 
   const loadTasks = async () => {
     try {
@@ -202,71 +219,55 @@ export default function ArtisansTasks() {
         String(
           localUser.id || localUser.userId || localUser.user_id || "",
         ).trim();
-      const userEmail = (
-        payload.email ||
-        localUser.email ||
-        StorageService.get<string>(STORAGE_KEYS.EMAIL) ||
-        ""
-      )
-        .toLowerCase()
-        .trim();
 
-      const res = await maintenanceService.getLogs();
-      const dbLogs = Array.isArray(res) ? res : res.data || res.logs || [];
-
-      let fullName = "",
-        firstName = "",
-        lastName = "";
+      let fullName = "";
+      let displayName = "";
       try {
-        const currentProfileId =
-          getCurrentUserIdFromPayload(payload) ||
-          String(
-            localUser.id || localUser.userId || localUser.user_id || "",
-          ).trim();
+        const currentProfileId = currentUserId;
         if (currentProfileId) {
           const userProfile = await userService.getUserById(currentProfileId);
-          firstName = userProfile.firstName || userProfile.first_name || "";
-          lastName = userProfile.lastName || userProfile.last_name || "";
-          fullName = `${firstName} ${lastName}`.trim().toLowerCase();
+          const firstName = userProfile.firstName || userProfile.first_name || "";
+          const lastName = userProfile.lastName || userProfile.last_name || "";
+          displayName = `${firstName} ${lastName}`.trim();
+          fullName = displayName.toLowerCase();
         }
       } catch (profileErr) {
         console.error(
-          "Failed to load user profile, falling back to name checks",
+          "Failed to load user profile, falling back to local storage name",
           profileErr,
         );
       }
-
       if (!fullName && localUser.firstName) {
-        firstName = String(
+        const firstName = String(
           localUser.firstName || localUser.first_name || "",
         ).trim();
-        lastName = String(
+        const lastName = String(
           localUser.lastName || localUser.last_name || "",
         ).trim();
-        fullName = `${firstName} ${lastName}`.trim().toLowerCase();
+        displayName = `${firstName} ${lastName}`.trim();
+        fullName = displayName.toLowerCase();
       }
 
-      const assignedLogs = dbLogs.filter((log: any) => {
-        const technicianValue = getLogTechnicianValue(log);
-        if (!technicianValue) {
-          return (
-            String(log.assigned_to || log.assignedTo || "").trim() ===
-              currentUserId ||
-            String(log.technicianId || log.technician_id || "").trim() ===
-              currentUserId
-          );
-        }
-        const techName = technicianValue.toLowerCase().trim();
-        if (fullName && techName === fullName) return true;
-        if (
-          fullName &&
-          firstName &&
-          lastName &&
-          techName.includes(firstName.toLowerCase()) &&
-          techName.includes(lastName.toLowerCase())
-        )
-          return true;
-        if (currentUserId) {
+      setCurrentUserName(displayName);
+
+      // ── 1. Maintenance logs already created for this artisan ──
+      let mappedTasks: TaskItem[] = [];
+      try {
+        const res: any = await maintenanceService.getLogs();
+        const dbLogs = Array.isArray(res) ? res : res.data || res.logs || [];
+
+        const assignedLogs = dbLogs.filter((log: any) => {
+          const technicianValue = getLogTechnicianValue(log);
+          if (!technicianValue) {
+            return (
+              String(log.assigned_to || log.assignedTo || "").trim() ===
+                currentUserId ||
+              String(log.technicianId || log.technician_id || "").trim() ===
+                currentUserId
+            );
+          }
+          const techName = technicianValue.toLowerCase().trim();
+          if (fullName && techName === fullName) return true;
           const assignedId = String(
             log.assigned_to ||
               log.assignedTo ||
@@ -274,160 +275,143 @@ export default function ArtisansTasks() {
               log.technician_id ||
               "",
           ).trim();
-          if (assignedId && assignedId === currentUserId) return true;
-        }
-        if (
-          userEmail === "sefserferg@gmail.com" &&
-          (techName.includes("priya") || techName.includes("kumari"))
-        )
-          return true;
-        if (
-          userEmail === "shdbha@gmail.com" &&
-          (techName.includes("rt45t45") || techName.includes("54t45t45"))
-        )
-          return true;
-        return false;
-      });
-
-      const mappedTasks: TaskItem[] = assignedLogs.map((log: any) => {
-        let priority: TaskPriority = "Medium";
-        if (log.component) {
-          if (log.component.condition >= 4) priority = "High";
-          else if (log.component.condition <= 2) priority = "Low";
-        }
-
-        let status: TaskStatus = "Pending";
-        if (log.status === "Closed" || log.status === "Completed")
-          status = "Completed";
-        else if (log.status === "In Progress") status = "In Progress";
-
-        const isDowntimeDate =
-          log.downtime &&
-          log.downtime.includes("-") &&
-          !isNaN(Date.parse(log.downtime));
-        const rawDueDate = isDowntimeDate
-          ? log.downtime
-          : log.date || log.createdAt;
-
-        const formattedDueDate = new Date(rawDueDate).toLocaleDateString(
-          "en-US",
-          { month: "short", day: "numeric", year: "numeric" },
-        );
-        const formattedAssignedDate = new Date(
-          log.date || log.createdAt,
-        ).toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
-          year: "numeric",
+          return !!currentUserId && assignedId === currentUserId;
         });
 
-        const health = log.component?.condition
-          ? Math.max(
-              5,
-              Math.min(100, Math.round((log.component.condition / 5) * 100)),
-            )
-          : priority === "High"
-            ? Math.floor(Math.random() * 30) + 10
-            : priority === "Medium"
-              ? Math.floor(Math.random() * 30) + 40
-              : Math.floor(Math.random() * 25) + 70;
+        mappedTasks = assignedLogs.map((log: any) => {
+          const condition = log.component?.condition; // 1-5 scale from backend
+          let priority: TaskPriority = "Medium";
+          if (typeof condition === "number") {
+            if (condition >= 4) priority = "High";
+            else if (condition <= 2) priority = "Low";
+          }
 
-        return {
-          id: `TSK-${log.id.slice(0, 4).toUpperCase()}`,
-          realId: log.id,
-          machine: log.machine?.name || "Unknown Machine",
-          issue: log.work || "Routine Check",
-          priority,
-          status,
-          due: formattedDueDate,
-          assignedDate: formattedAssignedDate,
-          component: log.component?.category || "General",
-          assignedBy: "Company Admin",
-          location: log.machine?.site || "Site A",
-          remarks: log.work || "",
-          healthScore: health,
-          affectedComponents: log.component?.category
-            ? [log.component.category]
-            : undefined,
-        };
-      });
+          let status: TaskStatus = "Pending";
+          if (log.status === "Closed" || log.status === "Completed")
+            status = "Completed";
+          else if (log.status === "In Progress") status = "In Progress";
 
-      // 1. GET API Call: Fetch live assigned machines from GET /machines/assignments
+          const dueSource = log.downtime || log.date || log.createdAt;
+          const health =
+            typeof condition === "number"
+              ? Math.max(5, Math.min(100, Math.round((condition / 5) * 100)))
+              : undefined; // no fake fallback — leave undefined if backend gave nothing
+
+          return {
+            id: `TSK-${String(log.id).slice(0, 4).toUpperCase()}`,
+            realId: log.id,
+            isAssignmentOnly: false,
+            machine: log.machine?.name || "—",
+            issue: log.work || "—",
+            priority,
+            status,
+            due: formatDate(dueSource),
+            assignedDate: formatDate(log.date || log.createdAt),
+            component: log.component?.category || "—",
+            assignedBy: log.assignedBy || "—",
+            location: log.machine?.site || "—",
+            remarks: log.work || "",
+            healthScore: health,
+            affectedComponents: log.component?.category
+              ? [log.component.category]
+              : undefined,
+            cost: log.cost !== undefined && log.cost !== null ? log.cost : undefined,
+            downtime: log.downtime || undefined,
+          };
+        });
+      } catch (logsErr) {
+        console.error("Failed to load maintenance logs:", logsErr);
+      }
+
+      // ── 2. Machines assigned via GET /machines/assignments ──
       let apiAssignments: TaskItem[] = [];
       try {
-        const assignedRes = await machineService.getAssignedMachines();
+        const assignedRes: any = await machineService.getAssignedMachines();
         const rawList = Array.isArray(assignedRes)
           ? assignedRes
           : assignedRes?.data || assignedRes?.assignments || [];
 
-        if (Array.isArray(rawList) && rawList.length > 0) {
+        if (Array.isArray(rawList)) {
           apiAssignments = rawList
             .filter((item: any) => {
               if (!item) return false;
-              const aId = String(
-                item.artisanId ||
-                  item.assignedArtisanId ||
-                  item.artisan_id ||
-                  item.userId ||
-                  "",
-              ).toLowerCase();
-              const aName = String(
-                item.artisanName ||
-                  item.assignedArtisanName ||
-                  item.artisan_name ||
-                  "",
-              ).toLowerCase();
-              const cId = currentUserId.toLowerCase();
-              const uEmail = userEmail.toLowerCase();
-              const fName = fullName.toLowerCase();
+              const assignedArtisanId = String(
+                item.assignedArtisanId || "",
+              ).trim();
+              const assignedArtisanName = String(
+                item.assignedArtisanName || "",
+              )
+                .trim()
+                .toLowerCase();
 
-              if (cId && aId && aId === cId) return true;
-              if (fName && aName && (aName.includes(fName) || fName.includes(aName))) return true;
-              if (uEmail && aName && uEmail.includes("artisan") && aName.includes("artisan")) return true;
-              return false;
+              // If the backend has already assigned this machine to a specific
+              // artisan, only that artisan should see it.
+              if (assignedArtisanId || assignedArtisanName) {
+                if (currentUserId && assignedArtisanId === currentUserId)
+                  return true;
+                if (fullName && assignedArtisanName === fullName) return true;
+                return false;
+              }
+
+              // BACKEND TODO: today the API never sets assignedArtisanId, so
+              // every assigned machine in this artisan's company is shown.
+              // Once the backend adds per-artisan assignment, this branch can
+              // be removed.
+              return true;
             })
             .map((item: any) => {
-              const priority: TaskPriority = (item.priority as TaskPriority) || "High";
-              const status: TaskStatus =
-                item.status === "Active" || item.status === "In Progress" || item.status === "Active (Busy)"
-                  ? "In Progress"
-                  : item.status === "Completed"
-                    ? "Completed"
-                    : "Pending";
+              const componentsArr: any[] = Array.isArray(item.components)
+                ? item.components
+                : [];
+              const affected = componentsArr.filter(
+                (c: any) =>
+                  (typeof c.healthScore === "number" && c.healthScore < 60) ||
+                  (typeof c.condition === "number" && c.condition <= 2),
+              );
+
+              const priority: TaskPriority =
+                item.status === "Critical"
+                  ? "High"
+                  : item.status === "Warning"
+                    ? "Medium"
+                    : "Low";
 
               return {
-                id: item.taskId || item.id || `TSK-${Math.floor(Math.random() * 90000 + 10000)}`,
-                realId: item.id || item.taskId,
-                machine: item.machineName || item.machine?.name || item.machineId || "EX-201",
-                issue: item.workScope || item.work || "Assigned Component Maintenance & Technical Service",
+                id: item.machineId,
+                realId: item.machineId,
+                isAssignmentOnly: true,
+                machine: item.machineName || "—",
+                issue:
+                  item.assignedWorkScope || "—",
                 priority,
-                status,
-                due: item.dueDate
-                  ? new Date(item.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-                  : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-                assignedDate: item.assignedAt
-                  ? new Date(item.assignedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-                  : new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-                component: item.componentName || item.component?.category || "Hydraulic Main Pump",
-                assignedBy: item.supervisorName || item.assignedBy || "Supervisor User",
-                location: item.location || item.machine?.site || "Kasani Mine Site",
-                remarks: item.workScope || item.work || "Assigned by Supervisor",
-                healthScore: item.healthScore || 70,
-                affectedComponents: item.componentName ? [item.componentName] : ["Hydraulic Main Pump"],
+                status: "Pending" as TaskStatus, // no per-task workflow field on this endpoint yet
+                due: formatDate(item.assignedDueDate),
+                assignedDate: formatDate(item.assignedAt),
+                component: componentsArr[0]?.category || "—",
+                assignedBy:
+                  item.assignedBySupervisor ||
+                  item.assignedSupervisorName ||
+                  "—",
+                location: item.site || "—",
+                remarks: item.assignedWorkScope || "",
+                healthScore:
+                  typeof item.healthScore === "number"
+                    ? item.healthScore
+                    : undefined,
+                affectedComponents: affected.length
+                  ? affected.map((c: any) => c.category || c.name)
+                  : undefined,
               };
             });
         }
       } catch (apiErr) {
-        console.warn("GET /machines/assignments API call notice:", apiErr);
+        console.error("Failed to load /machines/assignments:", apiErr);
       }
 
-      // 2. Supervisor Component Artisan Tasks fetched directly from Backend database
-      const supervisorArtisanTasks: TaskItem[] = [];
-
-      const combined = [...apiAssignments, ...supervisorArtisanTasks, ...mappedTasks];
-      const uniqueTasksMap = new Map();
+      const combined = [...apiAssignments, ...mappedTasks];
+      const uniqueTasksMap = new Map<string, TaskItem>();
       combined.forEach((t) => {
-        const key = t.realId || t.id || t.machine;
+        const key = t.realId || t.id;
         if (!uniqueTasksMap.has(key)) uniqueTasksMap.set(key, t);
       });
 
@@ -450,6 +434,11 @@ export default function ArtisansTasks() {
   const [selectedTask, setSelectedTask] = useState<TaskItem | null>(null);
   const [formStatus, setFormStatus] = useState<TaskStatus>("Pending");
   const [formRemarks, setFormRemarks] = useState("");
+  const [formCost, setFormCost] = useState("");
+  const [formDowntime, setFormDowntime] = useState("");
+  const [confirmCost, setConfirmCost] = useState("");
+  const [confirmDowntime, setConfirmDowntime] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
   const [confirmState, setConfirmState] = useState<ConfirmState>({
     open: false,
     action: null,
@@ -464,10 +453,7 @@ export default function ArtisansTasks() {
       (t) => t.status === "Pending",
     ).length;
     const inProgress = tasks.filter((t) => t.status === "In Progress").length;
-    const completedToday = tasks.filter((t) => {
-      if (t.status !== "Completed") return false;
-      return true;
-    }).length;
+    const completedToday = tasks.filter((t) => t.status === "Completed").length;
     return {
       total,
       assignedMachines,
@@ -490,7 +476,7 @@ export default function ArtisansTasks() {
     const search = searchTerm.trim().toLowerCase();
     return tasks.filter((task) => {
       const health = task.healthScore ?? 100;
-      const machineStatus = getMachineStatus(health);
+      const machineStatus = getMachineStatus(task.healthScore);
 
       const matchesSearch =
         task.id.toLowerCase().includes(search) ||
@@ -550,61 +536,106 @@ export default function ArtisansTasks() {
     setSelectedTask(task);
     setFormStatus(task.status);
     setFormRemarks(task.remarks || "");
+    // Prefill with the task's real recorded cost/downtime if it has one
+    // (from an existing log). Never invent a starting number here.
+    setFormCost(task.cost !== undefined ? String(task.cost) : "");
+    setFormDowntime(task.downtime || "");
   };
 
   const handleCloseTask = () => {
     setSelectedTask(null);
     setFormStatus("Pending");
     setFormRemarks("");
+    setFormCost("");
+    setFormDowntime("");
   };
 
-  const updateSupervisorAssignmentsStorage = (
-    taskId: string,
-    targetStatus: string,
+  /**
+   * Single place that talks to the backend for a status/remarks/cost/downtime
+   * change. MaintenancePayload REQUIRES technician, date, cost and downtime —
+   * so this function refuses to guess any of them:
+   * - technician  → the real logged-in artisan's name (currentUserName).
+   *                 If it isn't loaded yet, we throw instead of sending "".
+   * - date        → the real current timestamp (genuinely "now", not fake).
+   * - cost        → only what the technician actually typed in the form.
+   *                 For "start" it's legitimately 0 (nothing spent yet).
+   * - downtime    → only what the technician actually typed in the form.
+   *                 For "start" it's legitimately "" (not measured yet).
+   *
+   * - If the task already has a maintenance log (realId + !isAssignmentOnly),
+   *   we update that log.
+   * - If it's a machine-assignment-only task with no log yet, we create one.
+   * No more silent catch{} — a failure here must surface to the user.
+   */
+  const persistTaskUpdate = async (
+    task: TaskItem,
+    nextStatus: TaskStatus,
     remarks?: string,
+    cost?: number | string,
+    downtime?: string,
   ) => {
-    try {
-      // Direct call to update task status in PostgreSQL database
-      apiCall(`/job-cards/${encodeURIComponent(taskId)}/status`, {
-        method: "PUT",
-        body: JSON.stringify({ status: targetStatus, remarks }),
-      }).catch(() => null);
-    } catch (err) {
-      console.warn("Failed to sync status to backend database:", err);
+    if (!currentUserName) {
+      throw new Error(
+        "Could not confirm your name for this update — please refresh and try again.",
+      );
+    }
+
+    const dbStatus = (
+      nextStatus === "Completed" ? "Closed" : nextStatus
+    ) as MaintenanceStatus;
+    const nowIso = new Date().toISOString();
+
+    if (task.isAssignmentOnly) {
+      // BACKEND TODO: confirm the exact "create log for this machine" method
+      // name/shape on maintenanceService — adjust the call below to match.
+      await maintenanceService.createLog({
+        machineId: task.realId || task.id,
+        technician: currentUserName,
+        date: nowIso,
+        status: dbStatus,
+        work: remarks ?? task.remarks,
+        cost: cost ?? 0,
+        downtime: downtime ?? "",
+      });
+    } else {
+      await maintenanceService.updateLog(task.realId || task.id, {
+        technician: currentUserName,
+        date: nowIso,
+        status: dbStatus,
+        work: remarks ?? task.remarks,
+        ...(cost !== undefined ? { cost } : {}),
+        ...(downtime !== undefined ? { downtime } : {}),
+      });
     }
   };
 
   const handleSaveTaskUpdate = async () => {
     if (!selectedTask) return;
-    const dbStatus = formStatus === "Completed" ? "Closed" : formStatus;
     try {
-      setIsLoading(true);
-      try {
-        await maintenanceService.updateLog(
-          selectedTask.realId || selectedTask.id,
-          { status: dbStatus, work: formRemarks.trim() },
-        );
-      } catch {}
-
-      updateSupervisorAssignmentsStorage(
-        selectedTask.realId || selectedTask.id,
+      setIsSaving(true);
+      await persistTaskUpdate(
+        selectedTask,
         formStatus,
-        formRemarks,
+        formRemarks.trim(),
+        formCost.trim() !== "" ? formCost.trim() : undefined,
+        formDowntime.trim() !== "" ? formDowntime.trim() : undefined,
       );
-
-      toast.success("Task status updated successfully! Supervisor portal notified.");
+      toast.success("Task status updated successfully!");
       await loadTasks();
       handleCloseTask();
     } catch (err: any) {
       console.error(err);
-      toast.error(err.message || "Failed to save task update");
+      toast.error(err?.message || "Failed to save task update");
     } finally {
-      setIsLoading(false);
+      setIsSaving(false);
     }
   };
 
-  const handleOpenConfirmation = (task: TaskItem, action: ConfirmAction) =>
+  const handleOpenConfirmation = (task: TaskItem, action: ConfirmAction) => {
+    setConfirmCost("");
+    setConfirmDowntime("");
     setConfirmState({ open: true, action, task });
+  };
   const handleCloseConfirmation = () =>
     setConfirmState({ open: false, action: null, task: null });
 
@@ -612,33 +643,38 @@ export default function ArtisansTasks() {
     if (!confirmState.task || !confirmState.action) return;
     const nextStatus: TaskStatus =
       confirmState.action === "start" ? "In Progress" : "Completed";
-    const dbStatus = nextStatus === "Completed" ? "Closed" : nextStatus;
+
+    // Starting a job has no real cost/downtime yet — 0/"" is the true state,
+    // not an invented one. Completing a job needs the technician's real
+    // entered values, so we require them here.
+    if (confirmState.action === "complete") {
+      if (confirmCost.trim() === "" || confirmDowntime.trim() === "") {
+        toast.error("Please enter cost and downtime before completing.");
+        return;
+      }
+    }
+
     try {
-      setIsLoading(true);
-      try {
-        await maintenanceService.updateLog(
-          confirmState.task.realId || confirmState.task.id,
-          { status: dbStatus },
-        );
-      } catch {}
-
-      updateSupervisorAssignmentsStorage(
-        confirmState.task.realId || confirmState.task.id,
+      setIsSaving(true);
+      await persistTaskUpdate(
+        confirmState.task,
         nextStatus,
+        undefined,
+        confirmState.action === "complete" ? confirmCost.trim() : 0,
+        confirmState.action === "complete" ? confirmDowntime.trim() : "",
       );
-
       toast.success(
         confirmState.action === "start"
-          ? "Task started successfully — Status updated on Supervisor portal!"
-          : "Task marked completed successfully — Status updated on Supervisor portal!",
+          ? "Task started successfully!"
+          : "Task marked completed successfully!",
       );
       await loadTasks();
       handleCloseConfirmation();
     } catch (err: any) {
       console.error(err);
-      toast.error(err.message || "Failed to update status");
+      toast.error(err?.message || "Failed to update status");
     } finally {
-      setIsLoading(false);
+      setIsSaving(false);
     }
   };
 
@@ -758,16 +794,18 @@ export default function ArtisansTasks() {
                       <p className="mt-1 font-extrabold text-slate-900 dark:text-white">
                         {alert.machine} → {alert.issue}
                       </p>
-                      <div className="mt-1.5 flex flex-wrap gap-1.5">
-                        {components.map((comp) => (
-                          <span
-                            key={comp}
-                            className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-700 dark:border-red-500/30 dark:bg-red-500/20 dark:text-red-300"
-                          >
-                            ⚠ {comp}
-                          </span>
-                        ))}
-                      </div>
+                      {components.length > 0 && (
+                        <div className="mt-1.5 flex flex-wrap gap-1.5">
+                          {components.map((comp) => (
+                            <span
+                              key={comp}
+                              className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-700 dark:border-red-500/30 dark:bg-red-500/20 dark:text-red-300"
+                            >
+                              ⚠ {comp}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                   <button
@@ -962,15 +1000,17 @@ export default function ArtisansTasks() {
                         Machine Health
                       </span>
                       <span
-                        className={`text-sm font-extrabold ${getMachineStatus(selectedTask.healthScore ?? 80).color}`}
+                        className={`text-sm font-extrabold ${getMachineStatus(selectedTask.healthScore).color}`}
                       >
-                        {selectedTask.healthScore ?? 80}%
+                        {selectedTask.healthScore !== undefined
+                          ? `${selectedTask.healthScore}%`
+                          : "Unknown"}
                       </span>
                     </div>
                     <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
                       <div
-                        className={`h-full rounded-full transition-all ${getHealthBarColor(selectedTask.healthScore ?? 80)}`}
-                        style={{ width: `${selectedTask.healthScore ?? 80}%` }}
+                        className={`h-full rounded-full transition-all ${getHealthBarColor(selectedTask.healthScore)}`}
+                        style={{ width: `${selectedTask.healthScore ?? 0}%` }}
                       />
                     </div>
                   </div>
@@ -1010,6 +1050,33 @@ export default function ArtisansTasks() {
                   <option value="Completed">Completed</option>
                 </select>
               </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="mb-2 block text-xs font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                    Cost
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={formCost}
+                    onChange={(e) => setFormCost(e.target.value)}
+                    placeholder="Enter actual cost"
+                    className="h-12 w-full rounded-lg border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 outline-none transition focus:border-blue-500 dark:border-slate-700 dark:bg-[#101f33] dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="mb-2 block text-xs font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                    Downtime
+                  </label>
+                  <input
+                    type="text"
+                    value={formDowntime}
+                    onChange={(e) => setFormDowntime(e.target.value)}
+                    placeholder="e.g. 2h 30m"
+                    className="h-12 w-full rounded-lg border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 outline-none transition focus:border-blue-500 dark:border-slate-700 dark:bg-[#101f33] dark:text-white"
+                  />
+                </div>
+              </div>
               <div>
                 <label className="mb-2 block text-xs font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
                   Remarks
@@ -1028,16 +1095,18 @@ export default function ArtisansTasks() {
               <button
                 type="button"
                 onClick={handleCloseTask}
-                className="h-12 rounded-lg border border-slate-300 bg-white px-5 text-sm font-bold text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-[#101f33] dark:text-slate-300 dark:hover:bg-white/[0.04]"
+                disabled={isSaving}
+                className="h-12 rounded-lg border border-slate-300 bg-white px-5 text-sm font-bold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-[#101f33] dark:text-slate-300 dark:hover:bg-white/[0.04]"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleSaveTaskUpdate}
-                className="h-12 rounded-lg bg-blue-600 px-5 text-sm font-bold text-white transition hover:bg-blue-700"
+                disabled={isSaving}
+                className="h-12 rounded-lg bg-blue-600 px-5 text-sm font-bold text-white transition hover:bg-blue-700 disabled:opacity-60"
               >
-                Save Update
+                {isSaving ? "Saving..." : "Save Update"}
               </button>
             </div>
           </div>
@@ -1084,11 +1153,41 @@ export default function ArtisansTasks() {
                     {confirmState.task.issue}
                   </p>
                 </div>
+                {confirmState.action === "complete" && (
+                  <div className="mt-4 grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="mb-1.5 block text-xs font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
+                        Cost
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={confirmCost}
+                        onChange={(e) => setConfirmCost(e.target.value)}
+                        placeholder="Actual cost"
+                        className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-700 outline-none transition focus:border-blue-500 dark:border-slate-700 dark:bg-[#101f33] dark:text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-xs font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
+                        Downtime
+                      </label>
+                      <input
+                        type="text"
+                        value={confirmDowntime}
+                        onChange={(e) => setConfirmDowntime(e.target.value)}
+                        placeholder="e.g. 2h 30m"
+                        className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-700 outline-none transition focus:border-blue-500 dark:border-slate-700 dark:bg-[#101f33] dark:text-white"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
               <button
                 type="button"
                 onClick={handleCloseConfirmation}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500 transition hover:bg-slate-200 dark:bg-white/10 dark:text-slate-300 dark:hover:bg-white/20"
+                disabled={isSaving}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500 transition hover:bg-slate-200 disabled:opacity-50 dark:bg-white/10 dark:text-slate-300 dark:hover:bg-white/20"
               >
                 <X size={17} />
               </button>
@@ -1097,22 +1196,26 @@ export default function ArtisansTasks() {
               <button
                 type="button"
                 onClick={handleCloseConfirmation}
-                className="h-12 rounded-lg border border-slate-300 bg-white px-5 text-sm font-bold text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-[#101f33] dark:text-slate-300 dark:hover:bg-white/[0.04]"
+                disabled={isSaving}
+                className="h-12 rounded-lg border border-slate-300 bg-white px-5 text-sm font-bold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-[#101f33] dark:text-slate-300 dark:hover:bg-white/[0.04]"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleConfirmAction}
-                className={`h-12 rounded-lg px-5 text-sm font-bold text-white transition ${
+                disabled={isSaving}
+                className={`h-12 rounded-lg px-5 text-sm font-bold text-white transition disabled:opacity-60 ${
                   confirmState.action === "start"
                     ? "bg-blue-600 hover:bg-blue-700"
                     : "bg-emerald-600 hover:bg-emerald-700"
                 }`}
               >
-                {confirmState.action === "start"
-                  ? "Yes, Start Task"
-                  : "Yes, Complete Task"}
+                {isSaving
+                  ? "Please wait..."
+                  : confirmState.action === "start"
+                    ? "Yes, Start Task"
+                    : "Yes, Complete Task"}
               </button>
             </div>
           </div>
@@ -1136,24 +1239,28 @@ function MachineCard({
   onStart: () => void;
   onComplete: () => void;
 }) {
-  const health = task.healthScore ?? 80;
+  const health = task.healthScore;
   const machineStatus = getMachineStatus(health);
   const affectedComponents = getAffectedComponents(task);
   const healthBarColor = getHealthBarColor(health);
+  const isLowHealth = health !== undefined && health < 70;
+  const isCritical = health !== undefined && health < 40;
 
   const summaryText =
-    health < 40
-      ? `This machine requires immediate inspection due to ${affectedComponents[0]?.toLowerCase() ?? "critical"} instability.`
-      : health < 70
-        ? `This machine needs service — ${affectedComponents.join(", ")} components require attention.`
-        : `Machine is operating normally. Routine inspection recommended.`;
+    health === undefined
+      ? "Health data not available yet for this machine."
+      : health < 40
+        ? `This machine requires immediate inspection due to ${affectedComponents[0]?.toLowerCase() ?? "critical"} instability.`
+        : health < 70
+          ? `This machine needs service${affectedComponents.length ? ` — ${affectedComponents.join(", ")} components require attention.` : "."}`
+          : `Machine is operating normally. Routine inspection recommended.`;
 
   return (
     <div
       className={`group flex flex-col overflow-hidden rounded-2xl border bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:bg-[#0d1e34] ${
-        health < 40
+        isCritical
           ? "border-red-200 dark:border-red-500/30"
-          : health < 70
+          : isLowHealth
             ? "border-amber-200 dark:border-amber-500/30"
             : "border-slate-200 dark:border-slate-800"
       }`}
@@ -1178,7 +1285,7 @@ function MachineCard({
           {/* Status dot + label */}
           <div className="flex shrink-0 items-center gap-1.5">
             <span
-              className={`h-2 w-2 rounded-full ${machineStatus.dot} animate-pulse`}
+              className={`h-2 w-2 rounded-full ${machineStatus.dot} ${machineStatus.unknown ? "" : "animate-pulse"}`}
             />
             <span className={`text-xs font-extrabold ${machineStatus.color}`}>
               {machineStatus.label}
@@ -1198,13 +1305,13 @@ function MachineCard({
             <span
               className={`text-sm font-extrabold tabular-nums ${machineStatus.color}`}
             >
-              {health}%
+              {health !== undefined ? `${health}%` : "N/A"}
             </span>
           </div>
           <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
             <div
               className={`h-full rounded-full transition-all duration-700 ${healthBarColor}`}
-              style={{ width: `${health}%` }}
+              style={{ width: `${health ?? 0}%` }}
             />
           </div>
         </div>
@@ -1227,28 +1334,30 @@ function MachineCard({
       </div>
 
       {/* Affected Components */}
-      <div className="border-t border-slate-100 px-4 py-3 dark:border-slate-800">
-        <p className="mb-2 text-[10px] font-extrabold uppercase tracking-widest text-slate-400">
-          Affected Components
-        </p>
-        <div className="flex flex-wrap gap-1.5">
-          {affectedComponents.map((comp) => (
-            <span
-              key={comp}
-              className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
-            >
-              ⚠ {comp}
-            </span>
-          ))}
+      {affectedComponents.length > 0 && (
+        <div className="border-t border-slate-100 px-4 py-3 dark:border-slate-800">
+          <p className="mb-2 text-[10px] font-extrabold uppercase tracking-widest text-slate-400">
+            Affected Components
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {affectedComponents.map((comp) => (
+              <span
+                key={comp}
+                className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
+              >
+                ⚠ {comp}
+              </span>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Summary */}
       <div
         className={`px-4 py-3 ${
-          health < 40
+          isCritical
             ? "bg-red-50 dark:bg-red-500/5"
-            : health < 70
+            : isLowHealth
               ? "bg-amber-50 dark:bg-amber-500/5"
               : "bg-slate-50 dark:bg-white/[0.02]"
         }`}

@@ -36,12 +36,8 @@ import {
   CheckCircle,
   PackagePlus,
   User,
+  Bell,
   FileSignature,
-
-  // Limited Company Admin
-  UserCircle,
-  MessageSquare,
-  FolderOpen,
 } from "lucide-react";
 
 export type UserRole =
@@ -185,7 +181,7 @@ const companyAdminNavGroups: NavGroup[] = [
 ];
 
 const engineerNavGroups: NavGroup[] = companyAdminNavGroups
-  .filter((group) => group.title !== "Commercial")
+  .filter((group) => group.title !== "Inquiry Management")
   .map((group) => ({
     ...group,
     items: group.items.map((item) => ({
@@ -303,6 +299,16 @@ export const sidebarConfig: Record<
       },
 
       {
+        title: "Notifications",
+        items: [
+          {
+            name: "Notifications",
+            path: "/super-admin/notifications",
+            icon: <Bell className={sidebarIconClass} />,
+          },
+        ],
+      },
+      {
         title: "Settings",
         items: [
           {
@@ -324,9 +330,6 @@ export const sidebarConfig: Record<
   },
 
   company_admin: {
-    // --------------------------------------------------
-    // Dashboard
-    // --------------------------------------------------
     dashboardItem: {
       icon: <LayoutDashboard className={sidebarIconClass} />,
       name: "Dashboard",
@@ -334,7 +337,6 @@ export const sidebarConfig: Record<
     },
 
     navGroups: [
-   
       {
         title: "Inquiry Management",
         items: [
@@ -423,6 +425,11 @@ export const sidebarConfig: Record<
       {
         title: "Account",
         items: [
+                    {
+            name: "Notifications",
+            path: "/company-admin/notifications",
+            icon: <Bell className={sidebarIconClass} />,
+          },
           {
             name: "Profile",
             path: "/company-admin/profile",
@@ -438,14 +445,7 @@ export const sidebarConfig: Record<
       },
     ],
 
-    // --------------------------------------------------
-    // LIMITED ACCESS
-    // Shown when Company Admin isActive === false
-    // --------------------------------------------------
     limitedNavGroups: [
-      // --------------------------------------------------
-      // QUOTATION INQUIRY
-      // --------------------------------------------------
       {
         title: "Inquiry Management",
         items: [
@@ -464,12 +464,14 @@ export const sidebarConfig: Record<
             path: "/company-admin/invoices",
             icon: <Receipt className={sidebarIconClass} />,
           },
+          {
+            name: "Notifications",
+            path: "/support/notifications",
+            icon: <FileText className={sidebarIconClass} />,
+          },
         ],
       },
 
-      // --------------------------------------------------
-      // ACCOUNT
-      // --------------------------------------------------
       {
         title: "Account",
         items: [
@@ -482,9 +484,6 @@ export const sidebarConfig: Record<
       },
     ],
 
-    // --------------------------------------------------
-    // PROFILE
-    // --------------------------------------------------
     profile: {
       shortName: "CA",
       title: "Company Admin",
@@ -541,7 +540,6 @@ export const sidebarConfig: Record<
             name: "Predictive Alerts",
             path: "/artisans/alerts",
             icon: <AlertTriangle className={artisansIconClass} />,
-            isComingSoon: true,
           },
           {
             name: "Maintenance",
@@ -559,6 +557,11 @@ export const sidebarConfig: Record<
       {
         title: "Account",
         items: [
+          {
+            name: "Notifications",
+            path: "/artisans/notifications",
+            icon: <Bell className={artisansIconClass} />,
+          },
           {
             name: "Profile",
             path: "/artisans/profile",
@@ -628,7 +631,6 @@ export const sidebarConfig: Record<
             name: "Alerts",
             path: "/operator/alerts",
             icon: <AlertTriangle className={operatorIconClass} />,
-            isComingSoon: true,
           },
           {
             name: "Active Task",
@@ -639,6 +641,11 @@ export const sidebarConfig: Record<
             name: "Service Logs",
             path: "/operator/service-logs",
             icon: <FileClock className={operatorIconClass} />,
+          },
+          {
+            name: "Notifications",
+            path: "/operator/notifications",
+            icon: <Bell className={operatorIconClass} />,
           },
           {
             name: "Profile",
@@ -693,11 +700,21 @@ export const sidebarConfig: Record<
             path: "/supervisor/fleet",
             icon: <Activity className={supervisorIconClass} />,
           },
+          {
+            name: "Alerts",
+            path: "/supervisor/alerts",
+            icon: <AlertTriangle className={supervisorIconClass} />,
+          },
         ],
       },
       {
         title: "Account",
         items: [
+          {
+            name: "Notifications",
+            path: "/supervisor/notifications",
+            icon: <Bell className={supervisorIconClass} />,
+          },
           {
             name: "Profile",
             path: "/supervisor/profile",
@@ -803,7 +820,7 @@ export const sidebarConfig: Record<
     },
   },
 
-    engineers: {
+  engineers: {
     dashboardItem: {
       icon: <LayoutDashboard className={engineersIconClass} />,
       name: "Dashboard",
@@ -815,6 +832,11 @@ export const sidebarConfig: Record<
       {
         title: "Account",
         items: [
+          {
+            name: "Notifications",
+            path: "/engineers/notifications",
+            icon: <Bell className={engineersIconClass} />,
+          },
           {
             name: "Profile",
             path: "/engineers/profile",
@@ -868,10 +890,15 @@ export const sidebarConfig: Record<
             path: "/sub-admin/categories",
             icon: <ListChecks className={sidebarIconClass} />,
           },
-          {
-            name: "Machine Health",
-            path: "/sub-admin/inspection-entry",
-            icon: <ClipboardCheck className={sidebarIconClass} />,
+          // {
+          //   name: "Machine Health",
+          //   path: "/sub-admin/inspection-entry",
+          //   icon: <ClipboardCheck className={sidebarIconClass} />,
+          // },
+                    {
+            name: "Notifications",
+            path: "/sub-admin/notifications",
+            icon: <Bell className={sidebarIconClass} />,
           },
         ],
       },
@@ -988,6 +1015,16 @@ export const sidebarConfig: Record<
         ],
       },
 
+      {
+        title: "Notifications",
+        items: [
+          {
+            name: "Notifications",
+            path: "/sub-super-admin/notifications",
+            icon: <Bell className={sidebarIconClass} />,
+          },
+        ],
+      },
       {
         title: "Settings",
         items: [

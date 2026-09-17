@@ -1268,10 +1268,4 @@ const heatmapData = useMemo<HeatmapDataPoint[]>(() => {
         />
       )}
     </div>
-  );
-import FleetHeatMap from "../CompanyAdmin/FleetHeatMap";
-
-export default function OperatorFleetPage() {
-  return <FleetHeatMap />;
-
-}
+  );}

@@ -24,28 +24,6 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 
-// ─────────────────────────────────────────────────────────────────────────
-// TODO (Backend / Auth / Real-time integration):
-// 1. Replace `viewingRole` with the authenticated user's role from AuthContext
-//    (e.g. `const { user } = useAuth(); const viewingRole = user.role;`) and
-//    remove the demo role switcher below.
-// 2. Replace DUMMY_NOTIFICATIONS with data from NotificationContext, hydrated via
-//    GET /api/notifications?role={viewingRole}&companyId={companyId}&page={page}
-// 3. Subscribe to a WebSocket channel (e.g. `ws://.../notifications/{userId}`) to
-//    prepend live events to the list as they arrive.
-// 4. `receivedMinutesAgo` is a dummy stand-in for a real ISO `createdAt` field —
-//    swap `getRelativeTime` to diff against `Date.now()` once wired to the API.
-// 5. `markAsRead` / `markAllAsRead` should call:
-//      POST /api/notifications/:id/read
-//      POST /api/notifications/mark-all-read
-//    with optimistic UI update (the local state update below can stay as the
-//    optimistic layer, rolled back on request failure).
-// 6. "Load more" should be replaced with real cursor/page-based pagination
-//    (GET /api/notifications?cursor={cursor}) once the list is server-driven.
-// ─────────────────────────────────────────────────────────────────────────
-
-// Use shared `Notification` type from NotificationContext
-
 const SEVERITY_PRIORITY: Record<Severity, number> = {
   critical: 0,
   warning: 1,
@@ -132,11 +110,23 @@ const CATEGORY_META: Record<Category, { icon: typeof Cpu; badge: string }> = {
     icon: CreditCard,
     badge: "bg-gray-100 text-gray-700 dark:bg-gray-500/10 dark:text-gray-300",
   },
+  Quotation: {
+    icon: FileText,
+    badge: "bg-cyan-50 text-cyan-700 dark:bg-cyan-500/10 dark:text-cyan-400",
+  },
+  Contract: {
+    icon: FileText,
+    badge:
+      "bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-400",
+  },
+  Payment: {
+    icon: CreditCard,
+    badge:
+      "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400",
+  },
 };
 
-// BACKEND TODO: dummy data shaped like the real API envelope — replace with fetched/live data.
 
-/** Converts a dummy `receivedMinutesAgo` value into a human relative-time label. */
 function getRelativeTime(timestamp: string) {
   const diff = Date.now() - new Date(timestamp).getTime();
 
@@ -375,7 +365,7 @@ export default function NotificationsPage() {
             <span className="mx-1 hidden h-4 w-px bg-gray-200 dark:bg-gray-700 sm:block" />
 
             <div className="flex flex-wrap gap-1.5">
-              {(
+                           {(
                 [
                   "All",
                   "Machine",
@@ -384,6 +374,9 @@ export default function NotificationsPage() {
                   "Maintenance",
                   "Component",
                   "Subscription",
+                  "Quotation",
+                  "Contract",
+                  "Payment",
                 ] as const
               ).map((option) => (
                 <button
