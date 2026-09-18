@@ -9,7 +9,6 @@
   import alert from "../../assets/images/landingpageimages/FuturePage/Alert.jpg";
   import report from "../../assets/images/landingpageimages/FuturePage/report.jpg";
   import fleet from "../../assets/images/landingpageimages/FuturePage/fleeet.jpg";
-  import roles from "../../assets/images/landingpageimages/FuturePage/RolesImg.jpg";
 
   import { Link } from "react-router-dom";
   import {
