@@ -1,19 +1,18 @@
-import { useEffect, useState } from "react";
-import Navbar from "../../components/landing/Navbar";
-import Footer from "../../components/landing/Footer";
-import RoleImg from "../../assets/images/landingpageimages/FuturePage/RolesImg.jpg";
-import img1 from "../../assets/images/landingpageimages/FuturePage/img1.jpg";
-import engine from "../../assets/images/landingpageimages/FuturePage/Engine.jpg";
-import hydraulic from "../../assets/images/landingpageimages/FuturePage/Hydraulic.jpg";
-import tyre from "../../assets/images/landingpageimages/FuturePage/Tyre&Suspention.jpg";
-import alert from "../../assets/images/landingpageimages/FuturePage/Alert.jpg";
-import report from "../../assets/images/landingpageimages/FuturePage/report.jpg";
-import fleet from "../../assets/images/landingpageimages/FuturePage/Fleeet.jpg";
-import roles from "../../assets/images/landingpageimages/FuturePage/RolesImg.jpg";
+  import { useEffect, useState } from "react";
+  import Navbar from "../../components/landing/Navbar";
+  import Footer from "../../components/landing/Footer";
+  import RoleImg from "../../assets/images/landingpageimages/FuturePage/RolesImg.jpg";
+  import img1 from "../../assets/images/landingpageimages/FuturePage/img1.jpg";
+  import engine from "../../assets/images/landingpageimages/FuturePage/Engine.jpg";
+  import hydraulic from "../../assets/images/landingpageimages/FuturePage/Hydraulic.jpg";
+  import tyre from "../../assets/images/landingpageimages/FuturePage/Tyre&Suspention.jpg";
+  import alert from "../../assets/images/landingpageimages/FuturePage/Alert.jpg";
+  import report from "../../assets/images/landingpageimages/FuturePage/report.jpg";
+  import fleet from "../../assets/images/landingpageimages/FuturePage/fleeet.jpg";
 
-import { Link } from "react-router-dom";
-import {
-  Gauge,
+  import { Link } from "react-router-dom";
+  import {
+    Gauge,
   Thermometer,
   Droplets,
   CircleGauge,
