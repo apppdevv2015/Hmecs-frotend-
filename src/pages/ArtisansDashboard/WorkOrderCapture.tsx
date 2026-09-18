@@ -188,21 +188,63 @@ export default function ArtisanWorkOrderCapture() {
       const currentArtisanEmail = String(artisanEmail).toLowerCase().trim();
       const currentArtisanName = String(artisanName).toLowerCase().trim();
 
-      let rawList: any[] = [];
+               interface RawMachine {
+        id?: string;
+        machineId?: string;
+        machineName?: string;
+        name?: string;
+        serialNumber?: string;
+        fleetId?: string;
+        equipmentType?: string;
+        category?: string;
+        imageUrl?: string;
+        location?: string;
+        site?: string;
+        companyId?: string;
+        currentHours?: number;
+        totalHours?: number;
+        hoursRun?: number;
+        operatingHours?: number;
+        installHours?: number;
+        assignedOperatorName?: string;
+        assignedSupervisorName?: string;
+        assignedArtisanId?: string;
+        assigned_artisan_id?: string;
+        artisanId?: string;
+        artisan_id?: string;
+        technicianId?: string;
+        assignedArtisanName?: string;
+        artisanName?: string;
+        technician?: string;
+        assignedArtisanEmail?: string;
+        artisanEmail?: string;
+      }
+
+      interface ListApiResponse {
+        data?: RawMachine[];
+        assignedMachines?: RawMachine[];
+        machines?: RawMachine[];
+      }
+
+      let rawList: RawMachine[] = [];
       try {
-        const res = await machineService.getAssignedMachines();
+        const res = (await machineService.getAssignedMachines()) as
+          | RawMachine[]
+          | ListApiResponse;
         if (Array.isArray(res)) rawList = res;
-        else if (Array.isArray(res?.data)) rawList = res.data;
-        else if (Array.isArray(res?.assignedMachines)) rawList = res.assignedMachines;
+        else if (Array.isArray(res.data)) rawList = res.data;
+        else if (Array.isArray(res.assignedMachines)) rawList = res.assignedMachines;
       } catch {
-        const res2 = await fleetService.getFleetMachines();
+        const res2 = (await fleetService.getFleetMachines()) as
+          | RawMachine[]
+          | ListApiResponse;
         if (Array.isArray(res2)) rawList = res2;
-        else if (Array.isArray(res2?.data)) rawList = res2.data;
-        else if (Array.isArray(res2?.machines)) rawList = res2.machines;
+        else if (Array.isArray(res2.data)) rawList = res2.data;
+        else if (Array.isArray(res2.machines)) rawList = res2.machines;
       }
 
       // Filter strictly for machines assigned to THIS Artisan
-      const assignedToArtisanList = rawList.filter((m: any) => {
+                const assignedToArtisanList = rawList.filter((m: RawMachine) => {
         if (!m) return false;
         if (userCompanyId && m.companyId && String(m.companyId) !== userCompanyId) return false;
 
@@ -238,12 +280,12 @@ export default function ArtisanWorkOrderCapture() {
         return false;
       });
 
-      const finalMachines = assignedToArtisanList.length > 0 ? assignedToArtisanList : rawList.filter((m: any) => {
+           const finalMachines = assignedToArtisanList.length > 0 ? assignedToArtisanList : rawList.filter((m: RawMachine) => {
         const hasArtisanField = m?.assignedArtisanId || m?.assignedArtisanName;
         return !userCompanyId || !m.companyId || String(m.companyId) === userCompanyId ? Boolean(hasArtisanField) : false;
       });
 
-      const mapped: MachineDetails[] = (finalMachines.length > 0 ? finalMachines : (rawList.length > 0 ? [rawList[0]] : [])).map((m: any) => {
+            const mapped: MachineDetails[] = (finalMachines.length > 0 ? finalMachines : (rawList.length > 0 ? [rawList[0]] : [])).map((m: RawMachine) => {
         const rawHours =
           m.currentHours ??
           m.totalHours ??
@@ -252,8 +294,8 @@ export default function ArtisanWorkOrderCapture() {
           m.installHours ??
           0;
 
-        return {
-          id: m.machineId || m.id,
+                return {
+          id: String(m.machineId || m.id || ""),
           name: cleanMachineName(m.machineName || m.name),
           machineId: String(m.serialNumber || m.fleetId || "SN-HME-1001").replace(/^DEMO-/i, ""),
           machineType: m.equipmentType || m.category || "Heavy Machinery",
@@ -322,12 +364,29 @@ export default function ArtisanWorkOrderCapture() {
       }
       setWorkEndTime(new Date().toISOString());
 
-      // 3. Load Components
-      const compRes = await componentService.getComponentsByMachineId(machineId);
-      let rawComps: any[] = [];
+            // 3. Load Components
+      interface RawComponent {
+        id?: string;
+        componentId?: string;
+        category?: string;
+        name?: string;
+        description?: string;
+        healthScore?: number;
+        currentReading?: string;
+      }
+
+      interface ComponentsApiResponse {
+        data?: RawComponent[];
+        components?: RawComponent[];
+      }
+
+      const compRes = (await componentService.getComponentsByMachineId(
+        machineId,
+      )) as RawComponent[] | ComponentsApiResponse;
+      let rawComps: RawComponent[] = [];
       if (Array.isArray(compRes)) rawComps = compRes;
-      else if (Array.isArray(compRes?.data)) rawComps = compRes.data;
-      else if (Array.isArray(compRes?.components)) rawComps = compRes.components;
+      else if (Array.isArray(compRes.data)) rawComps = compRes.data;
+      else if (Array.isArray(compRes.components)) rawComps = compRes.components;
 
       setComponents(rawComps.map((c: any) => ({
         id: c.id || c.componentId,

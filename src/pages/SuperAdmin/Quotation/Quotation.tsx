@@ -7,8 +7,6 @@ import QuotationResponses from "./QuotationResponses";
 
 import AddonQuotationBuilder from "./AddonQuotationBuilder";
 
-import { AddonQuotationBuilder } from "./AddonQuotationBuilder";
-
 import FormCard from "../../../components/common/SignupCard";
 
 /* ============================================================

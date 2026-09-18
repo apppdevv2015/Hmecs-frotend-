@@ -68,8 +68,11 @@ export interface QuotationRequest {
   readonly contractDuration?: string | null;
   readonly optionalServices?: readonly string[];
   readonly implementationRequirements?: string | null;
-  readonly additionalRequirements?: string | null;
+   readonly additionalRequirements?: string | null;
   readonly attachmentUrl?: string | null;
+  readonly attachmentFileName?: string | null;
+  readonly attachmentFileType?: string | null;
+  readonly attachmentSize?: number | null;
   readonly status: QuotationRequestStatus | string;
   readonly createdAt?: string;
   readonly updatedAt?: string;

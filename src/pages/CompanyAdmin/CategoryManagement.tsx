@@ -111,10 +111,13 @@ export default function CategoryManagement() {
 
 
   // Delete Confirmation Modal State
+   // Delete Confirmation Modal State
   const [deleteTarget, setDeleteTarget] = useState<{
     id: string;
     name: string;
+    type: "equipment" | "component";
   } | null>(null);
+  
   const [deleting, setDeleting] = useState(false);
 
   // Form Inputs

@@ -97,7 +97,7 @@ export default function ActiveTask() {
   const loadAssignedMachineData = useCallback(async () => {
     try {
       setMachineLoading(true);
-      const response = await machineService.getAssignedMachines();
+           const response: any = await machineService.getAssignedMachines();
       let machines: any[] = [];
       if (Array.isArray(response)) machines = response;
       else if (Array.isArray(response?.data)) machines = response.data;

@@ -126,7 +126,7 @@ class AuditTrailService {
       newValue?: string;
       badgeColor?: string;
       user?: Partial<AuditUser>;
-    }
+    },
   ): AuditLogEntry {
     const currentUser = this.getCurrentUser();
     const user: AuditUser = {
@@ -164,7 +164,7 @@ class AuditTrailService {
     };
 
     // 1. Instant local persistence for zero UI lag
-    const existing = this.getAllLogsFromStorage();
+    const existing = this.getLogsFromStorage();
     existing.unshift(entry);
     this.saveLogsToStorage(existing);
 
@@ -197,15 +197,17 @@ class AuditTrailService {
   /**
    * Get logs for a specific job card from Database Table & Cache
    */
-  public getLogsForJobCard(jobCardId: string): AuditLogEntry[] {
-    const logs = this.getAllLogsFromStorage();
-    return logs.filter((log) => log.jobCardId === jobCardId);
+    public getLogsForJobCard(jobCardId: string): AuditLogEntry[] {
+    const logs = this.getLogsFromStorage();
+    return logs.filter((log: AuditLogEntry) => log.jobCardId === jobCardId);
   }
 
   /**
    * Sync audit logs for a job card directly from the PostgreSQL Database
    */
-  public async syncJobCardLogsFromDb(jobCardId: string): Promise<AuditLogEntry[]> {
+  public async syncJobCardLogsFromDb(
+    jobCardId: string,
+  ): Promise<AuditLogEntry[]> {
     try {
       const res = await jobCardService.getAuditLogs(jobCardId);
       if (res?.data && Array.isArray(res.data)) {
@@ -236,10 +238,11 @@ class AuditTrailService {
           badgeColor: l.badgeColor || this.getDefaultBadgeColor(l.action),
         }));
 
-        if (dbLogs.length > 0) {
-          const cached = this.getAllLogsFromStorage().filter(
-            (l) => l.jobCardId !== jobCardId
+               if (dbLogs.length > 0) {
+          const cached = this.getLogsFromStorage().filter(
+            (l: AuditLogEntry) => l.jobCardId !== jobCardId
           );
+
           this.saveLogsToStorage([...dbLogs, ...cached]);
           return dbLogs;
         }
@@ -278,7 +281,7 @@ class AuditTrailService {
       audioUrl: string;
       durationSeconds: number;
       fileSizeFormatted?: string;
-    }
+    },
   ): AudioVoiceNote {
     const currentUser = this.getCurrentUser();
     const now = new Date();
@@ -294,7 +297,7 @@ class AuditTrailService {
       createdAt: now.toISOString(),
     };
 
-    const notes = this.getAllVoiceNotesFromStorage();
+        const notes = this.getVoiceNotesFromStorage();
     notes.unshift(note);
     this.saveVoiceNotesToStorage(notes);
 
@@ -319,12 +322,14 @@ class AuditTrailService {
     return note;
   }
 
-  public getVoiceNotesForJobCard(jobCardId: string): AudioVoiceNote[] {
-    const notes = this.getAllVoiceNotesFromStorage();
-    return notes.filter((n) => n.jobCardId === jobCardId);
+    public getVoiceNotesForJobCard(jobCardId: string): AudioVoiceNote[] {
+    const notes = this.getVoiceNotesFromStorage();
+    return notes.filter((n: AudioVoiceNote) => n.jobCardId === jobCardId);
   }
 
-  public async syncVoiceNotesFromDb(jobCardId: string): Promise<AudioVoiceNote[]> {
+  public async syncVoiceNotesFromDb(
+    jobCardId: string,
+  ): Promise<AudioVoiceNote[]> {
     try {
       const res = await jobCardService.getVoiceNotes(jobCardId);
       if (res?.data && Array.isArray(res.data)) {
@@ -342,9 +347,9 @@ class AuditTrailService {
           createdAt: n.createdAt,
         }));
 
-        if (dbNotes.length > 0) {
-          const cached = this.getAllVoiceNotesFromStorage().filter(
-            (n) => n.jobCardId !== jobCardId
+                if (dbNotes.length > 0) {
+          const cached = this.getVoiceNotesFromStorage().filter(
+            (n: AudioVoiceNote) => n.jobCardId !== jobCardId
           );
           this.saveVoiceNotesToStorage([...dbNotes, ...cached]);
           return dbNotes;
@@ -356,8 +361,8 @@ class AuditTrailService {
     return this.getVoiceNotesForJobCard(jobCardId);
   }
 
-  public deleteVoiceNote(noteId: string): void {
-    const notes = this.getAllVoiceNotesFromStorage().filter((n) => n.id !== noteId);
+    public deleteVoiceNote(noteId: string): void {
+    const notes = this.getVoiceNotesFromStorage().filter((n: AudioVoiceNote) => n.id !== noteId);
     this.saveVoiceNotesToStorage(notes);
     jobCardService.deleteVoiceNote(noteId).catch(() => {});
   }
@@ -365,8 +370,8 @@ class AuditTrailService {
   /**
    * Seed realistic sample audit logs for job cards if none exist
    */
-  public seedInitialLogsIfEmpty(jobCards: any[]): void {
-    const existing = this.getAllLogsFromStorage();
+    public seedInitialLogsIfEmpty(jobCards: any[]): void {
+    const existing = this.getLogsFromStorage();
     if (existing.length > 0) return;
 
     const initialLogs: AuditLogEntry[] = [];
@@ -401,7 +406,8 @@ class AuditTrailService {
         description: `Work order created for ${card.machine?.name || "Asset"} with ${card.priority || "MEDIUM"} priority.`,
         oldValue: "NEW",
         newValue: card.status || "OPEN",
-        badgeColor: "text-blue-600 bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-800",
+        badgeColor:
+          "text-blue-600 bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-800",
       });
 
       // If in progress or assigned, add transition log
@@ -430,7 +436,8 @@ class AuditTrailService {
           description: `Work commenced on site. Artisan clocked in labor timer.`,
           oldValue: "OPEN",
           newValue: card.status,
-          badgeColor: "text-amber-600 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800",
+          badgeColor:
+            "text-amber-600 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800",
         });
       }
     });

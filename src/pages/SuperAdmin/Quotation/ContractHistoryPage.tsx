@@ -17,7 +17,11 @@ import {
  * Data comes from GET /quotations/contracts (role-filtered server-side —
  * no companyId param needed, backend resolves it from the auth token).
  */
-const ContractHistoryPage: React.FC = () => {
+type ContractHistoryPageProps = {
+  onBack?: () => void;
+};
+
+const ContractHistoryPage: React.FC<ContractHistoryPageProps> = ({ onBack }) => {
   const navigate = useNavigate();
 
   const [contracts, setContracts] = useState<Contract[]>([]);
@@ -272,9 +276,9 @@ const ContractHistoryPage: React.FC = () => {
       <div className="mx-auto max-w-7xl">
         {/* Header */}
         <div className="mb-6">
-          <button
+                    <button
             type="button"
-            onClick={() => navigate(-1)}
+            onClick={() => (onBack ? onBack() : navigate(-1))}
             className="mb-3 inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 transition hover:text-slate-800"
           >
             <svg

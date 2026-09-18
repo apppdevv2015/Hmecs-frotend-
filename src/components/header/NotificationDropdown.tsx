@@ -60,6 +60,12 @@ const CATEGORY_STYLES: Record<Category, string> = {
   Component: "bg-teal-50 text-teal-700 dark:bg-teal-500/10 dark:text-teal-400",
   Subscription:
     "bg-gray-100 text-gray-700 dark:bg-gray-500/10 dark:text-gray-300",
+  Quotation:
+    "bg-cyan-50 text-cyan-700 dark:bg-cyan-500/10 dark:text-cyan-400",
+  Contract:
+    "bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-400",
+  Payment:
+    "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400",
 };
 
 function getRelativeTime(timestamp: string): string {

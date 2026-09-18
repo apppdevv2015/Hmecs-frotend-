@@ -108,10 +108,10 @@ const QuotationStatus: React.FC = () => {
       } else {
         setQuotation(EMPTY_QUOTATION);
       }
-    } catch (err: unknown) {
+        } catch (err: unknown) {
       if (signal.aborted) return;
-      const { message } = extractApiError(err);
-      setErrorMessage(message);
+      const message = extractApiError(err);
+      setErrorMessage(message || "Failed to load quotation status.");
       setQuotation(EMPTY_QUOTATION);
     } finally {
       if (!signal.aborted) {

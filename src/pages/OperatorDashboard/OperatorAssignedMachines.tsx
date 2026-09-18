@@ -64,6 +64,7 @@ const normalizeAssignmentDetails = (item: any): AssignmentDetails => ({
   id: String(item?.id ?? item?.assignmentId ?? item?.assignment_id ?? ""),
   machineName: String(item?.machineName ?? item?.machine_name ?? ""),
   machineId: String(item?.machineId ?? item?.machine_id ?? ""),
+  model: String(item?.model ?? item?.modelYear ?? item?.model_year ?? ""),
 
   assignedOn: String(
     item?.assignedOn ??

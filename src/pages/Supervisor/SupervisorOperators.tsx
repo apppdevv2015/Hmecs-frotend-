@@ -55,6 +55,17 @@ export default function SupervisorOperators() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [operatorFilter, setOperatorFilter] = useState<string>("All");
 
+ const currentSupervisorName = useMemo(() => {
+    const storedUser = StorageService.getUser();
+    return (
+      storedUser?.name ||
+      storedUser?.fullName ||
+      (storedUser?.firstName ? `${storedUser.firstName} ${storedUser.lastName || ""}`.trim() : "") ||
+      StorageService.get<string>(STORAGE_KEYS.USER_NAME) ||
+      "Supervisor"
+    );
+  }, []);
+
   const handleOpenUserModal = (row: OperatorMachineRow) => {
     const opName = row.operator && row.operator !== "-" ? row.operator : "Assigned Operator";
     const detail: UserDetailData = {
@@ -134,16 +145,15 @@ export default function SupervisorOperators() {
             StorageService.get<string>(STORAGE_KEYS.USER_NAME) ||
             "Supervisor";
 
-          const supervisorName =
+                    const supervisorName =
             f.assignedSupervisorName ||
             f.assigned_supervisor_name ||
             f.supervisorName ||
             f.supervisor_name ||
-            storedTask?.supervisorName ||
             (f.supervisor?.name ? f.supervisor.name : "") ||
             (opName ? currentSupervisorName : "");
 
-          const rawDate = storedTask?.assignedAt || f.assignedAt || f.assigned_at || (opName ? f.createdAt || f.created_at : null);
+          const rawDate = f.assignedAt || f.assigned_at || (opName ? f.createdAt || f.created_at : null);
           const assignedAtStr = (opName && rawDate)
             ? (isNaN(new Date(rawDate).getTime())
                 ? String(rawDate)

@@ -38,7 +38,9 @@ import {
   type SuperAdminCompany,
 } from "../../../services/SuperAdmin/machineService";
 import { authService } from "../../../services/Auth/authService";
-import StorageService, { STORAGE_KEYS } from "../../../services/storage.service";
+import StorageService, {
+  STORAGE_KEYS,
+} from "../../../services/storage.service";
 
 import Pagination from "../../../components/common/Pagination";
 
@@ -217,7 +219,9 @@ export default function CompanyAdminsPage() {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const [togglingStatusId, setTogglingStatusId] = useState<string | null>(null);
-  const [loggingInCompanyId, setLoggingInCompanyId] = useState<string | null>(null);
+  const [loggingInCompanyId, setLoggingInCompanyId] = useState<string | null>(
+    null,
+  );
 
   const [showAddUser, setShowAddUser] = useState(false);
 
@@ -767,7 +771,14 @@ export default function CompanyAdminsPage() {
           {showAddUser && (
             <div className="fixed inset-0 z-99999 flex items-center justify-center bg-black/50">
               <div className="relative max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white shadow-xl">
-                <SignupCard onClose={() => setShowAddUser(false)} />
+                <button
+                  type="button"
+                  onClick={() => setShowAddUser(false)}
+                  className="absolute right-4 top-4 z-10 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+                <SignupCard />
               </div>
             </div>
           )}

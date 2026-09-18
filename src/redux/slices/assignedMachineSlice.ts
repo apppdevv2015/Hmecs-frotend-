@@ -5,6 +5,7 @@ import {
 } from "@reduxjs/toolkit";
 
 import machineService from "../../services/Operator/machineService";
+import StorageService from "../../services/storage.service";
 
 /* ==========================================
    TYPES
@@ -43,6 +44,7 @@ export interface AssignmentHistoryItem {
   id: string;
   machineName: string;
   machineId: string;
+  model: string;
   assignedOn: string;
   assignedBy: string;
   status: AssignmentStatus;

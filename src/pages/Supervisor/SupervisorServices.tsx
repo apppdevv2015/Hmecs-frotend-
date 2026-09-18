@@ -24,7 +24,11 @@ import {
   Sparkles,
 } from "lucide-react";
 
-export type AssignmentStatus = "Active" | "Pending" | "Completed" | "Under Maintenance";
+export type AssignmentStatus =
+  | "Active"
+  | "Pending"
+  | "Completed"
+  | "Under Maintenance";
 
 export interface MachineAssignmentLog {
   id: string;
@@ -83,12 +87,16 @@ export default function SupervisorServicesHub() {
   const [assignments, setAssignments] = useState<MachineAssignmentLog[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [supervisorFilter, setSupervisorFilter] = useState<string>("All");
-  const [activeTab, setActiveTab] = useState<"all" | "assigned" | "service">("all");
+  const [activeTab, setActiveTab] = useState<"all" | "assigned" | "service">(
+    "all",
+  );
 
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState<number>(10);
 
-  const [selectedLog, setSelectedLog] = useState<MachineAssignmentLog | null>(null);
+  const [selectedLog, setSelectedLog] = useState<MachineAssignmentLog | null>(
+    null,
+  );
 
   const fetchAssignmentData = async () => {
     try {
@@ -104,13 +112,19 @@ export default function SupervisorServicesHub() {
       }
 
       // 1. Fetch live assigned machines
-      const queryParam = companyId ? `?companyId=${encodeURIComponent(companyId)}` : "";
+      const queryParam = companyId
+        ? `?companyId=${encodeURIComponent(companyId)}`
+        : "";
       let assignedList: any[] = [];
       try {
-        const res = await fetch(`${API_BASE}/machines/all/assigned${queryParam}`, { headers });
+        const res = await fetch(
+          `${API_BASE}/machines/all/assigned${queryParam}`,
+          { headers },
+        );
         const resData = await res.json();
         if (Array.isArray(resData?.data)) assignedList = resData.data;
-        else if (Array.isArray(resData?.assignedMachines)) assignedList = resData.assignedMachines;
+        else if (Array.isArray(resData?.assignedMachines))
+          assignedList = resData.assignedMachines;
         else if (Array.isArray(resData)) assignedList = resData;
       } catch (e) {
         console.warn("Failed to fetch assigned endpoint:", e);
@@ -119,10 +133,13 @@ export default function SupervisorServicesHub() {
       // 2. Fetch all company machines to get assignments if not returned above
       if (assignedList.length === 0) {
         try {
-          const res = await fetch(`${API_BASE}/machines${queryParam}`, { headers });
+          const res = await fetch(`${API_BASE}/machines${queryParam}`, {
+            headers,
+          });
           const resData = await res.json();
           let mList: any[] = [];
-          if (Array.isArray(resData?.data?.machines)) mList = resData.data.machines;
+          if (Array.isArray(resData?.data?.machines))
+            mList = resData.data.machines;
           else if (Array.isArray(resData?.data)) mList = resData.data;
           else if (Array.isArray(resData?.machines)) mList = resData.machines;
           else if (Array.isArray(resData)) mList = resData;
@@ -134,16 +151,41 @@ export default function SupervisorServicesHub() {
             serialNumber: m.serialNumber,
             equipmentType: m.equipmentType || m.category,
             site: m.site || m.location || "Active Mining Sector",
-            status: m.status || (m.healthScore < 50 ? "Critical" : m.healthScore < 85 ? "Warning" : "Optimal"),
+            status:
+              m.status ||
+              (m.healthScore < 50
+                ? "Critical"
+                : m.healthScore < 85
+                  ? "Warning"
+                  : "Optimal"),
             healthScore: m.healthScore ?? 100,
             assignedOperatorId: m.assignedOperatorId || m.operatorId || null,
-            assignedOperatorName: m.assignedOperatorName || m.operatorName || (m.assignedOperatorId ? `Operator (${m.assignedOperatorId})` : "David Martinez (Operator)"),
+            assignedOperatorName:
+              m.assignedOperatorName ||
+              m.operatorName ||
+              (m.assignedOperatorId
+                ? `Operator (${m.assignedOperatorId})`
+                : "David Martinez (Operator)"),
             assignedArtisanId: m.assignedArtisanId || m.artisanId || null,
-            assignedArtisanName: m.assignedArtisanName || m.artisanName || (m.assignedArtisanId ? `Artisan (${m.assignedArtisanId})` : "Alex Vance (Lead Mechanic)"),
-            assignedSupervisorId: m.assignedSupervisorId || m.supervisorId || null,
-            assignedSupervisorName: m.assignedSupervisorName || m.supervisorName || "Robert Vance (Chief Supervisor)",
-            assignedBySupervisor: m.assignedSupervisorName || "Chief Mining Supervisor",
-            assignedAt: m.assignedAt || m.updatedAt || m.createdAt || new Date().toISOString(),
+            assignedArtisanName:
+              m.assignedArtisanName ||
+              m.artisanName ||
+              (m.assignedArtisanId
+                ? `Artisan (${m.assignedArtisanId})`
+                : "Alex Vance (Lead Mechanic)"),
+            assignedSupervisorId:
+              m.assignedSupervisorId || m.supervisorId || null,
+            assignedSupervisorName:
+              m.assignedSupervisorName ||
+              m.supervisorName ||
+              "Robert Vance (Chief Supervisor)",
+            assignedBySupervisor:
+              m.assignedSupervisorName || "Chief Mining Supervisor",
+            assignedAt:
+              m.assignedAt ||
+              m.updatedAt ||
+              m.createdAt ||
+              new Date().toISOString(),
           }));
         } catch (e) {
           console.warn("Failed to fetch fleet machines fallback:", e);
@@ -153,63 +195,116 @@ export default function SupervisorServicesHub() {
       // 3. Fetch inspection/service audit history logs
       let auditLogs: any[] = [];
       try {
-        const res = await fetch(`${API_BASE}/machines/inspection-history${queryParam}`, { headers });
+        const res = await fetch(
+          `${API_BASE}/machines/inspection-history${queryParam}`,
+          { headers },
+        );
         const resData = await res.json();
-        if (Array.isArray(resData?.data?.historyLogs)) auditLogs = resData.data.historyLogs;
-        else if (Array.isArray(resData?.historyLogs)) auditLogs = resData.historyLogs;
+        if (Array.isArray(resData?.data?.historyLogs))
+          auditLogs = resData.data.historyLogs;
+        else if (Array.isArray(resData?.historyLogs))
+          auditLogs = resData.historyLogs;
         else if (Array.isArray(resData)) auditLogs = resData;
       } catch (e) {
         console.warn("Failed to fetch inspection history:", e);
       }
 
       // Map assigned machines into standard log items
-      const mappedAssignments: MachineAssignmentLog[] = assignedList.map((m: any, idx: number) => ({
-        id: `assign-${m.machineId || idx}`,
-        machineId: m.machineId || m.id || `M-${idx}`,
-        machineName: cleanMachineName(m.machineName || m.name || "Mining Machine"),
-        model: cleanMachineName(m.model || m.equipmentType || "Equipment Model"),
-        serialNumber: String(m.serialNumber || "").replace(/^DEMO-/i, "") || `SN-HME-${1000 + idx}`,
-        equipmentType: m.equipmentType || m.category || "Mining Equipment",
-        site: m.site || m.location || "Active Mining Sector",
-        status: m.status || (m.healthScore < 50 ? "Critical" : m.healthScore < 85 ? "Warning" : "Optimal"),
-        healthScore: m.healthScore !== undefined ? m.healthScore : 100,
-        assignedOperatorId: m.assignedOperatorId || null,
-        assignedOperatorName: m.assignedOperatorName || "David Martinez",
-        assignedArtisanId: m.assignedArtisanId || null,
-        assignedArtisanName: m.assignedArtisanName || "Alex Vance",
-        assignedSupervisorId: m.assignedSupervisorId || null,
-        assignedSupervisorName: m.assignedSupervisorName || m.assignedBySupervisor || "Robert Vance (Supervisor)",
-        assignedBySupervisor: m.assignedSupervisorName || m.assignedBySupervisor || "Robert Vance (Supervisor)",
-        assignedAt: m.assignedAt || m.updatedAt || new Date().toISOString(),
-        notes: `Assigned for standard production and daily mining operations.`,
-        logType: "assignment",
-      }));
+      const mappedAssignments: MachineAssignmentLog[] = assignedList.map(
+        (m: any, idx: number) => ({
+          id: `assign-${m.machineId || idx}`,
+          machineId: m.machineId || m.id || `M-${idx}`,
+          machineName: cleanMachineName(
+            m.machineName || m.name || "Mining Machine",
+          ),
+          model: cleanMachineName(
+            m.model || m.equipmentType || "Equipment Model",
+          ),
+          serialNumber:
+            String(m.serialNumber || "").replace(/^DEMO-/i, "") ||
+            `SN-HME-${1000 + idx}`,
+          equipmentType: m.equipmentType || m.category || "Mining Equipment",
+          site: m.site || m.location || "Active Mining Sector",
+          status:
+            m.status ||
+            (m.healthScore < 50
+              ? "Critical"
+              : m.healthScore < 85
+                ? "Warning"
+                : "Optimal"),
+          healthScore: m.healthScore !== undefined ? m.healthScore : 100,
+          assignedOperatorId: m.assignedOperatorId || null,
+          assignedOperatorName: m.assignedOperatorName || "David Martinez",
+          assignedArtisanId: m.assignedArtisanId || null,
+          assignedArtisanName: m.assignedArtisanName || "Alex Vance",
+          assignedSupervisorId: m.assignedSupervisorId || null,
+          assignedSupervisorName:
+            m.assignedSupervisorName ||
+            m.assignedBySupervisor ||
+            "Robert Vance (Supervisor)",
+          assignedBySupervisor:
+            m.assignedSupervisorName ||
+            m.assignedBySupervisor ||
+            "Robert Vance (Supervisor)",
+          assignedAt: m.assignedAt || m.updatedAt || new Date().toISOString(),
+          notes: `Assigned for standard production and daily mining operations.`,
+          logType: "assignment",
+        }),
+      );
 
       // Map audit inspection logs into standard items
-      const mappedAuditLogs: MachineAssignmentLog[] = auditLogs.map((log: any, idx: number) => {
-        const isSupervisor = String(log.userRole || "").toLowerCase().includes("super") || String(log.userRole || "").toLowerCase().includes("admin");
-        return {
-          id: `audit-${log.id || idx}`,
-          machineId: log.machineId || `M-${idx}`,
-          machineName: cleanMachineName(log.machineName || log.modelName || "Mining Machine"),
-          model: cleanMachineName(log.modelName || log.machineName || "Model"),
-          serialNumber: String(log.serialNumber || "").replace(/^DEMO-/i, "") || `SN-HME-${2000 + idx}`,
-          equipmentType: log.category || "Heavy Machinery",
-          site: "Active Mining Sector",
-          status: log.overallStatus || (log.overallHealthScore < 50 ? "Critical" : log.overallHealthScore < 85 ? "Warning" : "Optimal"),
-          healthScore: log.overallHealthScore ?? 100,
-          assignedOperatorId: !isSupervisor ? log.userId : null,
-          assignedOperatorName: !isSupervisor ? log.userName : "Operator Team",
-          assignedArtisanId: log.userId,
-          assignedArtisanName: log.userName || "Maintenance Tech",
-          assignedSupervisorId: isSupervisor ? log.userId : null,
-          assignedSupervisorName: isSupervisor ? `${log.userName} (${log.userRole})` : "Company Admin",
-          assignedBySupervisor: isSupervisor ? `${log.userName} (${log.userRole})` : "Company Admin",
-          assignedAt: log.createdAt || new Date().toISOString(),
-          notes: log.actionDescription || `${log.componentName || "Component"} Diagnostic Routine Inspection Recorded.`,
-          logType: "service",
-        };
-      });
+      const mappedAuditLogs: MachineAssignmentLog[] = auditLogs.map(
+        (log: any, idx: number) => {
+          const isSupervisor =
+            String(log.userRole || "")
+              .toLowerCase()
+              .includes("super") ||
+            String(log.userRole || "")
+              .toLowerCase()
+              .includes("admin");
+          return {
+            id: `audit-${log.id || idx}`,
+            machineId: log.machineId || `M-${idx}`,
+            machineName: cleanMachineName(
+              log.machineName || log.modelName || "Mining Machine",
+            ),
+            model: cleanMachineName(
+              log.modelName || log.machineName || "Model",
+            ),
+            serialNumber:
+              String(log.serialNumber || "").replace(/^DEMO-/i, "") ||
+              `SN-HME-${2000 + idx}`,
+            equipmentType: log.category || "Heavy Machinery",
+            site: "Active Mining Sector",
+            status:
+              log.overallStatus ||
+              (log.overallHealthScore < 50
+                ? "Critical"
+                : log.overallHealthScore < 85
+                  ? "Warning"
+                  : "Optimal"),
+            healthScore: log.overallHealthScore ?? 100,
+            assignedOperatorId: !isSupervisor ? log.userId : null,
+            assignedOperatorName: !isSupervisor
+              ? log.userName
+              : "Operator Team",
+            assignedArtisanId: log.userId,
+            assignedArtisanName: log.userName || "Maintenance Tech",
+            assignedSupervisorId: isSupervisor ? log.userId : null,
+            assignedSupervisorName: isSupervisor
+              ? `${log.userName} (${log.userRole})`
+              : "Company Admin",
+            assignedBySupervisor: isSupervisor
+              ? `${log.userName} (${log.userRole})`
+              : "Company Admin",
+            assignedAt: log.createdAt || new Date().toISOString(),
+            notes:
+              log.actionDescription ||
+              `${log.componentName || "Component"} Diagnostic Routine Inspection Recorded.`,
+            logType: "service",
+          };
+        },
+      );
 
       // Combine all assignment records
       const combined = [...mappedAssignments, ...mappedAuditLogs];
@@ -225,11 +320,10 @@ export default function SupervisorServicesHub() {
     fetchAssignmentData();
   }, []);
 
-  // Supervisor unique list for dropdown
   const uniqueSupervisors = useMemo(() => {
     const list = assignments
       .map((a) => a.assignedSupervisorName || a.assignedBySupervisor)
-      .filter(Boolean);
+      .filter((s): s is string => Boolean(s));
     return ["All", ...Array.from(new Set(list))];
   }, [assignments]);
 
@@ -237,7 +331,8 @@ export default function SupervisorServicesHub() {
   const filteredLogs = useMemo(() => {
     return assignments.filter((item) => {
       // Tab filter
-      if (activeTab === "assigned" && item.logType !== "assignment") return false;
+      if (activeTab === "assigned" && item.logType !== "assignment")
+        return false;
       if (activeTab === "service" && item.logType !== "service") return false;
 
       // Supervisor filter
@@ -280,10 +375,20 @@ export default function SupervisorServicesHub() {
 
   // Statistics
   const stats = useMemo(() => {
-    const assignedCount = assignments.filter((a) => a.assignedOperatorName || a.assignedArtisanName).length;
-    const operatorsCount = new Set(assignments.map((a) => a.assignedOperatorName).filter(Boolean)).size;
-    const artisansCount = new Set(assignments.map((a) => a.assignedArtisanName).filter(Boolean)).size;
-    const supervisorsCount = new Set(assignments.map((a) => a.assignedSupervisorName || a.assignedBySupervisor).filter(Boolean)).size;
+    const assignedCount = assignments.filter(
+      (a) => a.assignedOperatorName || a.assignedArtisanName,
+    ).length;
+    const operatorsCount = new Set(
+      assignments.map((a) => a.assignedOperatorName).filter(Boolean),
+    ).size;
+    const artisansCount = new Set(
+      assignments.map((a) => a.assignedArtisanName).filter(Boolean),
+    ).size;
+    const supervisorsCount = new Set(
+      assignments
+        .map((a) => a.assignedSupervisorName || a.assignedBySupervisor)
+        .filter(Boolean),
+    ).size;
 
     return {
       totalAssignments: assignedCount,
@@ -315,7 +420,9 @@ export default function SupervisorServicesHub() {
                 </h1>
 
                 <p className="mt-2 max-w-3xl text-xs font-medium leading-5 text-blue-100 sm:text-sm">
-                  Chronological records of which supervisor assigned each machine to operators and artisans, complete with timestamps, operating sites, and diagnostic health status.
+                  Chronological records of which supervisor assigned each
+                  machine to operators and artisans, complete with timestamps,
+                  operating sites, and diagnostic health status.
                 </p>
               </div>
 
@@ -325,7 +432,10 @@ export default function SupervisorServicesHub() {
                 disabled={loading}
                 className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/95 px-4 text-xs font-bold text-[#3730D9] shadow-lg shadow-black/10 transition hover:bg-white cursor-pointer"
               >
-                <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
+                <RefreshCw
+                  size={15}
+                  className={loading ? "animate-spin" : ""}
+                />
                 Refresh Logs
               </button>
             </div>
@@ -335,46 +445,71 @@ export default function SupervisorServicesHub() {
           <div className="grid grid-cols-2 gap-4 p-5 sm:grid-cols-4">
             <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4 dark:border-slate-800 dark:bg-[#101f33]/60">
               <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
-                <span className="text-xs font-bold uppercase tracking-wider">Assigned Machines</span>
+                <span className="text-xs font-bold uppercase tracking-wider">
+                  Assigned Machines
+                </span>
                 <Truck size={18} className="text-blue-600 dark:text-blue-400" />
               </div>
               <p className="mt-2 text-2xl font-black text-slate-900 dark:text-white">
                 {stats.totalAssignments}
               </p>
-              <p className="mt-0.5 text-[11px] font-semibold text-slate-400">Across Active Fleet</p>
+              <p className="mt-0.5 text-[11px] font-semibold text-slate-400">
+                Across Active Fleet
+              </p>
             </div>
 
             <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4 dark:border-slate-800 dark:bg-[#101f33]/60">
               <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
-                <span className="text-xs font-bold uppercase tracking-wider">Assigned Operators</span>
-                <User size={18} className="text-emerald-600 dark:text-emerald-400" />
+                <span className="text-xs font-bold uppercase tracking-wider">
+                  Assigned Operators
+                </span>
+                <User
+                  size={18}
+                  className="text-emerald-600 dark:text-emerald-400"
+                />
               </div>
               <p className="mt-2 text-2xl font-black text-slate-900 dark:text-white">
                 {stats.operatorsCount}
               </p>
-              <p className="mt-0.5 text-[11px] font-semibold text-slate-400">Active Daily Drivers</p>
+              <p className="mt-0.5 text-[11px] font-semibold text-slate-400">
+                Active Daily Drivers
+              </p>
             </div>
 
             <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4 dark:border-slate-800 dark:bg-[#101f33]/60">
               <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
-                <span className="text-xs font-bold uppercase tracking-wider">Assigned Artisans</span>
-                <Wrench size={18} className="text-amber-600 dark:text-amber-400" />
+                <span className="text-xs font-bold uppercase tracking-wider">
+                  Assigned Artisans
+                </span>
+                <Wrench
+                  size={18}
+                  className="text-amber-600 dark:text-amber-400"
+                />
               </div>
               <p className="mt-2 text-2xl font-black text-slate-900 dark:text-white">
                 {stats.artisansCount}
               </p>
-              <p className="mt-0.5 text-[11px] font-semibold text-slate-400">Maintenance Technicians</p>
+              <p className="mt-0.5 text-[11px] font-semibold text-slate-400">
+                Maintenance Technicians
+              </p>
             </div>
 
             <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4 dark:border-slate-800 dark:bg-[#101f33]/60">
               <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
-                <span className="text-xs font-bold uppercase tracking-wider">Supervisors Logged</span>
-                <ShieldCheck size={18} className="text-purple-600 dark:text-purple-400" />
+                <span className="text-xs font-bold uppercase tracking-wider">
+                  Supervisors Logged
+                </span>
+                <ShieldCheck
+                  size={18}
+                  className="text-purple-600 dark:text-purple-400"
+                />
               </div>
               <p className="mt-2 text-2xl font-black text-slate-900 dark:text-white">
                 {stats.supervisorsCount}
               </p>
-              <p className="mt-0.5 text-[11px] font-semibold text-slate-400">Assigning Authorities</p>
+              <p className="mt-0.5 text-[11px] font-semibold text-slate-400">
+                Assigning Authorities
+              </p>
             </div>
           </div>
         </div>
@@ -446,7 +581,7 @@ export default function SupervisorServicesHub() {
                   >
                     <option value="All">🛡️ All Supervisors</option>
                     {uniqueSupervisors
-                      .filter((s) => s !== "All")
+                      .filter((s): s is string => Boolean(s) && s !== "All")
                       .map((sup) => (
                         <option key={sup} value={sup}>
                           {sup}
@@ -465,8 +600,12 @@ export default function SupervisorServicesHub() {
                 <tr className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-[0.14em] text-slate-500 dark:border-slate-800 dark:bg-slate-950/60">
                   <th className="w-14 px-4 py-4 text-center font-bold">#</th>
                   <th className="px-6 py-4 font-bold">Equipment & Serial</th>
-                  <th className="px-6 py-4 font-bold">Assigned To (Operator / Artisan)</th>
-                  <th className="px-6 py-4 font-bold">Assigned By (Supervisor)</th>
+                  <th className="px-6 py-4 font-bold">
+                    Assigned To (Operator / Artisan)
+                  </th>
+                  <th className="px-6 py-4 font-bold">
+                    Assigned By (Supervisor)
+                  </th>
                   <th className="px-6 py-4 font-bold">Date & Time</th>
                   <th className="px-6 py-4 font-bold">Health Status</th>
                   <th className="px-6 py-4 text-center font-bold">Action</th>
@@ -478,7 +617,10 @@ export default function SupervisorServicesHub() {
                   <tr>
                     <td colSpan={7} className="px-6 py-16 text-center">
                       <div className="flex flex-col items-center justify-center gap-3">
-                        <RefreshCw className="animate-spin text-blue-600" size={24} />
+                        <RefreshCw
+                          className="animate-spin text-blue-600"
+                          size={24}
+                        />
                         <p className="text-sm font-extrabold text-slate-700 dark:text-slate-300">
                           Loading machine assignment and service records...
                         </p>
@@ -487,14 +629,19 @@ export default function SupervisorServicesHub() {
                   </tr>
                 ) : paginatedLogs.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-6 py-16 text-center text-slate-500 dark:text-slate-400">
+                    <td
+                      colSpan={7}
+                      className="px-6 py-16 text-center text-slate-500 dark:text-slate-400"
+                    >
                       <div className="flex flex-col items-center justify-center gap-2">
                         <Wrench size={28} className="text-slate-400" />
                         <p className="text-sm font-extrabold text-slate-900 dark:text-white">
                           No assignment records found
                         </p>
                         <p className="text-xs text-slate-400">
-                          {searchTerm ? "Try searching with a different keyword." : "Machines assigned by supervisors will appear here."}
+                          {searchTerm
+                            ? "Try searching with a different keyword."
+                            : "Machines assigned by supervisors will appear here."}
                         </p>
                       </div>
                     </td>
@@ -504,7 +651,8 @@ export default function SupervisorServicesHub() {
                     const rowNumber = (currentPage - 1) * pageSize + index + 1;
                     const score = log.healthScore ?? 100;
                     const isCrit = score < 50 || log.status === "Critical";
-                    const isWarn = (!isCrit && score < 85) || log.status === "Warning";
+                    const isWarn =
+                      (!isCrit && score < 85) || log.status === "Warning";
 
                     return (
                       <tr
@@ -564,11 +712,12 @@ export default function SupervisorServicesHub() {
                               </div>
                             )}
 
-                            {!log.assignedOperatorName && !log.assignedArtisanName && (
-                              <span className="text-xs font-semibold text-slate-400">
-                                Unassigned
-                              </span>
-                            )}
+                            {!log.assignedOperatorName &&
+                              !log.assignedArtisanName && (
+                                <span className="text-xs font-semibold text-slate-400">
+                                  Unassigned
+                                </span>
+                              )}
                           </div>
                         </td>
 
@@ -580,7 +729,9 @@ export default function SupervisorServicesHub() {
                             </div>
                             <div className="flex flex-col">
                               <span className="text-xs font-bold text-slate-900 dark:text-white">
-                                {log.assignedSupervisorName || log.assignedBySupervisor || "Chief Supervisor"}
+                                {log.assignedSupervisorName ||
+                                  log.assignedBySupervisor ||
+                                  "Chief Supervisor"}
                               </span>
                               <span className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400">
                                 Authorizing Supervisor
@@ -608,16 +759,25 @@ export default function SupervisorServicesHub() {
                               isCrit
                                 ? "border-red-200 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"
                                 : isWarn
-                                ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
-                                : "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300"
+                                  ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
+                                  : "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300"
                             }`}
                           >
                             <span
                               className={`h-2 w-2 rounded-full ${
-                                isCrit ? "bg-red-500" : isWarn ? "bg-amber-500" : "bg-emerald-500"
+                                isCrit
+                                  ? "bg-red-500"
+                                  : isWarn
+                                    ? "bg-amber-500"
+                                    : "bg-emerald-500"
                               }`}
                             />
-                            {isCrit ? "Critical" : isWarn ? "Warning" : "Optimal"} {score}%
+                            {isCrit
+                              ? "Critical"
+                              : isWarn
+                                ? "Warning"
+                                : "Optimal"}{" "}
+                            {score}%
                           </span>
                         </td>
 
@@ -680,7 +840,9 @@ export default function SupervisorServicesHub() {
               <button
                 type="button"
                 disabled={currentPage >= totalPages}
-                onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+                onClick={() =>
+                  setCurrentPage((p) => Math.min(p + 1, totalPages))
+                }
                 className="inline-flex h-9 items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-40 dark:border-slate-800 dark:bg-[#101f33] dark:text-slate-300 cursor-pointer"
               >
                 Next
@@ -790,7 +952,10 @@ function AssignmentDetailModal({
               Authorized & Assigned By (Supervisor)
             </span>
             <p className="mt-1 text-sm font-extrabold text-slate-900 dark:text-white">
-              🛡️ {log.assignedSupervisorName || log.assignedBySupervisor || "Chief Supervisor"}
+              🛡️{" "}
+              {log.assignedSupervisorName ||
+                log.assignedBySupervisor ||
+                "Chief Supervisor"}
             </p>
             <p className="mt-0.5 text-[11px] text-slate-400">
               Site: {log.site} • Recorded: {formatDate(log.assignedAt)}
@@ -803,7 +968,8 @@ function AssignmentDetailModal({
               Operational Notes & Remarks
             </span>
             <p className="mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-300">
-              {log.notes || "Machine is assigned and ready for daily operations."}
+              {log.notes ||
+                "Machine is assigned and ready for daily operations."}
             </p>
           </div>
         </div>
@@ -820,6 +986,6 @@ function AssignmentDetailModal({
         </div>
       </div>
     </div>,
-    document.body
+    document.body,
   );
 }

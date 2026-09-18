@@ -905,8 +905,8 @@ export default function Users() {
     try {
       setLoggingInUserId(user.id);
 
-      const response: any = await authService.impersonate({
-        userId: user.id,
+           const response: any = await authService.impersonate({
+        userId: String(user.id),
         companyId: user.companyId,
         email: user.email && user.email !== "—" ? user.email : undefined,
       });

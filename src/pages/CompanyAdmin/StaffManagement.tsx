@@ -105,6 +105,7 @@ const emptyForm: StaffFormData = {
   password: "",
   mobileNumber: "",
   roleName: "",
+  companyId: "",
   isActive: true,
 };
 

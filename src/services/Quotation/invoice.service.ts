@@ -52,6 +52,7 @@ export interface Invoice {
   readonly notes: string | null;
 
   readonly status: InvoiceStatus;
+  readonly paymentProofStatus?: "PENDING_VERIFICATION" | "VERIFIED" | null;
   readonly invoiceDate: string;
   readonly dueDate: string;
 

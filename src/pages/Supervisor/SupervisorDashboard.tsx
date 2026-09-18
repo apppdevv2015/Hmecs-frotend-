@@ -26,6 +26,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { fetchArtisanAssignments, selectArtisanAssignments } from "../../redux/slices/artisanAssignmentSlice";
 import { fleetService } from "../../services/Fleet/fleetService";
+import { machineService } from "../../services/companyadmin/machineService";
 import { componentService } from "../../services/companyadmin/componentService";
 import { supervisorTaskService } from "../../services/Task/supervisorTaskService";
 import { supervisorAlertsService, type AlertItem } from "../../services/Task/supervisorAlertsService";

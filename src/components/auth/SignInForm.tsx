@@ -89,6 +89,7 @@ type DecodedToken = {
   company?: string;
   companyId?: string;
   company_id?: string;
+  isActive?: boolean;
   user?: LoginUser;
   data?: {
     id?: string | number;

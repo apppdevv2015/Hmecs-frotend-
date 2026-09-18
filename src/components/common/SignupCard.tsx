@@ -28,7 +28,6 @@ import {
 
 } from "../../services/SuperAdmin/quotation/quotationInquiryService";
 
-} from "../../services/SuperAdmin/quotationInquiryService";
 
 import { showLoadingToast, updateToast } from "../../utils/toastUtils";
 import StorageService from "../../services/storage.service";
@@ -38,7 +37,6 @@ import {
 
 } from "../../services/SuperAdmin/quotation/optionalService";
 
-} from "../../services/SuperAdmin/optionalService";
 
 
 import {
@@ -1011,6 +1009,7 @@ interface RequestQuotationModalProps {
   phone: string;
   siteLocation?: string;
   equipmentTypeOptions: SelectOption[];
+  optionalServiceOptions: SelectOption[];
   isLoadingDynamicOptions: boolean;
   /**
    * The backend contract stores attachments as a URL

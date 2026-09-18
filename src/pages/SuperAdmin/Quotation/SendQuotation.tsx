@@ -226,7 +226,8 @@ const computeQuotationTotals = (params: {
 ============================================================ */
 
 const SendQuotation: FC = () => {
-  const initialInquiry = ACCEPTED_INQUIRIES.length > 0 ? ACCEPTED_INQUIRIES[0] : undefined;
+  const initialInquiry =
+    ACCEPTED_INQUIRIES.length > 0 ? ACCEPTED_INQUIRIES[0] : undefined;
 
   const [selectedInquiryId, setSelectedInquiryId] = useState<string>(
     initialInquiry !== undefined ? initialInquiry.id : "",
@@ -274,9 +275,10 @@ const SendQuotation: FC = () => {
   const selectedServiceLineItems = useMemo(() => {
     return selectedServiceIds.map((serviceId) => {
       const catalogueEntry = findOptionalServiceById(serviceId);
-      const amount = serviceAmountById[serviceId] !== undefined
-        ? serviceAmountById[serviceId]
-        : 0;
+      const amount =
+        serviceAmountById[serviceId] !== undefined
+          ? serviceAmountById[serviceId]
+          : 0;
 
       return {
         id: serviceId,
@@ -373,20 +375,26 @@ const SendQuotation: FC = () => {
         contactPhone: selectedInquiry.phone,
         tier: "Enterprise",
         machineCount: selectedInquiry.activeMachines,
+        licensedMachineAllowance,
         contractDuration,
         billingFrequency: paymentTerms,
+        implementationFee,
+        monthlySiteLicence,
+        additionalMachineCharge,
         baseAmount: quotationTotals.totalOneTimeCharges,
         optionalServicesAmount: quotationTotals.selectedServicesTotal,
         discountAmount: 0,
         totalAmount: quotationTotals.totalContractValue,
         optionalServices: selectedServiceLineItems.map((lineItem) => ({
           serviceId: lineItem.id,
-          serviceName: lineItem.name,
-          quantity: 1,
-          amount: lineItem.amount,
+          name: lineItem.name,
+          price: lineItem.amount,
         })),
         paymentTerms,
-        validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        notes: "",
+        validUntil: new Date(
+          Date.now() + 30 * 24 * 60 * 60 * 1000,
+        ).toISOString(),
       });
     } finally {
       setIsSending(false);
@@ -407,8 +415,8 @@ const SendQuotation: FC = () => {
         </h2>
 
         <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-          Accepted quotation inquiries will appear here when they are ready
-          for quotation preparation.
+          Accepted quotation inquiries will appear here when they are ready for
+          quotation preparation.
         </p>
       </section>
     );
@@ -421,7 +429,6 @@ const SendQuotation: FC = () => {
   return (
     <>
       <section className="w-full">
-        
         {/* ======================================================
             INQUIRY SELECTOR
         ====================================================== */}
@@ -493,20 +500,11 @@ const SendQuotation: FC = () => {
                     value={selectedInquiry.contactPerson}
                   />
 
-                  <InfoItem
-                    label="Email"
-                    value={selectedInquiry.email}
-                  />
+                  <InfoItem label="Email" value={selectedInquiry.email} />
 
-                  <InfoItem
-                    label="Phone"
-                    value={selectedInquiry.phone}
-                  />
+                  <InfoItem label="Phone" value={selectedInquiry.phone} />
 
-                  <InfoItem
-                    label="Site"
-                    value={selectedInquiry.siteName}
-                  />
+                  <InfoItem label="Site" value={selectedInquiry.siteName} />
 
                   <InfoItem
                     label="Quotation Type"
@@ -568,7 +566,6 @@ const SendQuotation: FC = () => {
                       }}
                       className={inputClassName}
                     />
-
                   </Field>
 
                   <Field>
@@ -632,9 +629,7 @@ const SendQuotation: FC = () => {
 
                 <div className="space-y-3">
                   {OPTIONAL_SERVICES.map((service) => {
-                    const isSelected = selectedServiceIds.includes(
-                      service.id,
-                    );
+                    const isSelected = selectedServiceIds.includes(service.id);
                     const currentAmount =
                       serviceAmountById[service.id] !== undefined
                         ? serviceAmountById[service.id]
@@ -654,9 +649,7 @@ const SendQuotation: FC = () => {
                             <input
                               type="checkbox"
                               checked={isSelected}
-                              onChange={() =>
-                                toggleOptionalService(service.id)
-                              }
+                              onChange={() => toggleOptionalService(service.id)}
                               className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                             />
 
@@ -1272,9 +1265,7 @@ interface SummaryRowProps {
 
 const SummaryRow: FC<SummaryRowProps> = ({ label, value }) => (
   <div className="flex items-start justify-between gap-4">
-    <span className="text-sm text-slate-500 dark:text-slate-400">
-      {label}
-    </span>
+    <span className="text-sm text-slate-500 dark:text-slate-400">{label}</span>
 
     <span className="text-right text-sm font-semibold text-slate-900 dark:text-slate-100">
       {value}

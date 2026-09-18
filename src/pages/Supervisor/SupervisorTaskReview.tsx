@@ -20,6 +20,7 @@ import {
 import AppSelect from "../../components/ui/dropdown/AppSelect";
 import Pagination from "../../components/common/Pagination";
 import { showSuccessToast, showErrorToast } from "../../utils/toastUtils";
+import StorageService from "../../services/storage.service";
 import { apiCall } from "../../services/apiHandler";
 
 export type ReviewTaskItem = {
@@ -68,27 +69,44 @@ export default function SupervisorTaskReview() {
 
     try {
       const storedUser = StorageService.getUser() || {};
-      const compId = storedUser?.companyId || storedUser?.company_id || StorageService.getCompanyId() || "";
-      const queryParam = compId ? `?companyId=${encodeURIComponent(compId)}` : "";
+      const compId =
+        storedUser?.companyId ||
+        storedUser?.company_id ||
+        StorageService.getCompanyId() ||
+        "";
+      const queryParam = compId
+        ? `?companyId=${encodeURIComponent(compId)}`
+        : "";
 
       // 1. Fetch Real Database Inspection Audit Logs from PostgreSQL table (machine_inspection_audit_logs)
-      const [inspectionRes, assignedMachinesRes, jobCardsRes] = await Promise.allSettled([
-        apiCall<any>(`/machines/inspection-history${queryParam}`, { method: "GET" }).catch(() =>
-          apiCall<any>(`/machines/all/inspection-history${queryParam}`, { method: "GET" }).catch(() => null)
-        ),
-        apiCall<any>(`/machines/assigned${queryParam}`, { method: "GET" }).catch(() =>
-          apiCall<any>(`/machines/assignments${queryParam}`, { method: "GET" }).catch(() => null)
-        ),
-        apiCall<any>(`/job-cards${queryParam}`, { method: "GET" }).catch(() => null),
-      ]);
+      const [inspectionRes, assignedMachinesRes, jobCardsRes] =
+        await Promise.allSettled([
+          apiCall<any>(`/machines/inspection-history${queryParam}`, {
+            method: "GET",
+          }).catch(() =>
+            apiCall<any>(`/machines/all/inspection-history${queryParam}`, {
+              method: "GET",
+            }).catch(() => null),
+          ),
+          apiCall<any>(`/machines/assigned${queryParam}`, {
+            method: "GET",
+          }).catch(() =>
+            apiCall<any>(`/machines/assignments${queryParam}`, {
+              method: "GET",
+            }).catch(() => null),
+          ),
+          apiCall<any>(`/job-cards${queryParam}`, { method: "GET" }).catch(
+            () => null,
+          ),
+        ]);
 
       if (inspectionRes.status === "fulfilled" && inspectionRes.value) {
         const histData = inspectionRes.value.data || inspectionRes.value;
         const logsArray = Array.isArray(histData?.historyLogs)
           ? histData.historyLogs
           : Array.isArray(histData)
-          ? histData
-          : [];
+            ? histData
+            : [];
 
         logsArray.forEach((item: any, idx: number) => {
           const issuesData = typeof item.issues === "object" ? item.issues : {};
@@ -98,15 +116,28 @@ export default function SupervisorTaskReview() {
             taskId: `OP-INSP-${item.id.slice(-6)}`,
             role: "Operator",
             assignedName: name,
-            assignedEmail: item.userEmail || `${name.toLowerCase().replace(/\s+/g, ".")}@hme.com`,
-            machineName: item.machineName || item.modelName || "Heavy Equipment",
+            assignedEmail:
+              item.userEmail ||
+              `${name.toLowerCase().replace(/\s+/g, ".")}@hme.com`,
+            machineName:
+              item.machineName || item.modelName || "Heavy Equipment",
             componentName: item.componentName || "All Components",
             workScope: `Pre-start inspection for ${item.componentName || "all components"}.`,
             priority: item.componentHealthScore < 50 ? "High" : "Medium",
-            assignedAt: item.createdAt ? new Date(item.createdAt).toLocaleDateString() : new Date().toLocaleDateString(),
-            dueDate: item.createdAt ? new Date(item.createdAt).toLocaleDateString() : new Date().toLocaleDateString(),
-            status: item.status === "Approved & Verified" ? "Completed" : "In Progress",
-            approvalStatus: item.status === "Approved & Verified" ? "Approved" : "Pending Review",
+            assignedAt: item.createdAt
+              ? new Date(item.createdAt).toLocaleDateString()
+              : new Date().toLocaleDateString(),
+            dueDate: item.createdAt
+              ? new Date(item.createdAt).toLocaleDateString()
+              : new Date().toLocaleDateString(),
+            status:
+              item.status === "Approved & Verified"
+                ? "Completed"
+                : "In Progress",
+            approvalStatus:
+              item.status === "Approved & Verified"
+                ? "Approved"
+                : "Pending Review",
             supervisorRemarks: issuesData.supervisorRemarks || "",
             supervisorName: issuesData.supervisorName || "Supervisor",
             reviewedAt: issuesData.reviewedAt || "",
@@ -115,12 +146,20 @@ export default function SupervisorTaskReview() {
       }
 
       // 2. Fetch Real Database Assigned Machines from PostgreSQL table (machines)
-      if (assignedMachinesRes.status === "fulfilled" && assignedMachinesRes.value) {
-        const mData = assignedMachinesRes.value.data || assignedMachinesRes.value;
+      if (
+        assignedMachinesRes.status === "fulfilled" &&
+        assignedMachinesRes.value
+      ) {
+        const mData =
+          assignedMachinesRes.value.data || assignedMachinesRes.value;
         const mArray = Array.isArray(mData) ? mData : [];
         mArray.forEach((m: any, idx: number) => {
           if (m.assignedOperatorName) {
-            const alreadyExists = combined.some((t) => t.machineName === m.name && t.assignedName === m.assignedOperatorName);
+            const alreadyExists = combined.some(
+              (t) =>
+                t.machineName === m.name &&
+                t.assignedName === m.assignedOperatorName,
+            );
             if (!alreadyExists) {
               combined.push({
                 id: m.id || `op_m_${idx}`,
@@ -132,7 +171,9 @@ export default function SupervisorTaskReview() {
                 componentName: "Vehicle Fleet Unit",
                 workScope: `Operational haulage and shift pre-start check for ${m.name}.`,
                 priority: "High",
-                assignedAt: new Date(m.updatedAt || m.createdAt).toLocaleDateString(),
+                assignedAt: new Date(
+                  m.updatedAt || m.createdAt,
+                ).toLocaleDateString(),
                 dueDate: new Date(Date.now() + 86400000).toLocaleDateString(),
                 status: "In Progress",
                 approvalStatus: "Pending Review",
@@ -151,9 +192,12 @@ export default function SupervisorTaskReview() {
               assignedEmail: `${m.assignedArtisanName.toLowerCase().replace(/\s+/g, ".")}@hme.com`,
               machineName: m.name || m.model || "Machine Unit",
               componentName: m.components?.[0]?.name || "Mechanical Assembly",
-              workScope: "Component scheduled maintenance and diagnostic check.",
+              workScope:
+                "Component scheduled maintenance and diagnostic check.",
               priority: "Medium",
-              assignedAt: new Date(m.updatedAt || m.createdAt).toLocaleDateString(),
+              assignedAt: new Date(
+                m.updatedAt || m.createdAt,
+              ).toLocaleDateString(),
               dueDate: new Date(Date.now() + 172800000).toLocaleDateString(),
               status: "In Progress",
               approvalStatus: "Pending Review",
@@ -167,7 +211,11 @@ export default function SupervisorTaskReview() {
       // 3. Fetch Real Job Cards from PostgreSQL table (job_cards)
       if (jobCardsRes.status === "fulfilled" && jobCardsRes.value) {
         const jcData = jobCardsRes.value.data || jobCardsRes.value;
-        const jcArray = Array.isArray(jcData) ? jcData : Array.isArray(jcData?.jobCards) ? jcData.jobCards : [];
+        const jcArray = Array.isArray(jcData)
+          ? jcData
+          : Array.isArray(jcData?.jobCards)
+            ? jcData.jobCards
+            : [];
         jcArray.forEach((jc: any, idx: number) => {
           combined.push({
             id: jc.id || `jc_${idx}`,
@@ -179,13 +227,27 @@ export default function SupervisorTaskReview() {
             componentName: jc.component?.name || "Assembly Component",
             workScope: jc.description || jc.title || "Job card maintenance.",
             priority: jc.priority === "HIGH" ? "High" : "Medium",
-            assignedAt: jc.plannedStartDate ? new Date(jc.plannedStartDate).toLocaleDateString() : new Date().toLocaleDateString(),
-            dueDate: jc.plannedFinishDate ? new Date(jc.plannedFinishDate).toLocaleDateString() : new Date().toLocaleDateString(),
-            status: jc.status === "COMPLETED" ? "Completed" : jc.status === "CLOSED" ? "Closed" : "In Progress",
-            approvalStatus: jc.status === "COMPLETED" || jc.status === "CLOSED" ? "Approved" : "Pending Review",
+            assignedAt: jc.plannedStartDate
+              ? new Date(jc.plannedStartDate).toLocaleDateString()
+              : new Date().toLocaleDateString(),
+            dueDate: jc.plannedFinishDate
+              ? new Date(jc.plannedFinishDate).toLocaleDateString()
+              : new Date().toLocaleDateString(),
+            status:
+              jc.status === "COMPLETED"
+                ? "Completed"
+                : jc.status === "CLOSED"
+                  ? "Closed"
+                  : "In Progress",
+            approvalStatus:
+              jc.status === "COMPLETED" || jc.status === "CLOSED"
+                ? "Approved"
+                : "Pending Review",
             supervisorRemarks: jc.supervisorNotes || "",
             supervisorName: jc.assignedSupervisorName || "Supervisor",
-            reviewedAt: jc.supervisorApprovedAt ? new Date(jc.supervisorApprovedAt).toLocaleString() : "",
+            reviewedAt: jc.supervisorApprovedAt
+              ? new Date(jc.supervisorApprovedAt).toLocaleString()
+              : "",
           });
         });
       }
@@ -208,11 +270,15 @@ export default function SupervisorTaskReview() {
         t.taskId.toLowerCase().includes(search.toLowerCase()) ||
         t.assignedName.toLowerCase().includes(search.toLowerCase()) ||
         t.machineName.toLowerCase().includes(search.toLowerCase()) ||
-        (t.componentName && t.componentName.toLowerCase().includes(search.toLowerCase())) ||
+        (t.componentName &&
+          t.componentName.toLowerCase().includes(search.toLowerCase())) ||
         t.workScope.toLowerCase().includes(search.toLowerCase());
 
       const matchRole = roleFilter === "All" || t.role === roleFilter;
-      const matchStatus = statusFilter === "All" || t.status === statusFilter || t.approvalStatus === statusFilter;
+      const matchStatus =
+        statusFilter === "All" ||
+        t.status === statusFilter ||
+        t.approvalStatus === statusFilter;
 
       return matchSearch && matchRole && matchStatus;
     });
@@ -232,21 +298,27 @@ export default function SupervisorTaskReview() {
     if (!selectedTask) return;
     setIsSubmitting(true);
 
-    const isExtended = updatedStatus === "Date Extended" || updatedApproval === "Date Extended";
-    const finalDueDate = isExtended && extendedDueDate ? extendedDueDate : selectedTask.dueDate;
+    const isExtended =
+      updatedStatus === "Date Extended" || updatedApproval === "Date Extended";
+    const finalDueDate =
+      isExtended && extendedDueDate ? extendedDueDate : selectedTask.dueDate;
 
     try {
       // 1. Submit review directly to PostgreSQL database table (machine_inspection_audit_logs / job_cards)
-      await apiCall(`/machines/inspection-history/${encodeURIComponent(selectedTask.id)}/review`, {
-        method: "POST",
-        body: JSON.stringify({
-          supervisorRemarks: remarks,
-          reviewRating: "Approved & Verified",
-          supervisorName: "Supervisor",
-          operatorName: selectedTask.assignedName,
-          machineName: selectedTask.machineName,
-        }),
-      }, { showError: false }).catch(() => null);
+      await apiCall(
+        `/machines/inspection-history/${encodeURIComponent(selectedTask.id)}/review`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            supervisorRemarks: remarks,
+            reviewRating: "Approved & Verified",
+            supervisorName: "Supervisor",
+            operatorName: selectedTask.assignedName,
+            machineName: selectedTask.machineName,
+          }),
+        },
+        { showError: false },
+      ).catch(() => null);
 
       // 2. Dispatch live notification to operator/artisan in PostgreSQL database
       const globalNotif = {
@@ -283,18 +355,24 @@ export default function SupervisorTaskReview() {
       setIsSubmitting(false);
       setSelectedTask(null);
       showSuccessToast(
-        `✓ Task Review Email Sent! Task ${selectedTask.taskId} status updated to [${updatedStatus}]. Email notification dispatched to ${selectedTask.assignedName} (${selectedTask.assignedEmail})`
+        `✓ Task Review Email Sent! Task ${selectedTask.taskId} status updated to [${updatedStatus}]. Email notification dispatched to ${selectedTask.assignedName} (${selectedTask.assignedEmail})`,
       );
     }, 600);
   };
 
   const isShowAll = itemsPerPage === "all";
   const activeListLength = filteredTasks.length;
-  const effectivePageSize = isShowAll ? Math.max(1, activeListLength) : itemsPerPage;
-  const totalPages = isShowAll ? 1 : Math.max(1, Math.ceil(activeListLength / effectivePageSize));
+  const effectivePageSize = isShowAll
+    ? Math.max(1, activeListLength)
+    : itemsPerPage;
+  const totalPages = isShowAll
+    ? 1
+    : Math.max(1, Math.ceil(activeListLength / effectivePageSize));
   const startIndex = (currentPage - 1) * effectivePageSize;
   const startItem = activeListLength === 0 ? 0 : isShowAll ? 1 : startIndex + 1;
-  const endItem = isShowAll ? activeListLength : Math.min(startIndex + effectivePageSize, activeListLength);
+  const endItem = isShowAll
+    ? activeListLength
+    : Math.min(startIndex + effectivePageSize, activeListLength);
 
   return (
     <div className="space-y-6 p-4 md:p-6 font-sans">
@@ -315,7 +393,10 @@ export default function SupervisorTaskReview() {
             </h1>
 
             <p className="mt-2 max-w-2xl text-sm leading-6 text-blue-100">
-              Review task execution progress (`In Progress`, `Completed`, `Closed`, `Date Extended`), grant supervisor approvals, extend target completion dates, and send automated status emails to Artisans & Operators.
+              Review task execution progress (`In Progress`, `Completed`,
+              `Closed`, `Date Extended`), grant supervisor approvals, extend
+              target completion dates, and send automated status emails to
+              Artisans & Operators.
             </p>
           </div>
 
@@ -336,8 +417,12 @@ export default function SupervisorTaskReview() {
         <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xs dark:border-slate-800 dark:bg-slate-900">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Total Tasks Under Review</p>
-              <h2 className="mt-2 text-3xl font-black text-slate-900 dark:text-white">{tasks.length}</h2>
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                Total Tasks Under Review
+              </p>
+              <h2 className="mt-2 text-3xl font-black text-slate-900 dark:text-white">
+                {tasks.length}
+              </h2>
             </div>
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-400">
               <CheckSquare size={22} />
@@ -348,7 +433,9 @@ export default function SupervisorTaskReview() {
         <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xs dark:border-slate-800 dark:bg-slate-900">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Active / In Progress</p>
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                Active / In Progress
+              </p>
               <h2 className="mt-2 text-3xl font-black text-amber-600 dark:text-amber-400">
                 {tasks.filter((t) => t.status === "In Progress").length}
               </h2>
@@ -362,9 +449,17 @@ export default function SupervisorTaskReview() {
         <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xs dark:border-slate-800 dark:bg-slate-900">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Date Extended Tasks</p>
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                Date Extended Tasks
+              </p>
               <h2 className="mt-2 text-3xl font-black text-purple-600 dark:text-purple-400">
-                {tasks.filter((t) => t.status === "Date Extended" || t.approvalStatus === "Date Extended").length}
+                {
+                  tasks.filter(
+                    (t) =>
+                      t.status === "Date Extended" ||
+                      t.approvalStatus === "Date Extended",
+                  ).length
+                }
               </h2>
             </div>
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-purple-50 text-purple-600 dark:bg-purple-950/50 dark:text-purple-400">
@@ -376,9 +471,18 @@ export default function SupervisorTaskReview() {
         <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xs dark:border-slate-800 dark:bg-slate-900">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Approved & Closed</p>
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                Approved & Closed
+              </p>
               <h2 className="mt-2 text-3xl font-black text-emerald-600 dark:text-emerald-400">
-                {tasks.filter((t) => t.status === "Completed" || t.status === "Closed" || t.approvalStatus === "Approved").length}
+                {
+                  tasks.filter(
+                    (t) =>
+                      t.status === "Completed" ||
+                      t.status === "Closed" ||
+                      t.approvalStatus === "Approved",
+                  ).length
+                }
               </h2>
             </div>
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400">
@@ -448,7 +552,8 @@ export default function SupervisorTaskReview() {
               Tasks Awaiting Review & Status Approval
             </h3>
             <p className="text-xs text-slate-500">
-              Select any task to review progress, approve completion, extend due date, and send email to assigned staff.
+              Select any task to review progress, approve completion, extend due
+              date, and send email to assigned staff.
             </p>
           </div>
           <span className="text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 px-3 py-1 rounded-xl">
@@ -486,101 +591,131 @@ export default function SupervisorTaskReview() {
             <tbody className="divide-y divide-slate-200 dark:divide-slate-800 text-xs">
               {filteredTasks.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-slate-500 dark:text-slate-400 font-semibold">
+                  <td
+                    colSpan={7}
+                    className="px-6 py-12 text-center text-slate-500 dark:text-slate-400 font-semibold"
+                  >
                     No tasks found matching current filters.
                   </td>
                 </tr>
               ) : (
-                filteredTasks.slice(startIndex, startIndex + effectivePageSize).map((task) => (
-                  <tr key={task.id} className="transition hover:bg-slate-50/50 dark:hover:bg-slate-800/50">
-                    <td className="whitespace-nowrap px-6 py-4 font-bold">
-                      <div>
-                        <span className="rounded-md bg-blue-50 px-2 py-0.5 font-mono text-[10px] font-bold text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60">
-                          {task.taskId}
-                        </span>
-                        <p className="mt-1 text-slate-900 dark:text-white font-bold">{task.machineName}</p>
-                      </div>
-                    </td>
-
-                    <td className="px-6 py-4 max-w-xs">
-                      {task.componentName && (
-                        <span className="inline-flex items-center gap-1 rounded-md bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">
-                          <Cpu size={12} />
-                          {task.componentName}
-                        </span>
-                      )}
-                      <p className="line-clamp-2 text-slate-600 dark:text-slate-300 mt-1">{task.workScope}</p>
-                    </td>
-
-                    <td className="whitespace-nowrap px-6 py-4">
-                      <div>
-                        <div className="flex items-center gap-1.5 font-bold text-slate-900 dark:text-white">
-                          {task.role === "Artisan" ? <UserCheck size={14} className="text-indigo-500" /> : <UsersRound size={14} className="text-emerald-500" />}
-                          <span>{task.assignedName}</span>
-                          <span className="rounded bg-slate-100 px-1.5 py-0.2 text-[9px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                            {task.role}
+                filteredTasks
+                  .slice(startIndex, startIndex + effectivePageSize)
+                  .map((task) => (
+                    <tr
+                      key={task.id}
+                      className="transition hover:bg-slate-50/50 dark:hover:bg-slate-800/50"
+                    >
+                      <td className="whitespace-nowrap px-6 py-4 font-bold">
+                        <div>
+                          <span className="rounded-md bg-blue-50 px-2 py-0.5 font-mono text-[10px] font-bold text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60">
+                            {task.taskId}
                           </span>
+                          <p className="mt-1 text-slate-900 dark:text-white font-bold">
+                            {task.machineName}
+                          </p>
                         </div>
-                        <p className="text-[10px] text-blue-600 dark:text-blue-400 font-mono mt-0.5">
-                          {task.assignedEmail}
-                        </p>
-                      </div>
-                    </td>
+                      </td>
 
-                    <td className="whitespace-nowrap px-6 py-4">
-                      <div>
-                        <span className="font-medium text-slate-700 dark:text-slate-300">{task.extendedDate || task.dueDate}</span>
-                        {task.extendedDate && (
-                          <span className="ml-1 inline-block rounded bg-purple-100 px-1.5 py-0.5 text-[9px] font-bold text-purple-700 dark:bg-purple-950/60 dark:text-purple-300">
-                            Extended
+                      <td className="px-6 py-4 max-w-xs">
+                        {task.componentName && (
+                          <span className="inline-flex items-center gap-1 rounded-md bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">
+                            <Cpu size={12} />
+                            {task.componentName}
                           </span>
                         )}
-                      </div>
-                    </td>
+                        <p className="line-clamp-2 text-slate-600 dark:text-slate-300 mt-1">
+                          {task.workScope}
+                        </p>
+                      </td>
 
-                    <td className="whitespace-nowrap px-6 py-4 text-center">
-                      <span
-                        className={`inline-flex items-center gap-1 rounded-full px-3 py-1 font-bold ${
-                          task.status === "Completed"
-                            ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300"
-                            : task.status === "Date Extended"
-                            ? "bg-purple-100 text-purple-800 dark:bg-purple-950/50 dark:text-purple-300"
-                            : task.status === "Closed"
-                            ? "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
-                            : "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300"
-                        }`}
-                      >
-                        {task.status === "Completed" ? <CheckCircle2 size={12} /> : task.status === "Date Extended" ? <Calendar size={12} /> : <Clock size={12} />}
-                        {task.status}
-                      </span>
-                    </td>
+                      <td className="whitespace-nowrap px-6 py-4">
+                        <div>
+                          <div className="flex items-center gap-1.5 font-bold text-slate-900 dark:text-white">
+                            {task.role === "Artisan" ? (
+                              <UserCheck
+                                size={14}
+                                className="text-indigo-500"
+                              />
+                            ) : (
+                              <UsersRound
+                                size={14}
+                                className="text-emerald-500"
+                              />
+                            )}
+                            <span>{task.assignedName}</span>
+                            <span className="rounded bg-slate-100 px-1.5 py-0.2 text-[9px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                              {task.role}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-blue-600 dark:text-blue-400 font-mono mt-0.5">
+                            {task.assignedEmail}
+                          </p>
+                        </div>
+                      </td>
 
-                    <td className="whitespace-nowrap px-6 py-4 text-center">
-                      <span
-                        className={`inline-flex items-center gap-1 rounded-xl px-2.5 py-1 text-[11px] font-bold ${
-                          task.approvalStatus === "Approved"
-                            ? "bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/60"
-                            : task.approvalStatus === "Date Extended"
-                            ? "bg-purple-50 text-purple-700 border border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800/60"
-                            : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
-                        }`}
-                      >
-                        <ShieldCheck size={13} />
-                        {task.approvalStatus}
-                      </span>
-                    </td>
+                      <td className="whitespace-nowrap px-6 py-4">
+                        <div>
+                          <span className="font-medium text-slate-700 dark:text-slate-300">
+                            {task.extendedDate || task.dueDate}
+                          </span>
+                          {task.extendedDate && (
+                            <span className="ml-1 inline-block rounded bg-purple-100 px-1.5 py-0.5 text-[9px] font-bold text-purple-700 dark:bg-purple-950/60 dark:text-purple-300">
+                              Extended
+                            </span>
+                          )}
+                        </div>
+                      </td>
 
-                    <td className="whitespace-nowrap px-6 py-4 text-center">
-                      <button
-                        onClick={() => handleOpenReviewModal(task)}
-                        className="inline-flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3.5 py-2 text-xs font-bold text-blue-700 hover:bg-blue-600 hover:text-white transition shadow-xs dark:border-blue-800/60 dark:bg-blue-950/40 dark:text-blue-300"
-                      >
-                        <MessageSquareQuote size={14} />
-                        Review & Send Email
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                      <td className="whitespace-nowrap px-6 py-4 text-center">
+                        <span
+                          className={`inline-flex items-center gap-1 rounded-full px-3 py-1 font-bold ${
+                            task.status === "Completed"
+                              ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300"
+                              : task.status === "Date Extended"
+                                ? "bg-purple-100 text-purple-800 dark:bg-purple-950/50 dark:text-purple-300"
+                                : task.status === "Closed"
+                                  ? "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                                  : "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300"
+                          }`}
+                        >
+                          {task.status === "Completed" ? (
+                            <CheckCircle2 size={12} />
+                          ) : task.status === "Date Extended" ? (
+                            <Calendar size={12} />
+                          ) : (
+                            <Clock size={12} />
+                          )}
+                          {task.status}
+                        </span>
+                      </td>
+
+                      <td className="whitespace-nowrap px-6 py-4 text-center">
+                        <span
+                          className={`inline-flex items-center gap-1 rounded-xl px-2.5 py-1 text-[11px] font-bold ${
+                            task.approvalStatus === "Approved"
+                              ? "bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/60"
+                              : task.approvalStatus === "Date Extended"
+                                ? "bg-purple-50 text-purple-700 border border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800/60"
+                                : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                          }`}
+                        >
+                          <ShieldCheck size={13} />
+                          {task.approvalStatus}
+                        </span>
+                      </td>
+
+                      <td className="whitespace-nowrap px-6 py-4 text-center">
+                        <button
+                          onClick={() => handleOpenReviewModal(task)}
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3.5 py-2 text-xs font-bold text-blue-700 hover:bg-blue-600 hover:text-white transition shadow-xs dark:border-blue-800/60 dark:bg-blue-950/40 dark:text-blue-300"
+                        >
+                          <MessageSquareQuote size={14} />
+                          Review & Send Email
+                        </button>
+                      </td>
+                    </tr>
+                  ))
               )}
             </tbody>
           </table>
@@ -593,6 +728,8 @@ export default function SupervisorTaskReview() {
           currentPage={currentPage}
           totalPages={totalPages}
           onPageChange={setCurrentPage}
+          onPrev={() => setCurrentPage((p) => Math.max(1, p - 1))}
+          onNext={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
           itemsPerPage={itemsPerPage}
           onItemsPerPageChange={(val) => {
             setItemsPerPage(val);
@@ -619,7 +756,8 @@ export default function SupervisorTaskReview() {
                     Task Review & Email Status Update
                   </h3>
                   <p className="text-xs text-slate-500">
-                    Update task status, grant approval, extend due date, and dispatch email notification.
+                    Update task status, grant approval, extend due date, and
+                    dispatch email notification.
                   </p>
                 </div>
               </div>
@@ -647,11 +785,16 @@ export default function SupervisorTaskReview() {
                   {selectedTask.assignedName}
                 </h4>
                 <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
-                  Machine: {selectedTask.machineName} {selectedTask.componentName ? `(${selectedTask.componentName})` : ""}
+                  Machine: {selectedTask.machineName}{" "}
+                  {selectedTask.componentName
+                    ? `(${selectedTask.componentName})`
+                    : ""}
                 </p>
                 <p className="mt-1.5 text-[11px] font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1">
                   📧 Automated status email will be sent to:
-                  <span className="underline">{selectedTask.assignedEmail}</span>
+                  <span className="underline">
+                    {selectedTask.assignedEmail}
+                  </span>
                 </p>
               </div>
 
@@ -663,10 +806,22 @@ export default function SupervisorTaskReview() {
                 <AppSelect
                   value={updatedStatus}
                   options={[
-                    { label: "🟡 In Progress (Ongoing Task)", value: "In Progress" },
-                    { label: "🟢 Completed (Task Finished by Staff)", value: "Completed" },
-                    { label: "🟣 Date Extended / In Progress (Task Prolonged)", value: "Date Extended" },
-                    { label: "🔴 Closed (Task Formally Closed)", value: "Closed" },
+                    {
+                      label: "🟡 In Progress (Ongoing Task)",
+                      value: "In Progress",
+                    },
+                    {
+                      label: "🟢 Completed (Task Finished by Staff)",
+                      value: "Completed",
+                    },
+                    {
+                      label: "🟣 Date Extended / In Progress (Task Prolonged)",
+                      value: "Date Extended",
+                    },
+                    {
+                      label: "🔴 Closed (Task Formally Closed)",
+                      value: "Closed",
+                    },
                   ]}
                   onChange={setUpdatedStatus}
                 />
@@ -680,8 +835,14 @@ export default function SupervisorTaskReview() {
                 <AppSelect
                   value={updatedApproval}
                   options={[
-                    { label: "✅ Approved & Verified (Task Verified)", value: "Approved" },
-                    { label: "⏳ Date Extended (Revise Target Completion Date)", value: "Date Extended" },
+                    {
+                      label: "✅ Approved & Verified (Task Verified)",
+                      value: "Approved",
+                    },
+                    {
+                      label: "⏳ Date Extended (Revise Target Completion Date)",
+                      value: "Date Extended",
+                    },
                     { label: "🔴 Closed / Terminated", value: "Closed" },
                     { label: "⏳ Pending Review", value: "Pending Review" },
                   ]}
@@ -690,7 +851,8 @@ export default function SupervisorTaskReview() {
               </div>
 
               {/* Extended Due Date Input (Shown when Date Extended is selected) */}
-              {(updatedStatus === "Date Extended" || updatedApproval === "Date Extended") && (
+              {(updatedStatus === "Date Extended" ||
+                updatedApproval === "Date Extended") && (
                 <div className="rounded-2xl border border-purple-200 bg-purple-50/60 p-4 dark:border-purple-900/40 dark:bg-purple-950/30">
                   <label className="mb-1.5 flex items-center gap-1.5 text-xs font-bold text-purple-900 dark:text-purple-300">
                     <Calendar size={14} />
@@ -701,14 +863,21 @@ export default function SupervisorTaskReview() {
                       type="date"
                       value={extendedDueDate}
                       onChange={(e) => setExtendedDueDate(e.target.value)}
-                      onClick={(e) => (e.target as HTMLInputElement).showPicker?.()}
+                      onClick={(e) =>
+                        (e.target as HTMLInputElement).showPicker?.()
+                      }
                       className="w-full cursor-pointer rounded-xl border border-purple-200 bg-white p-2.5 pr-9 text-xs font-semibold outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 dark:border-purple-800 dark:bg-slate-900 dark:text-white"
                     />
                     <button
                       type="button"
                       onClick={(e) => {
-                        const input = (e.currentTarget.previousElementSibling as HTMLInputElement);
-                        input?.showPicker?.() || input?.focus();
+                        const input = e.currentTarget
+                          .previousElementSibling as HTMLInputElement;
+                        if (input?.showPicker) {
+                          input.showPicker();
+                        } else {
+                          input?.focus();
+                        }
                       }}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-purple-400 hover:text-purple-600 dark:hover:text-purple-300"
                     >
@@ -716,7 +885,8 @@ export default function SupervisorTaskReview() {
                     </button>
                   </div>
                   <p className="mt-1 text-[10px] text-purple-700 dark:text-purple-300">
-                    Staff member will be notified via email about this revised due date target.
+                    Staff member will be notified via email about this revised
+                    due date target.
                   </p>
                 </div>
               )}
