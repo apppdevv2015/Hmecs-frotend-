@@ -118,15 +118,17 @@ export default function ArtisansMaintenance() {
       setLoading(true);
       const queryParam = userCompanyId ? `?companyId=${encodeURIComponent(userCompanyId)}` : "";
 
-      // 1. Fetch assigned machines
+          
+      type MachinesApiResponse = unknown[] | { data?: unknown[] };
+
       let rawMachines: any[] = [];
       try {
-        const res = await machineService.getAssignedMachines();
-        if (Array.isArray(res)) rawMachines = res;
-        else if (Array.isArray(res?.data)) rawMachines = res.data;
+        const res = (await machineService.getAssignedMachines()) as MachinesApiResponse;
+        if (Array.isArray(res)) rawMachines = res as any[];
+        else if (Array.isArray(res.data)) rawMachines = res.data as any[];
       } catch {
-        const res2 = await fleetService.getFleetMachines();
-        if (Array.isArray(res2)) rawMachines = res2;
+        const res2 = (await fleetService.getFleetMachines()) as MachinesApiResponse;
+        if (Array.isArray(res2)) rawMachines = res2 as any[];
       }
 
       const filteredM = rawMachines.filter((m) => !userCompanyId || !m.companyId || String(m.companyId) === userCompanyId);

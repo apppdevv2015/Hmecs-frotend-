@@ -52,6 +52,8 @@ export interface ClientRequirement {
   readonly requestedServiceNames: readonly string[];
   readonly requirementDescription: string;
   readonly otherRequirements: string | null;
+  readonly contractDuration: string;
+  readonly optionalServices: readonly string[];
 }
 
 export interface QuotationInquiry {
@@ -273,10 +275,10 @@ export function mapRequestToInquiry(raw: QuotationRequest): QuotationInquiry {
   return {
     id: raw.id,
     inquiryId: raw.requestId,
-    status: raw.status,
-    inquiryDate: raw.createdAt,
+    status: raw.status as QuotationRequestStatus,
+    inquiryDate: raw.createdAt ?? "",
     company: {
-      companyId: raw.companyId,
+      companyId: raw.companyId ?? "",
       name: safeText(raw.companyName, "Unknown Company"),
       contactPerson: safeText(raw.contactPerson, "—"),
       email: safeText(raw.email, "—"),
@@ -301,6 +303,8 @@ export function mapRequestToInquiry(raw: QuotationRequest): QuotationInquiry {
         raw.additionalRequirements.trim().length > 0
           ? raw.additionalRequirements
           : null,
+      contractDuration: safeText((raw as any).contractDuration, ""),
+      optionalServices: safeArray<string>(raw.optionalServices),
     },
     // Documented limitation, not fabricated data — see TrialRequest above.
     trial: {
@@ -2097,8 +2101,8 @@ function SendQuotationDrawer({
     onSaveDraft(draft);
   }
 
-  function handleSendClick() {
-    if (!draft) return;
+    function handleSendClick() {
+    if (!draft || !inquiry) return;
     const isTrial =
       inquiry.requirement.quotationType?.toLowerCase().includes("trial") ||
       inquiry.requirement.quotationType?.toLowerCase().includes("demo");
@@ -2983,7 +2987,7 @@ export default function QuotationManagementPage() {
     const controller = new AbortController();
     (async () => {
       try {
-        const res = await getPublicOptionalServices(controller.signal);
+                const res = await getPublicOptionalServices();
         setServiceCatalog(
           (res ?? []).map((s: any) => ({
             id: s.id,

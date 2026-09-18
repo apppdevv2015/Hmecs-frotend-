@@ -86,7 +86,8 @@ export default function OperatorDashboard() {
     try {
       setLoading(true);
       // 1. Fetch Assigned Machine from Backend
-      const response = await machineService.getAssignedMachines();
+            // 1. Fetch Assigned Machine from Backend
+      const response: any = await machineService.getAssignedMachines();
       let machinesList: any[] = [];
       if (Array.isArray(response)) machinesList = response;
       else if (Array.isArray(response?.data)) machinesList = response.data;
@@ -162,7 +163,8 @@ export default function OperatorDashboard() {
         }
 
         try {
-          const compRes = await componentService.getComponentsByMachineId(mId);
+                  
+          const compRes: any = await componentService.getComponentsByMachineId(mId);
           let compList: any[] = [];
           if (Array.isArray(compRes)) compList = compRes;
           else if (Array.isArray(compRes?.data)) compList = compRes.data;

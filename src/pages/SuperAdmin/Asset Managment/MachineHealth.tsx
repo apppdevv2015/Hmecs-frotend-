@@ -45,7 +45,9 @@ import {
 } from "lucide-react";
 import PageMeta from "../../../components/common/PageMeta";
 import { apiRequest } from "../../../services/api";
-import StorageService, { STORAGE_KEYS } from "../../../services/storage.service";
+import StorageService, {
+  STORAGE_KEYS,
+} from "../../../services/storage.service";
 
 interface Machine {
   id: string;
@@ -64,6 +66,7 @@ interface Machine {
   sourceCatalog?: string;
   companyId?: string;
   companyName?: string;
+  components?: any[];
 }
 
 interface SpecParameter {
@@ -80,6 +83,7 @@ interface SpecComponent {
   name: string;
   category: string;
   parameters: SpecParameter[];
+  description?: string;
 }
 
 interface HistoryLog {
@@ -117,13 +121,14 @@ const memoryCustomComponents = new Map<string, SpecComponent[]>();
 
 const getCustomComponentsForMachine = (m: Machine | null): SpecComponent[] => {
   if (!m) return [];
-  const machineKey = m.id || m.serialNumber || m.machineId || m.name || m.model;
+  const machineKey =
+    m.id || m.serialNumber || m.machineId || m.name || m.model || "";
   return memoryCustomComponents.get(machineKey) || [];
 };
 
 const saveCustomComponentForMachine = (m: Machine, comp: SpecComponent) => {
   try {
-    apiCall("/machines/custom-components", {
+    apiRequest("/machines/custom-components", {
       method: "POST",
       body: JSON.stringify({
         machineId: m.id,
@@ -132,15 +137,19 @@ const saveCustomComponentForMachine = (m: Machine, comp: SpecComponent) => {
         parameters: comp.parameters,
         description: comp.description,
       }),
-    }, { showError: false }).catch(() => null);
+    }).catch(() => null);
 
-    const machineKey = m.id || m.serialNumber || m.machineId || m.name || m.model;
+    const machineKey =
+      m.id || m.serialNumber || m.machineId || m.name || m.model || "";
     const existing = memoryCustomComponents.get(machineKey) || [];
-    const updated = [...existing.filter((c) => c.name.toLowerCase() !== comp.name.toLowerCase()), comp];
+    const updated = [
+      ...existing.filter(
+        (c) => c.name.toLowerCase() !== comp.name.toLowerCase(),
+      ),
+      comp,
+    ];
     memoryCustomComponents.set(machineKey, updated);
-  } catch (e) {
-    console.error("Error saving custom component:", e);
-  }
+  } catch (e) {}
 };
 
 // Preset templates for instant 1-click addition of standard heavy equipment systems
@@ -155,61 +164,158 @@ const PRESET_COMPONENT_TEMPLATES: Array<{
     name: "Telescopic Boom & Hoist System",
     category: "Crane Hydraulics",
     icon: "🏗️",
-    description: "Main boom telescoping cylinder and high-tension hoist winch hydraulics",
+    description:
+      "Main boom telescoping cylinder and high-tension hoist winch hydraulics",
     parameters: [
-      { name: "Boom Extension Pressure", unit: "Bar", safeMin: 150, safeMax: 300, defaultVal: 220, description: "Boom cylinder extension pressure" },
-      { name: "Hoist Winch Pressure", unit: "Bar", safeMin: 160, safeMax: 300, defaultVal: 230, description: "Main hoisting winch hydraulic pressure" },
-      { name: "Boom Angle Elevation", unit: "Deg", safeMin: 0, safeMax: 85, defaultVal: 45, description: "Boom operating elevation angle" },
+      {
+        name: "Boom Extension Pressure",
+        unit: "Bar",
+        safeMin: 150,
+        safeMax: 300,
+        defaultVal: 220,
+        description: "Boom cylinder extension pressure",
+      },
+      {
+        name: "Hoist Winch Pressure",
+        unit: "Bar",
+        safeMin: 160,
+        safeMax: 300,
+        defaultVal: 230,
+        description: "Main hoisting winch hydraulic pressure",
+      },
+      {
+        name: "Boom Angle Elevation",
+        unit: "Deg",
+        safeMin: 0,
+        safeMax: 85,
+        defaultVal: 45,
+        description: "Boom operating elevation angle",
+      },
     ],
   },
   {
     name: "Outrigger Stabilization System",
     category: "Crane Hydraulics",
     icon: "🚧",
-    description: "Hydraulic outrigger vertical jacks and horizontal beam extension",
+    description:
+      "Hydraulic outrigger vertical jacks and horizontal beam extension",
     parameters: [
-      { name: "Outrigger Jack Pressure", unit: "Bar", safeMin: 140, safeMax: 280, defaultVal: 210, description: "Vertical load-bearing jack pressure" },
-      { name: "Leveling Pitch Deviation", unit: "Deg", safeMin: 0, safeMax: 5, defaultVal: 1.2, description: "Base chassis horizontal tilt angle" },
+      {
+        name: "Outrigger Jack Pressure",
+        unit: "Bar",
+        safeMin: 140,
+        safeMax: 280,
+        defaultVal: 210,
+        description: "Vertical load-bearing jack pressure",
+      },
+      {
+        name: "Leveling Pitch Deviation",
+        unit: "Deg",
+        safeMin: 0,
+        safeMax: 5,
+        defaultVal: 1.2,
+        description: "Base chassis horizontal tilt angle",
+      },
     ],
   },
   {
     name: "Pneumatic Air Brake & Steering",
     category: "Brakes & Steering",
     icon: "🛑",
-    description: "Dual-circuit pneumatic service brakes and all-wheel carrier steering",
+    description:
+      "Dual-circuit pneumatic service brakes and all-wheel carrier steering",
     parameters: [
-      { name: "Pneumatic Air Pressure", unit: "Bar", safeMin: 6.5, safeMax: 9.5, defaultVal: 8.2, description: "Air reservoir holding pressure" },
-      { name: "Steering Assist Pressure", unit: "Bar", safeMin: 120, safeMax: 200, defaultVal: 155, description: "Carrier hydraulic steering line" },
+      {
+        name: "Pneumatic Air Pressure",
+        unit: "Bar",
+        safeMin: 6.5,
+        safeMax: 9.5,
+        defaultVal: 8.2,
+        description: "Air reservoir holding pressure",
+      },
+      {
+        name: "Steering Assist Pressure",
+        unit: "Bar",
+        safeMin: 120,
+        safeMax: 200,
+        defaultVal: 155,
+        description: "Carrier hydraulic steering line",
+      },
     ],
   },
   {
     name: "24V Electrical & Safety Telemetry",
     category: "Electrical",
     icon: "⚡",
-    description: "Alternator charging, dual battery bank, and A2B safety limit switches",
+    description:
+      "Alternator charging, dual battery bank, and A2B safety limit switches",
     parameters: [
-      { name: "Battery System Voltage", unit: "V", safeMin: 24.0, safeMax: 28.5, defaultVal: 26.4, description: "DC alternator charging potential" },
-      { name: "A2B Anti-Two-Block Sensor", unit: "%", safeMin: 80, safeMax: 100, defaultVal: 100, description: "Crane over-hoist limit switch status" },
+      {
+        name: "Battery System Voltage",
+        unit: "V",
+        safeMin: 24.0,
+        safeMax: 28.5,
+        defaultVal: 26.4,
+        description: "DC alternator charging potential",
+      },
+      {
+        name: "A2B Anti-Two-Block Sensor",
+        unit: "%",
+        safeMin: 80,
+        safeMax: 100,
+        defaultVal: 100,
+        description: "Crane over-hoist limit switch status",
+      },
     ],
   },
   {
     name: "Auxiliary Radiator Cooling Unit",
     category: "Cooling System",
     icon: "❄️",
-    description: "Secondary high-flow cooling pack and hydraulic oil cooler fan",
+    description:
+      "Secondary high-flow cooling pack and hydraulic oil cooler fan",
     parameters: [
-      { name: "Coolant Loop Pressure", unit: "PSI", safeMin: 15, safeMax: 25, defaultVal: 18, description: "Pressurized radiator cap line" },
-      { name: "Cooling Fan RPM", unit: "RPM", safeMin: 800, safeMax: 2200, defaultVal: 1400, description: "Hydraulic variable speed fan" },
+      {
+        name: "Coolant Loop Pressure",
+        unit: "PSI",
+        safeMin: 15,
+        safeMax: 25,
+        defaultVal: 18,
+        description: "Pressurized radiator cap line",
+      },
+      {
+        name: "Cooling Fan RPM",
+        unit: "RPM",
+        safeMin: 800,
+        safeMax: 2200,
+        defaultVal: 1400,
+        description: "Hydraulic variable speed fan",
+      },
     ],
   },
   {
     name: "Hydraulic Slew & Swing Motor",
     category: "Hydraulics",
     icon: "🛢️",
-    description: "360-degree superstructure swing drive and slew ring holding brake",
+    description:
+      "360-degree superstructure swing drive and slew ring holding brake",
     parameters: [
-      { name: "Slew Motor Pressure", unit: "Bar", safeMin: 140, safeMax: 260, defaultVal: 190, description: "Superstructure rotation line pressure" },
-      { name: "Swing Brake Holding Pressure", unit: "Bar", safeMin: 120, safeMax: 220, defaultVal: 180, description: "Slew lock release pressure" },
+      {
+        name: "Slew Motor Pressure",
+        unit: "Bar",
+        safeMin: 140,
+        safeMax: 260,
+        defaultVal: 190,
+        description: "Superstructure rotation line pressure",
+      },
+      {
+        name: "Swing Brake Holding Pressure",
+        unit: "Bar",
+        safeMin: 120,
+        safeMax: 220,
+        defaultVal: 180,
+        description: "Slew lock release pressure",
+      },
     ],
   },
 ];
@@ -220,7 +326,7 @@ export default function MachineHealth() {
   const [machines, setMachines] = useState<Machine[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [loadingSpecs, setLoadingSpecs] = useState<boolean>(false);
-  
+
   // 3-Tier Cascading Filter State: Category -> Brand -> Machine Model
   const [selectedCategory, setSelectedCategory] = useState<string>("ALL");
   const [selectedBrand, setSelectedBrand] = useState<string>("ALL");
@@ -228,12 +334,15 @@ export default function MachineHealth() {
 
   // Dropdown Open States
   const [isCatDropdownOpen, setIsCatDropdownOpen] = useState<boolean>(false);
-  const [isBrandDropdownOpen, setIsBrandDropdownOpen] = useState<boolean>(false);
-  const [isMachineDropdownOpen, setIsMachineDropdownOpen] = useState<boolean>(false);
+  const [isBrandDropdownOpen, setIsBrandDropdownOpen] =
+    useState<boolean>(false);
+  const [isMachineDropdownOpen, setIsMachineDropdownOpen] =
+    useState<boolean>(false);
 
   // Global Quick Machine Search State (Direct search across 9,742+ machines)
   const [globalSearch, setGlobalSearch] = useState<string>("");
-  const [isGlobalSearchFocused, setIsGlobalSearchFocused] = useState<boolean>(false);
+  const [isGlobalSearchFocused, setIsGlobalSearchFocused] =
+    useState<boolean>(false);
 
   // Search filter inside dropdowns
   const [catSearch, setCatSearch] = useState<string>("");
@@ -247,42 +356,84 @@ export default function MachineHealth() {
   // Inspection & Spec Components State
   const [specComponents, setSpecComponents] = useState<SpecComponent[]>([]);
   const [activeTab, setActiveTab] = useState<string>("");
-  const [paramInputs, setParamInputs] = useState<Record<string, Record<string, string>>>({});
+  const [paramInputs, setParamInputs] = useState<
+    Record<string, Record<string, string>>
+  >({});
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [healthResult, setHealthResult] = useState<any>(null);
   const [successMsg, setSuccessMsg] = useState<string>("");
 
   // Add Custom Component Modal State
-  const [isAddComponentModalOpen, setIsAddComponentModalOpen] = useState<boolean>(false);
+  const [isAddComponentModalOpen, setIsAddComponentModalOpen] =
+    useState<boolean>(false);
   const [newCompName, setNewCompName] = useState<string>("");
-  const [newCompCategory, setNewCompCategory] = useState<string>("Crane Hydraulics");
+  const [newCompCategory, setNewCompCategory] =
+    useState<string>("Crane Hydraulics");
   const [newCompParams, setNewCompParams] = useState<
-    Array<{ name: string; unit: string; safeMin: number; safeMax: number; defaultVal: number; description?: string }>
+    Array<{
+      name: string;
+      unit: string;
+      safeMin: number;
+      safeMax: number;
+      defaultVal: number;
+      description?: string;
+    }>
   >([
-    { name: "Operating Pressure", unit: "Bar", safeMin: 150, safeMax: 300, defaultVal: 220, description: "Main hydraulic line pressure" },
+    {
+      name: "Operating Pressure",
+      unit: "Bar",
+      safeMin: 150,
+      safeMax: 300,
+      defaultVal: 220,
+      description: "Main hydraulic line pressure",
+    },
   ]);
   const [compFormError, setCompFormError] = useState<string>("");
 
   // Audit History State
   const [historyLogs, setHistoryLogs] = useState<HistoryLog[]>([]);
-  const [auditViewScope, setAuditViewScope] = useState<"ALL" | "SELECTED">("ALL");
+  const [auditViewScope, setAuditViewScope] = useState<"ALL" | "SELECTED">(
+    "ALL",
+  );
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState<boolean>(false);
   const [loadingHistory, setLoadingHistory] = useState<boolean>(false);
-  const [viewingDetailLog, setViewingDetailLog] = useState<HistoryLog | null>(null);
-  const [deletingLogTarget, setDeletingLogTarget] = useState<{ id: string; name: string } | null>(null);
+  const [viewingDetailLog, setViewingDetailLog] = useState<HistoryLog | null>(
+    null,
+  );
+  const [deletingLogTarget, setDeletingLogTarget] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
   const [isDeletingLog, setIsDeletingLog] = useState<boolean>(false);
 
   // Get Dynamic Logged-In User & Company Info from active session
   const currentUser = useMemo(() => {
     try {
       const storedUser: any = StorageService.get(STORAGE_KEYS.USER) || {};
-      const storedRole = StorageService.get<string>(STORAGE_KEYS.ROLE) || storedUser?.role || "SUPER_ADMIN";
-      const isSuper = String(storedRole || "").toLowerCase().includes("super");
+      const storedRole =
+        StorageService.get<string>(STORAGE_KEYS.ROLE) ||
+        storedUser?.role ||
+        "SUPER_ADMIN";
+      const isSuper = String(storedRole || "")
+        .toLowerCase()
+        .includes("super");
 
-      const storedName = StorageService.get<string>(STORAGE_KEYS.NAME) || storedUser?.name || `${storedUser?.firstName || ''} ${storedUser?.lastName || ''}`.trim() || (isSuper ? "Super Admin" : "System User");
-      const storedEmail = StorageService.get<string>(STORAGE_KEYS.EMAIL) || storedUser?.email;
-      const storedCompanyId = isSuper ? null : (StorageService.get<string>(STORAGE_KEYS.COMPANY_ID) || storedUser?.companyId || storedUser?.company?.id || null);
-      const storedCompanyName = isSuper ? null : (storedUser?.company?.name || storedUser?.companyName || null);
+      const storedName =
+        StorageService.get<string>(STORAGE_KEYS.NAME) ||
+        storedUser?.name ||
+        `${storedUser?.firstName || ""} ${storedUser?.lastName || ""}`.trim() ||
+        (isSuper ? "Super Admin" : "System User");
+      const storedEmail =
+        StorageService.get<string>(STORAGE_KEYS.EMAIL) || storedUser?.email;
+      const storedCompanyId = isSuper
+        ? null
+        : StorageService.get<string>(STORAGE_KEYS.COMPANY_ID) ||
+          storedUser?.companyId ||
+          storedUser?.company?.id ||
+          null;
+      const storedCompanyName = isSuper
+        ? null
+        : storedUser?.company?.name || storedUser?.companyName || null;
 
       return {
         id: storedUser?.id || null,
@@ -316,7 +467,10 @@ export default function MachineHealth() {
 
         if (Array.isArray(catalogData) && catalogData.length > 0) {
           const mappedMachines: Machine[] = catalogData.map((item: any) => ({
-            id: item.id || item.slug || `heh-${item.brand?.toLowerCase()}-${item.modelName?.toLowerCase().replace(/\s+/g, '-')}`,
+            id:
+              item.id ||
+              item.slug ||
+              `heh-${item.brand?.toLowerCase()}-${item.modelName?.toLowerCase().replace(/\s+/g, "-")}`,
             machineId: item.id,
             name: `${item.brand} ${item.modelName} ${item.category || ""}`.trim(),
             brand: item.brand,
@@ -325,7 +479,14 @@ export default function MachineHealth() {
             equipmentType: item.category,
             model: item.modelName,
             modelName: item.modelName,
-            serialNumber: `SN-${item.brand?.toUpperCase().substring(0, 4)}-${Math.abs(item.modelName?.split('').reduce((a: any,b: any)=>{a=((a<<5)-a)+b.charCodeAt(0);return a&a},0) % 9000 + 1000)}`,
+            serialNumber: `SN-${item.brand?.toUpperCase().substring(0, 4)}-${Math.abs(
+              (item.modelName?.split("").reduce((a: any, b: any) => {
+                a = (a << 5) - a + b.charCodeAt(0);
+                return a & a;
+              }, 0) %
+                9000) +
+                1000,
+            )}`,
             status: "Not Inspected",
             healthScore: null as any,
             sourceCatalog: `PostgreSQL DB (${item.brand})`,
@@ -350,11 +511,15 @@ export default function MachineHealth() {
   const categoriesList = useMemo(() => {
     const map = new Map<string, number>();
     machines.forEach((m) => {
-      const cat = m.equipmentType || m.equipment_type || m.category || "General";
+      const cat =
+        m.equipmentType || m.equipment_type || m.category || "General";
       map.set(cat, (map.get(cat) || 0) + 1);
     });
 
-    const list = Array.from(map.entries()).map(([name, count]) => ({ name, count }));
+    const list = Array.from(map.entries()).map(([name, count]) => ({
+      name,
+      count,
+    }));
     list.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
     return list;
   }, [machines]);
@@ -363,7 +528,7 @@ export default function MachineHealth() {
   const filteredCategoryOptions = useMemo(() => {
     if (!catSearch.trim()) return categoriesList;
     return categoriesList.filter((c) =>
-      c.name.toLowerCase().includes(catSearch.toLowerCase())
+      c.name.toLowerCase().includes(catSearch.toLowerCase()),
     );
   }, [categoriesList, catSearch]);
 
@@ -373,8 +538,12 @@ export default function MachineHealth() {
     if (selectedCategory !== "ALL") {
       source = machines.filter(
         (m) =>
-          (m.equipmentType || m.equipment_type || m.category || "").toLowerCase() ===
-          selectedCategory.toLowerCase()
+          (
+            m.equipmentType ||
+            m.equipment_type ||
+            m.category ||
+            ""
+          ).toLowerCase() === selectedCategory.toLowerCase(),
       );
     }
 
@@ -384,7 +553,10 @@ export default function MachineHealth() {
       map.set(b, (map.get(b) || 0) + 1);
     });
 
-    const list = Array.from(map.entries()).map(([name, count]) => ({ name, count }));
+    const list = Array.from(map.entries()).map(([name, count]) => ({
+      name,
+      count,
+    }));
     list.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
     return list;
   }, [machines, selectedCategory]);
@@ -393,7 +565,7 @@ export default function MachineHealth() {
   const filteredBrandOptions = useMemo(() => {
     if (!brandSearch.trim()) return brandsList;
     return brandsList.filter((b) =>
-      b.name.toLowerCase().includes(brandSearch.toLowerCase())
+      b.name.toLowerCase().includes(brandSearch.toLowerCase()),
     );
   }, [brandsList, brandSearch]);
 
@@ -402,18 +574,26 @@ export default function MachineHealth() {
     return machines.filter((m) => {
       const matchesCategory =
         selectedCategory === "ALL" ||
-        (m.equipmentType || m.equipment_type || m.category || "").toLowerCase() ===
-          selectedCategory.toLowerCase();
+        (
+          m.equipmentType ||
+          m.equipment_type ||
+          m.category ||
+          ""
+        ).toLowerCase() === selectedCategory.toLowerCase();
 
       const matchesBrand =
         selectedBrand === "ALL" ||
-        (m.brand || m.manufacturer || "").toLowerCase() === selectedBrand.toLowerCase();
+        (m.brand || m.manufacturer || "").toLowerCase() ===
+          selectedBrand.toLowerCase();
 
       const matchesSearch =
         machineSearch === "" ||
-        (m.name && m.name.toLowerCase().includes(machineSearch.toLowerCase())) ||
-        (m.model && m.model.toLowerCase().includes(machineSearch.toLowerCase())) ||
-        (m.serialNumber && m.serialNumber.toLowerCase().includes(machineSearch.toLowerCase()));
+        (m.name &&
+          m.name.toLowerCase().includes(machineSearch.toLowerCase())) ||
+        (m.model &&
+          m.model.toLowerCase().includes(machineSearch.toLowerCase())) ||
+        (m.serialNumber &&
+          m.serialNumber.toLowerCase().includes(machineSearch.toLowerCase()));
 
       return matchesCategory && matchesBrand && matchesSearch;
     });
@@ -422,28 +602,38 @@ export default function MachineHealth() {
   // Build map of latest health per component for the selected machine
   const compHealthMap = useMemo(() => {
     const map: Record<string, { healthScore: number; status: string }> = {};
-    if (selectedMachine?.components && Array.isArray(selectedMachine.components)) {
+    if (
+      selectedMachine?.components &&
+      Array.isArray(selectedMachine.components)
+    ) {
       selectedMachine.components.forEach((c: any) => {
         if (c && c.name) {
           map[c.name] = {
             healthScore: c.healthScore ?? 100,
-            status: c.status || "Healthy"
+            status: c.status || "Healthy",
           };
         }
       });
     }
     const machineLogs = historyLogs.filter((l) => {
       return (
-        (selectedMachine?.serialNumber && l.serialNumber === selectedMachine.serialNumber) ||
-        (selectedMachine?.id && (l.machineId === selectedMachine.id || l.id === selectedMachine.id)) ||
-        (selectedMachine?.model && l.machineName && l.machineName.toLowerCase().includes(selectedMachine.model.toLowerCase()))
+        (selectedMachine?.serialNumber &&
+          l.serialNumber === selectedMachine.serialNumber) ||
+        (selectedMachine?.id &&
+          (l.machineId === selectedMachine.id ||
+            l.id === selectedMachine.id)) ||
+        (selectedMachine?.model &&
+          l.machineName &&
+          l.machineName
+            .toLowerCase()
+            .includes(selectedMachine.model.toLowerCase()))
       );
     });
     machineLogs.forEach((l) => {
       if (l.componentName && !map[l.componentName]) {
         map[l.componentName] = {
           healthScore: l.componentHealthScore ?? l.componentHealth ?? 100,
-          status: l.status || "Healthy"
+          status: l.status || "Healthy",
         };
       }
     });
@@ -455,15 +645,16 @@ export default function MachineHealth() {
     if (!globalSearch.trim()) return [];
     const q = globalSearch.toLowerCase().trim();
     return machines
-      .filter((m) =>
-        (m.name && m.name.toLowerCase().includes(q)) ||
-        (m.model && m.model.toLowerCase().includes(q)) ||
-        (m.modelName && m.modelName.toLowerCase().includes(q)) ||
-        (m.brand && m.brand.toLowerCase().includes(q)) ||
-        (m.manufacturer && m.manufacturer.toLowerCase().includes(q)) ||
-        (m.category && m.category.toLowerCase().includes(q)) ||
-        (m.equipmentType && m.equipmentType.toLowerCase().includes(q)) ||
-        (m.serialNumber && m.serialNumber.toLowerCase().includes(q))
+      .filter(
+        (m) =>
+          (m.name && m.name.toLowerCase().includes(q)) ||
+          (m.model && m.model.toLowerCase().includes(q)) ||
+          (m.modelName && m.modelName.toLowerCase().includes(q)) ||
+          (m.brand && m.brand.toLowerCase().includes(q)) ||
+          (m.manufacturer && m.manufacturer.toLowerCase().includes(q)) ||
+          (m.category && m.category.toLowerCase().includes(q)) ||
+          (m.equipmentType && m.equipmentType.toLowerCase().includes(q)) ||
+          (m.serialNumber && m.serialNumber.toLowerCase().includes(q)),
       )
       .slice(0, 25);
   }, [machines, globalSearch]);
@@ -490,7 +681,13 @@ export default function MachineHealth() {
     let matchedList = machines;
     if (catName !== "ALL") {
       matchedList = machines.filter(
-        (m) => (m.equipmentType || m.equipment_type || m.category || "").toLowerCase() === catName.toLowerCase()
+        (m) =>
+          (
+            m.equipmentType ||
+            m.equipment_type ||
+            m.category ||
+            ""
+          ).toLowerCase() === catName.toLowerCase(),
       );
     }
     if (matchedList.length > 0) {
@@ -507,12 +704,20 @@ export default function MachineHealth() {
     let matchedList = machines;
     if (selectedCategory !== "ALL") {
       matchedList = matchedList.filter(
-        (m) => (m.equipmentType || m.equipment_type || m.category || "").toLowerCase() === selectedCategory.toLowerCase()
+        (m) =>
+          (
+            m.equipmentType ||
+            m.equipment_type ||
+            m.category ||
+            ""
+          ).toLowerCase() === selectedCategory.toLowerCase(),
       );
     }
     if (brandName !== "ALL") {
       matchedList = matchedList.filter(
-        (m) => (m.brand || m.manufacturer || "").toLowerCase() === brandName.toLowerCase()
+        (m) =>
+          (m.brand || m.manufacturer || "").toLowerCase() ===
+          brandName.toLowerCase(),
       );
     }
     if (matchedList.length > 0) {
@@ -531,21 +736,26 @@ export default function MachineHealth() {
 
     const user = StorageService.getUser();
     const companyId = user?.companyId || user?.company_id || m.companyId || "";
-    const typeStr = m.equipmentType || m.equipment_type || m.category || m.model || "Truck";
+    const typeStr =
+      m.equipmentType || m.equipment_type || m.category || m.model || "Truck";
 
     try {
       const res: any = await apiRequest(
-        `/machines/spec-template?equipmentType=${encodeURIComponent(typeStr)}&modelName=${encodeURIComponent(m.model || m.modelName || "")}&companyId=${encodeURIComponent(companyId)}&machineId=${encodeURIComponent(m.id || m.serialNumber || "")}`
+        `/machines/spec-template?equipmentType=${encodeURIComponent(typeStr)}&modelName=${encodeURIComponent(m.model || m.modelName || "")}&companyId=${encodeURIComponent(companyId)}&machineId=${encodeURIComponent(m.id || m.serialNumber || "")}`,
       );
       const templateData = res?.data || res;
-      const rawTemplateComponents: SpecComponent[] = templateData?.components || [];
+      const rawTemplateComponents: SpecComponent[] =
+        templateData?.components || [];
 
       // Merge standard factory components with company-added custom components
       const customComps = getCustomComponentsForMachine(m);
       const mergedComponents: SpecComponent[] = [
         ...rawTemplateComponents,
         ...customComps.filter(
-          (c) => !rawTemplateComponents.some((tc) => tc.name.toLowerCase() === c.name.toLowerCase())
+          (c) =>
+            !rawTemplateComponents.some(
+              (tc) => tc.name.toLowerCase() === c.name.toLowerCase(),
+            ),
         ),
       ];
 
@@ -572,7 +782,9 @@ export default function MachineHealth() {
   };
 
   // Preset Template Quick Loader
-  const handleApplyPresetTemplate = (preset: typeof PRESET_COMPONENT_TEMPLATES[0]) => {
+  const handleApplyPresetTemplate = (
+    preset: (typeof PRESET_COMPONENT_TEMPLATES)[0],
+  ) => {
     setNewCompName(preset.name);
     setNewCompCategory(preset.category);
     setNewCompParams(
@@ -583,7 +795,7 @@ export default function MachineHealth() {
         safeMax: p.safeMax,
         defaultVal: p.defaultVal,
         description: p.description || "",
-      }))
+      })),
     );
     setCompFormError("");
   };
@@ -611,7 +823,7 @@ export default function MachineHealth() {
   // Update parameter row field
   const handleUpdateParamField = (index: number, field: string, value: any) => {
     setNewCompParams((prev) =>
-      prev.map((p, i) => (i === index ? { ...p, [field]: value } : p))
+      prev.map((p, i) => (i === index ? { ...p, [field]: value } : p)),
     );
   };
 
@@ -623,7 +835,8 @@ export default function MachineHealth() {
     }
 
     // Auto-fallback: if user didn't type component name, use first parameter name or 'Custom Component'
-    const effectiveCompName = newCompName.trim() || newCompParams[0]?.name.trim() || "Custom Component";
+    const effectiveCompName =
+      newCompName.trim() || newCompParams[0]?.name.trim() || "Custom Component";
 
     if (newCompParams.length === 0) {
       setCompFormError("Please add at least 1 inspection parameter.");
@@ -632,11 +845,15 @@ export default function MachineHealth() {
 
     for (const p of newCompParams) {
       if (!p.name.trim()) {
-        setCompFormError("All parameter rows must have a valid parameter name.");
+        setCompFormError(
+          "All parameter rows must have a valid parameter name.",
+        );
         return;
       }
       if (Number(p.safeMin) >= Number(p.safeMax)) {
-        setCompFormError(`For parameter '${p.name}', Safe Min (${p.safeMin}) must be strictly less than Safe Max (${p.safeMax}).`);
+        setCompFormError(
+          `For parameter '${p.name}', Safe Min (${p.safeMin}) must be strictly less than Safe Max (${p.safeMax}).`,
+        );
         return;
       }
     }
@@ -657,18 +874,21 @@ export default function MachineHealth() {
     // 1. Save to Backend Database API for this company & machine
     try {
       const user = StorageService.getUser();
-      const companyId = user?.companyId || user?.company_id || selectedMachine.companyId || "";
-      await apiRequest('/machines/custom-components', {
-        method: 'POST',
-        data: {
+      const companyId =
+        user?.companyId || user?.company_id || selectedMachine.companyId || "";
+      await apiRequest("/machines/custom-components", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
           companyId,
           machineId: selectedMachine.id || selectedMachine.serialNumber,
           modelName: selectedMachine.model || selectedMachine.name,
-          equipmentType: selectedMachine.category || selectedMachine.equipmentType,
+          equipmentType:
+            selectedMachine.category || selectedMachine.equipmentType,
           name: effectiveCompName,
           category: "Equipment Component",
           parameters: newComponent.parameters,
-        },
+        }),
       });
     } catch (apiErr) {
       console.warn("Notice: Custom component backend sync:", apiErr);
@@ -679,9 +899,15 @@ export default function MachineHealth() {
 
     // 3. Update active component list
     setSpecComponents((prev) => {
-      const exists = prev.some((c) => c.name.toLowerCase() === newComponent.name.toLowerCase());
+      const exists = prev.some(
+        (c) => c.name.toLowerCase() === newComponent.name.toLowerCase(),
+      );
       if (exists) {
-        return prev.map((c) => (c.name.toLowerCase() === newComponent.name.toLowerCase() ? newComponent : c));
+        return prev.map((c) =>
+          c.name.toLowerCase() === newComponent.name.toLowerCase()
+            ? newComponent
+            : c,
+        );
       }
       return [...prev, newComponent];
     });
@@ -689,17 +915,22 @@ export default function MachineHealth() {
     // 4. Initialize parameter values
     setParamInputs((prev) => ({
       ...prev,
-      [newComponent.name]: newComponent.parameters.reduce((acc, p) => {
-        acc[p.name] = String(p.defaultVal);
-        return acc;
-      }, {} as Record<string, string>),
+      [newComponent.name]: newComponent.parameters.reduce(
+        (acc, p) => {
+          acc[p.name] = String(p.defaultVal);
+          return acc;
+        },
+        {} as Record<string, string>,
+      ),
     }));
 
     setActiveTab(newComponent.name);
     setIsAddComponentModalOpen(false);
     setNewCompName("");
     setCompFormError("");
-    setSuccessMsg(`✓ Added component "${newComponent.name}" to ${selectedMachine.name || selectedMachine.model}! You can now inspect and record daily parameters.`);
+    setSuccessMsg(
+      `✓ Added component "${newComponent.name}" to ${selectedMachine.name || selectedMachine.model}! You can now inspect and record daily parameters.`,
+    );
   };
 
   const fetchMachineExistingData = async (mId: string) => {
@@ -708,22 +939,29 @@ export default function MachineHealth() {
       const res: any = await apiRequest(`/machines/${mId}/manual-data`);
       const payload = res?.data || res;
       if (payload?.machine) {
-        setSelectedMachine((prev) => prev ? {
-          ...prev,
-          healthScore: payload.machine.healthScore,
-          status: payload.machine.status
-        } : prev);
+        setSelectedMachine((prev) =>
+          prev
+            ? {
+                ...prev,
+                healthScore: payload.machine.healthScore,
+                status: payload.machine.status,
+              }
+            : prev,
+        );
 
         setMachines((prevMachines) =>
           prevMachines.map((m) =>
-            m.id === mId || (m.serialNumber && payload.machine.serialNumber && m.serialNumber === payload.machine.serialNumber)
+            m.id === mId ||
+            (m.serialNumber &&
+              payload.machine.serialNumber &&
+              m.serialNumber === payload.machine.serialNumber)
               ? {
                   ...m,
                   healthScore: payload.machine.healthScore,
-                  status: payload.machine.status
+                  status: payload.machine.status,
                 }
-              : m
-          )
+              : m,
+          ),
         );
       }
       fetchAllHistoryLogs();
@@ -759,21 +997,28 @@ export default function MachineHealth() {
     if (!deletingLogTarget) return;
     setIsDeletingLog(true);
     try {
-      await apiRequest(`/machines/inspection-history/${encodeURIComponent(deletingLogTarget.id)}`, {
-        method: "DELETE",
-      });
-      setSuccessMsg(`✓ Inspection record for "${deletingLogTarget.name}" permanently deleted.`);
+      await apiRequest(
+        `/machines/inspection-history/${encodeURIComponent(deletingLogTarget.id)}`,
+        {
+          method: "DELETE",
+        },
+      );
+      setSuccessMsg(
+        `✓ Inspection record for "${deletingLogTarget.name}" permanently deleted.`,
+      );
       setDeletingLogTarget(null);
       fetchAllHistoryLogs();
-    } catch (err: any) {
-      console.error("Failed to delete audit log:", err);
-      setErrorMsg(err?.message || "Failed to delete inspection log");
+        } catch (err: any) {
     } finally {
       setIsDeletingLog(false);
     }
   };
 
-  const handleInputChange = (compName: string, paramName: string, value: string) => {
+  const handleInputChange = (
+    compName: string,
+    paramName: string,
+    value: string,
+  ) => {
     setParamInputs((prev) => ({
       ...prev,
       [compName]: {
@@ -784,8 +1029,12 @@ export default function MachineHealth() {
   };
 
   // Evaluate parameter status live for the UI card
-  const getParamValidationStatus = (param: SpecParameter, rawVal: string | undefined) => {
-    if (rawVal === undefined || rawVal === "") return { status: "normal", msg: "Default standard" };
+  const getParamValidationStatus = (
+    param: SpecParameter,
+    rawVal: string | undefined,
+  ) => {
+    if (rawVal === undefined || rawVal === "")
+      return { status: "normal", msg: "Default standard" };
     const num = parseFloat(rawVal);
     if (isNaN(num)) return { status: "invalid", msg: "Invalid number format" };
 
@@ -793,21 +1042,36 @@ export default function MachineHealth() {
       const delta = param.safeMin - num;
       const span = param.safeMax - param.safeMin || 1;
       if (delta / span > 0.25 || num <= 0) {
-        return { status: "critical-low", msg: `🔴 Critical Low (Below ${param.safeMin} ${param.unit})` };
+        return {
+          status: "critical-low",
+          msg: `🔴 Critical Low (Below ${param.safeMin} ${param.unit})`,
+        };
       }
-      return { status: "warning-low", msg: `🟡 Low (Safe: ${param.safeMin} - ${param.safeMax})` };
+      return {
+        status: "warning-low",
+        msg: `🟡 Low (Safe: ${param.safeMin} - ${param.safeMax})`,
+      };
     }
 
     if (num > param.safeMax) {
       const delta = num - param.safeMax;
       const span = param.safeMax - param.safeMin || 1;
       if (delta / span > 0.25) {
-        return { status: "critical-high", msg: `🔴 Critical High (Exceeds ${param.safeMax} ${param.unit})` };
+        return {
+          status: "critical-high",
+          msg: `🔴 Critical High (Exceeds ${param.safeMax} ${param.unit})`,
+        };
       }
-      return { status: "warning-high", msg: `🟡 High (Safe: ${param.safeMin} - ${param.safeMax})` };
+      return {
+        status: "warning-high",
+        msg: `🟡 High (Safe: ${param.safeMin} - ${param.safeMax})`,
+      };
     }
 
-    return { status: "healthy", msg: `🟢 In Safe Range (${param.safeMin} - ${param.safeMax} ${param.unit})` };
+    return {
+      status: "healthy",
+      msg: `🟢 In Safe Range (${param.safeMin} - ${param.safeMax} ${param.unit})`,
+    };
   };
 
   // Action: Load Historical Log into Form for Editing
@@ -817,27 +1081,40 @@ export default function MachineHealth() {
       (m) =>
         m.id === log.machineId ||
         m.machineId === log.machineId ||
-        (log.modelName && m.model && m.model.toLowerCase() === log.modelName.toLowerCase()) ||
-        (log.machineName && m.name && m.name.toLowerCase().includes(log.machineName.toLowerCase()))
+        (log.modelName &&
+          m.model &&
+          m.model.toLowerCase() === log.modelName.toLowerCase()) ||
+        (log.machineName &&
+          m.name &&
+          m.name.toLowerCase().includes(log.machineName.toLowerCase())),
     );
 
     if (targetMachine) {
       setSelectedMachine(targetMachine);
       if (targetMachine.category || targetMachine.equipmentType) {
-        setSelectedCategory(targetMachine.category || targetMachine.equipmentType || "ALL");
+        setSelectedCategory(
+          targetMachine.category || targetMachine.equipmentType || "ALL",
+        );
       }
       if (targetMachine.brand || targetMachine.manufacturer) {
-        setSelectedBrand(targetMachine.brand || targetMachine.manufacturer || "ALL");
+        setSelectedBrand(
+          targetMachine.brand || targetMachine.manufacturer || "ALL",
+        );
       }
 
       // Fetch template for that machine
       setLoadingSpecs(true);
-      const typeStr = targetMachine.equipmentType || targetMachine.category || targetMachine.model || "Truck";
+      const typeStr =
+        targetMachine.equipmentType ||
+        targetMachine.category ||
+        targetMachine.model ||
+        "Truck";
       const user = StorageService.getUser();
-      const companyId = user?.companyId || user?.company_id || targetMachine.companyId || "";
+      const companyId =
+        user?.companyId || user?.company_id || targetMachine.companyId || "";
       try {
         const res: any = await apiRequest(
-          `/machines/spec-template?equipmentType=${encodeURIComponent(typeStr)}&modelName=${encodeURIComponent(targetMachine.model || "")}&companyId=${encodeURIComponent(companyId)}&machineId=${encodeURIComponent(targetMachine.id || targetMachine.serialNumber || "")}`
+          `/machines/spec-template?equipmentType=${encodeURIComponent(typeStr)}&modelName=${encodeURIComponent(targetMachine.model || "")}&companyId=${encodeURIComponent(companyId)}&machineId=${encodeURIComponent(targetMachine.id || targetMachine.serialNumber || "")}`,
         );
         const templateData = res?.data || res;
         if (templateData && templateData.components) {
@@ -867,18 +1144,25 @@ export default function MachineHealth() {
         next[log.componentName] = { ...(next[log.componentName] || {}) };
         fields.forEach((f: any) => {
           if (f && f.name) {
-            next[log.componentName][f.name] = String(f.value !== undefined ? f.value : "");
+            next[log.componentName][f.name] = String(
+              f.value !== undefined ? f.value : "",
+            );
           }
         });
         return next;
       });
     }
 
-    setSuccessMsg(`✏️ Loaded inspection record for ${log.componentName} (${log.machineName || log.modelName}) into form. You can now modify values and recalculate health.`);
+    setSuccessMsg(
+      `✏️ Loaded inspection record for ${log.componentName} (${log.machineName || log.modelName}) into form. You can now modify values and recalculate health.`,
+    );
 
     // 4. Scroll smoothly to inspection form
     if (inspectionSectionRef.current) {
-      inspectionSectionRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+      inspectionSectionRef.current.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
     } else {
       window.scrollTo({ top: 400, behavior: "smooth" });
     }
@@ -893,17 +1177,19 @@ export default function MachineHealth() {
     const currentTabInputs = paramInputs[activeTab] || {};
     const activeSpec = specComponents.find((c) => c.name === activeTab);
 
-    const customFields = Object.entries(currentTabInputs).map(([name, value]) => {
-      const paramMeta = activeSpec?.parameters.find((p) => p.name === name);
-      return {
-        name,
-        value,
-        safeMin: paramMeta?.safeMin,
-        safeMax: paramMeta?.safeMax,
-        unit: paramMeta?.unit || "",
-        description: paramMeta?.description || "",
-      };
-    });
+    const customFields = Object.entries(currentTabInputs).map(
+      ([name, value]) => {
+        const paramMeta = activeSpec?.parameters.find((p) => p.name === name);
+        return {
+          name,
+          value,
+          safeMin: paramMeta?.safeMin,
+          safeMax: paramMeta?.safeMax,
+          unit: paramMeta?.unit || "",
+          description: paramMeta?.description || "",
+        };
+      },
+    );
 
     try {
       const payload = {
@@ -911,19 +1197,29 @@ export default function MachineHealth() {
         componentName: activeTab,
         customFields,
         brand: selectedMachine.brand || selectedBrand || "Caterpillar",
-        category: selectedMachine.equipmentType || selectedCategory || "General",
-        modelName: selectedMachine.model || selectedMachine.modelName || selectedMachine.name || "",
+        category:
+          selectedMachine.equipmentType || selectedCategory || "General",
+        modelName:
+          selectedMachine.model ||
+          selectedMachine.modelName ||
+          selectedMachine.name ||
+          "",
         serialNumber: selectedMachine.serialNumber || "SN-AUTO-001",
         machineName: selectedMachine.name || selectedMachine.model || "",
-        companyId: currentUser?.isSuperAdmin ? null : (currentUser?.companyId || null),
-        companyName: currentUser?.isSuperAdmin ? null : (currentUser?.companyName || null),
+        companyId: currentUser?.isSuperAdmin
+          ? null
+          : currentUser?.companyId || null,
+        companyName: currentUser?.isSuperAdmin
+          ? null
+          : currentUser?.companyName || null,
         userId: currentUser?.id || null,
         userName: currentUser?.name || "Super Admin",
         userRole: currentUser?.role || "SUPER_ADMIN",
         userEmail: currentUser?.email || "superadmin@hme.com",
       };
 
-      const targetId = selectedMachine.id || selectedMachine.machineId || "heh-cat-777";
+      const targetId =
+        selectedMachine.id || selectedMachine.machineId || "heh-cat-777";
       const res: any = await apiRequest(`/machines/${targetId}/manual-data`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -932,37 +1228,53 @@ export default function MachineHealth() {
       const data = res?.data || res;
 
       setHealthResult(data?.componentHealth || data?.health || data);
-      
-      const compScore = data?.componentHealth?.healthScore ?? data?.component?.healthScore ?? 100;
+
+      const compScore =
+        data?.componentHealth?.healthScore ??
+        data?.component?.healthScore ??
+        100;
       const compStatus = data?.componentHealth?.status || "Healthy";
-      const overallHealth = data?.machineHealth?.overallMachineHealth ?? data?.machine?.healthScore ?? null;
-      const machineStatus = data?.machineHealth?.machineStatus ?? data?.machine?.status ?? null;
-      const actionType = data?.actionType === "INITIAL_INSPECTION" ? "New Entry Created" : "Routine Update Logged";
+      const overallHealth =
+        data?.machineHealth?.overallMachineHealth ??
+        data?.machine?.healthScore ??
+        null;
+      const machineStatus =
+        data?.machineHealth?.machineStatus ?? data?.machine?.status ?? null;
+      const actionType =
+        data?.actionType === "INITIAL_INSPECTION"
+          ? "New Entry Created"
+          : "Routine Update Logged";
 
       if (overallHealth !== null && machineStatus !== null) {
-        setSelectedMachine((prev) => prev ? {
-          ...prev,
-          healthScore: overallHealth,
-          status: machineStatus
-        } : prev);
+        setSelectedMachine((prev) =>
+          prev
+            ? {
+                ...prev,
+                healthScore: overallHealth,
+                status: machineStatus,
+              }
+            : prev,
+        );
 
         setMachines((prevMachines) =>
           prevMachines.map((m) =>
-            m.id === targetId || (selectedMachine?.serialNumber && m.serialNumber === selectedMachine.serialNumber)
+            m.id === targetId ||
+            (selectedMachine?.serialNumber &&
+              m.serialNumber === selectedMachine.serialNumber)
               ? {
                   ...m,
                   healthScore: overallHealth,
-                  status: machineStatus
+                  status: machineStatus,
                 }
-              : m
-          )
+              : m,
+          ),
         );
       }
 
       setSuccessMsg(
-        `✅ ${actionType} for ${activeTab}! Status: ${compStatus} (${compScore}%). Saved to PostgreSQL Audit Log Table.`
+        `✅ ${actionType} for ${activeTab}! Status: ${compStatus} (${compScore}%). Saved to PostgreSQL Audit Log Table.`,
       );
-      
+
       fetchMachineExistingData(targetId);
     } catch (err: any) {
       console.error("Failed to save inspection:", err);
@@ -980,12 +1292,16 @@ export default function MachineHealth() {
     setSuccessMsg("");
 
     try {
-      const targetId = selectedMachine.id || selectedMachine.machineId || "heh-cat-777";
+      const targetId =
+        selectedMachine.id || selectedMachine.machineId || "heh-cat-777";
 
       const componentsPayload = specComponents.map((comp) => {
         const compInputs = paramInputs[comp.name] || {};
         const customFields = comp.parameters.map((param) => {
-          const val = compInputs[param.name] !== undefined ? compInputs[param.name] : String(param.defaultVal);
+          const val =
+            compInputs[param.name] !== undefined
+              ? compInputs[param.name]
+              : String(param.defaultVal);
           return {
             name: param.name,
             value: val,
@@ -1006,12 +1322,21 @@ export default function MachineHealth() {
       const payload = {
         components: componentsPayload,
         brand: selectedMachine.brand || selectedBrand || "Caterpillar",
-        category: selectedMachine.equipmentType || selectedCategory || "General",
-        modelName: selectedMachine.model || selectedMachine.modelName || selectedMachine.name || "",
+        category:
+          selectedMachine.equipmentType || selectedCategory || "General",
+        modelName:
+          selectedMachine.model ||
+          selectedMachine.modelName ||
+          selectedMachine.name ||
+          "",
         serialNumber: selectedMachine.serialNumber || "SN-AUTO-001",
         machineName: selectedMachine.name || selectedMachine.model || "",
-        companyId: currentUser?.isSuperAdmin ? null : (currentUser?.companyId || null),
-        companyName: currentUser?.isSuperAdmin ? null : (currentUser?.companyName || null),
+        companyId: currentUser?.isSuperAdmin
+          ? null
+          : currentUser?.companyId || null,
+        companyName: currentUser?.isSuperAdmin
+          ? null
+          : currentUser?.companyName || null,
         userId: currentUser?.id || null,
         userName: currentUser?.name || "Super Admin",
         userRole: currentUser?.role || "SUPER_ADMIN",
@@ -1029,29 +1354,35 @@ export default function MachineHealth() {
       const machineStatus = data?.machineHealth?.machineStatus ?? null;
 
       if (overallHealth !== null && machineStatus !== null) {
-        setSelectedMachine((prev) => prev ? {
-          ...prev,
-          healthScore: overallHealth,
-          status: machineStatus
-        } : prev);
+        setSelectedMachine((prev) =>
+          prev
+            ? {
+                ...prev,
+                healthScore: overallHealth,
+                status: machineStatus,
+              }
+            : prev,
+        );
 
         setMachines((prevMachines) =>
           prevMachines.map((m) =>
-            m.id === targetId || (selectedMachine?.serialNumber && m.serialNumber === selectedMachine.serialNumber)
+            m.id === targetId ||
+            (selectedMachine?.serialNumber &&
+              m.serialNumber === selectedMachine.serialNumber)
               ? {
                   ...m,
                   healthScore: overallHealth,
-                  status: machineStatus
+                  status: machineStatus,
                 }
-              : m
-          )
+              : m,
+          ),
         );
       }
 
       setSuccessMsg(
-        `✅ Saved all ${specComponents.length} components in 1 single consolidated inspection log! Overall Machine Health: ${overallHealth}% (${machineStatus}).`
+        `✅ Saved all ${specComponents.length} components in 1 single consolidated inspection log! Overall Machine Health: ${overallHealth}% (${machineStatus}).`,
       );
-      
+
       fetchMachineExistingData(targetId);
     } catch (err: any) {
       console.error("Failed to save all components:", err);
@@ -1113,7 +1444,8 @@ export default function MachineHealth() {
             Loading Heavy Equipment Database...
           </h3>
           <p className="text-xs font-medium text-slate-500 max-w-sm">
-            Fetching 9,742+ Machines, 55 Categories &amp; 91 Brands from PostgreSQL Master Equipment Catalog
+            Fetching 9,742+ Machines, 55 Categories &amp; 91 Brands from
+            PostgreSQL Master Equipment Catalog
           </p>
         </div>
       </div>
@@ -1141,7 +1473,10 @@ export default function MachineHealth() {
               Machine Health &amp; Inspection Audit Trail
             </h1>
             <p className="text-sm font-medium text-slate-300 max-w-2xl">
-              Select Category, Brand and Model to inspect components. Every save/update permanently creates a timestamped Audit Log in PostgreSQL with company, user, parameter changes &amp; health scores.
+              Select Category, Brand and Model to inspect components. Every
+              save/update permanently creates a timestamped Audit Log in
+              PostgreSQL with company, user, parameter changes &amp; health
+              scores.
             </p>
           </div>
 
@@ -1149,7 +1484,11 @@ export default function MachineHealth() {
             <button
               onClick={() => {
                 if (selectedMachine) {
-                  fetchHistoryLogs(selectedMachine.id || selectedMachine.machineId || "heh-cat-777");
+                  fetchHistoryLogs(
+                    selectedMachine.id ||
+                      selectedMachine.machineId ||
+                      "heh-cat-777",
+                  );
                   setIsHistoryModalOpen(true);
                 }
               }}
@@ -1164,7 +1503,6 @@ export default function MachineHealth() {
 
         {/* 3-Tier Cascading Category, Brand & Machine Downward Selection Panel */}
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-[#0c1626] space-y-5">
-          
           {/* DIRECT GLOBAL EQUIPMENT SEARCH BAR */}
           <div className="relative space-y-1.5">
             <div className="flex items-center justify-between">
@@ -1191,7 +1529,10 @@ export default function MachineHealth() {
                 placeholder="Type machine name, model, brand, or serial number (e.g. Caterpillar 777, Komatsu PC8000, SN-CAT-101)..."
                 className="w-full rounded-2xl border-2 border-blue-500/40 bg-blue-50/40 pl-11 pr-10 py-3 text-sm font-bold text-slate-900 shadow-sm transition placeholder:text-slate-400 focus:border-blue-600 focus:bg-white focus:outline-none dark:border-blue-600/40 dark:bg-[#10223b]/60 dark:text-white dark:focus:bg-[#0a1628]"
               />
-              <Search size={18} className="absolute left-4 top-3.5 text-blue-500" />
+              <Search
+                size={18}
+                className="absolute left-4 top-3.5 text-blue-500"
+              />
 
               {globalSearch && (
                 <button
@@ -1246,11 +1587,19 @@ export default function MachineHealth() {
                             </span>
                           </div>
                           <p className="text-[11px] opacity-70 font-medium mt-0.5">
-                            Category: {m.equipmentType || m.category} • Serial: {m.serialNumber}
+                            Category: {m.equipmentType || m.category} • Serial:{" "}
+                            {m.serialNumber}
                           </p>
                         </div>
 
-                        <ChevronRight size={16} className={selectedMachine?.id === m.id ? "text-white" : "text-slate-400"} />
+                        <ChevronRight
+                          size={16}
+                          className={
+                            selectedMachine?.id === m.id
+                              ? "text-white"
+                              : "text-slate-400"
+                          }
+                        />
                       </button>
                     ))
                   )}
@@ -1268,7 +1617,6 @@ export default function MachineHealth() {
           </div>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3 lg:grid-cols-3">
-            
             {/* STEP 1: Category Dropdown */}
             <div className="relative space-y-1.5">
               <label className="text-xs font-extrabold uppercase tracking-wider text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
@@ -1290,7 +1638,10 @@ export default function MachineHealth() {
                     ? `🌐 All Categories (${machines.length})`
                     : `🚜 ${selectedCategory}`}
                 </span>
-                <ChevronDown size={18} className={`text-blue-600 dark:text-blue-400 transition-transform ${isCatDropdownOpen ? "rotate-180" : ""}`} />
+                <ChevronDown
+                  size={18}
+                  className={`text-blue-600 dark:text-blue-400 transition-transform ${isCatDropdownOpen ? "rotate-180" : ""}`}
+                />
               </button>
 
               {/* ALWAYS DOWNWARD Expanding Menu */}
@@ -1304,7 +1655,10 @@ export default function MachineHealth() {
                       onChange={(e) => setCatSearch(e.target.value)}
                       className="w-full rounded-xl border border-slate-300 bg-slate-50 pl-9 pr-3 py-2 text-xs font-bold text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-[#101f33] dark:text-white"
                     />
-                    <Search size={13} className="absolute left-3 top-2.5 text-slate-400" />
+                    <Search
+                      size={13}
+                      className="absolute left-3 top-2.5 text-slate-400"
+                    />
                   </div>
 
                   <div className="space-y-1 pt-1">
@@ -1317,7 +1671,9 @@ export default function MachineHealth() {
                       }`}
                     >
                       <span>🌐 All Categories</span>
-                      <span className="text-[10px] font-bold opacity-80">{machines.length}</span>
+                      <span className="text-[10px] font-bold opacity-80">
+                        {machines.length}
+                      </span>
                     </button>
 
                     {filteredCategoryOptions.map((cat) => (
@@ -1325,7 +1681,8 @@ export default function MachineHealth() {
                         key={cat.name}
                         onClick={() => handleCategoryChange(cat.name)}
                         className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-extrabold transition ${
-                          selectedCategory.toLowerCase() === cat.name.toLowerCase()
+                          selectedCategory.toLowerCase() ===
+                          cat.name.toLowerCase()
                             ? "bg-blue-600 text-white"
                             : "text-slate-800 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
                         }`}
@@ -1362,7 +1719,10 @@ export default function MachineHealth() {
                     ? `🏷️ All Brands (${brandsList.length})`
                     : `🏷️ ${selectedBrand}`}
                 </span>
-                <ChevronDown size={18} className={`text-indigo-600 dark:text-indigo-400 transition-transform ${isBrandDropdownOpen ? "rotate-180" : ""}`} />
+                <ChevronDown
+                  size={18}
+                  className={`text-indigo-600 dark:text-indigo-400 transition-transform ${isBrandDropdownOpen ? "rotate-180" : ""}`}
+                />
               </button>
 
               {/* ALWAYS DOWNWARD Expanding Menu */}
@@ -1376,7 +1736,10 @@ export default function MachineHealth() {
                       onChange={(e) => setBrandSearch(e.target.value)}
                       className="w-full rounded-xl border border-slate-300 bg-slate-50 pl-9 pr-3 py-2 text-xs font-bold text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-[#101f33] dark:text-white"
                     />
-                    <Search size={13} className="absolute left-3 top-2.5 text-slate-400" />
+                    <Search
+                      size={13}
+                      className="absolute left-3 top-2.5 text-slate-400"
+                    />
                   </div>
 
                   <div className="space-y-1 pt-1">
@@ -1389,7 +1752,9 @@ export default function MachineHealth() {
                       }`}
                     >
                       <span>🏷️ All Brands</span>
-                      <span className="text-[10px] font-bold opacity-80">{machines.length}</span>
+                      <span className="text-[10px] font-bold opacity-80">
+                        {machines.length}
+                      </span>
                     </button>
 
                     {filteredBrandOptions.map((brand) => (
@@ -1397,7 +1762,8 @@ export default function MachineHealth() {
                         key={brand.name}
                         onClick={() => handleBrandChange(brand.name)}
                         className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-extrabold transition ${
-                          selectedBrand.toLowerCase() === brand.name.toLowerCase()
+                          selectedBrand.toLowerCase() ===
+                          brand.name.toLowerCase()
                             ? "bg-indigo-600 text-white"
                             : "text-slate-800 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
                         }`}
@@ -1430,9 +1796,14 @@ export default function MachineHealth() {
                 className="flex w-full items-center justify-between rounded-xl border border-slate-300 bg-white px-4 py-3 text-left text-sm font-extrabold text-slate-900 shadow-sm transition hover:border-blue-500 focus:outline-none dark:border-slate-700 dark:bg-[#101f33] dark:text-white"
               >
                 <span className="truncate">
-                  {selectedMachine ? `🛠️ ${selectedMachine.name || selectedMachine.model}` : "Select a Machine Model"}
+                  {selectedMachine
+                    ? `🛠️ ${selectedMachine.name || selectedMachine.model}`
+                    : "Select a Machine Model"}
                 </span>
-                <ChevronDown size={18} className={`text-slate-400 transition-transform ${isMachineDropdownOpen ? "rotate-180" : ""}`} />
+                <ChevronDown
+                  size={18}
+                  className={`text-slate-400 transition-transform ${isMachineDropdownOpen ? "rotate-180" : ""}`}
+                />
               </button>
 
               {/* ALWAYS DOWNWARD Expanding Menu */}
@@ -1446,7 +1817,10 @@ export default function MachineHealth() {
                       onChange={(e) => setMachineSearch(e.target.value)}
                       className="w-full rounded-xl border border-slate-300 bg-slate-50 pl-9 pr-3 py-2 text-xs font-bold text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-[#101f33] dark:text-white"
                     />
-                    <Search size={13} className="absolute left-3 top-2.5 text-slate-400" />
+                    <Search
+                      size={13}
+                      className="absolute left-3 top-2.5 text-slate-400"
+                    />
                   </div>
 
                   <div className="space-y-1 pt-1">
@@ -1461,8 +1835,12 @@ export default function MachineHealth() {
                         }`}
                       >
                         <div className="truncate">
-                          <p className="font-extrabold truncate">{m.name || m.model}</p>
-                          <p className="text-[10px] opacity-70 font-medium">{m.equipmentType || m.category} • {m.serialNumber}</p>
+                          <p className="font-extrabold truncate">
+                            {m.name || m.model}
+                          </p>
+                          <p className="text-[10px] opacity-70 font-medium">
+                            {m.equipmentType || m.category} • {m.serialNumber}
+                          </p>
                         </div>
                         <span className="rounded-full bg-slate-200/60 px-2 py-0.5 text-[9px] font-bold text-slate-700 dark:bg-slate-700 dark:text-slate-200 ml-2">
                           {m.brand}
@@ -1488,11 +1866,18 @@ export default function MachineHealth() {
                       {selectedMachine.name || selectedMachine.model}
                     </span>
                     <span className="rounded-md bg-blue-200/80 px-2 py-0.5 text-[10px] font-extrabold text-blue-900 dark:bg-blue-900 dark:text-blue-200">
-                      Category: {selectedMachine.equipmentType || selectedMachine.category}
+                      Category:{" "}
+                      {selectedMachine.equipmentType ||
+                        selectedMachine.category}
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                    Source: <span className="font-bold text-blue-600 dark:text-blue-400">{selectedMachine.sourceCatalog}</span> • Model: {selectedMachine.model} • Serial: {selectedMachine.serialNumber}
+                    Source:{" "}
+                    <span className="font-bold text-blue-600 dark:text-blue-400">
+                      {selectedMachine.sourceCatalog}
+                    </span>{" "}
+                    • Model: {selectedMachine.model} • Serial:{" "}
+                    {selectedMachine.serialNumber}
                   </p>
                 </div>
               </div>
@@ -1503,7 +1888,10 @@ export default function MachineHealth() {
                     Overall Machine Health
                   </span>
                   <div>
-                    {getStatusBadge(selectedMachine.status || "Not Inspected", selectedMachine.healthScore ?? null)}
+                    {getStatusBadge(
+                      selectedMachine.status || "Not Inspected",
+                      selectedMachine.healthScore ?? null,
+                    )}
                   </div>
                 </div>
               </div>
@@ -1513,8 +1901,10 @@ export default function MachineHealth() {
 
         {/* Components Inspection & Diagnostics Matrix */}
         {selectedMachine && (
-          <div ref={inspectionSectionRef} className="grid grid-cols-1 gap-6 lg:grid-cols-4">
-            
+          <div
+            ref={inspectionSectionRef}
+            className="grid grid-cols-1 gap-6 lg:grid-cols-4"
+          >
             {/* Left Sidebar: Components Navigation */}
             <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-[#0c1626] space-y-3 lg:col-span-1">
               <div className="px-1">
@@ -1552,25 +1942,37 @@ export default function MachineHealth() {
                       >
                         <div className="truncate flex-1">
                           <p className="truncate font-bold">{comp.name}</p>
-                          <span className={`text-[10px] font-bold ${isActive ? "text-blue-100" : "text-slate-400"}`}>
-                            {comp.category} • {comp.parameters?.length || 0} params
+                          <span
+                            className={`text-[10px] font-bold ${isActive ? "text-blue-100" : "text-slate-400"}`}
+                          >
+                            {comp.category} • {comp.parameters?.length || 0}{" "}
+                            params
                           </span>
                         </div>
 
                         {healthInfo ? (
-                          <span className={`ml-2 shrink-0 rounded-lg px-2 py-0.5 text-[10px] font-black shadow-sm ${
-                            isActive
-                              ? "bg-white/20 text-white"
-                              : healthInfo.healthScore < 50
-                              ? "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300"
-                              : healthInfo.healthScore < 85
-                              ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
-                              : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
-                          }`}>
+                          <span
+                            className={`ml-2 shrink-0 rounded-lg px-2 py-0.5 text-[10px] font-black shadow-sm ${
+                              isActive
+                                ? "bg-white/20 text-white"
+                                : healthInfo.healthScore < 50
+                                  ? "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300"
+                                  : healthInfo.healthScore < 85
+                                    ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+                                    : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+                            }`}
+                          >
                             {healthInfo.healthScore}%
                           </span>
                         ) : (
-                          <ChevronRight size={14} className={isActive ? "text-white" : "text-slate-400 shrink-0"} />
+                          <ChevronRight
+                            size={14}
+                            className={
+                              isActive
+                                ? "text-white"
+                                : "text-slate-400 shrink-0"
+                            }
+                          />
                         )}
                       </button>
                     );
@@ -1585,8 +1987,7 @@ export default function MachineHealth() {
                     }}
                     className="flex w-full items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-slate-300 p-2.5 text-xs font-extrabold text-blue-600 hover:border-blue-500 hover:bg-blue-50/50 dark:border-slate-700 dark:text-blue-400 dark:hover:bg-blue-950/20 transition mt-2"
                   >
-                    <Plus size={14} strokeWidth={2.5} />
-                    + Add Custom Component
+                    <Plus size={14} strokeWidth={2.5} />+ Add Custom Component
                   </button>
                 </div>
               )}
@@ -1596,9 +1997,13 @@ export default function MachineHealth() {
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-[#0c1626] lg:col-span-3 space-y-6">
               {loadingSpecs ? (
                 <div className="flex min-h-[300px] flex-col items-center justify-center p-8 text-center space-y-3">
-                  <Loader2 size={32} className="text-blue-600 animate-spin dark:text-blue-400" />
+                  <Loader2
+                    size={32}
+                    className="text-blue-600 animate-spin dark:text-blue-400"
+                  />
                   <p className="text-xs font-bold text-slate-600 dark:text-slate-300">
-                    Loading Factory Specifications &amp; Parameters for {selectedMachine.model || selectedMachine.name}...
+                    Loading Factory Specifications &amp; Parameters for{" "}
+                    {selectedMachine.model || selectedMachine.name}...
                   </p>
                 </div>
               ) : (
@@ -1624,7 +2029,10 @@ export default function MachineHealth() {
                   {successMsg && (
                     <div className="mt-4 flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-bold text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-300">
                       <span>{successMsg}</span>
-                      <button onClick={() => setSuccessMsg("")} className="text-emerald-600 hover:underline">
+                      <button
+                        onClick={() => setSuccessMsg("")}
+                        className="text-emerald-600 hover:underline"
+                      >
                         Dismiss
                       </button>
                     </div>
@@ -1633,8 +2041,13 @@ export default function MachineHealth() {
                   {/* Pre-populated Parameter Input Fields with Live Range Validation */}
                   <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2">
                     {activeCompSpec?.parameters.map((param) => {
-                      const currentValue = paramInputs[activeTab]?.[param.name] ?? String(param.defaultVal);
-                      const validation = getParamValidationStatus(param, currentValue);
+                      const currentValue =
+                        paramInputs[activeTab]?.[param.name] ??
+                        String(param.defaultVal);
+                      const validation = getParamValidationStatus(
+                        param,
+                        currentValue,
+                      );
 
                       const isCrit = validation.status.includes("critical");
                       const isWarn = validation.status.includes("warning");
@@ -1646,8 +2059,8 @@ export default function MachineHealth() {
                             isCrit
                               ? "border-red-400 bg-red-50/50 dark:border-red-800/80 dark:bg-red-950/30"
                               : isWarn
-                              ? "border-amber-400 bg-amber-50/50 dark:border-amber-800/80 dark:bg-amber-950/30"
-                              : "border-slate-200 bg-slate-50/80 dark:border-slate-800 dark:bg-[#101f33]"
+                                ? "border-amber-400 bg-amber-50/50 dark:border-amber-800/80 dark:bg-amber-950/30"
+                                : "border-slate-200 bg-slate-50/80 dark:border-slate-800 dark:bg-[#101f33]"
                           }`}
                         >
                           <div className="flex items-center justify-between">
@@ -1667,13 +2080,19 @@ export default function MachineHealth() {
                             <input
                               type="text"
                               value={currentValue}
-                              onChange={(e) => handleInputChange(activeTab, param.name, e.target.value)}
+                              onChange={(e) =>
+                                handleInputChange(
+                                  activeTab,
+                                  param.name,
+                                  e.target.value,
+                                )
+                              }
                               className={`w-full rounded-xl border px-3.5 py-2 text-sm font-black shadow-sm focus:outline-none ${
                                 isCrit
                                   ? "border-red-500 bg-white text-red-900 focus:ring-2 focus:ring-red-500/30 dark:bg-[#150a0a] dark:text-red-200"
                                   : isWarn
-                                  ? "border-amber-500 bg-white text-amber-900 focus:ring-2 focus:ring-amber-500/30 dark:bg-[#1a1205] dark:text-amber-200"
-                                  : "border-slate-300 bg-white text-slate-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-[#081324] dark:text-white"
+                                    ? "border-amber-500 bg-white text-amber-900 focus:ring-2 focus:ring-amber-500/30 dark:bg-[#1a1205] dark:text-amber-200"
+                                    : "border-slate-300 bg-white text-slate-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-[#081324] dark:text-white"
                               }`}
                             />
                           </div>
@@ -1681,9 +2100,20 @@ export default function MachineHealth() {
                           {/* Live Range Feedback */}
                           <div className="mt-2 flex items-center justify-between text-[10px] font-bold">
                             <span className="text-slate-500">
-                              Safe: <strong className="text-indigo-600 dark:text-indigo-400">{param.safeMin} – {param.safeMax} {param.unit}</strong>
+                              Safe:{" "}
+                              <strong className="text-indigo-600 dark:text-indigo-400">
+                                {param.safeMin} – {param.safeMax} {param.unit}
+                              </strong>
                             </span>
-                            <span className={isCrit ? "text-red-600 font-extrabold" : isWarn ? "text-amber-600 font-extrabold" : "text-emerald-600"}>
+                            <span
+                              className={
+                                isCrit
+                                  ? "text-red-600 font-extrabold"
+                                  : isWarn
+                                    ? "text-amber-600 font-extrabold"
+                                    : "text-emerald-600"
+                              }
+                            >
                               {validation.msg}
                             </span>
                           </div>
@@ -1720,8 +2150,9 @@ export default function MachineHealth() {
                         disabled={submitting}
                         className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 px-5 py-3 text-xs font-black text-white shadow-lg shadow-indigo-500/25 transition hover:from-indigo-500 hover:to-purple-500 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
                       >
-                        <Zap size={15} className="text-amber-300" />
-                        ⚡ Save All ({specComponents.length}) Components &amp; Compute Full Machine Health
+                        <Zap size={15} className="text-amber-300" />⚡ Save All
+                        ({specComponents.length}) Components &amp; Compute Full
+                        Machine Health
                       </button>
                     )}
                   </div>
@@ -1734,21 +2165,33 @@ export default function MachineHealth() {
                           <Gauge size={16} className="text-blue-500" />
                           Inspection Evaluation &amp; Diagnostic Result
                         </h4>
-                        {getStatusBadge(healthResult.status || "Healthy", healthResult.healthScore ?? healthResult.overallMachineHealth)}
+                        {getStatusBadge(
+                          healthResult.status || "Healthy",
+                          healthResult.healthScore ??
+                            healthResult.overallMachineHealth,
+                        )}
                       </div>
 
                       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 text-xs">
                         <div className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-[#101f33]">
-                          <span className="text-slate-400">Component Health</span>
+                          <span className="text-slate-400">
+                            Component Health
+                          </span>
                           <p className="text-base font-black text-slate-900 dark:text-white mt-0.5">
-                            {healthResult.healthScore ?? healthResult.overallMachineHealth}%
+                            {healthResult.healthScore ??
+                              healthResult.overallMachineHealth}
+                            %
                           </p>
                         </div>
 
                         <div className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-[#101f33]">
-                          <span className="text-slate-400">Overall Machine Health</span>
+                          <span className="text-slate-400">
+                            Overall Machine Health
+                          </span>
                           <p className="text-base font-black text-blue-600 dark:text-blue-400 mt-0.5">
-                            {selectedMachine.healthScore ?? healthResult.healthScore}%
+                            {selectedMachine.healthScore ??
+                              healthResult.healthScore}
+                            %
                           </p>
                         </div>
 
@@ -1760,7 +2203,9 @@ export default function MachineHealth() {
                         </div>
 
                         <div className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-[#101f33]">
-                          <span className="text-slate-400">PostgreSQL Audit Table</span>
+                          <span className="text-slate-400">
+                            PostgreSQL Audit Table
+                          </span>
                           <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 mt-1">
                             ✓ Snapshot Stored
                           </p>
@@ -1768,19 +2213,22 @@ export default function MachineHealth() {
                       </div>
 
                       {/* Flagged Issues List */}
-                      {healthResult.issues && healthResult.issues.length > 0 && (
-                        <div className="rounded-xl border border-red-200 bg-red-50/80 p-3.5 text-xs font-medium text-red-900 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200 space-y-1">
-                          <p className="font-bold flex items-center gap-1.5 text-red-800 dark:text-red-300">
-                            <AlertOctagon size={14} />
-                            Identified Warnings &amp; Issues:
-                          </p>
-                          <ul className="list-disc pl-5 space-y-0.5 text-[11px]">
-                            {healthResult.issues.map((iss: string, idx: number) => (
-                              <li key={idx}>{iss}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
+                      {healthResult.issues &&
+                        healthResult.issues.length > 0 && (
+                          <div className="rounded-xl border border-red-200 bg-red-50/80 p-3.5 text-xs font-medium text-red-900 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200 space-y-1">
+                            <p className="font-bold flex items-center gap-1.5 text-red-800 dark:text-red-300">
+                              <AlertOctagon size={14} />
+                              Identified Warnings &amp; Issues:
+                            </p>
+                            <ul className="list-disc pl-5 space-y-0.5 text-[11px]">
+                              {healthResult.issues.map(
+                                (iss: string, idx: number) => (
+                                  <li key={idx}>{iss}</li>
+                                ),
+                              )}
+                            </ul>
+                          </div>
+                        )}
                     </div>
                   )}
                 </div>
@@ -1807,7 +2255,9 @@ export default function MachineHealth() {
                 Equipment Inspection Audit Trail &amp; Health History
               </h3>
               <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mt-0.5">
-                Comprehensive chronological log of component inspections, parameter updates, diagnostic alerts, and calculated health scores.
+                Comprehensive chronological log of component inspections,
+                parameter updates, diagnostic alerts, and calculated health
+                scores.
               </p>
             </div>
 
@@ -1842,7 +2292,10 @@ export default function MachineHealth() {
                 onClick={fetchAllHistoryLogs}
                 className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3.5 py-1.5 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-[#101f33] dark:text-slate-200"
               >
-                <RefreshCw size={13} className={loadingHistory ? "animate-spin" : ""} />
+                <RefreshCw
+                  size={13}
+                  className={loadingHistory ? "animate-spin" : ""}
+                />
                 Refresh Logs
               </button>
             </div>
@@ -1850,264 +2303,344 @@ export default function MachineHealth() {
 
           {loadingHistory ? (
             <div className="flex min-h-[140px] flex-col items-center justify-center p-8 text-center space-y-2">
-              <Loader2 size={26} className="text-blue-600 animate-spin dark:text-blue-400" />
-              <p className="text-xs font-bold text-slate-500">Loading audit history logs from PostgreSQL database...</p>
+              <Loader2
+                size={26}
+                className="text-blue-600 animate-spin dark:text-blue-400"
+              />
+              <p className="text-xs font-bold text-slate-500">
+                Loading audit history logs from PostgreSQL database...
+              </p>
             </div>
-          ) : (() => {
-            const displayed = auditViewScope === "SELECTED" && selectedMachine
-              ? historyLogs.filter(l => l.machineId === selectedMachine.id || l.machineId === selectedMachine.machineId || l.modelName === selectedMachine.model || l.serialNumber === selectedMachine.serialNumber)
-              : historyLogs;
+          ) : (
+            (() => {
+              const displayed =
+                auditViewScope === "SELECTED" && selectedMachine
+                  ? historyLogs.filter(
+                      (l) =>
+                        l.machineId === selectedMachine.id ||
+                        l.machineId === selectedMachine.machineId ||
+                        l.modelName === selectedMachine.model ||
+                        l.serialNumber === selectedMachine.serialNumber,
+                    )
+                  : historyLogs;
 
-            if (displayed.length === 0) {
-              return (
-                <div className="rounded-xl border border-dashed border-slate-300 p-8 text-center text-xs font-bold text-slate-400 dark:border-slate-700">
-                  {auditViewScope === "SELECTED"
-                    ? `No inspection entries logged yet for ${selectedMachine?.name || selectedMachine?.model}. Click "Save & Calculate Health Score" above to log the first entry!`
-                    : "No inspection audit entries recorded yet in the system. Select a machine and click \"Save & Calculate Health Score\" to create the first record!"}
-                </div>
+              if (displayed.length === 0) {
+                return (
+                  <div className="rounded-xl border border-dashed border-slate-300 p-8 text-center text-xs font-bold text-slate-400 dark:border-slate-700">
+                    {auditViewScope === "SELECTED"
+                      ? `No inspection entries logged yet for ${selectedMachine?.name || selectedMachine?.model}. Click "Save & Calculate Health Score" above to log the first entry!`
+                      : 'No inspection audit entries recorded yet in the system. Select a machine and click "Save & Calculate Health Score" to create the first record!'}
+                  </div>
+                );
+              }
+
+              const totalAuditPages = Math.max(
+                1,
+                Math.ceil(displayed.length / auditPageSize),
               );
-            }
+              const paginatedAuditLogs = displayed.slice(
+                (auditCurrentPage - 1) * auditPageSize,
+                auditCurrentPage * auditPageSize,
+              );
 
-            const totalAuditPages = Math.max(1, Math.ceil(displayed.length / auditPageSize));
-            const paginatedAuditLogs = displayed.slice(
-              (auditCurrentPage - 1) * auditPageSize,
-              auditCurrentPage * auditPageSize
-            );
+              return (
+                <div className="space-y-4">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-extrabold uppercase text-slate-500 dark:border-slate-800 dark:bg-[#07111f] dark:text-slate-400">
+                          <th className="p-3 w-12 text-center">#</th>
+                          <th className="p-3">Timestamp</th>
+                          <th className="p-3">Equipment / Model</th>
+                          <th className="p-3">Action</th>
+                          <th className="p-3">Inspector (User)</th>
+                          <th className="p-3">Component</th>
+                          <th className="p-3">
+                            Parameter Changes (Old &rarr; New)
+                          </th>
+                          <th className="p-3">Scores (Comp / Overall)</th>
+                          <th className="p-3 text-center">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
+                        {paginatedAuditLogs.map((log, idx) => {
+                          const isNewEntry =
+                            log.actionType === "INITIAL_INSPECTION";
+                          const changes = Array.isArray(log.parameterChanges)
+                            ? log.parameterChanges
+                            : [];
+                          const serialNum =
+                            (auditCurrentPage - 1) * auditPageSize + idx + 1;
 
-            return (
-              <div className="space-y-4">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead>
-                      <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-extrabold uppercase text-slate-500 dark:border-slate-800 dark:bg-[#07111f] dark:text-slate-400">
-                        <th className="p-3 w-12 text-center">#</th>
-                        <th className="p-3">Timestamp</th>
-                        <th className="p-3">Equipment / Model</th>
-                        <th className="p-3">Action</th>
-                        <th className="p-3">Inspector (User)</th>
-                        <th className="p-3">Component</th>
-                        <th className="p-3">Parameter Changes (Old &rarr; New)</th>
-                        <th className="p-3">Scores (Comp / Overall)</th>
-                        <th className="p-3 text-center">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
-                      {paginatedAuditLogs.map((log, idx) => {
-                        const isNewEntry = log.actionType === "INITIAL_INSPECTION";
-                        const changes = Array.isArray(log.parameterChanges) ? log.parameterChanges : [];
-                        const serialNum = (auditCurrentPage - 1) * auditPageSize + idx + 1;
+                          return (
+                            <tr
+                              key={log.id}
+                              className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30"
+                            >
+                              <td className="p-3 text-center font-mono font-black text-xs text-slate-400">
+                                {serialNum}
+                              </td>
+                              <td className="p-3 whitespace-nowrap text-slate-600 dark:text-slate-300 font-medium">
+                                <div className="flex items-center gap-1.5 font-bold text-slate-800 dark:text-slate-200">
+                                  <Calendar
+                                    size={13}
+                                    className="text-blue-500"
+                                  />
+                                  {new Date(log.createdAt).toLocaleDateString()}
+                                </div>
+                                <span className="text-[10px] text-slate-400">
+                                  {new Date(log.createdAt).toLocaleTimeString()}
+                                </span>
+                              </td>
 
-                        return (
-                          <tr key={log.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
-                            <td className="p-3 text-center font-mono font-black text-xs text-slate-400">
-                              {serialNum}
-                            </td>
-                            <td className="p-3 whitespace-nowrap text-slate-600 dark:text-slate-300 font-medium">
-                              <div className="flex items-center gap-1.5 font-bold text-slate-800 dark:text-slate-200">
-                                <Calendar size={13} className="text-blue-500" />
-                                {new Date(log.createdAt).toLocaleDateString()}
-                              </div>
-                              <span className="text-[10px] text-slate-400">
-                                {new Date(log.createdAt).toLocaleTimeString()}
-                              </span>
-                            </td>
-
-                            <td className="p-3 text-slate-900 dark:text-white">
-                              <p className="font-black text-xs truncate max-w-[220px]">
-                                {log.machineName || log.modelName || "Mining Machine"}
-                              </p>
-                              <div className="flex items-center gap-1 mt-0.5">
-                                {log.brand && (
-                                  <span className="rounded bg-slate-100 px-1.5 py-0.2 text-[9px] font-extrabold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                                    {log.brand}
+                              <td className="p-3 text-slate-900 dark:text-white">
+                                <p className="font-black text-xs truncate max-w-[220px]">
+                                  {log.machineName ||
+                                    log.modelName ||
+                                    "Mining Machine"}
+                                </p>
+                                <div className="flex items-center gap-1 mt-0.5">
+                                  {log.brand && (
+                                    <span className="rounded bg-slate-100 px-1.5 py-0.2 text-[9px] font-extrabold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                                      {log.brand}
+                                    </span>
+                                  )}
+                                  {log.category && (
+                                    <span className="text-[10px] text-slate-400 truncate max-w-[140px]">
+                                      {log.category}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="mt-1.5">
+                                  <span className="inline-block rounded-md bg-blue-50 border border-blue-200/80 font-mono text-[10px] font-black text-blue-700 dark:bg-blue-950/60 dark:border-blue-900/50 dark:text-blue-300 px-2 py-0.5 shadow-sm">
+                                    {log.serialNumber ||
+                                      (selectedMachine?.serialNumber ??
+                                        "SN-RECORDED")}
                                   </span>
-                                )}
-                                {log.category && (
-                                  <span className="text-[10px] text-slate-400 truncate max-w-[140px]">
-                                    {log.category}
-                                  </span>
-                                )}
-                              </div>
-                              <div className="mt-1.5">
-                                <span className="inline-block rounded-md bg-blue-50 border border-blue-200/80 font-mono text-[10px] font-black text-blue-700 dark:bg-blue-950/60 dark:border-blue-900/50 dark:text-blue-300 px-2 py-0.5 shadow-sm">
-                                  {log.serialNumber || (selectedMachine?.serialNumber ?? "SN-RECORDED")}
-                                </span>
-                              </div>
-                            </td>
+                                </div>
+                              </td>
 
-                            <td className="p-3 whitespace-nowrap">
-                              {isNewEntry ? (
-                                <span className="rounded-md bg-blue-100 px-2 py-0.5 text-[10px] font-extrabold text-blue-800 dark:bg-blue-950 dark:text-blue-300">
-                                  Initial Entry
-                                </span>
-                              ) : (
-                                <span className="rounded-md bg-purple-100 px-2 py-0.5 text-[10px] font-extrabold text-purple-800 dark:bg-purple-950 dark:text-purple-300">
-                                  Routine Update
-                                </span>
-                              )}
-                            </td>
-
-                            <td className="p-3 text-slate-800 dark:text-slate-200 whitespace-nowrap">
-                              <div className="font-extrabold flex items-center gap-1.5">
-                                <User size={13} className="text-blue-500" />
-                                {log.userName || log.submittedBy || "Super Admin"}
-                              </div>
-                              <span className="text-[10px] text-slate-400 font-medium">
-                                Role: {log.userRole || "SUPER_ADMIN"}
-                              </span>
-                            </td>
-
-                            <td className="p-3 font-bold text-slate-900 dark:text-white">
-                              {log.componentName}
-                            </td>
-
-                            <td className="p-3 whitespace-nowrap">
-                              {(() => {
-                                let fields: any[] = [];
-                                if (Array.isArray(log.currentParameters)) fields = log.currentParameters;
-                                else if (Array.isArray(log.parameters)) fields = log.parameters;
-
-                                const hasChanges = changes && changes.length > 0;
-
-                                return hasChanges ? (
-                                  <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 border border-blue-200/80 px-3 py-1 text-xs font-bold text-blue-700 dark:bg-blue-950/40 dark:border-blue-900/40 dark:text-blue-300">
-                                    <Sliders size={12} className="text-blue-600 dark:text-blue-400" />
-                                    <span>{changes.length} Change{changes.length > 1 ? "s" : ""} Recorded</span>
+                              <td className="p-3 whitespace-nowrap">
+                                {isNewEntry ? (
+                                  <span className="rounded-md bg-blue-100 px-2 py-0.5 text-[10px] font-extrabold text-blue-800 dark:bg-blue-950 dark:text-blue-300">
+                                    Initial Entry
                                   </span>
                                 ) : (
-                                  <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 border border-slate-200 px-3 py-1 text-xs font-bold text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300">
-                                    <Layers size={12} className="text-slate-500" />
-                                    <span>{fields.length || 4} Parameters (Initial)</span>
+                                  <span className="rounded-md bg-purple-100 px-2 py-0.5 text-[10px] font-extrabold text-purple-800 dark:bg-purple-950 dark:text-purple-300">
+                                    Routine Update
                                   </span>
-                                );
-                              })()}
-                            </td>
-
-                            <td className="p-3 whitespace-nowrap space-y-1">
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-[10px] text-slate-400 font-bold">Comp:</span>
-                                {getStatusBadge(
-                                  log.status || log.machineStatus || "Healthy",
-                                  log.componentHealthScore ?? log.componentHealth ?? 100
                                 )}
-                              </div>
-                              <div className="flex items-center gap-1.5 text-[10px]">
-                                <span className="text-slate-400 font-bold">Overall:</span>
-                                <span className="font-black text-slate-700 dark:text-slate-200">
-                                  {log.overallMachineHealth ?? log.componentHealthScore ?? 100}%
+                              </td>
+
+                              <td className="p-3 text-slate-800 dark:text-slate-200 whitespace-nowrap">
+                                <div className="font-extrabold flex items-center gap-1.5">
+                                  <User size={13} className="text-blue-500" />
+                                  {log.userName ||
+                                    log.submittedBy ||
+                                    "Super Admin"}
+                                </div>
+                                <span className="text-[10px] text-slate-400 font-medium">
+                                  Role: {log.userRole || "SUPER_ADMIN"}
                                 </span>
-                              </div>
-                            </td>
+                              </td>
 
-                            {/* ACTIONS COLUMN: VIEW DETAILS & EDIT (ICON ONLY) */}
-                            <td className="p-3 whitespace-nowrap text-center">
-                              <div className="flex items-center justify-center gap-1.5">
-                                <button
-                                  type="button"
-                                  title="View Details Snapshot"
-                                  onClick={() => setViewingDetailLog(log)}
-                                  className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-blue-500 hover:bg-blue-50 hover:text-blue-600 dark:border-slate-700 dark:bg-[#101f33] dark:text-slate-300 dark:hover:border-blue-400 dark:hover:bg-blue-950/60 dark:hover:text-blue-300"
-                                >
-                                  <Eye size={15} />
-                                </button>
+                              <td className="p-3 font-bold text-slate-900 dark:text-white">
+                                {log.componentName}
+                              </td>
 
-                                <button
-                                  type="button"
-                                  title="Load Data into Form for Editing"
-                                  onClick={() => handleEditFromHistory(log)}
-                                  className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-blue-600 text-white shadow-sm transition hover:bg-blue-500 dark:bg-blue-600 dark:hover:bg-blue-500"
-                                >
-                                  <Edit3 size={14} />
-                                </button>
+                              <td className="p-3 whitespace-nowrap">
+                                {(() => {
+                                  let fields: any[] = [];
+                                  if (Array.isArray(log.currentParameters))
+                                    fields = log.currentParameters;
+                                  else if (Array.isArray(log.parameters))
+                                    fields = log.parameters;
 
-                                <button
-                                  type="button"
-                                  title="Delete Inspection Record"
-                                  onClick={() => handleDeleteHistoryLog(log.id, log.componentName || "Component")}
-                                  className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-red-200 bg-red-50 text-red-500 shadow-sm transition hover:border-red-400 hover:bg-red-100 hover:text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-400 dark:hover:bg-red-900/60"
-                                >
-                                  <Trash2 size={14} />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                                  const hasChanges =
+                                    changes && changes.length > 0;
 
-                {/* AUDIT LOG PAGINATION CONTROLS */}
-                {displayed.length > 0 && (
-                  <div className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-200 pt-4 dark:border-slate-800">
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
-                        Showing {(auditCurrentPage - 1) * auditPageSize + 1} to{" "}
-                        {Math.min(auditCurrentPage * auditPageSize, displayed.length)} of {displayed.length} audit logs
-                      </span>
+                                  return hasChanges ? (
+                                    <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 border border-blue-200/80 px-3 py-1 text-xs font-bold text-blue-700 dark:bg-blue-950/40 dark:border-blue-900/40 dark:text-blue-300">
+                                      <Sliders
+                                        size={12}
+                                        className="text-blue-600 dark:text-blue-400"
+                                      />
+                                      <span>
+                                        {changes.length} Change
+                                        {changes.length > 1 ? "s" : ""} Recorded
+                                      </span>
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 border border-slate-200 px-3 py-1 text-xs font-bold text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300">
+                                      <Layers
+                                        size={12}
+                                        className="text-slate-500"
+                                      />
+                                      <span>
+                                        {fields.length || 4} Parameters
+                                        (Initial)
+                                      </span>
+                                    </span>
+                                  );
+                                })()}
+                              </td>
 
-                      <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                        <span>Show</span>
-                        <select
-                          value={auditPageSize}
-                          onChange={(e) => {
-                            setAuditPageSize(Number(e.target.value));
-                            setAuditCurrentPage(1);
-                          }}
-                          className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs font-extrabold text-slate-700 shadow-sm dark:border-slate-700 dark:bg-[#101f33] dark:text-slate-200"
-                        >
-                          <option value={5}>5</option>
-                          <option value={10}>10</option>
-                          <option value={20}>20</option>
-                          <option value={50}>50</option>
-                        </select>
-                        <span>per page</span>
-                      </div>
-                    </div>
+                              <td className="p-3 whitespace-nowrap space-y-1">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-[10px] text-slate-400 font-bold">
+                                    Comp:
+                                  </span>
+                                  {getStatusBadge(
+                                    log.status ||
+                                      log.machineStatus ||
+                                      "Healthy",
+                                    log.componentHealthScore ??
+                                      log.componentHealth ??
+                                      100,
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-1.5 text-[10px]">
+                                  <span className="text-slate-400 font-bold">
+                                    Overall:
+                                  </span>
+                                  <span className="font-black text-slate-700 dark:text-slate-200">
+                                    {log.overallMachineHealth ??
+                                      log.componentHealthScore ??
+                                      100}
+                                    %
+                                  </span>
+                                </div>
+                              </td>
 
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setAuditCurrentPage((p) => Math.max(1, p - 1))}
-                        disabled={auditCurrentPage === 1}
-                        className="inline-flex items-center gap-1 rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-extrabold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-40 dark:border-slate-700 dark:bg-[#101f33] dark:text-slate-200"
-                      >
-                        <ChevronLeft size={14} />
-                        Previous
-                      </button>
+                              {/* ACTIONS COLUMN: VIEW DETAILS & EDIT (ICON ONLY) */}
+                              <td className="p-3 whitespace-nowrap text-center">
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    title="View Details Snapshot"
+                                    onClick={() => setViewingDetailLog(log)}
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-blue-500 hover:bg-blue-50 hover:text-blue-600 dark:border-slate-700 dark:bg-[#101f33] dark:text-slate-300 dark:hover:border-blue-400 dark:hover:bg-blue-950/60 dark:hover:text-blue-300"
+                                  >
+                                    <Eye size={15} />
+                                  </button>
 
-                      <div className="flex items-center gap-1">
-                        {Array.from({ length: totalAuditPages }, (_, i) => i + 1).map((pageNum) => (
-                          <button
-                            key={pageNum}
-                            type="button"
-                            onClick={() => setAuditCurrentPage(pageNum)}
-                            className={`h-8 w-8 rounded-xl text-xs font-black transition ${
-                              auditCurrentPage === pageNum
-                                ? "bg-blue-600 text-white shadow-md shadow-blue-500/20"
-                                : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-[#101f33] dark:text-slate-200"
-                            }`}
-                          >
-                            {pageNum}
-                          </button>
-                        ))}
-                      </div>
+                                  <button
+                                    type="button"
+                                    title="Load Data into Form for Editing"
+                                    onClick={() => handleEditFromHistory(log)}
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-blue-600 text-white shadow-sm transition hover:bg-blue-500 dark:bg-blue-600 dark:hover:bg-blue-500"
+                                  >
+                                    <Edit3 size={14} />
+                                  </button>
 
-                      <button
-                        type="button"
-                        onClick={() => setAuditCurrentPage((p) => Math.min(totalAuditPages, p + 1))}
-                        disabled={auditCurrentPage === totalAuditPages}
-                        className="inline-flex items-center gap-1 rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-extrabold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-40 dark:border-slate-700 dark:bg-[#101f33] dark:text-slate-200"
-                      >
-                        Next
-                        <ChevronRight size={14} />
-                      </button>
-                    </div>
+                                  <button
+                                    type="button"
+                                    title="Delete Inspection Record"
+                                    onClick={() =>
+                                      handleDeleteHistoryLog(
+                                        log.id,
+                                        log.componentName || "Component",
+                                      )
+                                    }
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-red-200 bg-red-50 text-red-500 shadow-sm transition hover:border-red-400 hover:bg-red-100 hover:text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-400 dark:hover:bg-red-900/60"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
-                )}
-              </div>
-            );
-          })()}
+
+                  {/* AUDIT LOG PAGINATION CONTROLS */}
+                  {displayed.length > 0 && (
+                    <div className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-200 pt-4 dark:border-slate-800">
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
+                          Showing {(auditCurrentPage - 1) * auditPageSize + 1}{" "}
+                          to{" "}
+                          {Math.min(
+                            auditCurrentPage * auditPageSize,
+                            displayed.length,
+                          )}{" "}
+                          of {displayed.length} audit logs
+                        </span>
+
+                        <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                          <span>Show</span>
+                          <select
+                            value={auditPageSize}
+                            onChange={(e) => {
+                              setAuditPageSize(Number(e.target.value));
+                              setAuditCurrentPage(1);
+                            }}
+                            className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs font-extrabold text-slate-700 shadow-sm dark:border-slate-700 dark:bg-[#101f33] dark:text-slate-200"
+                          >
+                            <option value={5}>5</option>
+                            <option value={10}>10</option>
+                            <option value={20}>20</option>
+                            <option value={50}>50</option>
+                          </select>
+                          <span>per page</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setAuditCurrentPage((p) => Math.max(1, p - 1))
+                          }
+                          disabled={auditCurrentPage === 1}
+                          className="inline-flex items-center gap-1 rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-extrabold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-40 dark:border-slate-700 dark:bg-[#101f33] dark:text-slate-200"
+                        >
+                          <ChevronLeft size={14} />
+                          Previous
+                        </button>
+
+                        <div className="flex items-center gap-1">
+                          {Array.from(
+                            { length: totalAuditPages },
+                            (_, i) => i + 1,
+                          ).map((pageNum) => (
+                            <button
+                              key={pageNum}
+                              type="button"
+                              onClick={() => setAuditCurrentPage(pageNum)}
+                              className={`h-8 w-8 rounded-xl text-xs font-black transition ${
+                                auditCurrentPage === pageNum
+                                  ? "bg-blue-600 text-white shadow-md shadow-blue-500/20"
+                                  : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-[#101f33] dark:text-slate-200"
+                              }`}
+                            >
+                              {pageNum}
+                            </button>
+                          ))}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setAuditCurrentPage((p) =>
+                              Math.min(totalAuditPages, p + 1),
+                            )
+                          }
+                          disabled={auditCurrentPage === totalAuditPages}
+                          className="inline-flex items-center gap-1 rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-extrabold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-40 dark:border-slate-700 dark:bg-[#101f33] dark:text-slate-200"
+                        >
+                          Next
+                          <ChevronRight size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()
+          )}
         </div>
 
         {/* VIEW DETAILS MODAL */}
@@ -2121,7 +2654,14 @@ export default function MachineHealth() {
                     Inspection Record Snapshot
                   </h3>
                   <p className="text-xs text-blue-200 mt-0.5">
-                    Equipment: <span className="font-bold text-white">{viewingDetailLog.machineName || viewingDetailLog.modelName}</span> {viewingDetailLog.serialNumber ? `(${viewingDetailLog.serialNumber})` : ''}
+                    Equipment:{" "}
+                    <span className="font-bold text-white">
+                      {viewingDetailLog.machineName ||
+                        viewingDetailLog.modelName}
+                    </span>{" "}
+                    {viewingDetailLog.serialNumber
+                      ? `(${viewingDetailLog.serialNumber})`
+                      : ""}
                   </p>
                 </div>
 
@@ -2139,9 +2679,12 @@ export default function MachineHealth() {
                   <div>
                     <span className="text-slate-400 font-bold">Equipment</span>
                     <p className="font-black text-slate-900 dark:text-white mt-0.5">
-                      {viewingDetailLog.machineName || viewingDetailLog.modelName}
+                      {viewingDetailLog.machineName ||
+                        viewingDetailLog.modelName}
                     </p>
-                    <p className="text-[10px] text-slate-400">{viewingDetailLog.brand} • {viewingDetailLog.category}</p>
+                    <p className="text-[10px] text-slate-400">
+                      {viewingDetailLog.brand} • {viewingDetailLog.category}
+                    </p>
                   </div>
 
                   <div>
@@ -2154,32 +2697,46 @@ export default function MachineHealth() {
                   <div>
                     <span className="text-slate-400 font-bold">Inspector</span>
                     <p className="font-black text-slate-900 dark:text-white mt-0.5">
-                      {viewingDetailLog.userName || viewingDetailLog.submittedBy}
+                      {viewingDetailLog.userName ||
+                        viewingDetailLog.submittedBy}
                     </p>
-                    <p className="text-[10px] text-slate-400">Role: {viewingDetailLog.userRole}</p>
+                    <p className="text-[10px] text-slate-400">
+                      Role: {viewingDetailLog.userRole}
+                    </p>
                   </div>
 
                   <div>
-                    <span className="text-slate-400 font-bold">Date &amp; Time</span>
+                    <span className="text-slate-400 font-bold">
+                      Date &amp; Time
+                    </span>
                     <p className="font-bold text-slate-800 dark:text-slate-200 mt-0.5">
                       {new Date(viewingDetailLog.createdAt).toLocaleString()}
                     </p>
                   </div>
 
                   <div>
-                    <span className="text-slate-400 font-bold">Component Health</span>
+                    <span className="text-slate-400 font-bold">
+                      Component Health
+                    </span>
                     <div className="mt-0.5">
                       {getStatusBadge(
                         viewingDetailLog.status || "Healthy",
-                        viewingDetailLog.componentHealthScore ?? viewingDetailLog.componentHealth ?? 100
+                        viewingDetailLog.componentHealthScore ??
+                          viewingDetailLog.componentHealth ??
+                          100,
                       )}
                     </div>
                   </div>
 
                   <div>
-                    <span className="text-slate-400 font-bold">Overall Machine Health</span>
+                    <span className="text-slate-400 font-bold">
+                      Overall Machine Health
+                    </span>
                     <p className="text-base font-black text-indigo-600 dark:text-indigo-400 mt-0.5">
-                      {viewingDetailLog.overallMachineHealth ?? viewingDetailLog.componentHealthScore ?? 100}%
+                      {viewingDetailLog.overallMachineHealth ??
+                        viewingDetailLog.componentHealthScore ??
+                        100}
+                      %
                     </p>
                   </div>
                 </div>
@@ -2192,8 +2749,10 @@ export default function MachineHealth() {
 
                   {(() => {
                     let list: any[] = [];
-                    if (Array.isArray(viewingDetailLog.currentParameters)) list = viewingDetailLog.currentParameters;
-                    else if (Array.isArray(viewingDetailLog.parameters)) list = viewingDetailLog.parameters;
+                    if (Array.isArray(viewingDetailLog.currentParameters))
+                      list = viewingDetailLog.currentParameters;
+                    else if (Array.isArray(viewingDetailLog.parameters))
+                      list = viewingDetailLog.parameters;
 
                     if (list.length === 0) {
                       return (
@@ -2204,27 +2763,43 @@ export default function MachineHealth() {
                     }
 
                     // Check if this log contains multi-component grouped data
-                    const isMultiComp = list.length > 0 && list[0].componentName && Array.isArray(list[0].parameters);
+                    const isMultiComp =
+                      list.length > 0 &&
+                      list[0].componentName &&
+                      Array.isArray(list[0].parameters);
 
                     if (isMultiComp) {
                       return (
                         <div className="space-y-4">
                           {list.map((compGroup: any, cIdx: number) => {
                             return (
-                              <div key={cIdx} className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-sm dark:border-slate-800 dark:bg-[#0c1626]">
+                              <div
+                                key={cIdx}
+                                className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-sm dark:border-slate-800 dark:bg-[#0c1626]"
+                              >
                                 <div className="flex items-center justify-between bg-slate-100/80 dark:bg-[#101f33] px-4 py-2.5 border-b border-slate-200 dark:border-slate-800">
                                   <span className="font-extrabold text-xs text-slate-900 dark:text-white flex items-center gap-1.5">
-                                    <Layers size={14} className="text-blue-500" />
+                                    <Layers
+                                      size={14}
+                                      className="text-blue-500"
+                                    />
                                     {compGroup.componentName}
-                                    <span className="text-[10px] text-slate-500 font-medium">({compGroup.componentCategory || 'Component'})</span>
+                                    <span className="text-[10px] text-slate-500 font-medium">
+                                      (
+                                      {compGroup.componentCategory ||
+                                        "Component"}
+                                      )
+                                    </span>
                                   </span>
-                                  <span className={`rounded-lg px-2 py-0.5 text-[10px] font-black shadow-sm ${
-                                    compGroup.healthScore < 50
-                                      ? "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300"
-                                      : compGroup.healthScore < 85
-                                      ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
-                                      : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
-                                  }`}>
+                                  <span
+                                    className={`rounded-lg px-2 py-0.5 text-[10px] font-black shadow-sm ${
+                                      compGroup.healthScore < 50
+                                        ? "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300"
+                                        : compGroup.healthScore < 85
+                                          ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+                                          : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+                                    }`}
+                                  >
                                     {compGroup.healthScore}% {compGroup.status}
                                   </span>
                                 </div>
@@ -2233,102 +2808,165 @@ export default function MachineHealth() {
                                   <thead>
                                     <tr className="border-b border-slate-100 bg-slate-50/50 text-[10px] font-black uppercase text-slate-500 dark:border-slate-800 dark:bg-[#0c1626] dark:text-slate-400">
                                       <th className="p-3">Parameter Name</th>
-                                      <th className="p-3">Old Value (Previous)</th>
-                                      <th className="p-3">New Value (Recorded)</th>
-                                      <th className="p-3">OEM Safe Operating Range</th>
-                                      <th className="p-3 text-center">Diagnostic Status</th>
+                                      <th className="p-3">
+                                        Old Value (Previous)
+                                      </th>
+                                      <th className="p-3">
+                                        New Value (Recorded)
+                                      </th>
+                                      <th className="p-3">
+                                        OEM Safe Operating Range
+                                      </th>
+                                      <th className="p-3 text-center">
+                                        Diagnostic Status
+                                      </th>
                                     </tr>
                                   </thead>
                                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium">
-                                    {compGroup.parameters.map((param: any, pIdx: number) => {
-                                      const prevP = Array.isArray(compGroup.previousParameters)
-                                        ? compGroup.previousParameters.find((p: any) => String(p.name).toLowerCase().trim() === String(param.name).toLowerCase().trim())
-                                        : null;
-                                      const oldVal = prevP ? prevP.value : null;
-                                      const newVal = param.value;
-                                      const hasOld = oldVal !== null && oldVal !== undefined && oldVal !== '';
-                                      const delta = (hasOld && !isNaN(parseFloat(newVal)) && !isNaN(parseFloat(oldVal)))
-                                        ? Math.round((parseFloat(newVal) - parseFloat(oldVal)) * 100) / 100
-                                        : null;
+                                    {compGroup.parameters.map(
+                                      (param: any, pIdx: number) => {
+                                        const prevP = Array.isArray(
+                                          compGroup.previousParameters,
+                                        )
+                                          ? compGroup.previousParameters.find(
+                                              (p: any) =>
+                                                String(p.name)
+                                                  .toLowerCase()
+                                                  .trim() ===
+                                                String(param.name)
+                                                  .toLowerCase()
+                                                  .trim(),
+                                            )
+                                          : null;
+                                        const oldVal = prevP
+                                          ? prevP.value
+                                          : null;
+                                        const newVal = param.value;
+                                        const hasOld =
+                                          oldVal !== null &&
+                                          oldVal !== undefined &&
+                                          oldVal !== "";
+                                        const delta =
+                                          hasOld &&
+                                          !isNaN(parseFloat(newVal)) &&
+                                          !isNaN(parseFloat(oldVal))
+                                            ? Math.round(
+                                                (parseFloat(newVal) -
+                                                  parseFloat(oldVal)) *
+                                                  100,
+                                              ) / 100
+                                            : null;
 
-                                      const num = parseFloat(newVal);
-                                      const hasRange = param.safeMin !== undefined && param.safeMax !== undefined && !isNaN(Number(param.safeMin));
-                                      let isCritical = false;
-                                      let isWarning = false;
+                                        const num = parseFloat(newVal);
+                                        const hasRange =
+                                          param.safeMin !== undefined &&
+                                          param.safeMax !== undefined &&
+                                          !isNaN(Number(param.safeMin));
+                                        let isCritical = false;
+                                        let isWarning = false;
 
-                                      if (!isNaN(num) && hasRange) {
-                                        const min = Number(param.safeMin);
-                                        const max = Number(param.safeMax);
-                                        const span = Math.max(1, max - min);
-                                        if (num < min) {
-                                          const deltaMin = min - num;
-                                          if (deltaMin / span > 0.25 || num <= 0) isCritical = true;
-                                          else isWarning = true;
-                                        } else if (num > max) {
-                                          const deltaMax = num - max;
-                                          if (deltaMax / span > 0.25) isCritical = true;
-                                          else isWarning = true;
+                                        if (!isNaN(num) && hasRange) {
+                                          const min = Number(param.safeMin);
+                                          const max = Number(param.safeMax);
+                                          const span = Math.max(1, max - min);
+                                          if (num < min) {
+                                            const deltaMin = min - num;
+                                            if (
+                                              deltaMin / span > 0.25 ||
+                                              num <= 0
+                                            )
+                                              isCritical = true;
+                                            else isWarning = true;
+                                          } else if (num > max) {
+                                            const deltaMax = num - max;
+                                            if (deltaMax / span > 0.25)
+                                              isCritical = true;
+                                            else isWarning = true;
+                                          }
                                         }
-                                      }
 
-                                      return (
-                                        <tr key={pIdx} className="hover:bg-slate-50 dark:hover:bg-slate-900/40 transition">
-                                          <td className="p-3">
-                                            <span className="font-bold text-slate-800 dark:text-slate-200">{param.name}</span>
-                                            {param.description && <p className="text-[10px] text-slate-400 mt-0.5">{param.description}</p>}
-                                          </td>
-                                          <td className="p-3">
-                                            {hasOld ? (
-                                              <span className="inline-flex items-center font-mono text-xs text-slate-500 line-through bg-slate-100 dark:bg-slate-800/80 px-2 py-0.5 rounded-md">
-                                                {oldVal} {param.unit || ''}
+                                        return (
+                                          <tr
+                                            key={pIdx}
+                                            className="hover:bg-slate-50 dark:hover:bg-slate-900/40 transition"
+                                          >
+                                            <td className="p-3">
+                                              <span className="font-bold text-slate-800 dark:text-slate-200">
+                                                {param.name}
                                               </span>
-                                            ) : (
-                                              <span className="text-slate-400 text-[11px] italic">Initial (—)</span>
-                                            )}
-                                          </td>
-                                          <td className="p-3">
-                                            <div className="flex items-center gap-1.5">
-                                              <span className="font-mono font-black text-xs text-blue-600 dark:text-blue-400">
-                                                {newVal} {param.unit || ''}
-                                              </span>
-                                              {delta !== null && delta !== 0 && (
-                                                <span className={`rounded-md px-1.5 py-0.2 text-[10px] font-bold ${
-                                                  delta < 0
-                                                    ? "bg-red-50 text-red-600 dark:bg-red-950/60 dark:text-red-300"
-                                                    : "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-300"
-                                                }`}>
-                                                  {delta > 0 ? `+${delta}` : delta}
+                                              {param.description && (
+                                                <p className="text-[10px] text-slate-400 mt-0.5">
+                                                  {param.description}
+                                                </p>
+                                              )}
+                                            </td>
+                                            <td className="p-3">
+                                              {hasOld ? (
+                                                <span className="inline-flex items-center font-mono text-xs text-slate-500 line-through bg-slate-100 dark:bg-slate-800/80 px-2 py-0.5 rounded-md">
+                                                  {oldVal} {param.unit || ""}
+                                                </span>
+                                              ) : (
+                                                <span className="text-slate-400 text-[11px] italic">
+                                                  Initial (—)
                                                 </span>
                                               )}
-                                            </div>
-                                          </td>
-                                          <td className="p-3 text-slate-600 dark:text-slate-300 font-semibold">
-                                            {hasRange ? (
-                                              <span className="inline-flex items-center gap-1 font-mono text-[11px] bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">
-                                                {param.safeMin} – {param.safeMax} {param.unit || ''}
-                                              </span>
-                                            ) : (
-                                              <span className="text-slate-400">Standard OEM Limits</span>
-                                            )}
-                                          </td>
-                                          <td className="p-3 text-center">
-                                            {isCritical ? (
-                                              <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-0.5 text-[10px] font-black text-red-700 dark:bg-red-950 dark:text-red-300">
-                                                <AlertOctagon size={11} /> Critical Reading
-                                              </span>
-                                            ) : isWarning ? (
-                                              <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-[10px] font-black text-amber-800 dark:bg-amber-950 dark:text-amber-300">
-                                                <AlertTriangle size={11} /> Warning Range
-                                              </span>
-                                            ) : (
-                                              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-black text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
-                                                <CheckCircle2 size={11} /> Normal / Safe
-                                              </span>
-                                            )}
-                                          </td>
-                                        </tr>
-                                      );
-                                    })}
+                                            </td>
+                                            <td className="p-3">
+                                              <div className="flex items-center gap-1.5">
+                                                <span className="font-mono font-black text-xs text-blue-600 dark:text-blue-400">
+                                                  {newVal} {param.unit || ""}
+                                                </span>
+                                                {delta !== null &&
+                                                  delta !== 0 && (
+                                                    <span
+                                                      className={`rounded-md px-1.5 py-0.2 text-[10px] font-bold ${
+                                                        delta < 0
+                                                          ? "bg-red-50 text-red-600 dark:bg-red-950/60 dark:text-red-300"
+                                                          : "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-300"
+                                                      }`}
+                                                    >
+                                                      {delta > 0
+                                                        ? `+${delta}`
+                                                        : delta}
+                                                    </span>
+                                                  )}
+                                              </div>
+                                            </td>
+                                            <td className="p-3 text-slate-600 dark:text-slate-300 font-semibold">
+                                              {hasRange ? (
+                                                <span className="inline-flex items-center gap-1 font-mono text-[11px] bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">
+                                                  {param.safeMin} –{" "}
+                                                  {param.safeMax}{" "}
+                                                  {param.unit || ""}
+                                                </span>
+                                              ) : (
+                                                <span className="text-slate-400">
+                                                  Standard OEM Limits
+                                                </span>
+                                              )}
+                                            </td>
+                                            <td className="p-3 text-center">
+                                              {isCritical ? (
+                                                <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-0.5 text-[10px] font-black text-red-700 dark:bg-red-950 dark:text-red-300">
+                                                  <AlertOctagon size={11} />{" "}
+                                                  Critical Reading
+                                                </span>
+                                              ) : isWarning ? (
+                                                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-[10px] font-black text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                                                  <AlertTriangle size={11} />{" "}
+                                                  Warning Range
+                                                </span>
+                                              ) : (
+                                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-black text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                                                  <CheckCircle2 size={11} />{" "}
+                                                  Normal / Safe
+                                                </span>
+                                              )}
+                                            </td>
+                                          </tr>
+                                        );
+                                      },
+                                    )}
                                   </tbody>
                                 </table>
                               </div>
@@ -2342,13 +2980,20 @@ export default function MachineHealth() {
                     const prevMap = new Map<string, any>();
                     if (Array.isArray(viewingDetailLog.previousParameters)) {
                       viewingDetailLog.previousParameters.forEach((p: any) => {
-                        if (p && p.name) prevMap.set(String(p.name).toLowerCase().trim(), p.value);
+                        if (p && p.name)
+                          prevMap.set(
+                            String(p.name).toLowerCase().trim(),
+                            p.value,
+                          );
                       });
                     }
                     if (Array.isArray(viewingDetailLog.parameterChanges)) {
                       viewingDetailLog.parameterChanges.forEach((ch: any) => {
                         if (ch && ch.parameterName) {
-                          prevMap.set(String(ch.parameterName).toLowerCase().trim(), ch.previousValue);
+                          prevMap.set(
+                            String(ch.parameterName).toLowerCase().trim(),
+                            ch.previousValue,
+                          );
                         }
                       });
                     }
@@ -2362,21 +3007,34 @@ export default function MachineHealth() {
                               <th className="p-3">Old Value (Previous)</th>
                               <th className="p-3">New Value (Recorded)</th>
                               <th className="p-3">OEM Safe Operating Range</th>
-                              <th className="p-3 text-center">Diagnostic Status</th>
+                              <th className="p-3 text-center">
+                                Diagnostic Status
+                              </th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium">
                             {list.map((param: any, idx: number) => {
-                              const pNameKey = String(param.name || "").toLowerCase().trim();
+                              const pNameKey = String(param.name || "")
+                                .toLowerCase()
+                                .trim();
                               const oldVal = prevMap.get(pNameKey);
                               const newVal = param.value;
                               const oldNum = parseFloat(oldVal);
                               const newNum = parseFloat(newVal);
-                              const hasOld = oldVal !== undefined && oldVal !== null && oldVal !== "";
-                              const delta = (hasOld && !isNaN(oldNum) && !isNaN(newNum)) ? Math.round((newNum - oldNum) * 100) / 100 : null;
+                              const hasOld =
+                                oldVal !== undefined &&
+                                oldVal !== null &&
+                                oldVal !== "";
+                              const delta =
+                                hasOld && !isNaN(oldNum) && !isNaN(newNum)
+                                  ? Math.round((newNum - oldNum) * 100) / 100
+                                  : null;
 
                               const num = parseFloat(newVal);
-                              const hasRange = param.safeMin !== undefined && param.safeMax !== undefined && !isNaN(Number(param.safeMin));
+                              const hasRange =
+                                param.safeMin !== undefined &&
+                                param.safeMax !== undefined &&
+                                !isNaN(Number(param.safeMin));
                               let isCritical = false;
                               let isWarning = false;
 
@@ -2386,7 +3044,8 @@ export default function MachineHealth() {
                                 const span = Math.max(1, max - min);
                                 if (num < min) {
                                   const deltaMin = min - num;
-                                  if (deltaMin / span > 0.25 || num <= 0) isCritical = true;
+                                  if (deltaMin / span > 0.25 || num <= 0)
+                                    isCritical = true;
                                   else isWarning = true;
                                 } else if (num > max) {
                                   const deltaMax = num - max;
@@ -2396,13 +3055,18 @@ export default function MachineHealth() {
                               }
 
                               return (
-                                <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-900/40 transition">
+                                <tr
+                                  key={idx}
+                                  className="hover:bg-slate-50 dark:hover:bg-slate-900/40 transition"
+                                >
                                   <td className="p-3">
                                     <span className="font-black text-slate-800 dark:text-slate-200">
                                       {param.name}
                                     </span>
                                     {param.description && (
-                                      <p className="text-[10px] text-slate-400 mt-0.5">{param.description}</p>
+                                      <p className="text-[10px] text-slate-400 mt-0.5">
+                                        {param.description}
+                                      </p>
                                     )}
                                   </td>
 
@@ -2410,7 +3074,7 @@ export default function MachineHealth() {
                                   <td className="p-3">
                                     {hasOld ? (
                                       <span className="inline-flex items-center font-mono text-xs text-slate-500 line-through bg-slate-100 dark:bg-slate-800/80 px-2 py-0.5 rounded-md">
-                                        {oldVal} {param.unit || ''}
+                                        {oldVal} {param.unit || ""}
                                       </span>
                                     ) : (
                                       <span className="text-slate-400 text-[11px] italic">
@@ -2423,14 +3087,16 @@ export default function MachineHealth() {
                                   <td className="p-3">
                                     <div className="flex items-center gap-1.5">
                                       <span className="font-mono font-black text-xs text-blue-600 dark:text-blue-400">
-                                        {newVal} {param.unit || ''}
+                                        {newVal} {param.unit || ""}
                                       </span>
                                       {delta !== null && delta !== 0 && (
-                                        <span className={`rounded-md px-1.5 py-0.2 text-[10px] font-bold ${
-                                          delta < 0
-                                            ? "bg-red-50 text-red-600 dark:bg-red-950/60 dark:text-red-300"
-                                            : "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-300"
-                                        }`}>
+                                        <span
+                                          className={`rounded-md px-1.5 py-0.2 text-[10px] font-bold ${
+                                            delta < 0
+                                              ? "bg-red-50 text-red-600 dark:bg-red-950/60 dark:text-red-300"
+                                              : "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-300"
+                                          }`}
+                                        >
                                           {delta > 0 ? `+${delta}` : delta}
                                         </span>
                                       )}
@@ -2440,21 +3106,26 @@ export default function MachineHealth() {
                                   <td className="p-3 text-slate-600 dark:text-slate-300 font-semibold">
                                     {hasRange ? (
                                       <span className="inline-flex items-center gap-1 font-mono text-[11px] bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">
-                                        {param.safeMin} – {param.safeMax} {param.unit || ''}
+                                        {param.safeMin} – {param.safeMax}{" "}
+                                        {param.unit || ""}
                                       </span>
                                     ) : (
-                                      <span className="text-slate-400">Standard OEM Limits</span>
+                                      <span className="text-slate-400">
+                                        Standard OEM Limits
+                                      </span>
                                     )}
                                   </td>
 
                                   <td className="p-3 text-center">
                                     {isCritical ? (
                                       <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-0.5 text-[10px] font-black text-red-700 dark:bg-red-950 dark:text-red-300">
-                                        <AlertOctagon size={11} /> Critical Reading
+                                        <AlertOctagon size={11} /> Critical
+                                        Reading
                                       </span>
                                     ) : isWarning ? (
                                       <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-[10px] font-black text-amber-800 dark:bg-amber-950 dark:text-amber-300">
-                                        <AlertTriangle size={11} /> Warning Range
+                                        <AlertTriangle size={11} /> Warning
+                                        Range
                                       </span>
                                     ) : (
                                       <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-black text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
@@ -2473,19 +3144,22 @@ export default function MachineHealth() {
                 </div>
 
                 {/* Diagnostic Issues if any */}
-                {viewingDetailLog.issues && viewingDetailLog.issues.length > 0 && (
-                  <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-xs font-medium text-red-900 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200 space-y-2">
-                    <p className="font-extrabold flex items-center gap-1.5 text-red-800 dark:text-red-300">
-                      <AlertOctagon size={15} />
-                      Flagged Diagnostics &amp; Issues:
-                    </p>
-                    <ul className="list-disc pl-5 space-y-1 text-[11px]">
-                      {viewingDetailLog.issues.map((iss: string, idx: number) => (
-                        <li key={idx}>{iss}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
+                {viewingDetailLog.issues &&
+                  viewingDetailLog.issues.length > 0 && (
+                    <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-xs font-medium text-red-900 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200 space-y-2">
+                      <p className="font-extrabold flex items-center gap-1.5 text-red-800 dark:text-red-300">
+                        <AlertOctagon size={15} />
+                        Flagged Diagnostics &amp; Issues:
+                      </p>
+                      <ul className="list-disc pl-5 space-y-1 text-[11px]">
+                        {viewingDetailLog.issues.map(
+                          (iss: string, idx: number) => (
+                            <li key={idx}>{iss}</li>
+                          ),
+                        )}
+                      </ul>
+                    </div>
+                  )}
 
                 {/* Quick Action Button to Edit this record */}
                 <div className="flex items-center justify-end gap-3 pt-2">
@@ -2518,7 +3192,11 @@ export default function MachineHealth() {
                     Inspection Audit Trail &amp; Health History
                   </h2>
                   <p className="text-xs text-slate-300 mt-0.5">
-                    Machine: <span className="font-bold text-white">{selectedMachine?.name || selectedMachine?.model}</span> (SN: {selectedMachine?.serialNumber})
+                    Machine:{" "}
+                    <span className="font-bold text-white">
+                      {selectedMachine?.name || selectedMachine?.model}
+                    </span>{" "}
+                    (SN: {selectedMachine?.serialNumber})
                   </p>
                 </div>
 
@@ -2534,7 +3212,9 @@ export default function MachineHealth() {
                 {loadingHistory ? (
                   <div className="flex min-h-[120px] flex-col items-center justify-center p-8 text-center space-y-2">
                     <Loader2 size={24} className="text-blue-400 animate-spin" />
-                    <p className="text-xs text-slate-300">Loading audit history...</p>
+                    <p className="text-xs text-slate-300">
+                      Loading audit history...
+                    </p>
                   </div>
                 ) : historyLogs.length === 0 ? (
                   <div className="p-8 text-center text-xs font-bold text-slate-400">
@@ -2550,7 +3230,8 @@ export default function MachineHealth() {
                           <div className="flex items-center justify-between text-xs font-extrabold">
                             <span className="flex items-center gap-1.5 text-blue-600 dark:text-blue-400">
                               <User size={13} />
-                              {log.userName || log.submittedBy} ({log.userRole || "SUPER_ADMIN"})
+                              {log.userName || log.submittedBy} (
+                              {log.userRole || "SUPER_ADMIN"})
                             </span>
                             <span className="text-[11px] font-medium text-slate-400 flex items-center gap-1">
                               <Calendar size={12} />
@@ -2563,7 +3244,12 @@ export default function MachineHealth() {
                               Component: {log.componentName}
                             </span>
                             <div className="flex items-center gap-2">
-                              {getStatusBadge(log.status || log.machineStatus || "Healthy", log.componentHealthScore ?? log.componentHealth ?? 100)}
+                              {getStatusBadge(
+                                log.status || log.machineStatus || "Healthy",
+                                log.componentHealthScore ??
+                                  log.componentHealth ??
+                                  100,
+                              )}
                               <button
                                 type="button"
                                 title="Load Data into Form for Editing"
@@ -2602,7 +3288,14 @@ export default function MachineHealth() {
                       Add Custom Component to Equipment
                     </h2>
                     <p className="text-xs text-blue-200">
-                      Machine: <span className="font-bold text-white">{selectedMachine?.name || selectedMachine?.model}</span> ({selectedMachine?.equipmentType || selectedMachine?.category})
+                      Machine:{" "}
+                      <span className="font-bold text-white">
+                        {selectedMachine?.name || selectedMachine?.model}
+                      </span>{" "}
+                      (
+                      {selectedMachine?.equipmentType ||
+                        selectedMachine?.category}
+                      )
                     </p>
                   </div>
                 </div>
@@ -2633,7 +3326,8 @@ export default function MachineHealth() {
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-extrabold uppercase tracking-wide text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
                       <Sliders size={14} className="text-blue-500" />
-                      Monitored Parameters &amp; Safe Limits ({newCompParams.length})
+                      Monitored Parameters &amp; Safe Limits (
+                      {newCompParams.length})
                     </label>
 
                     <button
@@ -2654,22 +3348,38 @@ export default function MachineHealth() {
                       >
                         {/* Parameter Name */}
                         <div className="min-w-[160px] flex-1">
-                          <span className="text-[10px] font-bold text-slate-400 uppercase">Parameter Name</span>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase">
+                            Parameter Name
+                          </span>
                           <input
                             type="text"
                             placeholder="e.g. Oil Pressure"
                             value={param.name}
-                            onChange={(e) => handleUpdateParamField(idx, "name", e.target.value)}
+                            onChange={(e) =>
+                              handleUpdateParamField(
+                                idx,
+                                "name",
+                                e.target.value,
+                              )
+                            }
                             className="mt-0.5 h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-extrabold text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-[#07111f] dark:text-white"
                           />
                         </div>
 
                         {/* Unit */}
                         <div className="w-20">
-                          <span className="text-[10px] font-bold text-slate-400 uppercase">Unit</span>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase">
+                            Unit
+                          </span>
                           <select
                             value={param.unit}
-                            onChange={(e) => handleUpdateParamField(idx, "unit", e.target.value)}
+                            onChange={(e) =>
+                              handleUpdateParamField(
+                                idx,
+                                "unit",
+                                e.target.value,
+                              )
+                            }
                             className="mt-0.5 h-9 w-full rounded-lg border border-slate-300 bg-white px-1 text-xs font-extrabold text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-[#07111f] dark:text-white"
                           >
                             <option value="Bar">Bar</option>
@@ -2687,33 +3397,57 @@ export default function MachineHealth() {
 
                         {/* Safe Min */}
                         <div className="w-20">
-                          <span className="text-[10px] font-bold text-slate-400 uppercase">Safe Min</span>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase">
+                            Safe Min
+                          </span>
                           <input
                             type="number"
                             value={param.safeMin}
-                            onChange={(e) => handleUpdateParamField(idx, "safeMin", parseFloat(e.target.value) || 0)}
+                            onChange={(e) =>
+                              handleUpdateParamField(
+                                idx,
+                                "safeMin",
+                                parseFloat(e.target.value) || 0,
+                              )
+                            }
                             className="mt-0.5 h-9 w-full rounded-lg border border-slate-300 bg-white px-2 text-center text-xs font-extrabold text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-[#07111f] dark:text-white"
                           />
                         </div>
 
                         {/* Safe Max */}
                         <div className="w-20">
-                          <span className="text-[10px] font-bold text-slate-400 uppercase">Safe Max</span>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase">
+                            Safe Max
+                          </span>
                           <input
                             type="number"
                             value={param.safeMax}
-                            onChange={(e) => handleUpdateParamField(idx, "safeMax", parseFloat(e.target.value) || 0)}
+                            onChange={(e) =>
+                              handleUpdateParamField(
+                                idx,
+                                "safeMax",
+                                parseFloat(e.target.value) || 0,
+                              )
+                            }
                             className="mt-0.5 h-9 w-full rounded-lg border border-slate-300 bg-white px-2 text-center text-xs font-extrabold text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-[#07111f] dark:text-white"
                           />
                         </div>
 
                         {/* Default / Baseline */}
                         <div className="w-20">
-                          <span className="text-[10px] font-bold text-slate-400 uppercase">Default</span>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase">
+                            Default
+                          </span>
                           <input
                             type="number"
                             value={param.defaultVal}
-                            onChange={(e) => handleUpdateParamField(idx, "defaultVal", parseFloat(e.target.value) || 0)}
+                            onChange={(e) =>
+                              handleUpdateParamField(
+                                idx,
+                                "defaultVal",
+                                parseFloat(e.target.value) || 0,
+                              )
+                            }
                             className="mt-0.5 h-9 w-full rounded-lg border border-slate-300 bg-white px-2 text-center text-xs font-extrabold text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-[#07111f] dark:text-white"
                           />
                         </div>
@@ -2779,7 +3513,11 @@ export default function MachineHealth() {
               </div>
 
               <div className="mt-4 rounded-2xl bg-slate-50 p-3.5 text-xs text-slate-600 dark:bg-slate-900/60 dark:text-slate-300">
-                Are you sure you want to permanently delete the audit record for <strong className="text-red-500 dark:text-red-400 font-bold">"{deletingLogTarget.name}"</strong>? This action cannot be undone.
+                Are you sure you want to permanently delete the audit record for{" "}
+                <strong className="text-red-500 dark:text-red-400 font-bold">
+                  "{deletingLogTarget.name}"
+                </strong>
+                ? This action cannot be undone.
               </div>
 
               <div className="mt-6 flex items-center justify-end gap-2.5">
@@ -2797,7 +3535,11 @@ export default function MachineHealth() {
                   onClick={confirmDeleteHistoryLog}
                   className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 px-4 py-2 text-xs font-bold text-white shadow-lg shadow-red-600/30 transition hover:from-red-500 hover:to-rose-500 disabled:opacity-50"
                 >
-                  {isDeletingLog ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                  {isDeletingLog ? (
+                    <Loader2 size={13} className="animate-spin" />
+                  ) : (
+                    <Trash2 size={13} />
+                  )}
                   {isDeletingLog ? "Deleting..." : "Yes, Delete Record"}
                 </button>
               </div>

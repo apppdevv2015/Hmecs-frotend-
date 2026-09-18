@@ -74,12 +74,15 @@ export interface UnassignArtisanPayload {
 
 interface ArtisanAssignmentState {
   assignments: ArtisanAssignment[];
+  artisans: any[];
 
   loading: boolean;
+  artisansLoading: boolean;
   assigning: boolean;
   unassigning: boolean;
 
   error: string | null;
+  artisansError: string | null;
   assignError: string | null;
   unassignError: string | null;
 }

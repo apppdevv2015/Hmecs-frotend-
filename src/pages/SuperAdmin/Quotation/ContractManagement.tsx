@@ -42,10 +42,10 @@ interface CompanyOption {
 }
 
 interface OptionalService {
-  id: string;
+  id?: string;
   name: string;
   price: number;
-  billingFrequency: string;
+  billingFrequency?: string;
 }
 
 interface ContractCreateForm {
@@ -267,7 +267,7 @@ interface ContractPreviewProps {
   endDate: string;
   onClose: () => void;
   onCreateAndSend: () => void;
-  onEndDateChange: (value: string) => void; 
+  onEndDateChange: (value: string) => void;
   isSubmitting: boolean;
 }
 
@@ -364,7 +364,7 @@ const ContractPreview: FC<ContractPreviewProps> = ({
                     id="contract-end-date"
                     type="date"
                     value={form.endDate}
-                   onChange={(event) => onEndDateChange(event.target.value)} 
+                    onChange={(event) => onEndDateChange(event.target.value)}
                     className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
@@ -733,7 +733,12 @@ const ContractManagement: FC = () => {
       additionalMachineCharge: toNumber(company.additionalMachineCharge),
       implementationFee: toNumber(company.implementationFee),
       monthlySiteLicence: toNumber(company.monthlySiteLicence),
-      optionalServices: [...(company.optionalServices ?? [])],
+      optionalServices: (company.optionalServices ?? []).map((s: any) => ({
+        id: s.id ?? s.name,
+        name: s.name,
+        price: s.price,
+        billingFrequency: s.billingFrequency ?? "Monthly",
+      })),
     });
 
     setIsPreviewOpen(false);
@@ -783,7 +788,7 @@ const ContractManagement: FC = () => {
       form.duration,
     );
 
-       if (error) {
+    if (error) {
       showErrorToast(error);
       return;
     }
@@ -802,13 +807,15 @@ const ContractManagement: FC = () => {
       form.duration,
     );
 
-        if (dateError) {
+    if (dateError) {
       showErrorToast(dateError);
       return;
     }
 
     if (!signedByName.trim()) {
-      showErrorToast("Please enter the name of the person signing the contract.");
+      showErrorToast(
+        "Please enter the name of the person signing the contract.",
+      );
       return;
     }
 
@@ -820,7 +827,9 @@ const ContractManagement: FC = () => {
     const signatureFile = await getSignatureFile();
 
     if (!signatureFile) {
-      showErrorToast("Unable to capture the digital signature. Please sign again.");
+      showErrorToast(
+        "Unable to capture the digital signature. Please sign again.",
+      );
       return;
     }
 
@@ -839,7 +848,7 @@ const ContractManagement: FC = () => {
     try {
       const contract = await createContract(payload);
 
-           if (!contract) {
+      if (!contract) {
         showErrorToast("Unable to create the contract. Please try again.");
         return;
       }
@@ -849,7 +858,7 @@ const ContractManagement: FC = () => {
       setSelectedCompanyId("");
       setSignedByName("");
       handleClearSignature();
-       } catch {
+    } catch {
     } finally {
       setIsSubmitting(false);
     }
@@ -1206,8 +1215,6 @@ const ContractManagement: FC = () => {
                     )}
                   </div>
 
-               
-
                   <div className="rounded-2xl border border-blue-100 bg-blue-50/60 p-5 dark:border-blue-900/40 dark:bg-blue-950/20">
                     <SectionHeader
                       icon={<Clock3 size={20} />}
@@ -1294,10 +1301,7 @@ const ContractManagement: FC = () => {
                     </div>
                   </div>
 
-             
-
                   <div className="flex flex-col-reverse gap-3 border-t border-slate-200 pt-6 sm:flex-row sm:items-center sm:justify-end dark:border-slate-700">
-            
                     <button
                       type="button"
                       onClick={handlePreview}
@@ -1323,13 +1327,13 @@ const ContractManagement: FC = () => {
           </section>
 
           {isPreviewOpen && selectedCompany && form && (
-              <ContractPreview
+            <ContractPreview
               company={selectedCompany}
               form={form}
               endDate={form.endDate}
               onClose={() => setIsPreviewOpen(false)}
               onCreateAndSend={handleCreateAndSend}
-              onEndDateChange={handleEndDateChange} 
+              onEndDateChange={handleEndDateChange}
               isSubmitting={isSubmitting}
             />
           )}

@@ -57,6 +57,34 @@ const DEFAULT_COMPONENTS = [
   "Cooling & Radiator Unit",
 ];
 
+interface MachineComponentOption {
+  displayName?: string;
+  name?: string;
+  category?: string;
+}
+
+type ComponentsApiResponse =
+  | MachineComponentOption[]
+  | {
+      data?: MachineComponentOption[];
+      components?: MachineComponentOption[];
+    };
+
+function extractComponentsList(
+  res: ComponentsApiResponse,
+): MachineComponentOption[] {
+  if (Array.isArray(res)) {
+    return res;
+  }
+  if (Array.isArray(res.data)) {
+    return res.data;
+  }
+  if (Array.isArray(res.components)) {
+    return res.components;
+  }
+  return [];
+}
+
 export default function SupervisorAssignedArtisans() {
   // TODO: swap `useDispatch()` / `useSelector` for your typed
   // `useAppDispatch` / `useAppSelector` hooks if your project has them.
@@ -111,13 +139,26 @@ export default function SupervisorAssignedArtisans() {
       if (!modalMachineId) return;
       try {
         setLoadingModalComponents(true);
-        const res =
+        interface MachineComponentOption {
+          displayName?: string;
+          name?: string;
+          category?: string;
+        }
+
+        type ComponentsApiResponse =
+          | MachineComponentOption[]
+          | {
+              data?: MachineComponentOption[];
+              components?: MachineComponentOption[];
+            };
+
+        const res: ComponentsApiResponse =
           await componentService.getComponentsByMachineId(modalMachineId);
-        const list = Array.isArray(res)
-          ? res
-          : res?.data || res?.components || [];
+
+        const list = extractComponentsList(res);
+
         if (list.length > 0) {
-          const formatted = list.map((c: any) => ({
+          const formatted = list.map((c: MachineComponentOption) => ({
             label: c.displayName || c.name || c.category || "Component",
             value: c.displayName || c.name || c.category || "Component",
           }));
@@ -201,7 +242,6 @@ export default function SupervisorAssignedArtisans() {
       company: "HME Mining Operations",
       status: "Active",
       shift: "Day Shift (08:00 - 16:00)",
-
 
       assignedMachines: [
         {
@@ -309,17 +349,12 @@ export default function SupervisorAssignedArtisans() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-
   const handleOpenModal = (
     machineId = "",
     componentName = "",
     artisanId = "",
     existingAssignment: ComponentArtisanAssignment | null = null,
   ) => {
-
-  // Open Modal for a specific Machine & Component
-  const handleOpenModal = (machineId = "", componentName = "") => {
-
     const targetMachineId =
       machineId ||
       (selectedMachineId !== "all" ? selectedMachineId : machines[0]?.id) ||
@@ -344,17 +379,6 @@ export default function SupervisorAssignedArtisans() {
         new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
           .toISOString()
           .split("T")[0],
-
-    setModalComponentName(componentName || DEFAULT_COMPONENTS[0]);
-    setModalArtisanId(artisans[0]?.id || "");
-    setModalWorkScope("");
-    setModalPriority("Medium");
-    setModalStartDate(new Date().toISOString().split("T")[0]);
-    setModalDueDate(
-      new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-        .toISOString()
-        .split("T")[0],
-
     );
     setIsModalOpen(true);
   };
@@ -460,9 +484,6 @@ export default function SupervisorAssignedArtisans() {
         priority: modalPriority,
         startDate: modalStartDate,
         dueDate: modalDueDate,
-
-      }),
-
       }),
     );
 
@@ -475,8 +496,7 @@ export default function SupervisorAssignedArtisans() {
       componentName: modalComponentName,
       artisanId: modalArtisanId,
       artisanName: selectedArtisan?.name || "Assigned Artisan",
-      artisanSpecialization:
-        selectedArtisan?.specialization || "Maintenance Specialist",
+      supervisorId: supervisorId || "",
       supervisorName: (() => {
         try {
           const user = StorageService.getUser();
@@ -884,8 +904,8 @@ export default function SupervisorAssignedArtisans() {
           </span>
         </div>
 
-       <div className="overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-  <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-800">
+        <div className="overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+          <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-800">
             <thead className="bg-slate-50/80 dark:bg-[#081226]">
               <tr>
                 <th
@@ -1026,7 +1046,6 @@ export default function SupervisorAssignedArtisans() {
                       <span className="inline-flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700 dark:border-blue-800/60 dark:bg-blue-950/40 dark:text-blue-300">
                         <ShieldCheck size={14} />
 
-
                         {item.supervisorName || "Supervisor"}
 
                         {item.supervisorName &&
@@ -1038,7 +1057,6 @@ export default function SupervisorAssignedArtisans() {
                               STORAGE_KEYS.USER_NAME,
                             ) ||
                             "Supervisor"}
-
                       </span>
                     </td>
 
@@ -1136,16 +1154,12 @@ export default function SupervisorAssignedArtisans() {
                       <div className="flex items-center justify-center gap-2">
                         <button
                           onClick={() =>
-
                             handleOpenModal(
                               item.machineId,
                               item.componentName,
                               item.artisanId,
                               item,
                             )
-
-                            handleOpenModal(item.machineId, item.componentName)
-
                           }
                           title="Edit Component Artisan Assignment"
                           className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-xs transition hover:border-blue-500 hover:bg-blue-50 hover:text-blue-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-blue-500 dark:hover:bg-blue-950/40"
@@ -1175,6 +1189,8 @@ export default function SupervisorAssignedArtisans() {
             currentPage={currentPage}
             totalPages={totalPages}
             onPageChange={setCurrentPage}
+            onPrev={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+            onNext={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
             itemsPerPage={itemsPerPage}
             onItemsPerPageChange={(val) => {
               setItemsPerPage(val);
@@ -1209,7 +1225,7 @@ export default function SupervisorAssignedArtisans() {
               </button>
             </div>
             {/* Modal Scrollable Body */}
-          <div className="flex-1 overflow-y-auto p-5 space-y-3.5 text-xs [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+            <div className="flex-1 overflow-y-auto p-5 space-y-3.5 text-xs [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
               {/* Component Conflict / Status Warning Banner */}
               {existingAssignmentForModal &&
                 (existingAssignmentForModal.status === "Active" ? (
@@ -1326,7 +1342,6 @@ export default function SupervisorAssignedArtisans() {
                 />
               </div>
 
-              {/* 2-Column Artisan & Priority Selectors */}
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
@@ -1358,7 +1373,6 @@ export default function SupervisorAssignedArtisans() {
                 </div>
               </div>
 
-              {/* 2-Column Calendar Start Date & Target Due Date */}
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label className="mb-1 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
@@ -1380,7 +1394,11 @@ export default function SupervisorAssignedArtisans() {
                       onClick={(e) => {
                         const input = e.currentTarget
                           .previousElementSibling as HTMLInputElement;
-                        input?.showPicker?.() || input?.focus();
+                        if (input?.showPicker) {
+                          input.showPicker();
+                        } else {
+                          input?.focus();
+                        }
                       }}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400"
                     >
@@ -1409,7 +1427,11 @@ export default function SupervisorAssignedArtisans() {
                       onClick={(e) => {
                         const input = e.currentTarget
                           .previousElementSibling as HTMLInputElement;
-                        input?.showPicker?.() || input?.focus();
+                        if (input?.showPicker) {
+                          input.showPicker();
+                        } else {
+                          input?.focus();
+                        }
                       }}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400"
                     >

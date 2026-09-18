@@ -272,13 +272,17 @@ export default function CompanyAdminDashboard() {
               riskStatus: riskLabel,
               riskDriver: paramsText,
             };
-          } else if (inspCompName && !inspCompName.startsWith("all components")) {
-            mappedComponents.push({
+                    } else if (inspCompName && !inspCompName.startsWith("all components")) {
+                       mappedComponents.push({
               id: insp.id || `insp_${mappedComponents.length}`,
               machineId: targetMachId || insp.machineId,
-              name: insp.componentName || insp.name || "Machine Component",
+              companyId: "",
+              companyCode: "",
+              companyName: "",
+              company: undefined,
+              machine: undefined,
               category: insp.category || "General",
-              description: insp.description || `${insp.componentName || "Component"} (Inspected)`,
+              description: insp.componentName || insp.name || insp.description || "Machine Component",
               serialNumber: inspSn || `SN-COMP-${mappedComponents.length}`,
               supplier: "OEM Standard",
               status: inspStatus,
@@ -288,6 +292,8 @@ export default function CompanyAdminDashboard() {
               currentHours: (100 - inspScore) * 150,
               plannedLife: 15000,
               replacementCost: 35000,
+              createdAt: undefined,
+              updatedAt: undefined,
               intelligence: {
                 riskStatus: riskLabel,
                 riskDriver: paramsText,

@@ -41,6 +41,13 @@ import Pagination from "../../components/common/Pagination";
 ========================================================== */
 
 type FleetStatus = "Healthy" | "Warning" | "Critical";
+type ComponentStatus = "ok" | "warn" | "crit";
+
+type Company = {
+  id: string;
+  companyName: string;
+  companyCode: string;
+};
 
 type FleetStats = {
   totalMachines: number;

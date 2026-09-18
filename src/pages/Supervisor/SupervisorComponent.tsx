@@ -85,6 +85,12 @@ type MachineComponent = {
     riskDriver: string;
     estimatedSavings: string;
   };
+  // Live artisan/supervisor task assignment data (from backend)
+  assignedArtisanName?: string;
+  assignedSupervisorName?: string;
+  assignedWorkScope?: string;
+  assignedPriority?: "High" | "Medium" | "Low";
+  assignedTaskId?: string;
 };
 
 const getArrayData = <T,>(response: any): T[] => {
@@ -199,11 +205,14 @@ const normalizeComponent = (item: any): MachineComponent => ({
     item?.healthScore !== undefined && item?.healthScore !== null
       ? Number(item.healthScore)
       : item?.health_score !== undefined && item?.health_score !== null
-      ? Number(item.health_score)
-      : null,
+        ? Number(item.health_score)
+        : null,
 
   inspectionParameters:
-    item?.inspectionParameters || item?.inspection_parameters || item?.parameters || null,
+    item?.inspectionParameters ||
+    item?.inspection_parameters ||
+    item?.parameters ||
+    null,
 
   lastInspectedAt: item?.lastInspectedAt || item?.last_inspected_at || null,
 
@@ -212,20 +221,77 @@ const normalizeComponent = (item: any): MachineComponent => ({
   updatedAt: item?.updatedAt || item?.updated_at,
 
   intelligence: item?.intelligence,
+
+  assignedArtisanName: item?.assignedArtisanName || item?.assigned_artisan_name,
+  assignedSupervisorName:
+    item?.assignedSupervisorName || item?.assigned_supervisor_name,
+  assignedWorkScope: item?.assignedWorkScope || item?.assigned_work_scope,
+  assignedPriority: item?.assignedPriority || item?.assigned_priority,
+  assignedTaskId:
+    item?.assignedTaskId || item?.assigned_task_id || item?.taskId,
 });
 
 const deriveComponentCategory = (comp: any): string => {
-  const cat = String(comp?.category || comp?.categoryName || comp?.category_name || comp?.type || "").trim();
-  const text = `${comp?.description || ""} ${comp?.name || ""} ${cat}`.toLowerCase();
+  const cat = String(
+    comp?.category ||
+      comp?.categoryName ||
+      comp?.category_name ||
+      comp?.type ||
+      "",
+  ).trim();
+  const text =
+    `${comp?.description || ""} ${comp?.name || ""} ${cat}`.toLowerCase();
 
-  if (text.includes("tyre") || text.includes("tire")) return "Tyres & Undercarriage";
-  if (text.includes("hydraulic") || text.includes("pump") || text.includes("cylinder") || text.includes("valve")) return "Hydraulics";
-  if (text.includes("transmission") || text.includes("gearbox") || text.includes("powershift")) return "Transmission";
-  if (text.includes("drive") || text.includes("swing") || text.includes("motor") || text.includes("axle") || text.includes("drivetrain") || text.includes("track")) return "Powertrain & Parts";
-  if (text.includes("brake") || text.includes("suspension") || text.includes("strut")) return "Brakes & Suspension";
-  if (text.includes("cooling") || text.includes("radiator") || text.includes("fan")) return "Cooling System";
-  if (text.includes("engine") || text.includes("diesel") || text.includes("v12") || text.includes("v16")) return "Engine";
-  if (text.includes("electric") || text.includes("generator") || text.includes("battery") || text.includes("alternator")) return "Electrical";
+  if (text.includes("tyre") || text.includes("tire"))
+    return "Tyres & Undercarriage";
+  if (
+    text.includes("hydraulic") ||
+    text.includes("pump") ||
+    text.includes("cylinder") ||
+    text.includes("valve")
+  )
+    return "Hydraulics";
+  if (
+    text.includes("transmission") ||
+    text.includes("gearbox") ||
+    text.includes("powershift")
+  )
+    return "Transmission";
+  if (
+    text.includes("drive") ||
+    text.includes("swing") ||
+    text.includes("motor") ||
+    text.includes("axle") ||
+    text.includes("drivetrain") ||
+    text.includes("track")
+  )
+    return "Powertrain & Parts";
+  if (
+    text.includes("brake") ||
+    text.includes("suspension") ||
+    text.includes("strut")
+  )
+    return "Brakes & Suspension";
+  if (
+    text.includes("cooling") ||
+    text.includes("radiator") ||
+    text.includes("fan")
+  )
+    return "Cooling System";
+  if (
+    text.includes("engine") ||
+    text.includes("diesel") ||
+    text.includes("v12") ||
+    text.includes("v16")
+  )
+    return "Engine";
+  if (
+    text.includes("electric") ||
+    text.includes("generator") ||
+    text.includes("battery") ||
+    text.includes("alternator")
+  )
+    return "Electrical";
 
   return cat && cat.toLowerCase() !== "engine" ? cat : "General Component";
 };
@@ -330,7 +396,9 @@ export default function SupervisorComponentsPage() {
     return (
       storedUser?.name ||
       storedUser?.fullName ||
-      (storedUser?.firstName ? `${storedUser.firstName} ${storedUser.lastName || ""}`.trim() : "") ||
+      (storedUser?.firstName
+        ? `${storedUser.firstName} ${storedUser.lastName || ""}`.trim()
+        : "") ||
       StorageService.get<string>(STORAGE_KEYS.USER_NAME) ||
       "Marcus Supervisor"
     );
@@ -375,7 +443,7 @@ export default function SupervisorComponentsPage() {
     defaultValues: emptyComponentForm,
   });
 
-   useEffect(() => {
+  useEffect(() => {
     if (isFormModalOpen) {
       document.body.style.overflow = "hidden";
       document.documentElement.style.overflow = "hidden";
@@ -394,11 +462,12 @@ export default function SupervisorComponentsPage() {
     try {
       setLoading(true);
 
-      const [machineResponse, componentResponse, categoryResponse] = await Promise.all([
-        machineService.getMachines(),
-        componentService.getComponents(),
-        componentService.getCategories().catch(() => null),
-      ]);
+      const [machineResponse, componentResponse, categoryResponse] =
+        await Promise.all([
+          machineService.getMachines(),
+          componentService.getComponents(),
+          componentService.getCategories().catch(() => null),
+        ]);
 
       const mappedMachines =
         getArrayData<any>(machineResponse).map(normalizeMachine);
@@ -411,11 +480,12 @@ export default function SupervisorComponentsPage() {
 
       if (categoryResponse) {
         const cats = getArrayData<any>(categoryResponse);
-        const names = cats.map((c: any) => c.name || c.category || c).filter(Boolean);
+        const names = cats
+          .map((c: any) => c.name || c.category || c)
+          .filter(Boolean);
         setCategoriesList(names);
       }
     } catch {
-     
     } finally {
       setLoading(false);
     }
@@ -427,7 +497,9 @@ export default function SupervisorComponentsPage() {
 
   const categorySelectOptions = useMemo(() => {
     const fromComponents = components.map((c) => c.category).filter(Boolean);
-    const allUnique = Array.from(new Set([...categoriesList, ...fromComponents]));
+    const allUnique = Array.from(
+      new Set([...categoriesList, ...fromComponents]),
+    );
     return [
       { label: "All Component Types", value: "" },
       ...allUnique.map((cat) => ({ label: cat, value: cat })),
@@ -539,8 +611,8 @@ export default function SupervisorComponentsPage() {
 
   const totalComponents = filteredComponents.length;
 
-  const totalAssignedComponents = filteredComponents.filter(
-    (item) => Boolean(item.machineId && String(item.machineId).trim() !== ""),
+  const totalAssignedComponents = filteredComponents.filter((item) =>
+    Boolean(item.machineId && String(item.machineId).trim() !== ""),
   ).length;
 
   const healthyComponents = filteredComponents.filter((item) => {
@@ -554,7 +626,10 @@ export default function SupervisorComponentsPage() {
   }).length;
 
   const getComponentHealthInfo = (comp: any) => {
-    const rawScore = comp?.healthScore !== undefined && comp?.healthScore !== null ? Number(comp.healthScore) : null;
+    const rawScore =
+      comp?.healthScore !== undefined && comp?.healthScore !== null
+        ? Number(comp.healthScore)
+        : null;
 
     if (rawScore !== null && !isNaN(rawScore)) {
       const score = Math.max(0, Math.min(100, rawScore));
@@ -591,8 +666,15 @@ export default function SupervisorComponentsPage() {
       };
     }
 
-    if (comp?.condition !== undefined && comp?.condition !== null && Number(comp.condition) > 1) {
-      const calcScore = Math.max(0, Math.min(100, (6 - Number(comp.condition)) * 20));
+    if (
+      comp?.condition !== undefined &&
+      comp?.condition !== null &&
+      Number(comp.condition) > 1
+    ) {
+      const calcScore = Math.max(
+        0,
+        Math.min(100, (6 - Number(comp.condition)) * 20),
+      );
       return {
         score: calcScore,
         label: `Condition ${calcScore}%`,
@@ -661,20 +743,25 @@ export default function SupervisorComponentsPage() {
 
       if (formMode === "add") {
         // BACKEND TODO: confirm componentService.createComponent payload shape with API
-        const response = await componentService.createComponent(data);
+        const response = await componentService.createComponent({
+          ...data,
+          category: data.category ?? "",
+        });
 
         const created = normalizeComponent(
           response?.data || response?.component || response,
         );
 
         setComponents((prev) => [...prev, created]);
-
       } else if (formMode === "edit" && editingComponent) {
-        // BACKEND TODO: confirm componentService.updateComponent payload shape with API
-        const response = await componentService.updateComponent(
-          editingComponent.id,
-          data,
-        );
+
+  const response = await componentService.updateComponent(
+    editingComponent.id,
+    {
+      ...data,
+      category: data.category ?? "",
+    },
+  );
 
         const updated = normalizeComponent(
           response?.data ||
@@ -693,7 +780,8 @@ export default function SupervisorComponentsPage() {
       }
 
       handleCloseFormModal();
-    } catch {} finally {
+    } catch {
+    } finally {
       setIsSubmitting(false);
     }
   };
@@ -734,7 +822,8 @@ export default function SupervisorComponentsPage() {
 
   const getSupervisorName = (comp: MachineComponent, activeAssign: any) => {
     if (activeAssign?.supervisorName) return activeAssign.supervisorName;
-    if ((comp as any).assignedSupervisorName) return (comp as any).assignedSupervisorName;
+    if ((comp as any).assignedSupervisorName)
+      return (comp as any).assignedSupervisorName;
     if ((comp as any).supervisorName) return (comp as any).supervisorName;
     return activeAssign ? currentSupervisorName : "Unassigned";
   };
@@ -954,230 +1043,313 @@ export default function SupervisorComponentsPage() {
                     (m) => m.machineId === component.machineId,
                   );
 
-                // Find matching active artisan assignment from localStorage
-                const activeAssignment = (component.assignedArtisanName || (component as any).assigned_artisan_name)
-                  ? {
-                      artisanName: component.assignedArtisanName || (component as any).assigned_artisan_name,
-                      supervisorName: component.assignedSupervisorName || (component as any).assigned_supervisor_name || "Supervisor",
-                      workScope: (component as any).assignedWorkScope || "Component maintenance",
-                      priority: (component as any).assignedPriority || "Medium",
-                    }
-                  : null;
+                  const activeAssignment = component.assignedArtisanName
+                    ? {
+                        artisanName: component.assignedArtisanName,
+                        supervisorName: component.assignedSupervisorName,
+                        workScope: component.assignedWorkScope,
+                        priority: component.assignedPriority,
+                        taskId: component.assignedTaskId,
+                      }
+                    : null;
 
-                const healthInfo = getComponentHealthInfo(component);
-                const style = healthInfo;
-                const health = healthInfo.score ?? 100;
+                  const healthInfo = getComponentHealthInfo(component);
+                  const style = healthInfo;
+                  const health = healthInfo.score ?? 100;
 
-                const remainingHours = Math.max(
-                  0,
-                  component.plannedLife -
-                    Math.max(
-                      0,
-                      component.currentHours - component.installHours,
-                    ),
-                );
+                  const remainingHours = Math.max(
+                    0,
+                    component.plannedLife -
+                      Math.max(
+                        0,
+                        component.currentHours - component.installHours,
+                      ),
+                  );
 
-                return (
-                  <div
-                    key={component.id}
-                    className="group rounded-2xl border border-slate-200 bg-slate-50 p-5 transition duration-300 hover:-translate-y-1 hover:border-blue-300 hover:bg-white hover:shadow-xl dark:border-slate-800 dark:bg-[#101f33] dark:hover:border-blue-500/40 dark:hover:bg-[#12243b]"
-                  >
-                    {/* Header */}
-                    <div className="flex items-start justify-between">
-                      <div className="min-w-0 flex-1">
-                        <h3 className="truncate text-lg font-extrabold tracking-tight text-slate-950 dark:text-white">
-                          {component.description || "No Description"}
-                        </h3>
+                  return (
+                    <div
+                      key={component.id}
+                      className="group rounded-2xl border border-slate-200 bg-slate-50 p-5 transition duration-300 hover:-translate-y-1 hover:border-blue-300 hover:bg-white hover:shadow-xl dark:border-slate-800 dark:bg-[#101f33] dark:hover:border-blue-500/40 dark:hover:bg-[#12243b]"
+                    >
+                      {/* Header */}
+                      <div className="flex items-start justify-between">
+                        <div className="min-w-0 flex-1">
+                          <h3 className="truncate text-lg font-extrabold tracking-tight text-slate-950 dark:text-white">
+                            {component.description || "No Description"}
+                          </h3>
 
-                        <p className="mt-1 truncate text-sm font-medium text-slate-500 dark:text-slate-400">
-                          Serial: {component.serialNumber || "N/A"}
+                          <p className="mt-1 truncate text-sm font-medium text-slate-500 dark:text-slate-400">
+                            Serial: {component.serialNumber || "N/A"}
+                          </p>
+                        </div>
+
+                        <span
+                          className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-3 py-1 text-[11px] font-bold uppercase tracking-wide ${style.bg}`}
+                        >
+                          {style.icon}
+                          {style.label}
+                        </span>
+                      </div>
+
+                      {/* Details */}
+                      <div className="mt-5 space-y-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-[#0b1728]">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-medium text-slate-500 dark:text-slate-400">
+                            Component Category Type
+                          </span>
+                          <span className="font-bold text-indigo-600 dark:text-indigo-400">
+                            {deriveComponentCategory(component)}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-medium text-slate-500 dark:text-slate-400">
+                            Belongs to Machine
+                          </span>
+                          <span className="font-bold text-slate-800 dark:text-slate-200">
+                            {machine?.name || "CAT 320 Excavator"}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-medium text-slate-500 dark:text-slate-400">
+                            Assigned Artisan
+                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-bold text-blue-600 dark:text-blue-400">
+                              {activeAssignment
+                                ? activeAssignment.artisanName
+                                : (component as any).assignedArtisanName ||
+                                  (component as any).artisanName ||
+                                  "Unassigned"}
+                            </span>
+                            {(activeAssignment ||
+                              (component as any).assignedArtisanName) && (
+                              <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
+                                Active (Busy)
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-medium text-slate-500 dark:text-slate-400">
+                            Assigned By Supervisor
+                          </span>
+                          <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                            {getSupervisorName(component, activeAssignment)}
+                          </span>
+                        </div>
+
+                        {(activeAssignment?.taskId ||
+                          (component as any).taskId) && (
+                          <div className="flex items-center justify-between text-xs pt-1.5 border-t border-slate-100 dark:border-slate-800/80">
+                            <span className="font-medium text-slate-500 dark:text-slate-400">
+                              Active Task ID
+                            </span>
+                            <span className="rounded bg-blue-50 border border-blue-200 px-1.5 py-0.5 font-mono text-[10px] font-bold text-blue-700 dark:bg-blue-950/50 dark:border-blue-800 dark:text-blue-300">
+                              {activeAssignment?.taskId ||
+                                (component as any).taskId}
+                            </span>
+                          </div>
+                        )}
+
+                        {(activeAssignment?.workScope ||
+                          (component as any).workScope) && (
+                          <div className="text-[11px] pt-1 text-slate-600 dark:text-slate-400 italic">
+                            📝 "
+                            {activeAssignment?.workScope ||
+                              (component as any).workScope}
+                            "
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Operator Inspection Report Metrics & Trend Graph */}
+                      <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/80 p-3 dark:border-slate-800 dark:bg-[#081324]">
+                        <div className="flex items-center justify-between text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-2">
+                          <span className="flex items-center gap-1">
+                            <Activity size={13} className="text-blue-500" />
+                            Inspection Parameters & Values
+                          </span>
+                          <span className="text-[10px] text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 px-2 py-0.5 rounded-full border border-blue-200 dark:border-blue-800 font-bold">
+                            {healthInfo.hasData
+                              ? "📋 Live Log Verified"
+                              : "⏳ Pending Inspection"}
+                          </span>
+                        </div>
+
+                        {/* Operator Reported Inspection Metrics */}
+                        <div className="flex flex-wrap items-center gap-2 mb-3">
+                          {(() => {
+                            const params =
+                              component.inspectionParameters ||
+                              (component as any).parameters;
+                            let fieldList: any[] = [];
+                            if (Array.isArray(params)) fieldList = params;
+                            else if (
+                              params &&
+                              Array.isArray(params.customFields)
+                            )
+                              fieldList = params.customFields;
+
+                            if (fieldList && fieldList.length > 0) {
+                              return fieldList.map((f: any, idx: number) => {
+                                const name = f.name || `Param #${idx + 1}`;
+                                const val =
+                                  f.value !== undefined && f.value !== null
+                                    ? String(f.value)
+                                    : "N/A";
+                                const valLower = String(val).toLowerCase();
+                                const isAbnormal =
+                                  valLower === "0" ||
+                                  valLower.includes("crit") ||
+                                  valLower.includes("warn") ||
+                                  valLower.includes("fail") ||
+                                  valLower.includes("leak");
+
+                                return (
+                                  <span
+                                    key={idx}
+                                    className={`rounded-lg px-2.5 py-1 text-[10px] font-bold border ${
+                                      isAbnormal
+                                        ? "bg-amber-100/90 text-amber-900 dark:bg-amber-950/70 dark:text-amber-200 border-amber-300 dark:border-amber-800"
+                                        : "bg-emerald-100/80 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200 border-emerald-300 dark:border-emerald-800"
+                                    }`}
+                                  >
+                                    {name}: {val}
+                                  </span>
+                                );
+                              });
+                            }
+
+                            return (
+                              <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500 italic">
+                                No inspection parameters added yet
+                              </span>
+                            );
+                          })()}
+                        </div>
+
+                        {/* Component Trend Area Chart Driven by Operator Log Ratings */}
+                        <div className="h-28 w-full">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart
+                              data={[
+                                {
+                                  hour: "08:00",
+                                  val: Math.min(100, health + 10),
+                                },
+                                {
+                                  hour: "10:00",
+                                  val: Math.min(100, health + 5),
+                                },
+                                { hour: "12:00", val: health },
+                                {
+                                  hour: "14:00",
+                                  val: Math.max(20, health - 3),
+                                },
+                                { hour: "16:00", val: health },
+                              ]}
+                              margin={{
+                                top: 5,
+                                right: 5,
+                                left: -25,
+                                bottom: 0,
+                              }}
+                            >
+                              <defs>
+                                <linearGradient
+                                  id={`grad_${component.id}`}
+                                  x1="0"
+                                  y1="0"
+                                  x2="0"
+                                  y2="1"
+                                >
+                                  <stop
+                                    offset="5%"
+                                    stopColor={
+                                      health >= 80
+                                        ? "#10b981"
+                                        : health >= 50
+                                          ? "#f59e0b"
+                                          : "#ef4444"
+                                    }
+                                    stopOpacity={0.4}
+                                  />
+                                  <stop
+                                    offset="95%"
+                                    stopColor={
+                                      health >= 80
+                                        ? "#10b981"
+                                        : health >= 50
+                                          ? "#f59e0b"
+                                          : "#ef4444"
+                                    }
+                                    stopOpacity={0}
+                                  />
+                                </linearGradient>
+                              </defs>
+                              <CartesianGrid
+                                strokeDasharray="2 2"
+                                stroke="#334155"
+                                opacity={0.2}
+                                vertical={false}
+                              />
+                              <XAxis
+                                dataKey="hour"
+                                tick={{ fontSize: 9, fill: "#64748b" }}
+                              />
+                              <YAxis
+                                domain={[0, 100]}
+                                tick={{ fontSize: 9, fill: "#64748b" }}
+                              />
+                              <Tooltip
+                                contentStyle={{
+                                  background: "#0f172a",
+                                  borderColor: "#334155",
+                                  borderRadius: "8px",
+                                  color: "#fff",
+                                  fontSize: "10px",
+                                }}
+                              />
+                              <Area
+                                type="monotone"
+                                dataKey="val"
+                                name="Operator Inspection Rating %"
+                                stroke={
+                                  health >= 80
+                                    ? "#10b981"
+                                    : health >= 50
+                                      ? "#f59e0b"
+                                      : "#ef4444"
+                                }
+                                strokeWidth={2}
+                                fillOpacity={1}
+                                fill={`url(#grad_${component.id})`}
+                              />
+                            </AreaChart>
+                          </ResponsiveContainer>
+                        </div>
+                        <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400 italic font-medium">
+                          📋 Data sourced from Daily Shift Inspection Report
+                          logged by Machine Operator
                         </p>
                       </div>
 
-                      <span
-                        className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-3 py-1 text-[11px] font-bold uppercase tracking-wide ${style.bg}`}
-                      >
-                        {style.icon}
-                        {style.label}
-                      </span>
+                      {/* Actions */}
+                      <div className="mt-5 flex items-center">
+                        <button
+                          onClick={() => handleViewDetails(component)}
+                          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white transition duration-300 hover:bg-blue-700 hover:shadow-lg"
+                        >
+                          <Eye size={18} />
+                          View Full Details
+                        </button>
+                      </div>
                     </div>
-
-                    {/* Details */}
-                    <div className="mt-5 space-y-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-[#0b1728]">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="font-medium text-slate-500 dark:text-slate-400">
-                          Component Category Type
-                        </span>
-                        <span className="font-bold text-indigo-600 dark:text-indigo-400">
-                          {deriveComponentCategory(component)}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="font-medium text-slate-500 dark:text-slate-400">
-                          Belongs to Machine
-                        </span>
-                        <span className="font-bold text-slate-800 dark:text-slate-200">
-                          {machine?.name || "CAT 320 Excavator"}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="font-medium text-slate-500 dark:text-slate-400">
-                          Assigned Artisan
-                        </span>
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-bold text-blue-600 dark:text-blue-400">
-                            {activeAssignment
-                              ? activeAssignment.artisanName
-                              : (component as any).assignedArtisanName || (component as any).artisanName || "Unassigned"}
-                          </span>
-                          {(activeAssignment || (component as any).assignedArtisanName) && (
-                            <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
-                              Active (Busy)
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="font-medium text-slate-500 dark:text-slate-400">
-                          Assigned By Supervisor
-                        </span>
-                        <span className="font-bold text-emerald-600 dark:text-emerald-400">
-                          {getSupervisorName(component, activeAssignment)}
-                        </span>
-                      </div>
-
-                      {(activeAssignment?.taskId || (component as any).taskId) && (
-                        <div className="flex items-center justify-between text-xs pt-1.5 border-t border-slate-100 dark:border-slate-800/80">
-                          <span className="font-medium text-slate-500 dark:text-slate-400">
-                            Active Task ID
-                          </span>
-                          <span className="rounded bg-blue-50 border border-blue-200 px-1.5 py-0.5 font-mono text-[10px] font-bold text-blue-700 dark:bg-blue-950/50 dark:border-blue-800 dark:text-blue-300">
-                            {activeAssignment?.taskId || (component as any).taskId}
-                          </span>
-                        </div>
-                      )}
-
-                      {(activeAssignment?.workScope || (component as any).workScope) && (
-                        <div className="text-[11px] pt-1 text-slate-600 dark:text-slate-400 italic">
-                          📝 "{activeAssignment?.workScope || (component as any).workScope}"
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Operator Inspection Report Metrics & Trend Graph */}
-                    <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/80 p-3 dark:border-slate-800 dark:bg-[#081324]">
-                      <div className="flex items-center justify-between text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-2">
-                        <span className="flex items-center gap-1">
-                          <Activity size={13} className="text-blue-500" />
-                          Inspection Parameters & Values
-                        </span>
-                        <span className="text-[10px] text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 px-2 py-0.5 rounded-full border border-blue-200 dark:border-blue-800 font-bold">
-                          {healthInfo.hasData ? "📋 Live Log Verified" : "⏳ Pending Inspection"}
-                        </span>
-                      </div>
-
-                      {/* Operator Reported Inspection Metrics */}
-                      <div className="flex flex-wrap items-center gap-2 mb-3">
-                        {(() => {
-                          const params = component.inspectionParameters || (component as any).parameters;
-                          let fieldList: any[] = [];
-                          if (Array.isArray(params)) fieldList = params;
-                          else if (params && Array.isArray(params.customFields)) fieldList = params.customFields;
-
-                          if (fieldList && fieldList.length > 0) {
-                            return fieldList.map((f: any, idx: number) => {
-                              const name = f.name || `Param #${idx + 1}`;
-                              const val = f.value !== undefined && f.value !== null ? String(f.value) : "N/A";
-                              const valLower = String(val).toLowerCase();
-                              const isAbnormal = valLower === "0" || valLower.includes("crit") || valLower.includes("warn") || valLower.includes("fail") || valLower.includes("leak");
-
-                              return (
-                                <span
-                                  key={idx}
-                                  className={`rounded-lg px-2.5 py-1 text-[10px] font-bold border ${
-                                    isAbnormal
-                                      ? "bg-amber-100/90 text-amber-900 dark:bg-amber-950/70 dark:text-amber-200 border-amber-300 dark:border-amber-800"
-                                      : "bg-emerald-100/80 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200 border-emerald-300 dark:border-emerald-800"
-                                  }`}
-                                >
-                                  {name}: {val}
-                                </span>
-                              );
-                            });
-                          }
-
-                          return (
-                            <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500 italic">
-                              No inspection parameters added yet
-                            </span>
-                          );
-                        })()}
-                      </div>
-
-                      {/* Component Trend Area Chart Driven by Operator Log Ratings */}
-                      <div className="h-28 w-full">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <AreaChart
-                            data={[
-                              { hour: "08:00", val: Math.min(100, health + 10) },
-                              { hour: "10:00", val: Math.min(100, health + 5) },
-                              { hour: "12:00", val: health },
-                              { hour: "14:00", val: Math.max(20, health - 3) },
-                              { hour: "16:00", val: health },
-                            ]}
-                            margin={{ top: 5, right: 5, left: -25, bottom: 0 }}
-                          >
-                            <defs>
-                              <linearGradient id={`grad_${component.id}`} x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor={health >= 80 ? "#10b981" : health >= 50 ? "#f59e0b" : "#ef4444"} stopOpacity={0.4} />
-                                <stop offset="95%" stopColor={health >= 80 ? "#10b981" : health >= 50 ? "#f59e0b" : "#ef4444"} stopOpacity={0} />
-                              </linearGradient>
-                            </defs>
-                            <CartesianGrid strokeDasharray="2 2" stroke="#334155" opacity={0.2} vertical={false} />
-                            <XAxis dataKey="hour" tick={{ fontSize: 9, fill: "#64748b" }} />
-                            <YAxis domain={[0, 100]} tick={{ fontSize: 9, fill: "#64748b" }} />
-                            <Tooltip
-                              contentStyle={{
-                                background: "#0f172a",
-                                borderColor: "#334155",
-                                borderRadius: "8px",
-                                color: "#fff",
-                                fontSize: "10px",
-                              }}
-                            />
-                            <Area
-                              type="monotone"
-                              dataKey="val"
-                              name="Operator Inspection Rating %"
-                              stroke={health >= 80 ? "#10b981" : health >= 50 ? "#f59e0b" : "#ef4444"}
-                              strokeWidth={2}
-                              fillOpacity={1}
-                              fill={`url(#grad_${component.id})`}
-                            />
-                          </AreaChart>
-                        </ResponsiveContainer>
-                      </div>
-                      <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400 italic font-medium">
-                        📋 Data sourced from Daily Shift Inspection Report logged by Machine Operator
-                      </p>
-                    </div>
-
-                    {/* Actions */}
-                    <div className="mt-5 flex items-center">
-                      <button
-                        onClick={() => handleViewDetails(component)}
-                        className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white transition duration-300 hover:bg-blue-700 hover:shadow-lg"
-                      >
-                        <Eye size={18} />
-                        View Full Details
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
               </div>
 
               <div className="border-t border-slate-200 p-4 dark:border-slate-800">
@@ -1190,7 +1362,9 @@ export default function SupervisorComponentsPage() {
                   itemsPerPage={itemsPerPage}
                   itemLabel="components"
                   onPrev={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-                  onNext={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                  onNext={() =>
+                    setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+                  }
                   onPageChange={setCurrentPage}
                   onItemsPerPageChange={(val) => {
                     setItemsPerPage(val);
@@ -1205,7 +1379,7 @@ export default function SupervisorComponentsPage() {
           {isViewModalOpen && selectedComponent && (
             <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/80 p-4 backdrop-blur-md">
               <div className="max-h-[85vh] w-full max-w-3xl overflow-hidden rounded-3xl bg-white shadow-2xl dark:bg-[#07111f]">
-                 <div className="flex items-center justify-between border-b border-blue-500/30 bg-gradient-to-r from-blue-800 via-blue-700 to-indigo-700 px-6 py-4">
+                <div className="flex items-center justify-between border-b border-blue-500/30 bg-gradient-to-r from-blue-800 via-blue-700 to-indigo-700 px-6 py-4">
                   <div>
                     <h2 className="text-2xl font-extrabold text-white">
                       Component Details
@@ -1231,9 +1405,11 @@ export default function SupervisorComponentsPage() {
                       (m) => m.machineId === selectedComponent.machineId,
                     );
 
-                    const healthInfo = getComponentHealthInfo(selectedComponent);
+                    const healthInfo =
+                      getComponentHealthInfo(selectedComponent);
                     const style = healthInfo;
-                    const health = healthInfo.score !== null ? healthInfo.score : 0;
+                    const health =
+                      healthInfo.score !== null ? healthInfo.score : 0;
 
                     const modalArtisan =
                       (selectedComponent as any).assignedArtisanName ||
@@ -1324,7 +1500,6 @@ export default function SupervisorComponentsPage() {
                           </div>
 
                           <div className="grid grid-cols-1 gap-4 p-5 sm:grid-cols-2">
-
                             <div>
                               <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
                                 Description
@@ -1349,9 +1524,13 @@ export default function SupervisorComponentsPage() {
                               </p>
                               <p className="mt-1 text-sm font-bold">
                                 {modalArtisan ? (
-                                  <span className="text-blue-600 dark:text-blue-400">{modalArtisan}</span>
+                                  <span className="text-blue-600 dark:text-blue-400">
+                                    {modalArtisan}
+                                  </span>
                                 ) : (
-                                  <span className="font-bold text-emerald-600 dark:text-emerald-400">Unassigned</span>
+                                  <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                                    Unassigned
+                                  </span>
                                 )}
                               </p>
                             </div>
@@ -1362,9 +1541,13 @@ export default function SupervisorComponentsPage() {
                               </p>
                               <p className="mt-1 text-sm font-bold">
                                 {modalSupervisor ? (
-                                  <span className="text-emerald-600 dark:text-emerald-400">{modalSupervisor}</span>
+                                  <span className="text-emerald-600 dark:text-emerald-400">
+                                    {modalSupervisor}
+                                  </span>
                                 ) : (
-                                  <span className="font-bold text-emerald-600 dark:text-emerald-400">Unassigned</span>
+                                  <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                                    Unassigned
+                                  </span>
                                 )}
                               </p>
                             </div>
@@ -1374,7 +1557,9 @@ export default function SupervisorComponentsPage() {
                                 Health Status
                               </p>
                               <p className="mt-1 text-sm font-bold dark:text-white">
-                                {healthInfo.hasData && healthInfo.score !== null ? `${healthInfo.score}%` : "Not Inspected Yet"}
+                                {healthInfo.hasData && healthInfo.score !== null
+                                  ? `${healthInfo.score}%`
+                                  : "Not Inspected Yet"}
                               </p>
                             </div>
                           </div>
@@ -1383,7 +1568,9 @@ export default function SupervisorComponentsPage() {
                             <div className="h-3 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
                               <div
                                 className={`h-full rounded-full transition-all duration-500 ${style.progress}`}
-                                style={{ width: `${healthInfo.hasData && healthInfo.score !== null ? healthInfo.score : 0}%` }}
+                                style={{
+                                  width: `${healthInfo.hasData && healthInfo.score !== null ? healthInfo.score : 0}%`,
+                                }}
                               />
                             </div>
                           </div>
@@ -1396,43 +1583,65 @@ export default function SupervisorComponentsPage() {
                                 Operator Component Inspection Parameters
                               </span>
                               <span className="text-[10px] text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 px-2.5 py-1 rounded-full border border-blue-200 dark:border-blue-800 font-bold">
-                                {healthInfo.hasData ? "📋 Daily Shift Report Data" : "⏳ Pending Inspection"}
+                                {healthInfo.hasData
+                                  ? "📋 Daily Shift Report Data"
+                                  : "⏳ Pending Inspection"}
                               </span>
                             </div>
 
                             {/* Operator Reported Inspection Metrics */}
                             <div className="flex flex-wrap items-center gap-2 mb-4">
                               {(() => {
-                                const params = selectedComponent.inspectionParameters || (selectedComponent as any).parameters;
+                                const params =
+                                  selectedComponent.inspectionParameters ||
+                                  (selectedComponent as any).parameters;
                                 let fieldList: any[] = [];
                                 if (Array.isArray(params)) fieldList = params;
-                                else if (params && Array.isArray(params.customFields)) fieldList = params.customFields;
+                                else if (
+                                  params &&
+                                  Array.isArray(params.customFields)
+                                )
+                                  fieldList = params.customFields;
 
                                 if (fieldList && fieldList.length > 0) {
-                                  return fieldList.map((f: any, idx: number) => {
-                                    const name = f.name || `Param #${idx + 1}`;
-                                    const val = f.value !== undefined && f.value !== null ? String(f.value) : "N/A";
-                                    const valLower = String(val).toLowerCase();
-                                    const isAbnormal = valLower === "0" || valLower.includes("crit") || valLower.includes("warn") || valLower.includes("fail") || valLower.includes("leak");
+                                  return fieldList.map(
+                                    (f: any, idx: number) => {
+                                      const name =
+                                        f.name || `Param #${idx + 1}`;
+                                      const val =
+                                        f.value !== undefined &&
+                                        f.value !== null
+                                          ? String(f.value)
+                                          : "N/A";
+                                      const valLower =
+                                        String(val).toLowerCase();
+                                      const isAbnormal =
+                                        valLower === "0" ||
+                                        valLower.includes("crit") ||
+                                        valLower.includes("warn") ||
+                                        valLower.includes("fail") ||
+                                        valLower.includes("leak");
 
-                                    return (
-                                      <span
-                                        key={idx}
-                                        className={`rounded-lg px-3 py-1.5 text-xs font-bold border ${
-                                          isAbnormal
-                                            ? "bg-amber-100/90 text-amber-900 dark:bg-amber-950/70 dark:text-amber-200 border-amber-300 dark:border-amber-800"
-                                            : "bg-emerald-100/80 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200 border-emerald-300 dark:border-emerald-800"
-                                        }`}
-                                      >
-                                        {name}: {val}
-                                      </span>
-                                    );
-                                  });
+                                      return (
+                                        <span
+                                          key={idx}
+                                          className={`rounded-lg px-3 py-1.5 text-xs font-bold border ${
+                                            isAbnormal
+                                              ? "bg-amber-100/90 text-amber-900 dark:bg-amber-950/70 dark:text-amber-200 border-amber-300 dark:border-amber-800"
+                                              : "bg-emerald-100/80 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200 border-emerald-300 dark:border-emerald-800"
+                                          }`}
+                                        >
+                                          {name}: {val}
+                                        </span>
+                                      );
+                                    },
+                                  );
                                 }
 
                                 return (
                                   <span className="text-xs font-medium text-slate-400 dark:text-slate-500 italic">
-                                    No inspection parameters or comments added yet
+                                    No inspection parameters or comments added
+                                    yet
                                   </span>
                                 );
                               })()}
@@ -1443,24 +1652,78 @@ export default function SupervisorComponentsPage() {
                               <ResponsiveContainer width="100%" height="100%">
                                 <AreaChart
                                   data={[
-                                    { hour: "06:00", val: Math.min(100, health + 12) },
-                                    { hour: "08:00", val: Math.min(100, health + 8) },
-                                    { hour: "10:00", val: Math.min(100, health + 4) },
+                                    {
+                                      hour: "06:00",
+                                      val: Math.min(100, health + 12),
+                                    },
+                                    {
+                                      hour: "08:00",
+                                      val: Math.min(100, health + 8),
+                                    },
+                                    {
+                                      hour: "10:00",
+                                      val: Math.min(100, health + 4),
+                                    },
                                     { hour: "12:00", val: health },
-                                    { hour: "14:00", val: Math.max(20, health - 4) },
+                                    {
+                                      hour: "14:00",
+                                      val: Math.max(20, health - 4),
+                                    },
                                     { hour: "16:00", val: health },
                                   ]}
-                                  margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                                  margin={{
+                                    top: 10,
+                                    right: 10,
+                                    left: -20,
+                                    bottom: 0,
+                                  }}
                                 >
                                   <defs>
-                                    <linearGradient id={`grad_modal_${selectedComponent.id}`} x1="0" y1="0" x2="0" y2="1">
-                                      <stop offset="5%" stopColor={health >= 80 ? "#10b981" : health >= 50 ? "#f59e0b" : "#ef4444"} stopOpacity={0.45} />
-                                      <stop offset="95%" stopColor={health >= 80 ? "#10b981" : health >= 50 ? "#f59e0b" : "#ef4444"} stopOpacity={0} />
+                                    <linearGradient
+                                      id={`grad_modal_${selectedComponent.id}`}
+                                      x1="0"
+                                      y1="0"
+                                      x2="0"
+                                      y2="1"
+                                    >
+                                      <stop
+                                        offset="5%"
+                                        stopColor={
+                                          health >= 80
+                                            ? "#10b981"
+                                            : health >= 50
+                                              ? "#f59e0b"
+                                              : "#ef4444"
+                                        }
+                                        stopOpacity={0.45}
+                                      />
+                                      <stop
+                                        offset="95%"
+                                        stopColor={
+                                          health >= 80
+                                            ? "#10b981"
+                                            : health >= 50
+                                              ? "#f59e0b"
+                                              : "#ef4444"
+                                        }
+                                        stopOpacity={0}
+                                      />
                                     </linearGradient>
                                   </defs>
-                                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.2} vertical={false} />
-                                  <XAxis dataKey="hour" tick={{ fontSize: 10, fill: "#64748b" }} />
-                                  <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: "#64748b" }} />
+                                  <CartesianGrid
+                                    strokeDasharray="3 3"
+                                    stroke="#334155"
+                                    opacity={0.2}
+                                    vertical={false}
+                                  />
+                                  <XAxis
+                                    dataKey="hour"
+                                    tick={{ fontSize: 10, fill: "#64748b" }}
+                                  />
+                                  <YAxis
+                                    domain={[0, 100]}
+                                    tick={{ fontSize: 10, fill: "#64748b" }}
+                                  />
                                   <Tooltip
                                     contentStyle={{
                                       background: "#0f172a",
@@ -1474,7 +1737,13 @@ export default function SupervisorComponentsPage() {
                                     type="monotone"
                                     dataKey="val"
                                     name="Operator Inspection Score %"
-                                    stroke={health >= 80 ? "#10b981" : health >= 50 ? "#f59e0b" : "#ef4444"}
+                                    stroke={
+                                      health >= 80
+                                        ? "#10b981"
+                                        : health >= 50
+                                          ? "#f59e0b"
+                                          : "#ef4444"
+                                    }
                                     strokeWidth={2.5}
                                     fillOpacity={1}
                                     fill={`url(#grad_modal_${selectedComponent.id})`}
@@ -1483,7 +1752,8 @@ export default function SupervisorComponentsPage() {
                               </ResponsiveContainer>
                             </div>
                             <p className="mt-2 text-center text-xs text-slate-500 dark:text-slate-400 italic font-medium">
-                              📋 Operator Daily Shift Inspection Report Data (Source: Shift Operator Logbook)
+                              📋 Operator Daily Shift Inspection Report Data
+                              (Source: Shift Operator Logbook)
                             </p>
                           </div>
                         </div>
@@ -1499,7 +1769,7 @@ export default function SupervisorComponentsPage() {
           {isFormModalOpen && (
             <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/80 p-4 backdrop-blur-md">
               <div className="max-h-[90vh] w-full max-w-2xl overflow-hidden rounded-3xl bg-white shadow-2xl dark:bg-[#07111f]">
-              <div className="flex items-center justify-between border-b border-blue-500/30 bg-gradient-to-r from-blue-800 via-blue-700 to-indigo-700 px-6 py-4">
+                <div className="flex items-center justify-between border-b border-blue-500/30 bg-gradient-to-r from-blue-800 via-blue-700 to-indigo-700 px-6 py-4">
                   <div>
                     <h2 className="text-2xl font-extrabold text-white">
                       {formMode === "add" ? "Add Component" : "Edit Component"}
@@ -1514,7 +1784,7 @@ export default function SupervisorComponentsPage() {
 
                   <button
                     onClick={handleCloseFormModal}
-                     className="rounded-xl bg-gray-100 px-4 py-2 text-sm font-bold text-black transition hover:bg-gray-300"
+                    className="rounded-xl bg-gray-100 px-4 py-2 text-sm font-bold text-black transition hover:bg-gray-300"
                   >
                     <X size={18} />
                   </button>

@@ -33,7 +33,7 @@ export const CompanyPendingApprovalView: React.FC<
   const handleCheckStatus = async () => {
     try {
       setChecking(true);
-      const res = await authService.getMe();
+            const res = (await authService.getMe()) as any;
       const latestUser = res?.user || res?.admin || res?.data;
 
       if (latestUser) {

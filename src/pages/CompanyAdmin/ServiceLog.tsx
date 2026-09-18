@@ -449,7 +449,7 @@ export default function ServiceLogs() {
                   >
                     <option value="All">🛡️ All Supervisors</option>
                     {uniqueSupervisors
-                      .filter((s) => s !== "All")
+                      .filter((s): s is string => Boolean(s) && s !== "All")
                       .map((sup) => (
                         <option key={sup} value={sup}>
                           {sup}
@@ -826,3 +826,4 @@ function AssignmentDetailModal({
     document.body
   );
 }
+

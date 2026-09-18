@@ -62,6 +62,7 @@ type MachineComponent = {
     subscriptionStatus?: string;
   };
   machine?: any;
+  name: string;
   category: string;
   description: string;
   serialNumber: string;
@@ -1004,7 +1005,7 @@ const ComponentManagement: React.FC = () => {
         ? form.customCategory.trim()
         : form.category.trim() || "General";
 
-    const payload = {
+        const payload = {
       name: form.name.trim(),
       category: finalCategory,
       description: form.description.trim() || form.name.trim(),
@@ -1015,7 +1016,7 @@ const ComponentManagement: React.FC = () => {
       plannedLife: Number(form.plannedLife),
       replacementCost: Number(form.replacementCost || 0),
       condition: Number(form.condition),
-      parentComponentId: form.parentComponentId.trim() || null,
+      parentComponentId: form.parentComponentId.trim() || undefined,
     };
 
     try {

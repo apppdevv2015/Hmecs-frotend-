@@ -33,7 +33,6 @@ interface ConfirmConfig {
   onConfirm: () => void;
 }
 
-
 // ════════════════════════════════════════════════════════════════════════════
 // CONFIG MAPS
 // ════════════════════════════════════════════════════════════════════════════
@@ -108,7 +107,6 @@ const ROLE_CFG: Record<Role, { label: string; color: string; bg: string }> = {
     bg: "bg-indigo-100 dark:bg-indigo-500/10",
   },
 };
-
 const ACTION_CFG: Record<
   HistoryEntry["action"],
   {

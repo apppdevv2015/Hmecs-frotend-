@@ -1,4 +1,10 @@
-import { useMemo, useState, useEffect, useCallback, type ReactNode } from "react";
+import {
+  useMemo,
+  useState,
+  useEffect,
+  useCallback,
+  type ReactNode,
+} from "react";
 import { Link, useNavigate } from "react-router-dom";
 import ReactECharts from "echarts-for-react";
 import type { EChartsOption } from "echarts";
@@ -130,20 +136,27 @@ export default function ArtisansDashboard() {
     StorageService.get<any>(STORAGE_KEYS.USER) ||
     StorageService.get<any>("user") ||
     {};
-  const userName = storedUser?.name || storedUser?.fullName || "Artisan Technician";
+  const userName =
+    storedUser?.name || storedUser?.fullName || "Artisan Technician";
   const userRole = storedUser?.role || "ARTISAN";
 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [alertsState, setAlertsState] = useState<AlertItem[]>([]);
-  const [machineHealthState, setMachineHealthState] = useState<MachineHealth[]>([]);
+  const [machineHealthState, setMachineHealthState] = useState<MachineHealth[]>(
+    [],
+  );
   const [isLoading, setIsLoading] = useState(true);
   const [activeModal, setActiveModal] = useState<ModalType>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [selectedAlert, setSelectedAlert] = useState<AlertItem | null>(null);
-  const [selectedMachine, setSelectedMachine] = useState<MachineHealth | null>(null);
+  const [selectedMachine, setSelectedMachine] = useState<MachineHealth | null>(
+    null,
+  );
   const [confirmTask, setConfirmTask] = useState<Task | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [taskStatusFilter, setTaskStatusFilter] = useState<TaskStatus | "All">("All");
+  const [taskStatusFilter, setTaskStatusFilter] = useState<TaskStatus | "All">(
+    "All",
+  );
   const [priorityFilter, setPriorityFilter] = useState<Priority | "All">("All");
 
   const [fleetMachines, setFleetMachines] = useState<any[]>([]);
@@ -163,15 +176,18 @@ export default function ArtisansDashboard() {
       setIsLoading(true);
 
       const userCompanyId = StorageService.getCompanyId() || "";
-      const currentUserId = String(storedUser?.id || storedUser?.userId || "").toLowerCase().trim();
+      const currentUserId = String(storedUser?.id || storedUser?.userId || "")
+        .toLowerCase()
+        .trim();
 
-      // 1. Fetch Fleet Machines & Assignments directly from PostgreSQL
+           type FleetApiResponse = unknown[] | { data?: unknown[]; machines?: unknown[] };
+
       let rawMachines: any[] = [];
       try {
-        const fleetRes = await fleetService.getFleetMachines();
-        if (Array.isArray(fleetRes)) rawMachines = fleetRes;
-        else if (Array.isArray(fleetRes?.data)) rawMachines = fleetRes.data;
-        else if (Array.isArray(fleetRes?.machines)) rawMachines = fleetRes.machines;
+        const fleetRes = (await fleetService.getFleetMachines()) as FleetApiResponse;
+        if (Array.isArray(fleetRes)) rawMachines = fleetRes as any[];
+        else if (Array.isArray(fleetRes.data)) rawMachines = fleetRes.data as any[];
+        else if (Array.isArray(fleetRes.machines)) rawMachines = fleetRes.machines as any[];
       } catch {
         rawMachines = [];
       }
@@ -179,7 +195,12 @@ export default function ArtisansDashboard() {
       // Filter for this company
       const companyMachines = rawMachines.filter((m: any) => {
         if (!m) return false;
-        if (userCompanyId && m.companyId && String(m.companyId) !== userCompanyId) return false;
+        if (
+          userCompanyId &&
+          m.companyId &&
+          String(m.companyId) !== userCompanyId
+        )
+          return false;
         return true;
       });
 
@@ -193,14 +214,17 @@ export default function ArtisansDashboard() {
           0;
 
         const health = m.healthPercent ?? m.healthScore ?? 95;
-        const status = health >= 80 ? "Healthy" : health >= 60 ? "Warning" : "Critical";
+        const status =
+          health >= 80 ? "Healthy" : health >= 60 ? "Warning" : "Critical";
 
         return {
           id: m.machineId || m.id,
           machineId: m.machineId || m.id,
           name: cleanMachineName(m.machineName || m.name),
           machineName: cleanMachineName(m.machineName || m.name),
-          serialNumber: String(m.serialNumber || m.fleetId || "SN-HME-1001").replace(/^DEMO-/i, ""),
+          serialNumber: String(
+            m.serialNumber || m.fleetId || "SN-HME-1001",
+          ).replace(/^DEMO-/i, ""),
           category: m.equipmentType || m.category || "Heavy Machinery",
           location: m.location || m.site || "Mining Pit A",
           hoursRun: Number(rawHours || 0),
@@ -227,9 +251,15 @@ export default function ArtisansDashboard() {
 
       setMachineHealthState(machineHealth);
 
-      const healthyCount = matchedMachines.filter((m) => m.status === "Healthy").length;
-      const warnCount = matchedMachines.filter((m) => m.status === "Warning").length;
-      const critCount = matchedMachines.filter((m) => m.status === "Critical").length;
+      const healthyCount = matchedMachines.filter(
+        (m) => m.status === "Healthy",
+      ).length;
+      const warnCount = matchedMachines.filter(
+        (m) => m.status === "Warning",
+      ).length;
+      const critCount = matchedMachines.filter(
+        (m) => m.status === "Critical",
+      ).length;
 
       setFleetStats({
         totalMachines: matchedMachines.length,
@@ -255,23 +285,44 @@ export default function ArtisansDashboard() {
           }
 
           let status: TaskStatus = "Pending";
-          if (log.status === "Closed" || log.status === "Completed") status = "Completed";
-          else if (log.status === "In Progress" || log.status === "Active") status = "In Progress";
+          if (log.status === "Closed" || log.status === "Completed")
+            status = "Completed";
+          else if (log.status === "In Progress" || log.status === "Active")
+            status = "In Progress";
 
-          const rawDueDate = log.downtime || log.date || log.createdAt || new Date().toISOString();
-          const rawAssignedDate = log.date || log.createdAt || new Date().toISOString();
+          const rawDueDate =
+            log.downtime ||
+            log.date ||
+            log.createdAt ||
+            new Date().toISOString();
+          const rawAssignedDate =
+            log.date || log.createdAt || new Date().toISOString();
 
           return {
-            id: `TSK-${String(log.id || idx + 1).slice(0, 5).toUpperCase()}`,
+            id: `TSK-${String(log.id || idx + 1)
+              .slice(0, 5)
+              .toUpperCase()}`,
             realId: log.id,
-            machine: cleanMachineName(log.machine?.name || log.machineName || matchedMachines[0]?.name || "Mining Unit"),
-            issue: log.work || log.description || "Diagnostic & Component Verification",
+            machine: cleanMachineName(
+              log.machine?.name ||
+                log.machineName ||
+                matchedMachines[0]?.name ||
+                "Mining Unit",
+            ),
+            issue:
+              log.work ||
+              log.description ||
+              "Diagnostic & Component Verification",
             priority,
             status,
             assignedDate: formatDate(rawAssignedDate),
             dueDate: formatDate(rawDueDate),
-            location: log.machine?.site || log.location || "Site A - Workshop Bay",
-            description: log.work || log.description || "Routine maintenance inspection & component testing.",
+            location:
+              log.machine?.site || log.location || "Site A - Workshop Bay",
+            description:
+              log.work ||
+              log.description ||
+              "Routine maintenance inspection & component testing.",
           };
         });
 
@@ -282,25 +333,33 @@ export default function ArtisansDashboard() {
           setTasks([
             {
               id: "TSK-001",
-              machine: matchedMachines[0]?.name || "Hitachi ATC-604 All Terrain Crane",
+              machine:
+                matchedMachines[0]?.name || "Hitachi ATC-604 All Terrain Crane",
               issue: "Hydraulic Pump Calibration & Pressure Check",
               priority: "High",
               status: "In Progress",
               assignedDate: formatDate(new Date().toISOString()),
-              dueDate: formatDate(new Date(Date.now() + 86400000).toISOString()),
+              dueDate: formatDate(
+                new Date(Date.now() + 86400000).toISOString(),
+              ),
               location: "Workshop Bay 2",
-              description: "Perform hydraulic valve calibration, filter check, and test line pressure.",
+              description:
+                "Perform hydraulic valve calibration, filter check, and test line pressure.",
             },
             {
               id: "TSK-002",
-              machine: matchedMachines[0]?.name || "Hitachi ATC-604 All Terrain Crane",
+              machine:
+                matchedMachines[0]?.name || "Hitachi ATC-604 All Terrain Crane",
               issue: "Engine Oil Sampling & Diagnostic Telemetry",
               priority: "Medium",
               status: "Pending",
               assignedDate: formatDate(new Date().toISOString()),
-              dueDate: formatDate(new Date(Date.now() + 172800000).toISOString()),
+              dueDate: formatDate(
+                new Date(Date.now() + 172800000).toISOString(),
+              ),
               location: "Pit A - Field Station",
-              description: "Extract oil sample for wear metal analysis and sign off telemetry log.",
+              description:
+                "Extract oil sample for wear metal analysis and sign off telemetry log.",
             },
           ]);
         }
@@ -310,12 +369,18 @@ export default function ArtisansDashboard() {
 
       // 3. Fetch Alerts from Telemetry & Audit Logs
       try {
-        const queryParam = userCompanyId ? `?companyId=${encodeURIComponent(userCompanyId)}` : "";
-        const historyRes: any = await apiCall(`/machines/inspection-history${queryParam}`, { method: "GET" }, { showError: false })
-          .catch(() => null);
+        const queryParam = userCompanyId
+          ? `?companyId=${encodeURIComponent(userCompanyId)}`
+          : "";
+        const historyRes: any = await apiCall(
+          `/machines/inspection-history${queryParam}`,
+          { method: "GET" },
+          { showError: false },
+        ).catch(() => null);
 
         let logs: any[] = [];
-        if (Array.isArray(historyRes?.data?.historyLogs)) logs = historyRes.data.historyLogs;
+        if (Array.isArray(historyRes?.data?.historyLogs))
+          logs = historyRes.data.historyLogs;
         else if (Array.isArray(historyRes?.data)) logs = historyRes.data;
         else if (Array.isArray(historyRes)) logs = historyRes;
 
@@ -324,15 +389,27 @@ export default function ArtisansDashboard() {
         const alerts: AlertItem[] = [];
         logs.forEach((log: any, idx: number) => {
           const score = log.overallMachineHealth ?? 100;
-          if (score < 85 || log.status === "Warning" || log.status === "Critical") {
+          if (
+            score < 85 ||
+            log.status === "Warning" ||
+            log.status === "Critical"
+          ) {
             alerts.push({
               id: `ALT-${log.id || idx + 1}`,
               machine: cleanMachineName(log.machineName || "Mining Machine"),
-              issue: log.componentName ? `${log.componentName} wear observed` : "Component anomaly detected",
-              severity: score < 60 || log.status === "Critical" ? "Critical" : "Warning",
+              issue: log.componentName
+                ? `${log.componentName} wear observed`
+                : "Component anomaly detected",
+              severity:
+                score < 60 || log.status === "Critical"
+                  ? "Critical"
+                  : "Warning",
               time: formatDate(log.createdAt),
               location: "Active Pit Site",
-              recommendation: score < 60 ? "Immediate component replacement required" : "Detailed artisan inspection recommended",
+              recommendation:
+                score < 60
+                  ? "Immediate component replacement required"
+                  : "Detailed artisan inspection recommended",
             });
           }
         });
@@ -343,12 +420,14 @@ export default function ArtisansDashboard() {
           setAlertsState([
             {
               id: "ALT-01",
-              machine: matchedMachines[0]?.name || "Hitachi ATC-604 All Terrain Crane",
+              machine:
+                matchedMachines[0]?.name || "Hitachi ATC-604 All Terrain Crane",
               issue: "Hydraulic System Filter Replacement Cycle Due",
               severity: "Warning",
               time: "Today",
               location: "Site A - Workshop",
-              recommendation: "Inspect hydraulic filter element and verify flow rate during shift.",
+              recommendation:
+                "Inspect hydraulic filter element and verify flow rate during shift.",
             },
           ]);
         }
@@ -390,9 +469,18 @@ export default function ArtisansDashboard() {
           type: "bar",
           barWidth: "40%",
           data: [
-            { value: fleetStats.healthy, itemStyle: { color: "#10b981", borderRadius: [8, 8, 0, 0] } },
-            { value: fleetStats.Warning, itemStyle: { color: "#f59e0b", borderRadius: [8, 8, 0, 0] } },
-            { value: fleetStats.critical, itemStyle: { color: "#ef4444", borderRadius: [8, 8, 0, 0] } },
+            {
+              value: fleetStats.healthy,
+              itemStyle: { color: "#10b981", borderRadius: [8, 8, 0, 0] },
+            },
+            {
+              value: fleetStats.Warning,
+              itemStyle: { color: "#f59e0b", borderRadius: [8, 8, 0, 0] },
+            },
+            {
+              value: fleetStats.critical,
+              itemStyle: { color: "#ef4444", borderRadius: [8, 8, 0, 0] },
+            },
           ],
         },
       ],
@@ -411,8 +499,10 @@ export default function ArtisansDashboard() {
         task.issue.toLowerCase().includes(query) ||
         task.location.toLowerCase().includes(query);
 
-      const matchesStatus = taskStatusFilter === "All" || task.status === taskStatusFilter;
-      const matchesPriority = priorityFilter === "All" || task.priority === priorityFilter;
+      const matchesStatus =
+        taskStatusFilter === "All" || task.status === taskStatusFilter;
+      const matchesPriority =
+        priorityFilter === "All" || task.priority === priorityFilter;
 
       return matchesSearch && matchesStatus && matchesPriority;
     });
@@ -420,15 +510,22 @@ export default function ArtisansDashboard() {
 
   const confirmTaskStatusChange = async () => {
     if (!confirmTask) return;
-    const nextStatus: TaskStatus = confirmTask.status === "Pending" ? "In Progress" : "Completed";
+    const nextStatus: TaskStatus =
+      confirmTask.status === "Pending" ? "In Progress" : "Completed";
     const dbStatus = nextStatus === "Completed" ? "Closed" : nextStatus;
 
     try {
       setIsLoading(true);
       if (confirmTask.realId) {
-        await maintenanceService.updateLog(confirmTask.realId, { status: dbStatus });
+        await maintenanceService.updateLog(confirmTask.realId, {
+          status: dbStatus,
+        });
       }
-      toast.success(confirmTask.status === "Pending" ? "Task started successfully" : "Task completed successfully");
+      toast.success(
+        confirmTask.status === "Pending"
+          ? "Task started successfully"
+          : "Task completed successfully",
+      );
       await loadDashboardData();
     } catch (err: any) {
       toast.error(err.message || "Failed to update task");
@@ -438,9 +535,13 @@ export default function ArtisansDashboard() {
     }
   };
 
-  const avgFleetHealth = fleetMachines.length > 0
-    ? Math.round(fleetMachines.reduce((acc, m) => acc + m.healthPercent, 0) / fleetMachines.length)
-    : 92;
+  const avgFleetHealth =
+    fleetMachines.length > 0
+      ? Math.round(
+          fleetMachines.reduce((acc, m) => acc + m.healthPercent, 0) /
+            fleetMachines.length,
+        )
+      : 92;
 
   return (
     <div className="min-h-screen bg-[#f8fafc] p-4 font-sans text-slate-900 antialiased dark:bg-[#07111f] dark:text-slate-50 sm:p-6 lg:p-8 space-y-6">
@@ -461,7 +562,9 @@ export default function ArtisansDashboard() {
             </h1>
 
             <p className="max-w-2xl text-xs font-semibold leading-relaxed text-blue-100 sm:text-sm">
-              Manage equipment maintenance work orders, execute component diagnostics, monitor real-time telemetry, and authorize inspection logs.
+              Manage equipment maintenance work orders, execute component
+              diagnostics, monitor real-time telemetry, and authorize inspection
+              logs.
             </p>
           </div>
 
@@ -470,11 +573,16 @@ export default function ArtisansDashboard() {
               type="button"
               onClick={() => {
                 loadDashboardData();
-                showSuccessToast("Refreshed maintenance & fleet telemetry from database!");
+                showSuccessToast(
+                  "Refreshed maintenance & fleet telemetry from database!",
+                );
               }}
               className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 text-xs font-bold text-white backdrop-blur-md transition hover:bg-white/20 cursor-pointer"
             >
-              <RefreshCw size={15} className={isLoading ? "animate-spin" : ""} />
+              <RefreshCw
+                size={15}
+                className={isLoading ? "animate-spin" : ""}
+              />
               Refresh Telemetry
             </button>
 
@@ -498,8 +606,12 @@ export default function ArtisansDashboard() {
               <CheckCircle2 size={16} />
             </div>
             <div className="min-w-0">
-              <p className="truncate text-xs font-bold text-white">Pre-Start Inspection</p>
-              <p className="text-[10px] text-blue-200">Artisan Inspection Scope</p>
+              <p className="truncate text-xs font-bold text-white">
+                Pre-Start Inspection
+              </p>
+              <p className="text-[10px] text-blue-200">
+                Artisan Inspection Scope
+              </p>
             </div>
           </Link>
 
@@ -511,7 +623,9 @@ export default function ArtisansDashboard() {
               <ClipboardList size={16} />
             </div>
             <div className="min-w-0">
-              <p className="truncate text-xs font-bold text-white">Artisans Tasks</p>
+              <p className="truncate text-xs font-bold text-white">
+                Artisans Tasks
+              </p>
               <p className="text-[10px] text-blue-200">Work Orders & Jobs</p>
             </div>
           </Link>
@@ -524,8 +638,12 @@ export default function ArtisansDashboard() {
               <HistoryIcon size={16} />
             </div>
             <div className="min-w-0">
-              <p className="truncate text-xs font-bold text-white">Service Logs</p>
-              <p className="text-[10px] text-blue-200">Database History & Audit</p>
+              <p className="truncate text-xs font-bold text-white">
+                Service Logs
+              </p>
+              <p className="text-[10px] text-blue-200">
+                Database History & Audit
+              </p>
             </div>
           </Link>
 
@@ -537,8 +655,12 @@ export default function ArtisansDashboard() {
               <AlertTriangle size={16} />
             </div>
             <div className="min-w-0">
-              <p className="truncate text-xs font-bold text-white">Alerts & Hazards</p>
-              <p className="text-[10px] text-blue-200">Predictive Diagnostics</p>
+              <p className="truncate text-xs font-bold text-white">
+                Alerts & Hazards
+              </p>
+              <p className="text-[10px] text-blue-200">
+                Predictive Diagnostics
+              </p>
             </div>
           </Link>
         </div>
@@ -560,7 +682,8 @@ export default function ArtisansDashboard() {
             {tasks.length}
           </p>
           <p className="mt-1 text-xs font-semibold text-slate-400">
-            {tasks.filter((t) => t.status === "In Progress").length} In Progress • {tasks.filter((t) => t.status === "Pending").length} Pending
+            {tasks.filter((t) => t.status === "In Progress").length} In Progress
+            • {tasks.filter((t) => t.status === "Pending").length} Pending
           </p>
         </div>
 
@@ -647,7 +770,12 @@ export default function ArtisansDashboard() {
           </div>
 
           <div className="mt-4 h-64 w-full">
-            {chartOption && <ReactECharts option={chartOption} style={{ height: "100%", width: "100%" }} />}
+            {chartOption && (
+              <ReactECharts
+                option={chartOption}
+                style={{ height: "100%", width: "100%" }}
+              />
+            )}
           </div>
         </div>
 
@@ -658,7 +786,10 @@ export default function ArtisansDashboard() {
               <h3 className="text-base font-black text-slate-900 dark:text-white">
                 Priority Alerts ({alertsState.length})
               </h3>
-              <Link to="/artisans/alerts" className="text-xs font-bold text-blue-600 hover:underline dark:text-blue-400">
+              <Link
+                to="/artisans/alerts"
+                className="text-xs font-bold text-blue-600 hover:underline dark:text-blue-400"
+              >
                 View All
               </Link>
             </div>
@@ -671,13 +802,19 @@ export default function ArtisansDashboard() {
                   className="rounded-xl border border-amber-200/80 bg-amber-50/50 p-3 transition hover:bg-amber-50 dark:border-amber-900/40 dark:bg-amber-950/20 cursor-pointer"
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-black text-slate-900 dark:text-white">{a.machine}</span>
+                    <span className="text-xs font-black text-slate-900 dark:text-white">
+                      {a.machine}
+                    </span>
                     <span className="rounded bg-amber-100 px-2 py-0.5 text-[10px] font-extrabold text-amber-700 dark:bg-amber-900/50 dark:text-amber-300">
                       {a.severity}
                     </span>
                   </div>
-                  <p className="mt-1 text-xs font-semibold text-slate-700 dark:text-slate-200">{a.issue}</p>
-                  <p className="mt-0.5 text-[10px] text-slate-400">📍 {a.location} • {a.time}</p>
+                  <p className="mt-1 text-xs font-semibold text-slate-700 dark:text-slate-200">
+                    {a.issue}
+                  </p>
+                  <p className="mt-0.5 text-[10px] text-slate-400">
+                    📍 {a.location} • {a.time}
+                  </p>
                 </div>
               ))}
             </div>
@@ -719,20 +856,22 @@ export default function ArtisansDashboard() {
               </div>
 
               <div className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 p-1 dark:border-slate-800 dark:bg-[#101f33]">
-                {(["All", "Pending", "In Progress", "Completed"] as const).map((st) => (
-                  <button
-                    key={st}
-                    type="button"
-                    onClick={() => setTaskStatusFilter(st)}
-                    className={`rounded-lg px-2.5 py-1 text-xs font-bold transition cursor-pointer ${
-                      taskStatusFilter === st
-                        ? "bg-blue-600 text-white shadow-sm"
-                        : "text-slate-600 hover:bg-slate-200 dark:text-slate-400 dark:hover:bg-slate-800"
-                    }`}
-                  >
-                    {st}
-                  </button>
-                ))}
+                {(["All", "Pending", "In Progress", "Completed"] as const).map(
+                  (st) => (
+                    <button
+                      key={st}
+                      type="button"
+                      onClick={() => setTaskStatusFilter(st)}
+                      className={`rounded-lg px-2.5 py-1 text-xs font-bold transition cursor-pointer ${
+                        taskStatusFilter === st
+                          ? "bg-blue-600 text-white shadow-sm"
+                          : "text-slate-600 hover:bg-slate-200 dark:text-slate-400 dark:hover:bg-slate-800"
+                      }`}
+                    >
+                      {st}
+                    </button>
+                  ),
+                )}
               </div>
             </div>
           </div>
@@ -755,21 +894,31 @@ export default function ArtisansDashboard() {
             <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
               {filteredTasks.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-xs font-bold text-slate-400">
+                  <td
+                    colSpan={7}
+                    className="px-6 py-12 text-center text-xs font-bold text-slate-400"
+                  >
                     No maintenance tasks found matching filters.
                   </td>
                 </tr>
               ) : (
                 filteredTasks.map((t) => (
-                  <tr key={t.id} className="transition hover:bg-slate-50 dark:hover:bg-white/[0.02]">
+                  <tr
+                    key={t.id}
+                    className="transition hover:bg-slate-50 dark:hover:bg-white/[0.02]"
+                  >
                     <td className="px-6 py-4 font-mono text-xs font-black text-blue-600 dark:text-blue-400">
                       {t.id}
                     </td>
 
                     <td className="px-6 py-4">
                       <div className="flex flex-col">
-                        <span className="text-xs font-black text-slate-900 dark:text-white">{t.machine}</span>
-                        <span className="text-[10px] text-slate-400">📍 {t.location}</span>
+                        <span className="text-xs font-black text-slate-900 dark:text-white">
+                          {t.machine}
+                        </span>
+                        <span className="text-[10px] text-slate-400">
+                          📍 {t.location}
+                        </span>
                       </div>
                     </td>
 
@@ -780,7 +929,9 @@ export default function ArtisansDashboard() {
                     </td>
 
                     <td className="px-6 py-4">
-                      <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wide border ${priorityClass(t.priority)}`}>
+                      <span
+                        className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wide border ${priorityClass(t.priority)}`}
+                      >
                         {t.priority}
                       </span>
                     </td>
@@ -790,7 +941,9 @@ export default function ArtisansDashboard() {
                     </td>
 
                     <td className="px-6 py-4">
-                      <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wide border ${statusClass(t.status)}`}>
+                      <span
+                        className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wide border ${statusClass(t.status)}`}
+                      >
                         {t.status}
                       </span>
                     </td>
@@ -803,7 +956,11 @@ export default function ArtisansDashboard() {
                             onClick={() => setConfirmTask(t)}
                             className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white shadow transition hover:bg-emerald-700 cursor-pointer"
                           >
-                            {t.status === "Pending" ? <PlayCircle size={13} /> : <CheckCircle size={13} />}
+                            {t.status === "Pending" ? (
+                              <PlayCircle size={13} />
+                            ) : (
+                              <CheckCircle size={13} />
+                            )}
                             {t.status === "Pending" ? "Start" : "Complete"}
                           </button>
                         )}
@@ -859,9 +1016,13 @@ export default function ArtisansDashboard() {
                   <span className="rounded bg-white border border-slate-200 px-2 py-0.5 font-mono text-xs font-bold text-blue-700 dark:bg-[#0b1728] dark:border-slate-700 dark:text-blue-300">
                     {m.serialNumber}
                   </span>
-                  <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase ${
-                    m.status === "Healthy" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" : "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300"
-                  }`}>
+                  <span
+                    className={`rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase ${
+                      m.status === "Healthy"
+                        ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+                        : "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300"
+                    }`}
+                  >
                     ● {m.status}
                   </span>
                 </div>
@@ -869,13 +1030,17 @@ export default function ArtisansDashboard() {
                 <h4 className="mt-3 text-base font-black text-slate-900 dark:text-white truncate">
                   {m.name}
                 </h4>
-                <p className="text-xs font-semibold text-slate-400">📍 {m.location}</p>
+                <p className="text-xs font-semibold text-slate-400">
+                  📍 {m.location}
+                </p>
 
                 <div className="mt-4 space-y-2 border-t border-slate-200/80 pt-3 text-xs dark:border-slate-800">
                   <div className="flex items-center justify-between">
                     <span className="text-slate-400">Operating Meter:</span>
                     <span className="font-bold text-slate-800 dark:text-slate-200">
-                      {m.hoursRun > 0 ? `${m.hoursRun.toLocaleString()} hrs` : "0 hrs"}
+                      {m.hoursRun > 0
+                        ? `${m.hoursRun.toLocaleString()} hrs`
+                        : "0 hrs"}
                     </span>
                   </div>
 
@@ -922,11 +1087,17 @@ export default function ArtisansDashboard() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
           <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-[#0b1728]">
             <h4 className="text-base font-black text-slate-900 dark:text-white">
-              {confirmTask.status === "Pending" ? "Start Maintenance Task?" : "Complete Task?"}
+              {confirmTask.status === "Pending"
+                ? "Start Maintenance Task?"
+                : "Complete Task?"}
             </h4>
             <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-              Are you sure you want to mark <strong>{confirmTask.id}</strong> ({confirmTask.issue}) as{" "}
-              <strong>{confirmTask.status === "Pending" ? "In Progress" : "Completed"}</strong>?
+              Are you sure you want to mark <strong>{confirmTask.id}</strong> (
+              {confirmTask.issue}) as{" "}
+              <strong>
+                {confirmTask.status === "Pending" ? "In Progress" : "Completed"}
+              </strong>
+              ?
             </p>
 
             <div className="mt-5 flex justify-end gap-2">
@@ -969,15 +1140,21 @@ export default function ArtisansDashboard() {
             <div className="mt-4 space-y-3 text-xs text-slate-700 dark:text-slate-300">
               <div>
                 <span className="text-slate-400">Equipment:</span>
-                <p className="font-black text-slate-900 dark:text-white">{selectedTask.machine}</p>
+                <p className="font-black text-slate-900 dark:text-white">
+                  {selectedTask.machine}
+                </p>
               </div>
               <div>
                 <span className="text-slate-400">Issue / Scope:</span>
-                <p className="font-bold text-blue-600 dark:text-blue-400">{selectedTask.issue}</p>
+                <p className="font-bold text-blue-600 dark:text-blue-400">
+                  {selectedTask.issue}
+                </p>
               </div>
               <div>
                 <span className="text-slate-400">Description:</span>
-                <p className="font-medium leading-relaxed">{selectedTask.description}</p>
+                <p className="font-medium leading-relaxed">
+                  {selectedTask.description}
+                </p>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>

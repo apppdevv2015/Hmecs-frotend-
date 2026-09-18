@@ -1,6 +1,3 @@
-
-import React from 'react'
-
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   Activity,
@@ -72,6 +69,7 @@ interface Machine {
   sourceCatalog?: string;
   companyId?: string;
   companyName?: string;
+   components?: any[]; 
 }
 
 interface SpecParameter {
@@ -84,56 +82,6 @@ interface SpecParameter {
   description?: string;
 }
 
-
-function LegacyInspectionDataEntry() {
-  const [machines, setMachines] = useState<MachineItem[]>([]);
-  const readOnly = isReadOnlyRole(StorageService.getRole());
-  const [selectedMachineId, setSelectedMachineId] = useState<string>("");
-  const [selectedMachine, setSelectedMachine] = useState<MachineItem | null>(
-    null,
-  );
-
-  const [machineComponents, setMachineComponents] = useState<any[]>([]);
-  const [totalFleetComponents, setTotalFleetComponents] = useState<number>(0);
-  const [loadingComponents, setLoadingComponents] = useState(false);
-  const [componentHealthMap, setComponentHealthMap] = useState<
-    Record<string, { healthScore: number; status: string }>
-  >({});
-
-  // Stored Component Health Records for selected machine
-  const [inspectedRecords, setInspectedRecords] = useState<any[]>([]);
-  const [loadingRecords, setLoadingRecords] = useState(false);
-  const [selectedParamsRecord, setSelectedParamsRecord] = useState<any | null>(
-    null,
-  );
-
-  const loadInspectedRecords = async (machineId: string) => {
-    if (!machineId) return;
-    try {
-      setLoadingRecords(true);
-      const res: any = await machineService.getManualInspectionData(machineId);
-      let records: any[] = [];
-      if (res && res.data && Array.isArray(res.data.records)) {
-        records = res.data.records;
-      } else if (res && Array.isArray(res.records)) {
-        records = res.records;
-      } else if (Array.isArray(res)) {
-        records = res;
-      }
-      setInspectedRecords(records);
-    } catch (err) {
-      console.error("Failed to load component health records:", err);
-      setInspectedRecords([]);
-    } finally {
-      setLoadingRecords(false);
-    }
-  };
-
-  // Dynamic Component Categories State (Fetched from Category Master API)
-  const [categories, setCategories] = useState<DynamicCategory[]>([]);
-  const [loadingCategories, setLoadingCategories] = useState(false);
-  const [activeComponentTab, setActiveComponentTab] =
-    useState<string>("Engine Assembly");
 
 interface SpecComponent {
   name: string;
@@ -176,25 +124,24 @@ const memoryCustomComponents = new Map<string, SpecComponent[]>();
 
 const getCustomComponentsForMachine = (m: Machine | null): SpecComponent[] => {
   if (!m) return [];
-  const machineKey = m.id || m.serialNumber || m.machineId || m.name || m.model;
+    const machineKey = m.id || m.serialNumber || m.machineId || m.name || m.model || "unknown";
   return memoryCustomComponents.get(machineKey) || [];
 };
 
 
 const saveCustomComponentForMachine = (m: Machine, comp: SpecComponent) => {
   try {
-    apiRequest("/machines/custom-components", {
+        apiRequest("/machines/custom-components", {
       method: "POST",
       body: JSON.stringify({
         machineId: m.id,
         name: comp.name,
         category: comp.category,
         parameters: comp.parameters,
-        description: comp.description,
       }),
-    }, { showError: false }).catch(() => null);
+    }).catch(() => null);
 
-    const machineKey = m.id || m.serialNumber || m.machineId || m.name || m.model;
+       const machineKey = m.id || m.serialNumber || m.machineId || m.name || m.model || "unknown";
     const existing = memoryCustomComponents.get(machineKey) || [];
     const updated = [...existing.filter((c) => c.name.toLowerCase() !== comp.name.toLowerCase()), comp];
     memoryCustomComponents.set(machineKey, updated);
@@ -275,20 +222,7 @@ const PRESET_COMPONENT_TEMPLATES: Array<{
 ];
 
 
-  // Dynamic Readings (Section A), Checklist (Section B), and Custom Admin Fields mapped per category tab
-  const [readingsState, setReadingsState] = useState<
-    Record<string, Record<string, string>>
-  >({});
-  const [checklistState, setChecklistState] = useState<
-    Record<string, Record<string, string>>
-  >({});
-  const [customFieldsState, setCustomFieldsState] = useState<
-    Record<string, Array<{ id: string; name: string; value: string }>>
-  >({});
-
-  return null;
-}
-
+ 
 export default function InspectionDataEntry() {
   const inspectionSectionRef = useRef<HTMLDivElement>(null);
 
@@ -304,6 +238,12 @@ export default function InspectionDataEntry() {
   const [selectedCategory, setSelectedCategory] = useState<string>("ALL");
   const [selectedBrand, setSelectedBrand] = useState<string>("ALL");
   const [selectedMachine, setSelectedMachine] = useState<Machine | null>(null);
+  const [readingsState, setReadingsState] = useState<Record<string, Record<string, string>>>({});
+  const [checklistState, setChecklistState] = useState<Record<string, Record<string, string>>>({});
+  const [customFieldsState, setCustomFieldsState] = useState<Record<string, Array<{ id: string; name: string; value: string }>>>({});
+  const [componentHealthMap, setComponentHealthMap] = useState<Record<string, { healthScore: number; status: string }>>({});
+  const [activeComponentTab, setActiveComponentTab] = useState<string>("Engine Assembly");
+  
 
   // Dropdown Open States
   const [isCatDropdownOpen, setIsCatDropdownOpen] = useState<boolean>(false);
@@ -448,8 +388,8 @@ export default function InspectionDataEntry() {
     if (directName) return String(directName);
 
     return "Component";
+  }
 
-  // Fetch Company Registered Fleet
   const fetchCompanyFleet = async () => {
     try {
       const user = StorageService.getUser();
@@ -487,16 +427,16 @@ export default function InspectionDataEntry() {
     try {
       const user = StorageService.getUser();
       const compId = user?.companyId || user?.company_id || currentUser.companyId;
-      await apiRequest('/machines/assign-to-company', {
+            await apiRequest('/machines/assign-to-company', {
         method: 'POST',
-        data: {
+        body: JSON.stringify({
           companyId: compId,
           modelName: m.model || m.name,
           brand: m.brand || m.manufacturer,
           category: m.equipmentType || m.category,
           name: m.name || m.model,
           serialNumber: m.serialNumber,
-        },
+        }),
       });
       await fetchCompanyFleet();
       setSuccessMsg(`✓ "${m.name || m.model}" successfully added to your Company Fleet! Now assigned and available to your Supervisors, Artisans, and Operators.`);
@@ -581,7 +521,6 @@ export default function InspectionDataEntry() {
     fetchCompanyFleet();
   }, []);
 
-  // Active Source Machines depending on Fleet Mode
   const activeSourceMachines = useMemo(() => {
     if (fleetMode === "COMPANY_FLEET") {
       return companyFleet;
@@ -1362,9 +1301,9 @@ export default function InspectionDataEntry() {
     try {
       const user = StorageService.getUser();
       const companyId = user?.companyId || user?.company_id || selectedMachine.companyId || "";
-      await apiRequest('/machines/custom-components', {
+          await apiRequest('/machines/custom-components', {
         method: 'POST',
-        data: {
+        body: JSON.stringify({
           companyId,
           machineId: selectedMachine.id || selectedMachine.serialNumber,
           modelName: selectedMachine.model || selectedMachine.name,
@@ -1372,7 +1311,7 @@ export default function InspectionDataEntry() {
           name: effectiveCompName,
           category: "Equipment Component",
           parameters: newComponent.parameters,
-        },
+        }),
       });
     } catch (apiErr) {
       console.warn("Notice: Custom component backend sync:", apiErr);
@@ -1421,6 +1360,8 @@ export default function InspectionDataEntry() {
         [fieldKey]: value,
       },
     }));
+
+  }
 
   const fetchMachineExistingData = async (mId: string) => {
     if (!mId) return;
@@ -1513,6 +1454,7 @@ export default function InspectionDataEntry() {
         f.id === id ? { ...f, value } : f,
       ),
     }));
+  }
 
   const fetchHistoryLogs = async (mId: string) => {
     fetchAllHistoryLogs();
@@ -1573,7 +1515,9 @@ export default function InspectionDataEntry() {
       ? checklistState[tabName][fieldKey]
       : defaultVal;
 
-  // Evaluate parameter status live for the UI card
+  }
+
+
   const getParamValidationStatus = (param: SpecParameter, rawVal: string | undefined) => {
     if (rawVal === undefined || rawVal === "") return { status: "normal", msg: "Default standard" };
     const num = parseFloat(rawVal);
@@ -1868,7 +1812,7 @@ export default function InspectionDataEntry() {
       }
 
       setSuccessMsg(
-        `✅ Saved all ${specComponents.length} components in 1 single consolidated inspection log! Overall Machine Health: ${overallHealth}% (${machineStatus}).`
+        ` Saved all ${specComponents.length} components in 1 single consolidated inspection log! Overall Machine Health: ${overallHealth}% (${machineStatus}).`
       );
       
       fetchMachineExistingData(targetId);
@@ -1925,19 +1869,21 @@ export default function InspectionDataEntry() {
 
   const activeCompSpec = specComponents.find((c) => c.name === activeTab);
 
-  if (loading) {
+   if (loading) {
     return (
       <div className="flex min-h-[70vh] items-center justify-center p-8">
         <Loader2 size={32} className="animate-spin text-blue-600" />
       </div>
     );
   }
-function InspectionDataEntry() {
-  return (
-    <div>
-      <h1>fff</h1>
-    </div>
-  )
-}
 
-export default InspectionDataEntry
+  return (
+    <div className="p-6">
+      <PageMeta title="Inspection Data Entry" description="Manual component inspection data entry" />
+      <h1 className="text-2xl font-bold mb-4">Inspection Data Entry</h1>
+      <p className="text-slate-500">
+        Selected Machine: {selectedMachine ? formatCleanModelName(selectedMachine) : "None selected"}
+      </p>
+    </div>
+  );
+}

@@ -92,7 +92,8 @@ const normalizeQuotation = (
       : 0,
   siteNames: toSafeStringArray(raw?.siteNames),
   activeMachines:
-    typeof raw?.activeMachines === "number" && Number.isFinite(raw.activeMachines)
+    typeof raw?.activeMachines === "number" &&
+    Number.isFinite(raw.activeMachines)
       ? raw.activeMachines
       : 0,
   equipmentTypes: toSafeStringArray(raw?.equipmentTypes),
@@ -233,7 +234,7 @@ const QuotationDetailsPage: React.FC = () => {
       );
     } catch (requestError: unknown) {
       if (signal.aborted) return;
-      const { message } = extractApiError(requestError);
+      const message = extractApiError(requestError);
       setErrorMessage(message || "Failed to load quotation details.");
       setQuotation(EMPTY_QUOTATION);
     } finally {
@@ -281,7 +282,9 @@ const QuotationDetailsPage: React.FC = () => {
     ? parseInt(quotation.contractDuration, 10) || 5
     : 5;
 
-  const endDate = new Date(startDate.getTime() + durationDays * 24 * 60 * 60 * 1000);
+  const endDate = new Date(
+    startDate.getTime() + durationDays * 24 * 60 * 60 * 1000,
+  );
 
   return (
     <div className="w-full space-y-6">
@@ -452,8 +455,8 @@ const QuotationDetailsPage: React.FC = () => {
                 Designated Sites & Equipment
               </p>
               <div className="flex flex-wrap gap-2">
-                {quotation.siteNames.length > 0 ? (
-                  quotation.siteNames.map((site, i) => (
+                {(quotation.siteNames || []).length > 0 ? (
+                  (quotation.siteNames || []).map((site, i) => (
                     <span
                       key={i}
                       className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 shadow-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
@@ -469,7 +472,7 @@ const QuotationDetailsPage: React.FC = () => {
                   </span>
                 )}
 
-                {quotation.equipmentTypes.map((eq, i) => (
+                {(quotation.equipmentTypes || []).map((eq, i) => (
                   <span
                     key={i}
                     className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-100 bg-indigo-50/70 px-3 py-1.5 text-xs font-semibold text-indigo-700 dark:border-indigo-900/50 dark:bg-indigo-950/40 dark:text-indigo-300"
@@ -493,7 +496,8 @@ const QuotationDetailsPage: React.FC = () => {
                   Included Features & Services
                 </h2>
                 <p className="text-xs text-slate-500">
-                  Optional services and technical requirements for this evaluation
+                  Optional services and technical requirements for this
+                  evaluation
                 </p>
               </div>
             </div>
@@ -503,9 +507,9 @@ const QuotationDetailsPage: React.FC = () => {
               <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-400">
                 Selected Add-on Services
               </p>
-              {quotation.optionalServices.length > 0 ? (
+              {(quotation.optionalServices || []).length > 0 ? (
                 <div className="flex flex-wrap gap-2">
-                  {quotation.optionalServices.map((svc, i) => (
+                  {(quotation.optionalServices || []).map((svc, i) => (
                     <span
                       key={i}
                       className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50/80 px-3.5 py-1.5 text-xs font-bold text-emerald-800 shadow-sm dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
@@ -652,7 +656,9 @@ const QuotationDetailsPage: React.FC = () => {
                 <div className="flex flex-col items-center">
                   <div
                     className={`flex h-7 w-7 items-center justify-center rounded-full text-white shadow-sm ${
-                      isApproved ? "bg-blue-600" : "bg-slate-300 dark:bg-slate-700"
+                      isApproved
+                        ? "bg-blue-600"
+                        : "bg-slate-300 dark:bg-slate-700"
                     }`}
                   >
                     <Zap className="h-4 w-4" />
@@ -660,7 +666,9 @@ const QuotationDetailsPage: React.FC = () => {
                 </div>
                 <div>
                   <p className="text-xs font-bold text-slate-900 dark:text-white">
-                    {isApproved ? "Demo Evaluation Active" : "5 Days Evaluation Window"}
+                    {isApproved
+                      ? "Demo Evaluation Active"
+                      : "5 Days Evaluation Window"}
                   </p>
                   <p className="text-[11px] text-slate-500 font-medium">
                     {isApproved

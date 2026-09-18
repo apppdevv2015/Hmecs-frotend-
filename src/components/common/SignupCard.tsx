@@ -1009,6 +1009,7 @@ interface RequestQuotationModalProps {
   phone: string;
   siteLocation?: string;
   equipmentTypeOptions: SelectOption[];
+  optionalServiceOptions: SelectOption[];
   isLoadingDynamicOptions: boolean;
   /**
    * The backend contract stores attachments as a URL

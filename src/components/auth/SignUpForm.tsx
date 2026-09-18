@@ -623,16 +623,13 @@ export default function SignUpForm() {
       StorageService.remove(STORAGE_KEYS.NAME);
       StorageService.remove(STORAGE_KEYS.COMPANY_ID);
 
-      const createdCompanyId =
-        registerResponse?.data?.company?.id ||
-        registerResponse?.company?.id ||
-        user?.companyId ||
-        user?.company_id;
+            const createdCompanyId =
+        registerData?.company?.id ||
+        (registerResponse as any)?.company?.id;
 
       const createdUserId =
-        registerResponse?.data?.user?.id ||
-        registerResponse?.user?.id ||
-        user?.id;
+        registerData?.user?.id ||
+        (registerResponse as any)?.user?.id;
 
       const normalizedRole = "company_admin";
       const finalUser = {
@@ -659,7 +656,7 @@ export default function SignUpForm() {
         StorageService.set(STORAGE_KEYS.COMPANY_ID, createdCompanyId);
       }
 
-      // Submit Quotation Request Details to Backend Database
+      const toastId = showLoadingToast("Submitting quotation request...");
       try {
         await submitQuotationRequest({
           companyName: data.companyName.trim(),
@@ -1250,12 +1247,11 @@ export default function SignUpForm() {
                       <div className="flex min-w-0 flex-col">
                         <Label>5. Fleet / Equipment Types *</Label>
                         <div className="mt-1">
-                          <Controller
+                                                    <Controller
                             name="equipmentTypes"
                             control={control}
                             render={({ field }) => (
                               <AppMultiSelect
-
                                 values={field.value}
                                 onChange={(values) => {
                                   field.onChange(values);
@@ -1270,15 +1266,10 @@ export default function SignUpForm() {
                                     : "Select equipment types"
                                 }
                                 error={Boolean(errors.equipmentTypes)}
-
-                                values={field.value || []}
-                                onChange={(values) => field.onChange(values)}
-                                options={optionalServiceOptions}
-                                placeholder="Select optional services"
-
                               />
                             )}
                           />
+
                         </div>
                         <div className="min-h-[18px] pt-1">
                           {errors.equipmentTypes?.message && (
@@ -1367,7 +1358,7 @@ export default function SignUpForm() {
                         <Label>Optional Services</Label>
 
                         <div className="mt-1">
-                          <Controller
+                                                    <Controller
                             name="optionalServices"
                             control={control}
                             render={({ field }) => (
@@ -1375,17 +1366,15 @@ export default function SignUpForm() {
                                 values={field.value || []}
                                 onChange={(values) => field.onChange(values)}
                                 options={optionalServiceOptions}
-
                                 placeholder={
                                   isLoadingDynamicOptions
                                     ? "Loading optional services..."
                                     : "Select optional services"
                                 }
-
-                                placeholder="Select optional services"
-            />
+                              />
                             )}
                           />
+
                         </div>
                       </div>
 

@@ -958,19 +958,8 @@ const MachineManagement: React.FC = () => {
       model: formData.model.trim(),
       serialNumber: formData.serialNumber.trim(),
       equipmentType: formData.equipmentType.trim(),
-
-      condition:
-        formData.condition && formData.condition.trim()
-          ? formData.condition
-          : null,
-      imageUrl:
-        formData.imageUrl && formData.imageUrl.trim()
-          ? formData.imageUrl
-          : null,
-
       condition: formData.condition ? Number(formData.condition) || 1 : 1,
       imageUrl: formData.imageUrl && formData.imageUrl.trim() ? formData.imageUrl : null,
-
     };
   };
 

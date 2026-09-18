@@ -319,10 +319,10 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
           return;
         }
 
-        const normalized = list
+                const normalized = list
           .filter(isObject)
           .map((item) => normalizeNotification(item))
-          .filter(isValidNotification);
+          .filter(isValidNotification) as unknown as Notification[];
 
         setNotifications((previous) => {
           const byId = new Map<string, Notification>();

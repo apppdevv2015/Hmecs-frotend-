@@ -1,4 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import React, {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useCallback,
+} from "react";
 import toast from "react-hot-toast";
 import {
   AlertTriangle,
@@ -200,7 +206,8 @@ export default function ArtisanPreStartInspection() {
     StorageService.get<any>(STORAGE_KEYS.USER) ||
     StorageService.get<any>("user") ||
     {};
-  const artisanName = storedUser?.name || storedUser?.fullName || "Artisan User";
+  const artisanName =
+    storedUser?.name || storedUser?.fullName || "Artisan User";
   const artisanEmail = storedUser?.email || "artisan@mine.com";
   const artisanId = String(storedUser?.id || storedUser?.userId || "art-1");
 
@@ -233,13 +240,19 @@ export default function ArtisanPreStartInspection() {
   // History State
   const [historyLogs, setHistoryLogs] = useState<any[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [selectedHistoryLog, setSelectedHistoryLog] = useState<any | null>(null);
+  const [selectedHistoryLog, setSelectedHistoryLog] = useState<any | null>(
+    null,
+  );
 
   // Tabs: 'components' | 'visual' | 'history'
-  const [activeTab, setActiveTab] = useState<"components" | "visual" | "history">("components");
+  const [activeTab, setActiveTab] = useState<
+    "components" | "visual" | "history"
+  >("components");
 
   // Modals
-  const [updateTarget, setUpdateTarget] = useState<MachineComponent | null>(null);
+  const [updateTarget, setUpdateTarget] = useState<MachineComponent | null>(
+    null,
+  );
   const [isAddComponentModalOpen, setIsAddComponentModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -259,68 +272,83 @@ export default function ArtisanPreStartInspection() {
       const currentArtisanName = String(artisanName).toLowerCase().trim();
 
       let rawList: any[] = [];
-      try {
-        const res = await machineService.getAssignedMachines();
-        if (Array.isArray(res)) rawList = res;
-        else if (Array.isArray(res?.data)) rawList = res.data;
-        else if (Array.isArray(res?.assignedMachines)) rawList = res.assignedMachines;
-      } catch {
-        const res2 = await fleetService.getFleetMachines();
-        if (Array.isArray(res2)) rawList = res2;
-        else if (Array.isArray(res2?.data)) rawList = res2.data;
-        else if (Array.isArray(res2?.machines)) rawList = res2.machines;
-      }
 
       // Filter strictly for machines assigned to THIS Artisan
       const assignedToArtisanList = rawList.filter((m: any) => {
         if (!m) return false;
-        if (userCompanyId && m.companyId && String(m.companyId) !== userCompanyId) return false;
+        if (
+          userCompanyId &&
+          m.companyId &&
+          String(m.companyId) !== userCompanyId
+        )
+          return false;
 
         const mArtisanId = String(
           m?.assignedArtisanId ??
-          m?.assigned_artisan_id ??
-          m?.artisanId ??
-          m?.artisan_id ??
-          m?.technicianId ??
-          ""
-        ).toLowerCase().trim();
+            m?.assigned_artisan_id ??
+            m?.artisanId ??
+            m?.artisan_id ??
+            m?.technicianId ??
+            "",
+        )
+          .toLowerCase()
+          .trim();
 
         const mArtisanName = String(
-          m?.assignedArtisanName ??
-          m?.artisanName ??
-          m?.technician ??
-          ""
-        ).toLowerCase().trim();
+          m?.assignedArtisanName ?? m?.artisanName ?? m?.technician ?? "",
+        )
+          .toLowerCase()
+          .trim();
 
         const mArtisanEmail = String(
-          m?.assignedArtisanEmail ??
-          m?.artisanEmail ??
-          ""
-        ).toLowerCase().trim();
+          m?.assignedArtisanEmail ?? m?.artisanEmail ?? "",
+        )
+          .toLowerCase()
+          .trim();
 
         if (mArtisanId && currentArtisanId && mArtisanId === currentArtisanId) {
           return true;
         }
-        if (mArtisanEmail && currentArtisanEmail && mArtisanEmail === currentArtisanEmail) {
+        if (
+          mArtisanEmail &&
+          currentArtisanEmail &&
+          mArtisanEmail === currentArtisanEmail
+        ) {
           return true;
         }
-        if (mArtisanName && currentArtisanName && (
-          mArtisanName.includes(currentArtisanName) ||
-          currentArtisanName.includes(mArtisanName)
-        )) {
+        if (
+          mArtisanName &&
+          currentArtisanName &&
+          (mArtisanName.includes(currentArtisanName) ||
+            currentArtisanName.includes(mArtisanName))
+        ) {
           return true;
         }
 
         return false;
       });
 
-      const finalMachines = assignedToArtisanList.length > 0 ? assignedToArtisanList : rawList.filter((m: any) => {
-        // If no explicit ID match yet, check company machines with artisan assignment field present
-        const hasArtisanField = m?.assignedArtisanId || m?.assignedArtisanName;
-        return !userCompanyId || !m.companyId || String(m.companyId) === userCompanyId ? Boolean(hasArtisanField) : false;
-      });
+      const finalMachines =
+        assignedToArtisanList.length > 0
+          ? assignedToArtisanList
+          : rawList.filter((m: any) => {
+              // If no explicit ID match yet, check company machines with artisan assignment field present
+              const hasArtisanField =
+                m?.assignedArtisanId || m?.assignedArtisanName;
+              return !userCompanyId ||
+                !m.companyId ||
+                String(m.companyId) === userCompanyId
+                ? Boolean(hasArtisanField)
+                : false;
+            });
 
-      const mapped: Machine[] = (finalMachines.length > 0 ? finalMachines : (rawList.length > 0 ? [rawList[0]] : [])).map((m: any) => {
+      const mapped: Machine[] = (
+        finalMachines.length > 0
+          ? finalMachines
+          : rawList.length > 0
+            ? [rawList[0]]
+            : []
+      ).map((m: any) => {
         const rawHours =
           m.currentHours ??
           m.totalHours ??
@@ -333,10 +361,15 @@ export default function ArtisanPreStartInspection() {
           id: m.machineId || m.id,
           name: cleanMachineName(m.machineName || m.name),
           type: m.equipmentType || m.category || "Heavy Machinery",
-          serialNumber: String(m.serialNumber || m.fleetId || "SN-HME-1001").replace(/^DEMO-/i, ""),
+          serialNumber: String(
+            m.serialNumber || m.fleetId || "SN-HME-1001",
+          ).replace(/^DEMO-/i, ""),
           location: m.location || m.site || "Mining Pit Sector A",
           currentHours: Number(rawHours || 0),
-          status: (m.status === "Offline" || m.status === "Maintenance") ? m.status : "Online",
+          status:
+            m.status === "Offline" || m.status === "Maintenance"
+              ? m.status
+              : "Online",
           operatorName: m.assignedOperatorName || "Operator User",
           supervisorName: m.assignedSupervisorName || "Supervisor User",
           healthScore: m.healthPercent ?? m.healthScore ?? 100,
@@ -348,7 +381,9 @@ export default function ArtisanPreStartInspection() {
 
       setMachines(mapped);
       if (mapped.length > 0) {
-        setSelectedMachineId((prev) => (prev && mapped.some((m) => m.id === prev) ? prev : mapped[0].id));
+        setSelectedMachineId((prev) =>
+          prev && mapped.some((m) => m.id === prev) ? prev : mapped[0].id,
+        );
       }
     } catch (err) {
       console.warn("Could not load assigned machines for artisan:", err);
@@ -362,132 +397,151 @@ export default function ArtisanPreStartInspection() {
   }, [loadMachines]);
 
   const activeMachine = useMemo(() => {
-    return machines.find((m) => m.id === selectedMachineId) || machines[0] || null;
+    return (
+      machines.find((m) => m.id === selectedMachineId) || machines[0] || null
+    );
   }, [machines, selectedMachineId]);
 
   // ---------------------------------------------------------------------------
   // Load Components & History for Selected Machine
   // ---------------------------------------------------------------------------
-  const loadMachineInspectionData = useCallback(async (machineId: string) => {
-    if (!machineId) return;
-    try {
-      setComponentsLoading(true);
-
-      // 1. Load Components from PostgreSQL Database
-      const compRes = await componentService.getComponentsByMachineId(machineId);
-      let rawComps: any[] = [];
-      if (Array.isArray(compRes)) rawComps = compRes;
-      else if (Array.isArray(compRes?.data)) rawComps = compRes.data;
-      else if (Array.isArray(compRes?.components)) rawComps = compRes.components;
-
-      let mappedComps: MachineComponent[] = rawComps.map((c: any) => {
-        const health = conditionNumToHealth(c.condition);
-        return {
-          id: c.id || c.componentId,
-          category: c.category || "General Subsystem",
-          name: c.name || c.description || "Component Unit",
-          health,
-          status: healthToStatus(health),
-          currentReading: c.currentReading || `${health}% Health`,
-          parameters: [
-            {
-              name: "Operating Temperature",
-              unit: "°C",
-              safeMin: 65,
-              safeMax: 95,
-              defaultVal: 78,
-              currentVal: 78,
-              description: "Normal thermal operating envelope.",
-            },
-            {
-              name: "System Line Pressure",
-              unit: "Bar",
-              safeMin: 180,
-              safeMax: 320,
-              defaultVal: 245,
-              currentVal: 245,
-              description: "Main circuit hydraulic line pressure.",
-            },
-            {
-              name: "Vibration & Harmonic Wear",
-              unit: "mm/s",
-              safeMin: 0.5,
-              safeMax: 4.5,
-              defaultVal: 1.8,
-              currentVal: 1.8,
-              description: "Bearing housing vibration velocity.",
-            },
-          ],
-        };
-      });
-
-      setComponents(mappedComps);
-      baselineSnapshotRef.current = JSON.parse(JSON.stringify(mappedComps));
-
-      // 2. Load Real Inspection Checklist dynamically from Database & Installed Components
-      let realChecklist: InspectionItem[] = [];
+  const loadMachineInspectionData = useCallback(
+    async (machineId: string) => {
+      if (!machineId) return;
       try {
-        const inspRes = await inspectionService.getMachineInspection(machineId);
-        if (inspRes?.checklist && Array.isArray(inspRes.checklist)) {
-          realChecklist = inspRes.checklist;
-        } else if (inspRes?.data?.checklist && Array.isArray(inspRes.data.checklist)) {
-          realChecklist = inspRes.data.checklist;
+        setComponentsLoading(true);
+
+        type ComponentsApiResponse =
+          | unknown[]
+          | { data?: unknown[]; components?: unknown[] };
+
+        const compRes = (await componentService.getComponentsByMachineId(
+          machineId,
+        )) as ComponentsApiResponse;
+        let rawComps: any[] = [];
+        if (Array.isArray(compRes)) rawComps = compRes as any[];
+        else if (Array.isArray(compRes.data)) rawComps = compRes.data as any[];
+        else if (Array.isArray(compRes.components))
+          rawComps = compRes.components as any[];
+
+        let mappedComps: MachineComponent[] = rawComps.map((c: any) => {
+          const health = conditionNumToHealth(c.condition);
+          return {
+            id: c.id || c.componentId,
+            category: c.category || "General Subsystem",
+            name: c.name || c.description || "Component Unit",
+            health,
+            status: healthToStatus(health),
+            currentReading: c.currentReading || `${health}% Health`,
+            parameters: [
+              {
+                name: "Operating Temperature",
+                unit: "°C",
+                safeMin: 65,
+                safeMax: 95,
+                defaultVal: 78,
+                currentVal: 78,
+                description: "Normal thermal operating envelope.",
+              },
+              {
+                name: "System Line Pressure",
+                unit: "Bar",
+                safeMin: 180,
+                safeMax: 320,
+                defaultVal: 245,
+                currentVal: 245,
+                description: "Main circuit hydraulic line pressure.",
+              },
+              {
+                name: "Vibration & Harmonic Wear",
+                unit: "mm/s",
+                safeMin: 0.5,
+                safeMax: 4.5,
+                defaultVal: 1.8,
+                currentVal: 1.8,
+                description: "Bearing housing vibration velocity.",
+              },
+            ],
+          };
+        });
+
+        setComponents(mappedComps);
+        baselineSnapshotRef.current = JSON.parse(JSON.stringify(mappedComps));
+
+             let realChecklist: InspectionItem[] = [];
+
+        if (realChecklist.length === 0 && mappedComps.length > 0) {
+          realChecklist = mappedComps.map((c, idx) => ({
+            id: `insp-comp-${c.id || idx}`,
+            label: `${c.name} Safety Verification`,
+            icon: c.category.toLowerCase().includes("engine")
+              ? "droplet"
+              : c.category.toLowerCase().includes("hydraulic")
+                ? "wrench"
+                : c.category.toLowerCase().includes("brake")
+                  ? "discAlbum"
+                  : "circleDot",
+            status: c.status === "Critical" ? "Issue" : "OK",
+            value: c.currentReading || `${c.health}% Health`,
+            unit: c.parameters?.[0]?.unit || "%",
+            safeRange: `Condition: ${c.status} (${c.health}%)`,
+            description: `Artisan technical verification for ${c.name} subsystem.`,
+            imageUrl: null,
+          }));
         }
-      } catch {}
 
-      if (realChecklist.length === 0 && mappedComps.length > 0) {
-        realChecklist = mappedComps.map((c, idx) => ({
-          id: `insp-comp-${c.id || idx}`,
-          label: `${c.name} Safety Verification`,
-          icon: c.category.toLowerCase().includes("engine")
-            ? "droplet"
-            : c.category.toLowerCase().includes("hydraulic")
-            ? "wrench"
-            : c.category.toLowerCase().includes("brake")
-            ? "discAlbum"
-            : "circleDot",
-          status: c.status === "Critical" ? "Issue" : "OK",
-          value: c.currentReading || `${c.health}% Health`,
-          unit: c.parameters?.[0]?.unit || "%",
-          safeRange: `Condition: ${c.status} (${c.health}%)`,
-          description: `Artisan technical verification for ${c.name} subsystem.`,
-          imageUrl: null,
-        }));
-      }
+        setInspectionItems(realChecklist);
 
-      setInspectionItems(realChecklist);
+        // 3. Load Inspection History from PostgreSQL
+        try {
+          setHistoryLoading(true);
+          const userCompanyId = StorageService.getCompanyId() || "";
+          const queryParam = userCompanyId
+            ? `?companyId=${encodeURIComponent(userCompanyId)}`
+            : "";
+          const historyRes: any = await apiCall(
+            `/machines/${encodeURIComponent(machineId)}/inspection-history${queryParam}`,
+            { method: "GET" },
+            { showError: false },
+          ).catch(() =>
+            apiCall(
+              `/machines/inspection-history${queryParam}`,
+              { method: "GET" },
+              { showError: false },
+            ),
+          );
 
-      // 3. Load Inspection History from PostgreSQL
-      try {
-        setHistoryLoading(true);
-        const userCompanyId = StorageService.getCompanyId() || "";
-        const queryParam = userCompanyId ? `?companyId=${encodeURIComponent(userCompanyId)}` : "";
-        const historyRes: any = await apiCall(
-          `/machines/${encodeURIComponent(machineId)}/inspection-history${queryParam}`,
-          { method: "GET" },
-          { showError: false }
-        ).catch(() => apiCall(`/machines/inspection-history${queryParam}`, { method: "GET" }, { showError: false }));
+          let logs: any[] = [];
+          if (Array.isArray(historyRes?.data?.historyLogs))
+            logs = historyRes.data.historyLogs;
+          else if (Array.isArray(historyRes?.data)) logs = historyRes.data;
+          else if (Array.isArray(historyRes)) logs = historyRes;
 
-        let logs: any[] = [];
-        if (Array.isArray(historyRes?.data?.historyLogs)) logs = historyRes.data.historyLogs;
-        else if (Array.isArray(historyRes?.data)) logs = historyRes.data;
-        else if (Array.isArray(historyRes)) logs = historyRes;
-
-        const matchedLogs = logs.filter(
-          (l: any) => l.machineId === machineId || (l.machineName && activeMachine && l.machineName.toLowerCase().includes(activeMachine.name.toLowerCase()))
-        );
-        setHistoryLogs(matchedLogs.length > 0 ? matchedLogs : logs.slice(0, 10));
-      } catch {
-        setHistoryLogs([]);
+          const matchedLogs = logs.filter(
+            (l: any) =>
+              l.machineId === machineId ||
+              (l.machineName &&
+                activeMachine &&
+                l.machineName
+                  .toLowerCase()
+                  .includes(activeMachine.name.toLowerCase())),
+          );
+          setHistoryLogs(
+            matchedLogs.length > 0 ? matchedLogs : logs.slice(0, 10),
+          );
+        } catch {
+          setHistoryLogs([]);
+        } finally {
+          setHistoryLoading(false);
+        }
+      } catch (err) {
+        console.warn("Inspection data loading notice:", err);
       } finally {
-        setHistoryLoading(false);
+        setComponentsLoading(false);
       }
-    } catch (err) {
-      console.warn("Inspection data loading notice:", err);
-    } finally {
-      setComponentsLoading(false);
-    }
-  }, [activeMachine]);
+    },
+    [activeMachine],
+  );
 
   useEffect(() => {
     if (selectedMachineId) {
@@ -516,7 +570,7 @@ export default function ArtisanPreStartInspection() {
       (m) =>
         m.name.toLowerCase().includes(q) ||
         m.serialNumber.toLowerCase().includes(q) ||
-        m.type.toLowerCase().includes(q)
+        m.type.toLowerCase().includes(q),
     );
   }, [machines, machineSearch]);
 
@@ -525,7 +579,7 @@ export default function ArtisanPreStartInspection() {
   // ---------------------------------------------------------------------------
   const handleSaveComponentUpdate = (updatedComponent: MachineComponent) => {
     setComponents((prev) =>
-      prev.map((c) => (c.id === updatedComponent.id ? updatedComponent : c))
+      prev.map((c) => (c.id === updatedComponent.id ? updatedComponent : c)),
     );
     showSuccessToast(`Updated ${updatedComponent.name} diagnostics.`);
     setUpdateTarget(null);
@@ -542,9 +596,14 @@ export default function ArtisanPreStartInspection() {
     setInspectionItems((prev) =>
       prev.map((item) => {
         if (item.id !== itemId) return item;
-        const nextStatus: InspectionStatus = item.status === "OK" ? "Issue" : item.status === "Issue" ? "N/A" : "OK";
+        const nextStatus: InspectionStatus =
+          item.status === "OK"
+            ? "Issue"
+            : item.status === "Issue"
+              ? "N/A"
+              : "OK";
         return { ...item, status: nextStatus };
-      })
+      }),
     );
   };
 
@@ -568,7 +627,9 @@ export default function ArtisanPreStartInspection() {
 
   const handleSaveVisualReport = () => {
     if (!newIssue.component || !newIssue.description.trim()) {
-      showErrorToast("Please select a component and enter an issue description.");
+      showErrorToast(
+        "Please select a component and enter an issue description.",
+      );
       return;
     }
     const report: IssueReport = {
@@ -581,8 +642,15 @@ export default function ArtisanPreStartInspection() {
       createdAt: new Date().toISOString(),
     };
     setIssueReports((prev) => [...prev, report]);
-    setNewIssue({ component: "", severity: "Medium", description: "", images: [] });
-    showSuccessToast("Visual defect reported and attached to inspection scope.");
+    setNewIssue({
+      component: "",
+      severity: "Medium",
+      description: "",
+      images: [],
+    });
+    showSuccessToast(
+      "Visual defect reported and attached to inspection scope.",
+    );
   };
 
   // Submit complete inspection to PostgreSQL database
@@ -594,35 +662,46 @@ export default function ArtisanPreStartInspection() {
       const hasCritical = components.some((c) => c.status === "Critical");
 
       // Save directly into PostgreSQL database table (machine_inspection_audit_logs)
-      await apiCall(`/machines/${encodeURIComponent(activeMachine.id)}/manual-data`, {
-        method: "POST",
-        body: JSON.stringify({
-          machineName: activeMachine.name,
-          brand: "Heavy Mining Machinery",
-          category: activeMachine.type,
-          modelName: activeMachine.name,
-          serialNumber: activeMachine.serialNumber,
-          componentName: components.map((c) => c.name).join(", "),
-          componentCategory: "All Components",
-          actionDescription: "Artisan Pre-Start Technical Inspection Completed",
-          readings: {
-            components,
-            summary: {
-              totalComponents: components.length,
-              healthy: components.filter((c) => c.status === "Healthy" || c.status === "Good").length,
-              warning: components.filter((c) => c.status === "Warning").length,
-              critical: components.filter((c) => c.status === "Critical").length,
+      await apiCall(
+        `/machines/${encodeURIComponent(activeMachine.id)}/manual-data`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            machineName: activeMachine.name,
+            brand: "Heavy Mining Machinery",
+            category: activeMachine.type,
+            modelName: activeMachine.name,
+            serialNumber: activeMachine.serialNumber,
+            componentName: components.map((c) => c.name).join(", "),
+            componentCategory: "All Components",
+            actionDescription:
+              "Artisan Pre-Start Technical Inspection Completed",
+            readings: {
+              components,
+              summary: {
+                totalComponents: components.length,
+                healthy: components.filter(
+                  (c) => c.status === "Healthy" || c.status === "Good",
+                ).length,
+                warning: components.filter((c) => c.status === "Warning")
+                  .length,
+                critical: components.filter((c) => c.status === "Critical")
+                  .length,
+              },
             },
-          },
-          checklist: inspectionItems,
-          customFields: customAddedComponentsRef.current,
-          userName: artisanName,
-          userRole: "ARTISAN",
-          userEmail: artisanEmail,
-        }),
-      }, { showError: false });
+            checklist: inspectionItems,
+            customFields: customAddedComponentsRef.current,
+            userName: artisanName,
+            userRole: "ARTISAN",
+            userEmail: artisanEmail,
+          }),
+        },
+        { showError: false },
+      );
 
-      showSuccessToast(`✓ Pre-Start Inspection completed by Artisan ${artisanName} & logged!`);
+      showSuccessToast(
+        `✓ Pre-Start Inspection completed by Artisan ${artisanName} & logged!`,
+      );
       // Refresh history
       loadMachineInspectionData(activeMachine.id);
       setActiveTab("history");
@@ -646,7 +725,8 @@ export default function ArtisanPreStartInspection() {
             Pre-Start Technical Inspection
           </h1>
           <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-            Select assigned equipment, verify live component telemetry, calibrate parameters, and log inspections directly to the database.
+            Select assigned equipment, verify live component telemetry,
+            calibrate parameters, and log inspections directly to the database.
           </p>
         </div>
 
@@ -655,12 +735,20 @@ export default function ArtisanPreStartInspection() {
             type="button"
             onClick={() => {
               loadMachines();
-              if (selectedMachineId) loadMachineInspectionData(selectedMachineId);
+              if (selectedMachineId)
+                loadMachineInspectionData(selectedMachineId);
               showSuccessToast("Refreshed machine data!");
             }}
             className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-800 dark:bg-[#101f33] dark:text-slate-200 cursor-pointer"
           >
-            <RefreshCw size={15} className={machinesLoading || componentsLoading ? "animate-spin text-blue-600" : ""} />
+            <RefreshCw
+              size={15}
+              className={
+                machinesLoading || componentsLoading
+                  ? "animate-spin text-blue-600"
+                  : ""
+              }
+            />
             Refresh Data
           </button>
         </div>
@@ -695,7 +783,10 @@ export default function ArtisanPreStartInspection() {
             <div className="mt-4 space-y-2.5 max-h-[600px] overflow-y-auto pr-1">
               {machinesLoading ? (
                 <div className="py-12 text-center text-xs font-bold text-slate-400">
-                  <Loader2 className="mx-auto mb-2 animate-spin text-blue-600" size={20} />
+                  <Loader2
+                    className="mx-auto mb-2 animate-spin text-blue-600"
+                    size={20}
+                  />
                   Loading assigned machines...
                 </div>
               ) : filteredMachines.length === 0 ? (
@@ -739,7 +830,11 @@ export default function ArtisanPreStartInspection() {
 
                       <div className="mt-2 flex items-center justify-between border-t border-slate-200/60 pt-2 text-[10px] text-slate-500 dark:border-slate-700/60 dark:text-slate-400">
                         <span>👤 {m.operatorName}</span>
-                        <span>{m.currentHours > 0 ? `${m.currentHours.toLocaleString()} hrs` : "0 hrs"}</span>
+                        <span>
+                          {m.currentHours > 0
+                            ? `${m.currentHours.toLocaleString()} hrs`
+                            : "0 hrs"}
+                        </span>
                       </div>
                     </div>
                   );
@@ -765,7 +860,12 @@ export default function ArtisanPreStartInspection() {
                       {activeMachine.name}
                     </h2>
                     <p className="text-xs font-semibold text-blue-100">
-                      Serial: <span className="font-mono text-cyan-300">{activeMachine.serialNumber}</span> • Category: {activeMachine.type} • 📍 {activeMachine.location}
+                      Serial:{" "}
+                      <span className="font-mono text-cyan-300">
+                        {activeMachine.serialNumber}
+                      </span>{" "}
+                      • Category: {activeMachine.type} • 📍{" "}
+                      {activeMachine.location}
                     </p>
                   </div>
 
@@ -783,20 +883,38 @@ export default function ArtisanPreStartInspection() {
 
                 <div className="mt-4 grid grid-cols-2 gap-3 border-t border-white/10 pt-4 sm:grid-cols-4 text-xs">
                   <div>
-                    <span className="text-blue-200 text-[10px] uppercase font-bold">Assigned Operator</span>
-                    <p className="font-bold text-white">👤 {activeMachine.operatorName}</p>
+                    <span className="text-blue-200 text-[10px] uppercase font-bold">
+                      Assigned Operator
+                    </span>
+                    <p className="font-bold text-white">
+                      👤 {activeMachine.operatorName}
+                    </p>
                   </div>
                   <div>
-                    <span className="text-blue-200 text-[10px] uppercase font-bold">Supervisor</span>
-                    <p className="font-bold text-white">🛡️ {activeMachine.supervisorName}</p>
+                    <span className="text-blue-200 text-[10px] uppercase font-bold">
+                      Supervisor
+                    </span>
+                    <p className="font-bold text-white">
+                      🛡️ {activeMachine.supervisorName}
+                    </p>
                   </div>
                   <div>
-                    <span className="text-blue-200 text-[10px] uppercase font-bold">Meter Reading</span>
-                    <p className="font-bold text-white">{activeMachine.currentHours > 0 ? `${activeMachine.currentHours.toLocaleString()} hrs` : "0 hrs"}</p>
+                    <span className="text-blue-200 text-[10px] uppercase font-bold">
+                      Meter Reading
+                    </span>
+                    <p className="font-bold text-white">
+                      {activeMachine.currentHours > 0
+                        ? `${activeMachine.currentHours.toLocaleString()} hrs`
+                        : "0 hrs"}
+                    </p>
                   </div>
                   <div>
-                    <span className="text-blue-200 text-[10px] uppercase font-bold">Health Prediction</span>
-                    <p className="font-bold text-emerald-300">✓ {activeMachine.healthScore ?? 100}% Optimal</p>
+                    <span className="text-blue-200 text-[10px] uppercase font-bold">
+                      Health Prediction
+                    </span>
+                    <p className="font-bold text-emerald-300">
+                      ✓ {activeMachine.healthScore ?? 100}% Optimal
+                    </p>
                   </div>
                 </div>
               </div>
@@ -806,14 +924,18 @@ export default function ArtisanPreStartInspection() {
                 {/* Category Filter & Quick Actions */}
                 <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-[#0b1728]">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-slate-500">Category Filter:</span>
+                    <span className="text-xs font-bold text-slate-500">
+                      Category Filter:
+                    </span>
                     <select
                       value={categoryFilter}
                       onChange={(e) => setCategoryFilter(e.target.value)}
                       className="rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 outline-none transition focus:border-blue-500 dark:border-slate-700 dark:bg-[#101f33] dark:text-white"
                     >
                       {categories.map((cat) => (
-                        <option key={cat} value={cat}>{cat}</option>
+                        <option key={cat} value={cat}>
+                          {cat}
+                        </option>
                       ))}
                     </select>
                   </div>
@@ -832,7 +954,10 @@ export default function ArtisanPreStartInspection() {
                 <div className="space-y-4">
                   {componentsLoading ? (
                     <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center text-xs font-bold text-slate-400 dark:border-slate-800 dark:bg-[#0b1728]">
-                      <Loader2 className="mx-auto mb-2 animate-spin text-blue-600" size={24} />
+                      <Loader2
+                        className="mx-auto mb-2 animate-spin text-blue-600"
+                        size={24}
+                      />
                       Loading telemetry & component modules...
                     </div>
                   ) : filteredComponents.length === 0 ? (
@@ -870,8 +995,8 @@ export default function ArtisanPreStartInspection() {
                                   isCrit
                                     ? "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300"
                                     : isWarn
-                                    ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300"
-                                    : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+                                      ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300"
+                                      : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
                                 }`}
                               >
                                 {comp.health}% • {comp.status}
@@ -924,7 +1049,8 @@ export default function ArtisanPreStartInspection() {
                           Pre-Start Safety Checklist ({inspectionItems.length})
                         </h3>
                         <p className="text-xs text-slate-400">
-                          Toggle pass/fail status for each mechanical safety item.
+                          Toggle pass/fail status for each mechanical safety
+                          item.
                         </p>
                       </div>
                     </div>
@@ -938,14 +1064,20 @@ export default function ArtisanPreStartInspection() {
                             item.status === "OK"
                               ? "border-emerald-200 bg-emerald-50/40 dark:border-emerald-900/40 dark:bg-emerald-950/20"
                               : item.status === "Issue"
-                              ? "border-rose-200 bg-rose-50/40 dark:border-rose-900/40 dark:bg-rose-950/20"
-                              : "border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-[#101f33]/40"
+                                ? "border-rose-200 bg-rose-50/40 dark:border-rose-900/40 dark:bg-rose-950/20"
+                                : "border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-[#101f33]/40"
                           }`}
                         >
                           <div>
-                            <p className="text-xs font-bold text-slate-900 dark:text-white">{item.label}</p>
-                            <p className="text-[11px] font-semibold text-blue-600 dark:text-blue-400">{item.value}</p>
-                            <p className="text-[10px] text-slate-400">{item.safeRange}</p>
+                            <p className="text-xs font-bold text-slate-900 dark:text-white">
+                              {item.label}
+                            </p>
+                            <p className="text-[11px] font-semibold text-blue-600 dark:text-blue-400">
+                              {item.value}
+                            </p>
+                            <p className="text-[10px] text-slate-400">
+                              {item.safeRange}
+                            </p>
                           </div>
 
                           <span
@@ -953,8 +1085,8 @@ export default function ArtisanPreStartInspection() {
                               item.status === "OK"
                                 ? "bg-emerald-500 text-white"
                                 : item.status === "Issue"
-                                ? "bg-rose-500 text-white"
-                                : "bg-slate-300 text-slate-700 dark:bg-slate-700 dark:text-slate-200"
+                                  ? "bg-rose-500 text-white"
+                                  : "bg-slate-300 text-slate-700 dark:bg-slate-700 dark:text-slate-200"
                             }`}
                           >
                             {item.status}
@@ -966,7 +1098,10 @@ export default function ArtisanPreStartInspection() {
                     {/* Submit Bar */}
                     <div className="mt-6 flex flex-col gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:items-center sm:justify-between dark:border-slate-800">
                       <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-                        Inspected by Artisan: <strong className="text-slate-900 dark:text-white">{artisanName}</strong>
+                        Inspected by Artisan:{" "}
+                        <strong className="text-slate-900 dark:text-white">
+                          {artisanName}
+                        </strong>
                       </div>
 
                       <button
@@ -975,13 +1110,16 @@ export default function ArtisanPreStartInspection() {
                         onClick={handleSubmitCompleteInspection}
                         className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-6 text-xs font-black text-white shadow-lg shadow-emerald-500/25 transition hover:bg-emerald-700 disabled:opacity-50 cursor-pointer"
                       >
-                        {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+                        {isSubmitting ? (
+                          <Loader2 size={16} className="animate-spin" />
+                        ) : (
+                          <CheckCircle2 size={16} />
+                        )}
                         Complete & Send to Supervisor
                       </button>
                     </div>
                   </div>
                 )}
-
               </div>
             </>
           ) : (
@@ -1030,23 +1168,35 @@ export default function ArtisanPreStartInspection() {
             <div className="mt-4 space-y-3 text-xs text-slate-700 dark:text-slate-300">
               <div>
                 <span className="text-slate-400">Date & Time:</span>
-                <p className="font-bold text-slate-900 dark:text-white">{formatDate(selectedHistoryLog.createdAt)}</p>
+                <p className="font-bold text-slate-900 dark:text-white">
+                  {formatDate(selectedHistoryLog.createdAt)}
+                </p>
               </div>
               <div>
                 <span className="text-slate-400">Equipment:</span>
-                <p className="font-bold text-slate-900 dark:text-white">{selectedHistoryLog.machineName || activeMachine?.name}</p>
+                <p className="font-bold text-slate-900 dark:text-white">
+                  {selectedHistoryLog.machineName || activeMachine?.name}
+                </p>
               </div>
               <div>
                 <span className="text-slate-400">Inspected Scope:</span>
-                <p className="font-semibold text-blue-600 dark:text-blue-400">{selectedHistoryLog.componentName || "All Components"}</p>
+                <p className="font-semibold text-blue-600 dark:text-blue-400">
+                  {selectedHistoryLog.componentName || "All Components"}
+                </p>
               </div>
               <div>
                 <span className="text-slate-400">Action Remarks:</span>
-                <p className="font-medium text-slate-800 dark:text-slate-200">{selectedHistoryLog.actionDescription || "Pre-Start Inspection Verified"}</p>
+                <p className="font-medium text-slate-800 dark:text-slate-200">
+                  {selectedHistoryLog.actionDescription ||
+                    "Pre-Start Inspection Verified"}
+                </p>
               </div>
               <div>
                 <span className="text-slate-400">Submitted By:</span>
-                <p className="font-bold text-slate-900 dark:text-white">👤 {selectedHistoryLog.userName || "Artisan"} ({selectedHistoryLog.userRole || "ARTISAN"})</p>
+                <p className="font-bold text-slate-900 dark:text-white">
+                  👤 {selectedHistoryLog.userName || "Artisan"} (
+                  {selectedHistoryLog.userRole || "ARTISAN"})
+                </p>
               </div>
             </div>
 
@@ -1080,11 +1230,13 @@ function UpdateComponentModal({
   onSave: (comp: MachineComponent) => void;
 }) {
   const [health, setHealth] = useState(component.health);
-  const [params, setParams] = useState<ComponentParameter[]>(component.parameters || []);
+  const [params, setParams] = useState<ComponentParameter[]>(
+    component.parameters || [],
+  );
 
   const handleParamValChange = (idx: number, newVal: number) => {
     setParams((prev) =>
-      prev.map((p, i) => (i === idx ? { ...p, currentVal: newVal } : p))
+      prev.map((p, i) => (i === idx ? { ...p, currentVal: newVal } : p)),
     );
   };
 
@@ -1107,7 +1259,11 @@ function UpdateComponentModal({
           <h4 className="text-base font-black text-slate-900 dark:text-white">
             Calibrate / Update {component.name}
           </h4>
-          <button type="button" onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+          >
             <X size={16} />
           </button>
         </div>
@@ -1116,7 +1272,9 @@ function UpdateComponentModal({
           <div>
             <div className="flex items-center justify-between">
               <label className="font-bold">Component Health Rating (%)</label>
-              <span className="font-black text-blue-600 dark:text-blue-400">{health}%</span>
+              <span className="font-black text-blue-600 dark:text-blue-400">
+                {health}%
+              </span>
             </div>
             <input
               type="range"
@@ -1135,16 +1293,23 @@ function UpdateComponentModal({
                 Operating Parameters Telemetry
               </span>
               {params.map((p, idx) => (
-                <div key={idx} className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
+                <div
+                  key={idx}
+                  className="rounded-xl border border-slate-200 p-3 dark:border-slate-800"
+                >
                   <div className="flex items-center justify-between">
                     <span className="font-bold">{p.name}</span>
-                    <span className="text-slate-400 text-[11px]">Safe: {p.safeMin}–{p.safeMax} {p.unit}</span>
+                    <span className="text-slate-400 text-[11px]">
+                      Safe: {p.safeMin}–{p.safeMax} {p.unit}
+                    </span>
                   </div>
                   <div className="mt-2 flex items-center gap-2">
                     <input
                       type="number"
                       value={p.currentVal ?? p.defaultVal}
-                      onChange={(e) => handleParamValChange(idx, Number(e.target.value))}
+                      onChange={(e) =>
+                        handleParamValChange(idx, Number(e.target.value))
+                      }
                       className="h-9 w-full rounded-lg border border-slate-300 px-3 text-xs font-bold outline-none dark:border-slate-700 dark:bg-[#101f33] dark:text-white"
                     />
                     <span className="font-bold text-slate-500">{p.unit}</span>
@@ -1234,12 +1399,19 @@ function AddCustomComponentModal({
           <h4 className="text-base font-black text-slate-900 dark:text-white">
             Add Custom Component / Field
           </h4>
-          <button type="button" onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+          >
             <X size={16} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="mt-4 space-y-4 text-xs text-slate-700 dark:text-slate-300">
+        <form
+          onSubmit={handleSubmit}
+          className="mt-4 space-y-4 text-xs text-slate-700 dark:text-slate-300"
+        >
           <div>
             <label className="mb-1 block font-bold text-slate-700 dark:text-slate-300">
               Component Name *
@@ -1297,7 +1469,9 @@ function AddCustomComponentModal({
 
             <div className="grid grid-cols-3 gap-2">
               <div className="col-span-2">
-                <label className="mb-1 block text-[11px] font-bold">Parameter Label</label>
+                <label className="mb-1 block text-[11px] font-bold">
+                  Parameter Label
+                </label>
                 <input
                   type="text"
                   placeholder="e.g. Line Pressure"
@@ -1320,7 +1494,9 @@ function AddCustomComponentModal({
             </div>
 
             <div>
-              <label className="mb-1 block text-[11px] font-bold">Reading Value</label>
+              <label className="mb-1 block text-[11px] font-bold">
+                Reading Value
+              </label>
               <input
                 type="number"
                 value={paramVal}

@@ -43,14 +43,21 @@ export type MachineStatus = "Online" | "Offline" | "Maintenance";
 
 export interface Machine {
   id: string;
-  name: string; // e.g. "DT-102"
-  type: string; // e.g. "Haul Truck"
+  name: string;
+  type: string; 
+  model?: string;
+  category?: string;
   serialNumber: string;
   location: string;
   currentHours: number;
   status: MachineStatus;
   operatorName: string;
   imageUrl: string;
+  companyId?: string;
+  brand?: string;
+  manufacturer?: string;
+  equipmentType?: string;
+  supervisorName?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -2654,7 +2661,19 @@ const PreStartInspection: React.FC = () => {
       };
     });
 
-    // Save instant update to Supervisor audit log in localStorage
+    
+      const updatedComponents = allComponents.map((c) =>
+      c.id === updateTarget.id
+        ? {
+            ...c,
+            health: updates.health,
+            status: updates.status,
+            currentReading: updates.currentReading,
+            parameters: updates.parameters || c.parameters,
+          }
+        : c,
+    );
+
     try {
       const auditLog = {
         id: `op-insp-${Date.now()}`,
