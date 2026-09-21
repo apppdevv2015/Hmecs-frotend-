@@ -1,6 +1,10 @@
 /// <reference lib="webworker" />
 
-import { precacheAndRoute, createHandlerBoundToURL } from "workbox-precaching";
+import {
+  precacheAndRoute,
+  createHandlerBoundToURL,
+  cleanupOutdatedCaches,
+} from "workbox-precaching";
 
 import { clientsClaim } from "workbox-core";
 
@@ -33,7 +37,9 @@ const DB_NAME = "hme-offline-db";
 const DB_VERSION = 1;
 const STORE_NAME = "offline-requests";
 
+cleanupOutdatedCaches();
 precacheAndRoute(self.__WB_MANIFEST);
+self.skipWaiting();
 clientsClaim();
 
 registerRoute(
@@ -132,26 +138,6 @@ registerRoute(
 );
 
 /**
- * Handle POST, PUT, DELETE, PATCH (mutations) - Queue for sync when offline
- */
-registerRoute(
-  ({ url, request }) => {
-    const mutationMethods = ["POST", "PUT", "PATCH", "DELETE"];
-    return mutationMethods.includes(request.method);
-  },
-
-  new NetworkFirst({
-    cacheName: CACHE_NAMES.OFFLINE_QUEUE,
-    networkTimeoutSeconds: 5,
-    plugins: [
-      new CacheableResponsePlugin({
-        statuses: [0, 200],
-      }),
-    ],
-  }),
-);
-
-/**
  * IndexedDB helper - Open DB for offline request storage
  */
 function openDB(): Promise<IDBDatabase> {
@@ -245,33 +231,23 @@ self.addEventListener("fetch", (event) => {
      * For mutations, try network first, queue if fails
      */
     event.respondWith(
-      fetch(request.clone())
-        .then((response) => {
-          if (response.ok) {
-            return response;
-          }
-          // Non-ok response - still queue for retry
-          queueRequestIfOffline(request);
-          return response;
-        })
-        .catch((error) => {
-          // Network error - queue for later
-          queueRequestIfOffline(request);
-
-          return new Response(
-            JSON.stringify({
-              success: true,
-              offline: true,
-              queued: true,
-              message: "Request queued for sync when online",
-            }),
-            {
-              status: 200,
-              headers: { "Content-Type": "application/json" },
-            },
-          );
+  fetch(request.clone()).catch((error) => {
+    // sirf sach mein offline ho tab queue karo
+    if (!self.navigator.onLine) {
+      queueRequestIfOffline(request);
+      return new Response(
+        JSON.stringify({
+          success: true,
+          offline: true,
+          queued: true,
+          message: "Request queued for sync when online",
         }),
-    );
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    throw error; // online hai to asli error dikhao
+  }),
+);
   }
 });
 

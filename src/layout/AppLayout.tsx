@@ -16,20 +16,21 @@ type AppLayoutProps = {
 };
 
 const checkRealInternet = async (): Promise<boolean> => {
+  if (!navigator.onLine) return false;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 6000);
   try {
-    const cacheBuster = `${Date.now()}-${crypto.randomUUID()}`;
-
-    await fetch(`/favicon.ico?cb=${cacheBuster}`, {
+    const cb = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    await fetch(`/favicon.ico?cb=${cb}`, {
       method: "HEAD",
       cache: "no-store",
-      signal: AbortSignal.timeout(4000),
-      headers: {
-        "Cache-Control": "no-cache, no-store, must-revalidate",
-      },
+      signal: controller.signal,
     });
     return true;
   } catch {
     return false;
+  } finally {
+    clearTimeout(timer);
   }
 };
 
@@ -95,18 +96,14 @@ const LayoutContent: React.FC<AppLayoutProps> = ({ role = "super_admin" }) => {
     checkSub();
   }, [role]);
 
-  // ─── Heartbeat — PRIMARY source of truth ─────────────────────────────────
-  // Runs every 3s. This catches: ethernet unplug, WiFi cut, ISP down,
-  // mobile data off — anything the browser events miss.
   useEffect(() => {
-    const heartbeat = async () => {
-      if (checkingRef.current) return;
-      checkingRef.current = true;
-
+  const heartbeat = async () => {
+    if (checkingRef.current) return;
+    checkingRef.current = true;
+    try {
       const isOnline = await checkRealInternet();
 
       if (!initialCheckDoneRef.current) {
-        // First run — silently set initial state, no toast
         initialCheckDoneRef.current = true;
         networkStateRef.current = isOnline;
         setIsOffline(!isOnline);
@@ -116,24 +113,20 @@ const LayoutContent: React.FC<AppLayoutProps> = ({ role = "super_admin" }) => {
             id: "network-offline",
           });
         }
-        checkingRef.current = false;
         return;
       }
 
-      if (isOnline) {
-        await handleWentOnline();
-      } else {
-        handleWentOffline();
-      }
-
+      if (isOnline) await handleWentOnline();
+      else handleWentOffline();
+    } finally {
       checkingRef.current = false;
-    };
+    }
+  };
 
-    // Run immediately, then every 3 seconds
-    heartbeat();
-    const interval = setInterval(heartbeat, 3000);
-    return () => clearInterval(interval);
-  }, [handleWentOffline, handleWentOnline]);
+  heartbeat();
+  const interval = setInterval(heartbeat, 15000);
+  return () => clearInterval(interval);
+}, [handleWentOffline, handleWentOnline]);
 
   // ─── Browser events — SECONDARY (instant UX, not reliable alone) ─────────
   // These fire instantly when OS detects network change — good for quick UX.
