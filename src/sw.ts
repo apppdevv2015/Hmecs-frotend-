@@ -9,7 +9,7 @@ import {
 import { clientsClaim } from "workbox-core";
 
 import { registerRoute, NavigationRoute } from "workbox-routing";
-import { NetworkOnly } from "workbox-strategies";
+
 import {
   CacheFirst,
   NetworkFirst,
@@ -41,12 +41,6 @@ cleanupOutdatedCaches();
 precacheAndRoute(self.__WB_MANIFEST);
 self.skipWaiting();
 clientsClaim();
-
-registerRoute(
-  ({ url }) => url.pathname.includes("favicon.ico"),
-
-  new NetworkOnly(),
-);
 
 const handler = createHandlerBoundToURL("/index.html");
 
@@ -136,6 +130,7 @@ registerRoute(
     cacheName: CACHE_NAMES.STATIC,
   }),
 );
+
 
 /**
  * IndexedDB helper - Open DB for offline request storage
@@ -234,7 +229,7 @@ self.addEventListener("fetch", (event) => {
   fetch(request.clone()).catch((error) => {
     // sirf sach mein offline ho tab queue karo
     if (!self.navigator.onLine) {
-      queueRequestIfOffline(request);
+      event.waitUntil(queueRequestIfOffline(request));
       return new Response(
         JSON.stringify({
           success: true,
