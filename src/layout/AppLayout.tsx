@@ -19,7 +19,7 @@ const checkRealInternet = async (): Promise<boolean> => {
   try {
     const cacheBuster = `${Date.now()}-${crypto.randomUUID()}`;
 
-    const res = await fetch(`/favicon.ico?cb=${cacheBuster}`, {
+    await fetch(`/favicon.ico?cb=${cacheBuster}`, {
       method: "HEAD",
       cache: "no-store",
       signal: AbortSignal.timeout(4000),
@@ -27,7 +27,7 @@ const checkRealInternet = async (): Promise<boolean> => {
         "Cache-Control": "no-cache, no-store, must-revalidate",
       },
     });
-    return res.ok;
+    return true;
   } catch {
     return false;
   }
