@@ -3054,18 +3054,19 @@ export default function QuotationManagementPage() {
     setPendingSendDraft(draft);
   }, []);
 
-  const handleConfirmSend = useCallback(async () => {
+ const handleConfirmSend = useCallback(async () => {
     if (!selectedInquiry || !pendingSendDraft) return;
 
     if (
-      selectedInquiry.company.contactPerson === "—" ||
-      selectedInquiry.company.email === "—" ||
-      selectedInquiry.company.phone === "—" ||
-      selectedInquiry.company.location === "—"
-    ) {
-      return;
-    }
-
+  selectedInquiry.company.contactPerson === "—" ||
+  selectedInquiry.company.email === "—" ||
+  selectedInquiry.company.phone === "—"
+) {
+  showErrorToast(
+    "Company contact details (person, email or phone) are missing. Please update the inquiry before sending a quotation."
+  );
+  return;
+}
     setSavingState("send");
     try {
       const isTrial =
@@ -3140,9 +3141,9 @@ export default function QuotationManagementPage() {
       setIsSendQuotationOpen(false);
       setSelectedInquiry(null);
       setRefreshTick((t) => t + 1);
-    } catch (error) {
-      const message = extractApiError(error);
-      if (message) showErrorToast(message);
+       } catch (error) {
+      const message = extractApiError(error) ?? "Failed to send quotation. Please try again.";
+      showErrorToast(message);
     } finally {
       setSavingState("idle");
     }
