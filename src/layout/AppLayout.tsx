@@ -15,71 +15,63 @@ type AppLayoutProps = {
   role?: UserRole;
 };
 
-const checkRealInternet = async (): Promise<boolean> => {
-  if (!navigator.onLine) return false;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 6000);
-  try {
-    const cb = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    await fetch(`/favicon.ico?cb=${cb}`, {
-      method: "HEAD",
-      cache: "no-store",
-      signal: controller.signal,
-    });
-    return true;
-  } catch {
-    return false;
-  } finally {
-    clearTimeout(timer);
-  }
-};
+const isBrowserOnline = (): boolean =>
+  typeof navigator === "undefined" ? true : navigator.onLine;
 
 const LayoutContent: React.FC<AppLayoutProps> = ({ role = "super_admin" }) => {
   const { isExpanded, isHovered, isMobileOpen } = useSidebar();
   const [hasActiveSub, setHasActiveSub] = useState(true);
-  const [isOffline, setIsOffline] = useState(false); // Optimistic: assume online
 
-  // Single source of truth for network state
-  const networkStateRef = useRef(true);
-  // Prevents overlapping heartbeat calls
-  const checkingRef = useRef(false);
-  // Tracks if initial check has run
-  const initialCheckDoneRef = useRef(false);
+  const [isOffline, setIsOffline] = useState(() => !isBrowserOnline());
 
-  // ─── Core transition handler ─────────────────────────────────────────────
-  // All online/offline transitions go through here to prevent duplicate toasts
+  // Single source of truth for network state (prevents duplicate toasts/syncs)
+  const networkStateRef = useRef(isBrowserOnline());
+  // Prevents two syncs from running at the same time (avoids duplicate requests)
+  const isSyncingRef = useRef(false);
+
+  // ─── Sync pending offline requests ───────────────────────────────────────
+  const syncPendingRequests = useCallback(async () => {
+    if (isSyncingRef.current) return;
+    isSyncingRef.current = true;
+
+    try {
+      const pendingRequests = await offlineQueueService.getRequests();
+      if (pendingRequests.length === 0) return;
+
+      await offlineQueueService.syncRequests();
+      toast.success("✅ Offline changes synced successfully.", {
+        duration: 4000,
+      });
+    } catch (error) {
+      console.error("Offline sync failed:", error);
+      toast.error("❌ Failed to sync offline changes.", { duration: 4000 });
+    } finally {
+      isSyncingRef.current = false;
+    }
+  }, []);
+
+  // ─── Online / offline transition handlers ────────────────────────────────
   const handleWentOffline = useCallback(() => {
     if (!networkStateRef.current) return; // Already offline
     networkStateRef.current = false;
     setIsOffline(true);
     toast.error("⚠️ Internet connection lost. Working in offline mode.", {
       duration: 6000,
-      id: "network-offline", // Prevents duplicate toasts
+      id: "network-offline",
     });
   }, []);
 
-  const handleWentOnline = useCallback(async () => {
+  const handleWentOnline = useCallback(() => {
     if (networkStateRef.current) return; // Already online
     networkStateRef.current = true;
     setIsOffline(false);
+    toast.dismiss("network-offline");
     toast.success("✅ Internet connection restored.", {
       duration: 4000,
-      id: "network-online", // Prevents duplicate toasts
+      id: "network-online",
     });
-
-    try {
-      const pendingRequests = await offlineQueueService.getRequests();
-      if (pendingRequests.length > 0) {
-        await offlineQueueService.syncRequests();
-        toast.success("✅ Offline changes synced successfully.", {
-          duration: 4000,
-        });
-      }
-    } catch (error) {
-      console.error("Offline sync failed:", error);
-      toast.error("❌ Failed to sync offline changes.", { duration: 4000 });
-    }
-  }, []);
+    void syncPendingRequests();
+  }, [syncPendingRequests]);
 
   // ─── Subscription check ──────────────────────────────────────────────────
   useEffect(() => {
@@ -96,68 +88,26 @@ const LayoutContent: React.FC<AppLayoutProps> = ({ role = "super_admin" }) => {
     checkSub();
   }, [role]);
 
+  // ─── Network detection: browser online/offline events ────────────────────
   useEffect(() => {
-  const heartbeat = async () => {
-    if (checkingRef.current) return;
-    checkingRef.current = true;
-    try {
-      const isOnline = await checkRealInternet();
+    window.addEventListener("offline", handleWentOffline);
+    window.addEventListener("online", handleWentOnline);
 
-      if (!initialCheckDoneRef.current) {
-        initialCheckDoneRef.current = true;
-        networkStateRef.current = isOnline;
-        setIsOffline(!isOnline);
-        if (!isOnline) {
-          toast.error("⚠️ Internet connection lost. Working in offline mode.", {
-            duration: 6000,
-            id: "network-offline",
-          });
-        }
-        return;
-      }
-
-      if (isOnline) await handleWentOnline();
-      else handleWentOffline();
-    } finally {
-      checkingRef.current = false;
+    if (isBrowserOnline()) {
+      // Page load: send any changes that were queued in an earlier session
+      void syncPendingRequests();
+    } else {
+      toast.error("⚠️ Internet connection lost. Working in offline mode.", {
+        duration: 6000,
+        id: "network-offline",
+      });
     }
-  };
-
-  heartbeat();
-  const interval = setInterval(heartbeat, 15000);
-  return () => clearInterval(interval);
-}, [handleWentOffline, handleWentOnline]);
-
-  // ─── Browser events — SECONDARY (instant UX, not reliable alone) ─────────
-  // These fire instantly when OS detects network change — good for quick UX.
-  // But they miss many real-world cases, so heartbeat is still primary.
-  useEffect(() => {
-    const handleOfflineEvent = () => {
-      // Don't trust the event blindly — verify with a real fetch
-      // But do an optimistic UI update for instant feedback
-      handleWentOffline();
-    };
-
-    const handleOnlineEvent = async () => {
-      // Browser says online — but verify before showing success toast
-      // Wait a moment for connection to stabilize, then verify
-      setTimeout(async () => {
-        const actually = await checkRealInternet();
-        if (actually) {
-          await handleWentOnline();
-        }
-        // If not actually online, heartbeat will catch it
-      }, 1000);
-    };
-
-    window.addEventListener("offline", handleOfflineEvent);
-    window.addEventListener("online", handleOnlineEvent);
 
     return () => {
-      window.removeEventListener("offline", handleOfflineEvent);
-      window.removeEventListener("online", handleOnlineEvent);
+      window.removeEventListener("offline", handleWentOffline);
+      window.removeEventListener("online", handleWentOnline);
     };
-  }, [handleWentOffline, handleWentOnline]);
+  }, [handleWentOffline, handleWentOnline, syncPendingRequests]);
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-slate-900 dark:bg-slate-950 dark:text-white">
