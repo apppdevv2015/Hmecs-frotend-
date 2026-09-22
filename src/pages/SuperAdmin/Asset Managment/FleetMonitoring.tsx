@@ -1500,90 +1500,138 @@ export default function SuperAdminFleet() {
           cid === "all" ? undefined : cid,
         );
 
-        const machines: FleetMachine[] = (rawMachines || []).map((machine: any) => ({
-          id: String(machine?.machineId || machine?.id || ""),
+        const machines: FleetMachine[] = (rawMachines || []).map(
+          (machine: any) => {
+            const compId =
+              machine?.company?.companyId || machine?.companyId || "";
+            const compName =
+              machine?.company?.companyName &&
+              machine.company.companyName !== "N/A"
+                ? machine.company.companyName
+                : companies.find((c) => c.id === compId)?.companyName ||
+                  "Company";
 
-          machine: String(machine?.machineName || machine?.name || machine?.model || "Machine"),
+            return {
+              id: String(machine?.machineId || machine?.id || ""),
 
-          company:
-            machine?.company?.companyName && machine.company.companyName !== "N/A"
-              ? machine.company.companyName
-              : companies.find((c) => c.id === machine?.companyId)?.companyName || "Company",
+              machine: String(
+                machine?.machineName ||
+                  machine?.name ||
+                  machine?.model ||
+                  "Machine",
+              ),
 
-          companyId: machine?.company?.companyId || machine?.companyId || "",
+              company: compName,
 
-          fleet: String(machine?.fleetId || machine?.serialNumber || "SN-101"),
+              companyId: compId,
 
-          operator: typeof machine?.operator === "object" ? (machine.operator?.name || "Assigned Operator") : String(machine?.operator || "Assigned Operator"),
+              fleet: String(
+                machine?.fleetId || machine?.serialNumber || "SN-101",
+              ),
 
-          location: String(machine?.location || machine?.site || "Site"),
+              operator:
+                typeof machine?.operator === "object"
+                  ? machine.operator?.name || "Assigned Operator"
+                  : String(machine?.operator || "Assigned Operator"),
 
-          type: String(machine?.machineType || machine?.equipmentType || "Equipment"),
+              location: String(machine?.location || machine?.site || "Site"),
 
-          health: `${machine?.healthPercent ?? 85}%`,
+              type: String(
+                machine?.machineType ||
+                  machine?.equipmentType ||
+                  "Equipment",
+              ),
 
-          healthPercent: Number(machine?.healthPercent ?? 85),
+              health: `${machine?.healthPercent ?? 85}%`,
 
-          status: machine?.status || "Healthy",
+              healthPercent: Number(machine?.healthPercent ?? 85),
 
-          lastSeen: machine?.lastSeen || "Just now",
+              status: machine?.status || "Healthy",
 
-          hoursRun: Number(machine?.hoursRun || 0),
+              lastSeen: machine?.lastSeen || "Just now",
 
-          fuelLevel: Number(machine?.fuelLevel || 80),
+              hoursRun: Number(machine?.hoursRun || 0),
 
-          tyre: {
-            status: mapApiStatusToComponent(machine?.components?.tyre?.status),
-            label: "TYRE",
-            life: `${machine?.components?.tyre?.health ?? 85}% life left`,
-            lifePercent: Number(machine?.components?.tyre?.health ?? 85),
-            overallHealthPercent: Number(machine?.components?.tyre?.health ?? 85),
-            subMetrics: buildSubMetrics("tyre", machine?.components?.tyre),
+              fuelLevel: Number(machine?.fuelLevel || 80),
+
+              tyre: machine?.tyre || {
+                status: mapApiStatusToComponent(
+                  machine?.components?.tyre?.status,
+                ),
+                label: "TYRE",
+                life: `${machine?.components?.tyre?.health ?? 85}% life left`,
+                lifePercent: Number(machine?.components?.tyre?.health ?? 85),
+                overallHealthPercent: Number(
+                  machine?.components?.tyre?.health ?? 85,
+                ),
+                subMetrics: buildSubMetrics("tyre", machine?.components?.tyre),
+              },
+
+              engine: machine?.engine || {
+                status: mapApiStatusToComponent(
+                  machine?.components?.engine?.status,
+                ),
+                label: "ENGINE",
+                life: `${machine?.components?.engine?.health ?? 88}% life left`,
+                lifePercent: Number(machine?.components?.engine?.health ?? 88),
+                overallHealthPercent: Number(
+                  machine?.components?.engine?.health ?? 88,
+                ),
+                subMetrics: buildSubMetrics(
+                  "engine",
+                  machine?.components?.engine,
+                ),
+              },
+
+              hydraulic: machine?.hydraulic || {
+                status: mapApiStatusToComponent(
+                  machine?.components?.hydraulic?.status,
+                ),
+                label: "HYDRAULIC",
+                life: `${machine?.components?.hydraulic?.health ?? 75}% life left`,
+                lifePercent: Number(
+                  machine?.components?.hydraulic?.health ?? 75,
+                ),
+                overallHealthPercent: Number(
+                  machine?.components?.hydraulic?.health ?? 75,
+                ),
+                subMetrics: buildSubMetrics(
+                  "hydraulic",
+                  machine?.components?.hydraulic,
+                ),
+              },
+
+              transmission: machine?.transmission || {
+                status: mapApiStatusToComponent(
+                  machine?.components?.transmission?.status,
+                ),
+                label: "SUSPENSION",
+                life: `${machine?.components?.transmission?.health ?? 80}% life left`,
+                lifePercent: Number(
+                  machine?.components?.transmission?.health ?? 80,
+                ),
+                overallHealthPercent: Number(
+                  machine?.components?.transmission?.health ?? 80,
+                ),
+                subMetrics: buildSubMetrics(
+                  "transmission",
+                  machine?.components?.transmission,
+                ),
+              },
+
+              maintenanceHistory: Array.isArray(machine?.maintenanceHistory)
+                ? machine.maintenanceHistory
+                : [],
+            };
           },
+        );
 
-          engine: {
-            status: mapApiStatusToComponent(machine?.components?.engine?.status),
-            label: "ENGINE",
-            life: `${machine?.components?.engine?.health ?? 88}% life left`,
-            lifePercent: Number(machine?.components?.engine?.health ?? 88),
-            overallHealthPercent: Number(machine?.components?.engine?.health ?? 88),
-            subMetrics: buildSubMetrics("engine", machine?.components?.engine),
-          },
-
-          hydraulic: {
-            status: mapApiStatusToComponent(
-              machine?.components?.hydraulic?.status,
-            ),
-            label: "HYDRAULIC",
-            life: `${machine?.components?.hydraulic?.health ?? 75}% life left`,
-            lifePercent: Number(machine?.components?.hydraulic?.health ?? 75),
-            overallHealthPercent: Number(machine?.components?.hydraulic?.health ?? 75),
-            subMetrics: buildSubMetrics(
-              "hydraulic",
-              machine?.components?.hydraulic,
-            ),
-          },
-
-          transmission: {
-            status: mapApiStatusToComponent(
-              machine?.components?.transmission?.status,
-            ),
-            label: "SUSPENSION",
-            life: `${machine?.components?.transmission?.health ?? 80}% life left`,
-            lifePercent: Number(machine?.components?.transmission?.health ?? 80),
-            overallHealthPercent: Number(machine?.components?.transmission?.health ?? 80),
-            subMetrics: buildSubMetrics(
-              "transmission",
-              machine?.components?.transmission,
-            ),
-          },
-
-          maintenanceHistory: Array.isArray(machine?.maintenanceHistory) ? machine.maintenanceHistory : [],
-        }));
-
-        const stats = await fleetService.getFleetStats();
-
-        setStats(stats);
+        setStats({
+          totalMachines: machines.length,
+          healthy: machines.filter((m) => m.status === "Healthy").length,
+          maintenance: machines.filter((m) => m.status === "Warning").length,
+          critical: machines.filter((m) => m.status === "Critical").length,
+        });
 
         setFleetTable(machines);
 

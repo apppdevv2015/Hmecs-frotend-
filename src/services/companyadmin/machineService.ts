@@ -67,11 +67,16 @@ const buildMachineBody = (payload: Partial<MachinePayload>) => ({
   ...(payload.site !== undefined ? { site: payload.site } : {}),
 });
 export const machineService = {
-  async getMachines() {
-    const companyId = getCompanyId();
+  async getMachines(companyId?: string) {
+    const cid =
+      companyId !== undefined
+        ? companyId === "all"
+          ? ""
+          : companyId
+        : getCompanyId();
 
-    const endpoint = companyId
-      ? `/machines?companyId=${encodeURIComponent(companyId)}`
+    const endpoint = cid
+      ? `/machines?companyId=${encodeURIComponent(cid)}`
       : `/machines`;
 
     return apiCall(endpoint, {
@@ -80,7 +85,12 @@ export const machineService = {
   },
 
   async getCompanyFleetMachines(companyId?: string) {
-    const cid = companyId || getCompanyId();
+    const cid =
+      companyId !== undefined
+        ? companyId === "all"
+          ? ""
+          : companyId
+        : getCompanyId();
     const endpoint = cid
       ? `/machines/company-fleet?companyId=${encodeURIComponent(cid)}`
       : `/machines/company-fleet`;
@@ -90,13 +100,17 @@ export const machineService = {
     });
   },
 
-  async getCompanyMachines() {
+  async getCompanyMachines(companyId?: string) {
     try {
-      const res: any = await this.getCompanyFleetMachines();
-      const list = Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
+      const res: any = await this.getCompanyFleetMachines(companyId);
+      const list = Array.isArray(res)
+        ? res
+        : Array.isArray(res?.data)
+          ? res.data
+          : [];
       if (list.length > 0) return res;
     } catch {}
-    return this.getMachines();
+    return this.getMachines(companyId);
   },
 
   async createMachine(payload: MachinePayload) {

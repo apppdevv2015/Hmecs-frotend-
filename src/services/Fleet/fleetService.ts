@@ -62,7 +62,9 @@ export const fleetService = {
     operatorId?: string,
   ): Promise<FleetMachine[]> {
     try {
-      const res: any = await machineService.getCompanyMachines();
+      const targetCompanyId =
+        companyId && companyId !== "all" ? companyId : undefined;
+      const res: any = await machineService.getMachines(targetCompanyId);
       const raw = Array.isArray(res)
         ? res
         : Array.isArray(res?.data)
@@ -75,11 +77,27 @@ export const fleetService = {
         const liveFleet: FleetMachine[] = raw.map((item: any, idx: number) => {
           const mId = item.id || item._id || item.machineId || `m_${idx}`;
           const mName = item.name || item.model || `Machine #${idx + 1}`;
+          const compId =
+            item.companyId ||
+            item.company_id ||
+            item.company?.id ||
+            item.company?.companyId ||
+            "";
           const compName =
-            item.company?.companyName || item.company?.name || item.companyName || "N/A";
+            item.companyName ||
+            item.company_name ||
+            item.company?.name ||
+            item.company?.companyName ||
+            "N/A";
           const fId = item.serialNumber || `FL-${220 + idx}`;
           const opName =
-            item.assignedOperatorName || item.assigned_operator_name || item.operatorName || item.assignedOperator || (item.operator?.name && item.operator.name !== "N/A" ? item.operator.name : "");
+            item.assignedOperatorName ||
+            item.assigned_operator_name ||
+            item.operatorName ||
+            item.assignedOperator ||
+            (item.operator?.name && item.operator.name !== "N/A"
+              ? item.operator.name
+              : "");
           const loc = item.site || item.location || "N/A";
 
           let tyreHealth: number | null = null;
@@ -89,7 +107,9 @@ export const fleetService = {
 
           if (Array.isArray(item.components)) {
             item.components.forEach((c: any) => {
-              const name = String(c.category || c.name || c.component_type || "").toLowerCase();
+              const name = String(
+                c.category || c.name || c.component_type || "",
+              ).toLowerCase();
               let val = Number(c.health ?? c.health_percentage ?? 0);
               if (!val && c.condition) {
                 const cond = Number(c.condition);
@@ -107,14 +127,29 @@ export const fleetService = {
             });
           }
 
-          const rawHealthVals: (number | null)[] = [tyreHealth, engineHealth, hydraulicHealth, suspensionHealth];
-          const healthVals: number[] = rawHealthVals.filter((v): v is number => v !== null && !isNaN(v));
-          const avgHealth = healthVals.length > 0
-            ? Math.round(healthVals.reduce((a: number, b: number) => a + b, 0) / healthVals.length)
-            : 85;
+          const rawHealthVals: (number | null)[] = [
+            tyreHealth,
+            engineHealth,
+            hydraulicHealth,
+            suspensionHealth,
+          ];
+          const healthVals: number[] = rawHealthVals.filter(
+            (v): v is number => v !== null && !isNaN(v),
+          );
+          const avgHealth =
+            healthVals.length > 0
+              ? Math.round(
+                  healthVals.reduce((a: number, b: number) => a + b, 0) /
+                    healthVals.length,
+                )
+              : 85;
 
           const status =
-            avgHealth < 60 ? "Critical" : avgHealth < 75 ? "Warning" : "Healthy";
+            avgHealth < 60
+              ? "Critical"
+              : avgHealth < 75
+                ? "Warning"
+                : "Healthy";
 
           const getCompStatus = (h: number | null): ComponentHealthStatus => {
             if (h === null) return "ok";
@@ -127,7 +162,7 @@ export const fleetService = {
             machineId: mId,
             machineName: mName,
             company: {
-              companyId: item.companyId || item.company?.id || "",
+              companyId: compId,
               companyName: compName,
             },
             fleetId: fId,
@@ -139,7 +174,9 @@ export const fleetService = {
             machineType: item.equipmentType || "Heavy Haulage",
             healthPercent: avgHealth,
             status,
-            lastSeen: item.updatedAt ? new Date(item.updatedAt).toLocaleDateString() : "Just now",
+            lastSeen: item.updatedAt
+              ? new Date(item.updatedAt).toLocaleDateString()
+              : "Just now",
             hoursRun: Number(item.hoursRun || 0),
             fuelLevel: 85,
             components: {
@@ -165,16 +202,17 @@ export const fleetService = {
         });
 
         let result = liveFleet;
-        if (companyId && companyId !== "all") {
-          const filtered = result.filter(
+        if (targetCompanyId) {
+          result = result.filter(
             (m) =>
-              m.company.companyId === companyId ||
-              String((m as any).companyId) === String(companyId) ||
-              m.company.companyName.toLowerCase().includes(String(companyId).toLowerCase())
+              m.company.companyId === targetCompanyId ||
+              String((m as any).companyId) === String(targetCompanyId) ||
+              (m.company.companyName &&
+                targetCompanyId &&
+                m.company.companyName
+                  .toLowerCase()
+                  .includes(targetCompanyId.toLowerCase())),
           );
-          if (filtered.length > 0) {
-            result = filtered;
-          }
         }
         return result;
       }
@@ -191,8 +229,8 @@ export const fleetService = {
     return machines.find((machine) => machine.machineId === machineId) ?? null;
   },
 
-  async getFleetStats() {
-    const machines = await this.getFleetMachines();
+  async getFleetStats(companyId?: string) {
+    const machines = await this.getFleetMachines("super_admin", companyId);
 
     return {
       totalMachines: machines.length,
