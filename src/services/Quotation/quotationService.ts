@@ -1,5 +1,5 @@
 import { apiCall } from "../apiHandler";
-import { showErrorToast } from "../../utils/toastUtils"; 
+import { showErrorToast } from "../../utils/toastUtils";
 
 /* ============================================================================
  * 1. ERROR NORMALIZATION
@@ -24,22 +24,17 @@ export function extractApiError(error: unknown): string | undefined {
   if (error instanceof DOMException && error.name === "AbortError") {
     return undefined;
   }
-
   const shaped = error as ApiErrorShape | undefined;
-
   const backendMessage = shaped?.response?.data?.message ?? shaped?.message;
-
   if (typeof backendMessage === "string" && backendMessage.trim().length > 0) {
     return backendMessage;
   }
-
   return undefined;
 }
 
 /* ============================================================================
  * 2. TYPES
  * ==========================================================================*/
-
 export type QuotationRequestStatus =
   | "PENDING"
   | "DRAFT"
@@ -48,7 +43,6 @@ export type QuotationRequestStatus =
   | "ACCEPTED"
   | "REJECTED"
   | "EXPIRED";
-
 
 export interface QuotationRequest {
   readonly id: string;
@@ -68,7 +62,7 @@ export interface QuotationRequest {
   readonly contractDuration?: string | null;
   readonly optionalServices?: readonly string[];
   readonly implementationRequirements?: string | null;
-   readonly additionalRequirements?: string | null;
+  readonly additionalRequirements?: string | null;
   readonly attachmentUrl?: string | null;
   readonly attachmentFileName?: string | null;
   readonly attachmentFileType?: string | null;
@@ -76,6 +70,20 @@ export interface QuotationRequest {
   readonly status: QuotationRequestStatus | string;
   readonly createdAt?: string;
   readonly updatedAt?: string;
+
+  readonly tier?: string;
+  readonly billingFrequency?: string;
+  readonly licensedMachineAllowance?: number;
+  readonly onceOffImplementationFee?: number;
+  readonly monthlySiteLicence?: number;
+  readonly additionalMachineCharge?: number;
+  readonly paymentTerms?: string;
+  readonly trialRequested?: boolean;
+  readonly trialDuration?: string;
+  readonly trialMachines?: number;
+  readonly trialDescription?: string;
+  readonly notes?: string;
+  readonly draftOptionalServices?: readonly QuotationServiceItem[];
 }
 
 export interface ApiEnvelope<T> {
@@ -114,15 +122,28 @@ export interface CreateQuotationRequestPayload {
   readonly implementationRequirements?: string;
   readonly additionalRequirements?: string;
   readonly attachmentUrl?: string;
+
+  readonly tier?: string;
+  readonly billingFrequency?: string;
+  readonly licensedMachineAllowance?: number;
+  readonly onceOffImplementationFee?: number;
+  readonly monthlySiteLicence?: number;
+  readonly additionalMachineCharge?: number;
+  readonly paymentTerms?: string;
+  readonly trialRequested?: boolean;
+  readonly trialDuration?: string | null;
+  readonly trialMachines?: number | null;
+  readonly trialDescription?: string | null;
+  readonly notes?: string;
+  readonly draftOptionalServices?: readonly QuotationServiceItem[];
 }
 
 export type QuotationRequestPayload = CreateQuotationRequestPayload;
 
-export type UpdateQuotationRequestPayload = Partial<
-  CreateQuotationRequestPayload
-> & {
-  readonly status: QuotationRequestStatus;
-};
+export type UpdateQuotationRequestPayload =
+  Partial<CreateQuotationRequestPayload> & {
+    readonly status: QuotationRequestStatus;
+  };
 export interface AddonQuotationPayload {
   companyId?: string;
   companyName: string;
@@ -238,10 +259,6 @@ function assertValidId(id: string): void {
 }
 
 const BASE_ENDPOINT = "/quotations/requests";
-
-/**
- * Builds the query string for GET /quotations/requests.
- */
 function buildQuotationRequestsEndpoint(
   filters: Omit<QuotationRequestListParams, "signal"> = {},
 ): string {

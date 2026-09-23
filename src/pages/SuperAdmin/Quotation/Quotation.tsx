@@ -185,13 +185,8 @@ const Quotation: FC = () => {
             </p>
           </div>
 
-
-          <FormCard onInquirySubmitted={() => {}} />
-
           <FormCard
             onInquirySubmitted={() => {
-              // Optional: refresh inquiry list after successful submission
-              // e.g. call a refetch function passed down or via context
             }}
           />
 
