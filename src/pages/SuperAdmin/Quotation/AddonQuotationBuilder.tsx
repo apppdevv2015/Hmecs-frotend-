@@ -351,13 +351,6 @@ const PaymentDetailsPanel: FC<PaymentDetailsPanelProps> = ({
               copied={copiedField === "invoiceId"}
               onCopy={(value) => handleCopy("invoiceId", value)}
             />
-            <DetailRow
-              label="Company ID"
-              value={proof.companyId}
-              copyable
-              copied={copiedField === "companyId"}
-              onCopy={(value) => handleCopy("companyId", value)}
-            />
           </SectionCard>
 
           <SectionCard icon={<Mail size={16} />} title="User Information">
@@ -401,7 +394,6 @@ const PaymentDetailsPanel: FC<PaymentDetailsPanelProps> = ({
                 className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
                 aria-label="Download payment proof"
               >
-                <Download size={16} />
               </a>
                             </div>
 

@@ -392,11 +392,11 @@ export const sidebarConfig: Record<
             path: "/company-admin/categories",
             icon: <ListChecks className={sidebarIconClass} />,
           },
-          {
-            name: "Machine Health",
-            path: "/company-admin/inspection-entry",
-            icon: <ClipboardCheck className={sidebarIconClass} />,
-          },
+          // {
+          //   name: "Machine Health",
+          //   path: "/company-admin/inspection-entry",
+          //   icon: <ClipboardCheck className={sidebarIconClass} />,
+          // },
         ],
       },
 

@@ -697,10 +697,10 @@ const QuotationResponseModal: FC<QuotationResponseModalProps> = ({
           <button
             type="button"
             onClick={() => setShowEftModal(true)}
-            className="inline-flex h-11 items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 text-xs font-bold text-blue-700 hover:bg-blue-100 dark:border-blue-900/40 dark:bg-blue-950/40 dark:text-blue-300"
+            // className="inline-flex h-11 items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 text-xs font-bold text-blue-700 hover:bg-blue-100 dark:border-blue-900/40 dark:bg-blue-950/40 dark:text-blue-300"
           >
-            <Receipt size={16} />
-            Verify EFT / Bank Payment
+            {/* <Receipt size={16} />
+            Verify EFT / Bank Payment */}
           </button>
 
           <button

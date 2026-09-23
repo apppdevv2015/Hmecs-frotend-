@@ -960,9 +960,7 @@ const ComponentManagement: React.FC = () => {
   const validateForm = () => {
     if (!form.machineId.trim()) return "Please select a machine";
 
-    if (form.category === "Custom" && !form.customCategory.trim()) {
-      return "Please enter custom category name";
-    }
+  
 
     if (!form.name.trim()) return "Component name is required";
     if (!form.serialNumber.trim()) return "Serial number is required";

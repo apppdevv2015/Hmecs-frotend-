@@ -325,7 +325,7 @@ const QuotationStatus: React.FC = () => {
             </p>
           </div>
 
-          {/* Step 2: Super Admin Review */}
+
           <div
             className={`relative flex flex-col rounded-xl border p-4 ${
               isApproved || isSent
@@ -368,69 +368,7 @@ const QuotationStatus: React.FC = () => {
                 ? formatDate(quotation.updatedAt)
                 : "Under processing"}
             </p>
-          </div>
-
-          {/* Step 3: Activation */}
-          <div
-            className={`relative flex flex-col rounded-xl border p-4 ${
-              isApproved
-                ? "border-blue-200 bg-blue-50/50 dark:border-blue-900/40 dark:bg-blue-950/20"
-                : "border-slate-200 bg-slate-50/60 dark:border-slate-800 dark:bg-slate-800/40 opacity-70"
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <span
-                className={`flex h-8 w-8 items-center justify-center rounded-full text-white shadow-sm ${
-                  isApproved ? "bg-blue-600" : "bg-slate-400"
-                }`}
-              >
-                <Zap className="h-4 w-4" />
-              </span>
-              <span
-                className={`rounded-md px-2 py-0.5 text-[11px] font-bold ${
-                  isApproved
-                    ? "bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-300"
-                    : "bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300"
-                }`}
-              >
-                {isApproved ? "Active" : "Pending"}
-              </span>
-            </div>
-            <h3 className="mt-3 text-sm font-bold text-slate-900 dark:text-white">
-              3. Telemetry Activated
-            </h3>
-            <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
-              {isApproved
-                ? `${durationDays} Days live telemetry access granted.`
-                : "Unlocks on admin approval."}
-            </p>
-            <p className="mt-2 text-[11px] font-semibold text-slate-500">
-              {isApproved
-                ? `${formatDate(startDate.toISOString())} - ${formatDate(endDate.toISOString())}`
-                : "Pending approval"}
-            </p>
-          </div>
-
-          {/* Step 4: Enterprise Contract Ready */}
-          <div className="relative flex flex-col rounded-xl border border-slate-200 bg-slate-50/60 p-4 opacity-70 dark:border-slate-800 dark:bg-slate-800/40">
-            <div className="flex items-center justify-between">
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-400 text-white shadow-sm">
-                <ShieldCheck className="h-4 w-4" />
-              </span>
-              <span className="rounded-md bg-slate-200 px-2 py-0.5 text-[11px] font-bold text-slate-700 dark:bg-slate-700 dark:text-slate-300">
-                Next Stage
-              </span>
-            </div>
-            <h3 className="mt-3 text-sm font-bold text-slate-900 dark:text-white">
-              4. Commercial Contract
-            </h3>
-            <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
-              Upgrade to full production multi-year deployment.
-            </p>
-            <p className="mt-2 text-[11px] font-semibold text-slate-500">
-              Post-Evaluation
-            </p>
-          </div>
+          </div>      
         </div>
       </section>
 
