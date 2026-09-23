@@ -416,7 +416,7 @@ export default function InvoiceManagement() {
 
       {/* PDF Viewer Modal */}
       {pdfViewer && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-99999 bg-black/50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-[#0b1728] rounded-xl w-full max-w-4xl h-[85vh] flex flex-col overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-800">
               <h3 className="text-sm font-semibold text-gray-900 dark:text-white">

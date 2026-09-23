@@ -20,7 +20,6 @@ import {
 // ── Validation regexes ──────────────────────────────────────────────
 const IFSC_REGEX = /^[A-Z]{4}0[A-Z0-9]{6}$/;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const GSTIN_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
 const PHONE_REGEX = /^[6-9]\d{9}$/;
 const ACCOUNT_NUMBER_REGEX = /^\d{9,18}$/;
 
@@ -48,14 +47,7 @@ const invoiceFormSchema = z.object({
     .trim()
     .min(1, "Business address is required")
     .max(300),
-  gstin: z
-    .string()
-    .trim()
-    .optional()
-    .or(z.literal(""))
-    .refine((val) => !val || GSTIN_REGEX.test(val), {
-      message: "Invalid GSTIN format (e.g. 22AAAAA0000A1Z5)",
-    }),
+
   phone: z
     .string()
     .trim()
@@ -96,14 +88,12 @@ const invoiceFormSchema = z.object({
 });
 
 type InvoiceFormValues = z.infer<typeof invoiceFormSchema>;
-
 const emptyFormValues: InvoiceFormValues = {
   contractId: "",
   dueDate: "",
   notes: "Please include invoice number in payment reference.",
   businessName: "",
   addressLine: "",
-  gstin: "",
   phone: "",
   email: "",
   bankName: "",
@@ -126,7 +116,6 @@ export default function GenerateInvoiceForm() {
   );
 
   const [loadingProfile, setLoadingProfile] = useState(true);
-
   const [showConfirm, setShowConfirm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -148,8 +137,6 @@ export default function GenerateInvoiceForm() {
   const selectedContract =
     contracts.find((c) => c.id === selectedContractId) ?? null;
 
-  // ── Load: either the single preselected contract (from Invoice Management),
-  //    or the full ACCEPTED contract list (direct navigation fallback) ──
   useEffect(() => {
     const controller = new AbortController();
     setLoadingContracts(true);
@@ -191,7 +178,6 @@ export default function GenerateInvoiceForm() {
     return () => controller.abort();
   }, [preselectedContractId, setValue]);
 
-  // ── Load existing billing profile to pre-fill bank details ───────
   useEffect(() => {
     const controller = new AbortController();
     setLoadingProfile(true);
@@ -204,7 +190,6 @@ export default function GenerateInvoiceForm() {
             contractId: preselectedContractId ?? "",
             businessName: res.data.businessName,
             addressLine: res.data.addressLine,
-            gstin: res.data.gstin ?? "",
             phone: res.data.phone ?? "",
             email: res.data.email ?? "",
             bankName: res.data.bankName,
@@ -217,15 +202,15 @@ export default function GenerateInvoiceForm() {
       })
       .catch((err) => {
         if (err instanceof DOMException && err.name === "AbortError") return;
-        // No profile saved yet is a valid state (first-time setup) — not an error.
+
       })
       .finally(() => setLoadingProfile(false));
 
     return () => controller.abort();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    
   }, [reset]);
 
-  // ── Auto-fill due date once a contract is resolved ────────────────
+ 
   useEffect(() => {
     if (!selectedContract) return;
 
@@ -259,7 +244,6 @@ export default function GenerateInvoiceForm() {
       await saveBillingProfile({
         businessName: values.businessName,
         addressLine: values.addressLine,
-        gstin: values.gstin || undefined,
         phone: values.phone || undefined,
         email: values.email || undefined,
         bankName: values.bankName,
@@ -500,26 +484,6 @@ export default function GenerateInvoiceForm() {
           </div>
 
           <div className="grid grid-cols-3 gap-4 mb-4">
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                GSTIN
-              </label>
-              <input
-                className={`w-full border rounded-md px-3 py-2 text-sm uppercase focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                  errors.gstin ? "border-red-400" : "border-gray-300"
-                }`}
-                {...register("gstin")}
-                onChange={(e) => {
-                  e.target.value = e.target.value.toUpperCase();
-                  register("gstin").onChange(e);
-                }}
-              />
-              {errors.gstin && (
-                <p className="mt-1 text-xs text-red-600">
-                  {errors.gstin.message}
-                </p>
-              )}
-            </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">
                 Phone

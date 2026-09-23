@@ -542,60 +542,7 @@ const AnalyticsChart: React.FC = () => {
           options={options}
         />
       </div>
-
-      {/* PLAN SALES */}
-      <div className="mt-8">
-        <h3
-          className="mb-5 text-lg font-semibold"
-          style={{
-            color: theme.title,
-          }}
-        >
-          Plan Sales Distribution
-        </h3>
-
-        <div className="space-y-4">
-          {dynamicPlanSales.map((plan) => {
-            const maxSales = Math.max(1, ...dynamicPlanSales.map((p) => p.sales));
-            const pct = plan.sales > 0 ? Math.round((plan.sales / maxSales) * 100) : 0;
-
-            return (
-              <div key={plan.name}>
-                <div className="mb-1 flex items-center justify-between">
-                  <span
-                    className="text-sm font-medium"
-                    style={{
-                      color: theme.text,
-                    }}
-                  >
-                    {plan.name}
-                  </span>
-
-                  <span
-                    className="text-sm font-semibold"
-                    style={{
-                      color: plan.color,
-                    }}
-                  >
-                    {plan.sales} {plan.sales === 1 ? "Sale" : "Sales"}
-                  </span>
-                </div>
-
-                <div className="h-3 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
-                  <div
-                    className="h-full rounded-full transition-all duration-700"
-                    style={{
-                      width: plan.sales > 0 ? `${Math.max(8, pct)}%` : "0%",
-                      background: plan.color,
-                    }}
-                  />
-                </div>
-              </div>
-            );
-          })}
         </div>
-      </div>
-    </div>
   );
 };
 
