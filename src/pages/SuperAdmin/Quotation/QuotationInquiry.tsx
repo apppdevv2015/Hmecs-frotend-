@@ -65,6 +65,22 @@ export interface QuotationInquiry {
   readonly requirement: ClientRequirement;
   readonly trial: TrialRequest;
   readonly attachmentUrl: string | null;
+  readonly savedDraft: {
+    readonly tier: string | null;
+    readonly contractDuration: string | null;
+    readonly billingFrequency: string | null;
+    readonly licensedMachineAllowance: number | null;
+    readonly onceOffImplementationFee: number | null;
+    readonly monthlySiteLicence: number | null;
+    readonly additionalMachineCharge: number | null;
+    readonly paymentTerms: string | null;
+    readonly notes: string | null;
+    readonly draftOptionalServices: readonly {
+      serviceId: string;
+      name: string;
+      price: number;
+    }[];
+  } | null;
 }
 
 export interface AdditionalService {
@@ -271,7 +287,30 @@ function safeText(value: string | null | undefined, fallback: string): string {
     : fallback;
 }
 
+function normalizeContractDuration(raw: unknown): string | null {
+  if (typeof raw !== "string" || raw.trim().length === 0) return null;
+
+  const match = raw.match(/\d+/);
+  if (!match) return null;
+
+  const months = match[0];
+  const exact = CONTRACT_DURATION_OPTIONS.find((opt) =>
+    opt.startsWith(`${months} `),
+  );
+
+  return exact ?? null;
+}
+
+
+
 export function mapRequestToInquiry(raw: QuotationRequest): QuotationInquiry {
+  const hasSavedDraft =
+    raw.status === "DRAFT" ||
+    typeof raw.tier === "string" ||
+    typeof raw.billingFrequency === "string" ||
+    (Array.isArray(raw.draftOptionalServices) &&
+      raw.draftOptionalServices.length > 0);
+
   return {
     id: raw.id,
     inquiryId: raw.requestId,
@@ -306,14 +345,29 @@ export function mapRequestToInquiry(raw: QuotationRequest): QuotationInquiry {
       contractDuration: safeText((raw as any).contractDuration, ""),
       optionalServices: safeArray<string>(raw.optionalServices),
     },
-    // Documented limitation, not fabricated data — see TrialRequest above.
     trial: {
-      requested: false,
-      duration: null,
-      machines: null,
-      description: null,
+      requested: raw.trialRequested ?? false,
+      duration: raw.trialDuration ?? null,
+      machines: raw.trialMachines ?? null,
+      description: raw.trialDescription ?? null,
     },
     attachmentUrl: raw.attachmentUrl ?? null,
+    savedDraft: hasSavedDraft
+      ? {
+          tier: raw.tier ?? null,
+          contractDuration: normalizeContractDuration(
+            (raw as any).contractDuration,
+          ),
+          billingFrequency: raw.billingFrequency ?? null,
+          licensedMachineAllowance: raw.licensedMachineAllowance ?? null,
+          onceOffImplementationFee: raw.onceOffImplementationFee ?? null,
+          monthlySiteLicence: raw.monthlySiteLicence ?? null,
+          additionalMachineCharge: raw.additionalMachineCharge ?? null,
+          paymentTerms: raw.paymentTerms ?? null,
+          notes: raw.notes ?? null,
+          draftOptionalServices: raw.draftOptionalServices ?? [],
+        }
+      : null,
   };
 }
 
@@ -321,31 +375,45 @@ function buildDefaultDraft(
   inquiry: QuotationInquiry,
   catalog: readonly AdditionalService[],
 ): QuotationDraft {
+  const saved = inquiry.savedDraft;
+
   const requestedIds = new Set(
     inquiry.requirement.requestedServiceNames
       .map((n) => findServiceIdByName(n, catalog))
       .filter((id): id is string => Boolean(id)),
   );
+
+  const savedServiceIds = new Set(
+    (saved?.draftOptionalServices ?? []).map((s) => s.serviceId),
+  );
+
   return {
     inquiryId: inquiry.inquiryId,
-    tier: TIER_OPTIONS[0],
-    contractDuration: CONTRACT_DURATION_OPTIONS[1],
-    billingFrequency: BILLING_FREQUENCY_OPTIONS[0],
-    licensedMachineAllowance: inquiry.requirement.activeMachines,
-    onceOffImplementationFee: 0,
-    monthlySiteLicence: 0,
-    additionalMachineCharge: 0,
-    paymentTerms: PAYMENT_TERMS_OPTIONS[0],
+    tier: saved?.tier ?? TIER_OPTIONS[0],
+    contractDuration:
+      saved?.contractDuration ?? CONTRACT_DURATION_OPTIONS[1],
+    billingFrequency: saved?.billingFrequency ?? BILLING_FREQUENCY_OPTIONS[0],
+    licensedMachineAllowance:
+      saved?.licensedMachineAllowance ?? inquiry.requirement.activeMachines,
+    onceOffImplementationFee: saved?.onceOffImplementationFee ?? 0,
+    monthlySiteLicence: saved?.monthlySiteLicence ?? 0,
+    additionalMachineCharge: saved?.additionalMachineCharge ?? 0,
+    paymentTerms: saved?.paymentTerms ?? PAYMENT_TERMS_OPTIONS[0],
     trialRequested: inquiry.trial.requested,
     trialDuration: inquiry.trial.duration ?? DEFAULT_TRIAL_DURATION,
     trialMachines: inquiry.trial.machines ?? DEFAULT_TRIAL_MACHINES,
     trialDescription: inquiry.trial.description ?? "",
-    services: catalog.map((s) => ({
-      serviceId: s.id,
-      selected: requestedIds.has(s.id),
-      price: s.defaultPrice,
-    })),
-    notes: "",
+    services: catalog.map((s) => {
+      const savedService = saved?.draftOptionalServices?.find(
+        (x) => x.serviceId === s.id,
+      );
+      return {
+        serviceId: s.id,
+        selected: saved ? savedServiceIds.has(s.id) : requestedIds.has(s.id),
+        price: savedService?.price ?? s.defaultPrice,
+      };
+    }),
+    notes: saved?.notes ?? "",
   };
 }
 
@@ -658,11 +726,6 @@ function Chip({ children }: { readonly children: ReactNode }) {
   );
 }
 
-/**
- * Single badge component for every status shown in the app (Inquiry list,
- * Details drawer, Responses table). Backed 1:1 by QuotationRequestStatus —
- * there is no separate Active/Inactive badge concept anymore.
- */
 function StatusBadge({ status }: { readonly status: QuotationRequestStatus }) {
   return (
     <span
@@ -3009,12 +3072,24 @@ export default function QuotationManagementPage() {
     setIsInquiryDetailsOpen(true);
   }, []);
 
-  const handleOpenSendQuotation = useCallback((inquiry: QuotationInquiry) => {
-    setSelectedInquiry(inquiry);
+  const handleOpenSendQuotation = useCallback(
+  async (inquiry: QuotationInquiry) => {
     setSendDrawerMode(OPEN_STATUSES.includes(inquiry.status) ? "edit" : "view");
     setIsInquiryDetailsOpen(false);
+    setSelectedInquiry(inquiry);
     setIsSendQuotationOpen(true);
-  }, []);
+
+    try {
+      const raw = await getQuotationRequestById(inquiry.id);
+      setSelectedInquiry(mapRequestToInquiry(raw));
+    } catch (error) {
+      const message = extractApiError(error) ?? MESSAGES.inquiryDetailLoadError;
+      showErrorToast(message);
+    }
+  },
+  [],
+);
+
 
   const handleViewResponse = useCallback((inquiry: QuotationInquiry) => {
     setSelectedInquiry(inquiry);
@@ -3031,23 +3106,49 @@ export default function QuotationManagementPage() {
     setPendingDelete(false);
   }, []);
 
-  const handleSaveDraft = useCallback(
+   const handleSaveDraft = useCallback(
     async (draft: QuotationDraft) => {
       if (!selectedInquiry) return;
       setSavingState("draft");
       try {
         await updateQuotationRequest(selectedInquiry.id, {
           status: "DRAFT",
+          tier: draft.tier,
+          contractDuration: draft.contractDuration,
+          billingFrequency: draft.billingFrequency,
+          licensedMachineAllowance: draft.licensedMachineAllowance,
+          onceOffImplementationFee: draft.onceOffImplementationFee,
+          monthlySiteLicence: draft.monthlySiteLicence,
+          additionalMachineCharge: draft.additionalMachineCharge,
+          paymentTerms: draft.paymentTerms,
+          trialRequested: draft.trialRequested,
+          trialDuration: draft.trialDuration,
+          trialMachines: draft.trialMachines,
+          trialDescription: draft.trialDescription,
+          notes: draft.notes,
+          draftOptionalServices: draft.services
+            .filter((s) => s.selected)
+            .map((s) => {
+              const catalogService = getServiceById(s.serviceId, serviceCatalog);
+              return {
+                serviceId: s.serviceId,
+                name: catalogService?.name ?? "",
+                price: s.price,
+              };
+            }),
         });
         setIsSendQuotationOpen(false);
         setSelectedInquiry(null);
         setRefreshTick((t) => t + 1);
-      } catch {
+      } catch (error) {
+        const message =
+          extractApiError(error) ?? "Failed to save draft. Please try again.";
+        showErrorToast(message);
       } finally {
         setSavingState("idle");
       }
     },
-    [selectedInquiry],
+    [selectedInquiry, serviceCatalog],
   );
 
   const handleRequestSend = useCallback((draft: QuotationDraft) => {
@@ -3086,7 +3187,7 @@ export default function QuotationManagementPage() {
         const baseAmount =
           totals.contractValue - totals.additionalServicesTotal;
         const optionalServicesAmount = totals.additionalServicesTotal;
-        // No discount input exists in the UI yet — defaults to 0.
+        
         const discountAmount = 0;
         const totalAmount =
           baseAmount + optionalServicesAmount - discountAmount;
@@ -3153,7 +3254,7 @@ export default function QuotationManagementPage() {
     setPendingDelete(true);
   }, []);
 
-  const handleConfirmDelete = useCallback(async () => {
+   const handleConfirmDelete = useCallback(async () => {
     if (!selectedInquiry || savingState === "delete") return;
     setSavingState("delete");
     try {
@@ -3161,7 +3262,10 @@ export default function QuotationManagementPage() {
       setPendingDelete(false);
       closeAllDrawers();
       setRefreshTick((t) => t + 1);
-    } catch {
+    } catch (error) {
+      const message =
+        extractApiError(error) ?? "Failed to delete quotation. Please try again.";
+      showErrorToast(message);
     } finally {
       setSavingState("idle");
     }

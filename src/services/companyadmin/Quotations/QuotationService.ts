@@ -1,37 +1,6 @@
-/**
- * companyQuotationService.ts
- * -----------------------------------------------------------------------
- * Single source of truth for Company Admin's read access to a quotation
- * that Super Admin has sent them.
- *
- * Base endpoint: /quotations/{id}
- * The path param accepts EITHER the quotation's real id OR its
- * human-readable quotation number (e.g. "QT-20260907-YB2B") — this
- * matches the backend contract exactly (see swagger: "Get quotation
- * details by ID or Quotation Number").
- *
- * TYPE NOTE:
- * This interface was verified against a real GET /quotations/{id}
- * response on 2026-09-07 (see below). Several monetary fields come back
- * as STRINGS from the backend, not numbers — the type reflects that
- * exactly so nothing here silently disagrees with reality.
- *
- * MESSAGE POLICY:
- * - Backend success/error messages are handled by the shared apiHandler.
- * - This service never calls toast directly.
- * - This is a read-only (GET) service — no success Toast is shown.
- * - No fallback error messages are generated in this service.
- * - No mock/dummy data anywhere in this file — every value returned
- *   comes directly from the real backend response.
- * -----------------------------------------------------------------------
- */
+
 
 import { apiCall } from "./../../apiHandler";
-
-/* ============================================================================
- * 1. TYPES — exact shape of `data` from GET /quotations/{id}
- *    (verified against a live response, not guessed)
- * ==========================================================================*/
 
 export interface QuotationOptionalService {
   readonly serviceId: string;

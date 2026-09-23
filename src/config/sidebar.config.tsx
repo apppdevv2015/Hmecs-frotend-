@@ -215,11 +215,11 @@ export const sidebarConfig: Record<
             path: "/super-admin/quotation",
             icon: <FileText className={sidebarIconClass} />,
           },
-          {
-            name: "Quotation Plans",
-            path: "/super-admin/quotation-plans",
-            icon: <Layers className={sidebarIconClass} />,
-          },
+          // {
+          //   name: "Quotation Plans",
+          //   path: "/super-admin/quotation-plans",
+          //   icon: <Layers className={sidebarIconClass} />,
+          // },
           {
             name: "Contracts",
             path: "/super-admin/contracts",
