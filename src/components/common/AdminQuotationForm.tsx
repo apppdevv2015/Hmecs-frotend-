@@ -815,7 +815,6 @@ export default function QuotationRequestForm({
             <label className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
               4. Number of Active Machines *
             </label>
-
             <input
               type="text"
               inputMode="numeric"
@@ -827,7 +826,6 @@ export default function QuotationRequestForm({
               }`}
               {...register("activeMachines")}
             />
-
             <div className="min-h-[20px] pt-1">
               {errors.activeMachines?.message && (
                 <p className="text-xs leading-5 text-red-500">
@@ -838,7 +836,6 @@ export default function QuotationRequestForm({
           </div>
 
           {/* Equipment Types */}
-
           <div className="flex min-w-0 flex-col">
             <label className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
               5. Fleet / Equipment Types *

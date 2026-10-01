@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import toast from "react-hot-toast";
 
 import machineService from "../../services/Operator/machineService";
 import { componentService } from "../../services/companyadmin/componentService";
@@ -44,7 +43,7 @@ export type MachineStatus = "Online" | "Offline" | "Maintenance";
 export interface Machine {
   id: string;
   name: string;
-  type: string; 
+  type: string;
   model?: string;
   category?: string;
   serialNumber: string;
@@ -77,7 +76,7 @@ export type IssueSeverity = "Low" | "Medium" | "High" | "Critical";
 
 export interface IssueImage {
   id: string;
-  file: File | null; 
+  file: File | null;
   previewUrl: string;
   name: string;
   sizeKb: number;
@@ -102,7 +101,7 @@ export type InspectionStatus = "OK" | "Issue" | "N/A" | "Pending";
 export interface InspectionItem {
   id: string;
   label: string;
-  icon: string; 
+  icon: string;
   status: InspectionStatus;
   value?: string;
   unit?: string;
@@ -137,7 +136,7 @@ export interface MachineComponent {
   id: string;
   category: ComponentCategory;
   name: string;
-  health: number; 
+  health: number;
   status: ComponentHealthStatus;
   currentReading: string;
   parameters?: ComponentParameter[];
@@ -153,7 +152,6 @@ export interface ComponentUpdate {
   images: IssueImage[];
 }
 
-
 export interface PreStartInspectionApi {
   getAssignedMachine: (operatorId: string) => Promise<Machine>;
   getInspectionChecklist: (machineId: string) => Promise<InspectionItem[]>;
@@ -167,7 +165,6 @@ export interface PreStartInspectionApi {
   patchComponentUpdate: (update: ComponentUpdate) => Promise<void>;
   postCompleteInspection: (machineId: string) => Promise<void>;
 }
-
 
 export const mockMachine: Machine = {
   id: "m-dt102",
@@ -295,91 +292,173 @@ export const mockInspectionItems: InspectionItem[] = [
   },
 ];
 
-export const mockComponentCategories: ComponentCategory[] = [
-  "Engine",
-  "Hydraulic System",
-  "Transmission",
-  "Suspension",
-  "Braking System",
-  "Tyres",
-];
-
-export const mockCategoryOverview: Record<ComponentCategory, CategoryOverview> = {
-  Engine: {
-    category: "Engine",
-    overallHealth: 88,
-    status: "Healthy",
-    hoursRun: 4800,
-    lastUpdated: "Today, 07:40 AM",
-  },
-  "Hydraulic System": {
-    category: "Hydraulic System",
-    overallHealth: 74,
-    status: "Good",
-    hoursRun: 3120,
-    lastUpdated: "Yesterday, 06:10 PM",
-  },
-  Transmission: {
-    category: "Transmission",
-    overallHealth: 91,
-    status: "Healthy",
-    hoursRun: 4800,
-    lastUpdated: "Today, 07:40 AM",
-  },
-  Suspension: {
-    category: "Suspension",
-    overallHealth: 82,
-    status: "Healthy",
-    hoursRun: 2840,
-    lastUpdated: "Today, 08:15 AM",
-  },
-  "Braking System": {
-    category: "Braking System",
-    overallHealth: 68,
-    status: "Warning",
-    hoursRun: 4800,
-    lastUpdated: "Today, 08:15 AM",
-  },
-  Tyres: {
-    category: "Tyres",
-    overallHealth: 79,
-    status: "Good",
-    hoursRun: 1980,
-    lastUpdated: "2 days ago",
-  },
-};
-
-export const mockComponentsByCategory: Record<ComponentCategory, MachineComponent[]> = {
+export const mockComponentsByCategory: Record<
+  ComponentCategory,
+  MachineComponent[]
+> = {
   Engine: [
-    { id: "c-eng-oil", category: "Engine", name: "Engine Oil", health: 85, status: "Good", currentReading: "92°C" },
-    { id: "c-eng-turbo", category: "Engine", name: "Turbocharger", health: 90, status: "Healthy", currentReading: "—" },
-    { id: "c-eng-filter", category: "Engine", name: "Fuel Injector", health: 88, status: "Good", currentReading: "—" },
+    {
+      id: "c-eng-oil",
+      category: "Engine",
+      name: "Engine Oil",
+      health: 85,
+      status: "Good",
+      currentReading: "92°C",
+    },
+    {
+      id: "c-eng-turbo",
+      category: "Engine",
+      name: "Turbocharger",
+      health: 90,
+      status: "Healthy",
+      currentReading: "—",
+    },
+    {
+      id: "c-eng-filter",
+      category: "Engine",
+      name: "Fuel Injector",
+      health: 88,
+      status: "Good",
+      currentReading: "—",
+    },
   ],
   "Hydraulic System": [
-    { id: "c-hyd-pump", category: "Hydraulic System", name: "Hydraulic Pump", health: 72, status: "Good", currentReading: "58°C" },
-    { id: "c-hyd-oil", category: "Hydraulic System", name: "Hydraulic Oil", health: 76, status: "Good", currentReading: "—" },
-    { id: "c-hyd-hose", category: "Hydraulic System", name: "Hoses & Seals", health: 70, status: "Warning", currentReading: "—" },
+    {
+      id: "c-hyd-pump",
+      category: "Hydraulic System",
+      name: "Hydraulic Pump",
+      health: 72,
+      status: "Good",
+      currentReading: "58°C",
+    },
+    {
+      id: "c-hyd-oil",
+      category: "Hydraulic System",
+      name: "Hydraulic Oil",
+      health: 76,
+      status: "Good",
+      currentReading: "—",
+    },
+    {
+      id: "c-hyd-hose",
+      category: "Hydraulic System",
+      name: "Hoses & Seals",
+      health: 70,
+      status: "Warning",
+      currentReading: "—",
+    },
   ],
   Transmission: [
-    { id: "c-tr-fluid", category: "Transmission", name: "Transmission Fluid", health: 92, status: "Healthy", currentReading: "64°C" },
-    { id: "c-tr-clutch", category: "Transmission", name: "Clutch Pack", health: 90, status: "Healthy", currentReading: "—" },
+    {
+      id: "c-tr-fluid",
+      category: "Transmission",
+      name: "Transmission Fluid",
+      health: 92,
+      status: "Healthy",
+      currentReading: "64°C",
+    },
+    {
+      id: "c-tr-clutch",
+      category: "Transmission",
+      name: "Clutch Pack",
+      health: 90,
+      status: "Healthy",
+      currentReading: "—",
+    },
   ],
   Suspension: [
-    { id: "c-susp-oil", category: "Suspension", name: "Suspension Oil", health: 78, status: "Good", currentReading: "68°C" },
-    { id: "c-susp-cyl", category: "Suspension", name: "Suspension Cylinder", health: 86, status: "Good", currentReading: "—" },
-    { id: "c-susp-leaf", category: "Suspension", name: "Leaf Spring", health: 80, status: "Good", currentReading: "—" },
-    { id: "c-susp-shock", category: "Suspension", name: "Shock Absorber", health: 75, status: "Good", currentReading: "—" },
-    { id: "c-susp-pins", category: "Suspension", name: "Pins & Bushes", health: 82, status: "Good", currentReading: "—" },
+    {
+      id: "c-susp-oil",
+      category: "Suspension",
+      name: "Suspension Oil",
+      health: 78,
+      status: "Good",
+      currentReading: "68°C",
+    },
+    {
+      id: "c-susp-cyl",
+      category: "Suspension",
+      name: "Suspension Cylinder",
+      health: 86,
+      status: "Good",
+      currentReading: "—",
+    },
+    {
+      id: "c-susp-leaf",
+      category: "Suspension",
+      name: "Leaf Spring",
+      health: 80,
+      status: "Good",
+      currentReading: "—",
+    },
+    {
+      id: "c-susp-shock",
+      category: "Suspension",
+      name: "Shock Absorber",
+      health: 75,
+      status: "Good",
+      currentReading: "—",
+    },
+    {
+      id: "c-susp-pins",
+      category: "Suspension",
+      name: "Pins & Bushes",
+      health: 82,
+      status: "Good",
+      currentReading: "—",
+    },
   ],
   "Braking System": [
-    { id: "c-brk-pads", category: "Braking System", name: "Brake Pads", health: 62, status: "Warning", currentReading: "—" },
-    { id: "c-brk-fluid", category: "Braking System", name: "Brake Fluid", health: 74, status: "Good", currentReading: "—" },
-    { id: "c-brk-disc", category: "Braking System", name: "Brake Disc", health: 68, status: "Warning", currentReading: "—" },
+    {
+      id: "c-brk-pads",
+      category: "Braking System",
+      name: "Brake Pads",
+      health: 62,
+      status: "Warning",
+      currentReading: "—",
+    },
+    {
+      id: "c-brk-fluid",
+      category: "Braking System",
+      name: "Brake Fluid",
+      health: 74,
+      status: "Good",
+      currentReading: "—",
+    },
+    {
+      id: "c-brk-disc",
+      category: "Braking System",
+      name: "Brake Disc",
+      health: 68,
+      status: "Warning",
+      currentReading: "—",
+    },
   ],
   Tyres: [
-    { id: "c-tyre-fl", category: "Tyres", name: "Front Left Tyre", health: 80, status: "Good", currentReading: "32 psi" },
-    { id: "c-tyre-fr", category: "Tyres", name: "Front Right Tyre", health: 78, status: "Good", currentReading: "31 psi" },
-    { id: "c-tyre-rl", category: "Tyres", name: "Rear Left Tyre", health: 79, status: "Good", currentReading: "33 psi" },
+    {
+      id: "c-tyre-fl",
+      category: "Tyres",
+      name: "Front Left Tyre",
+      health: 80,
+      status: "Good",
+      currentReading: "32 psi",
+    },
+    {
+      id: "c-tyre-fr",
+      category: "Tyres",
+      name: "Front Right Tyre",
+      health: 78,
+      status: "Good",
+      currentReading: "31 psi",
+    },
+    {
+      id: "c-tyre-rl",
+      category: "Tyres",
+      name: "Rear Left Tyre",
+      health: 79,
+      status: "Good",
+      currentReading: "33 psi",
+    },
   ],
 };
 
@@ -624,7 +703,9 @@ function MachineCard({
   components: MachineComponent[];
 }) {
   const overallHealth = components.length
-    ? Math.round(components.reduce((sum, c) => sum + c.health, 0) / components.length)
+    ? Math.round(
+        components.reduce((sum, c) => sum + c.health, 0) / components.length,
+      )
     : 100;
   const status = healthToStatus(overallHealth);
   const circumference = 2 * Math.PI * 46;
@@ -709,7 +790,11 @@ function MachineCard({
       </div>
 
       <div className="mt-4 space-y-3 border-t border-slate-100 pt-4 dark:border-slate-800">
-        <InfoRow icon={Hash} label="Serial Number" value={machine.serialNumber} />
+        <InfoRow
+          icon={Hash}
+          label="Serial Number"
+          value={machine.serialNumber}
+        />
         <InfoRow icon={MapPin} label="Location" value={machine.location} />
         <InfoRow
           icon={Clock}
@@ -748,130 +833,6 @@ function InfoRow({
   );
 }
 
-function ReportIssueModal({
-  machineId,
-  onClose,
-  onSubmit,
-}: {
-  machineId: string;
-  onClose: () => void;
-  onSubmit: (report: IssueReport) => void;
-}) {
-  const [component, setComponent] = useState<IssueComponent | "">("");
-  const [severity, setSeverity] = useState<IssueSeverity | "">("");
-  const [description, setDescription] = useState(
-    "Oil leakage detected from the left suspension area.",
-  );
-  const { images, addImages, removeImage } = useImageUpload();
-  const [error, setError] = useState("");
-
-  const handleSubmit = () => {
-    if (!component || !severity || !description.trim()) {
-      setError("Please select a component, severity and add a description.");
-      return;
-    }
-
-    onSubmit({
-      id: nextId("issue"),
-      machineId,
-      component,
-      severity,
-      description: description.trim(),
-      images,
-      createdAt: new Date().toISOString(),
-    });
-  };
-
-  return (
-    <ModalShell title="Report an Issue" onClose={onClose}>
-      <div className="space-y-5">
-        {error && (
-          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-xs font-bold text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
-            {error}
-          </div>
-        )}
-
-        <div>
-          <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-            Component
-          </label>
-          <select
-            value={component}
-            onChange={(e) => setComponent(e.target.value as IssueComponent)}
-            className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-700 dark:bg-[#101f33] dark:text-white"
-          >
-            <option value="">Select component</option>
-            {ISSUE_COMPONENT_OPTIONS.map((opt) => (
-              <option key={opt} value={opt}>
-                {opt}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-            Severity
-          </label>
-          <div className="flex flex-wrap gap-2">
-            {SEVERITY_OPTIONS.map((opt) => (
-              <button
-                key={opt}
-                type="button"
-                onClick={() => setSeverity(opt)}
-                className={`h-9 rounded-lg border px-4 text-xs font-bold transition ${
-                  severity === opt
-                    ? severityBadgeClass(opt) + " ring-2 ring-offset-1 ring-current/30"
-                    : "border-slate-200 bg-white text-slate-500 hover:border-slate-300 dark:border-slate-700 dark:bg-[#101f33] dark:text-slate-400"
-                }`}
-              >
-                {opt}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-            Issue Description
-          </label>
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={4}
-            placeholder="Describe what's wrong..."
-            className="w-full resize-none rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-700 dark:bg-[#101f33] dark:text-white"
-          />
-        </div>
-
-        <div>
-          <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-            Images / Evidence
-          </label>
-          <ImageUploader images={images} onAdd={addImages} onRemove={removeImage} />
-        </div>
-      </div>
-
-      <ModalFooter>
-        <button
-          type="button"
-          onClick={onClose}
-          className="h-11 rounded-lg border border-slate-300 bg-white px-5 text-sm font-bold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-[#101f33] dark:text-slate-300 dark:hover:bg-[#12243b]"
-        >
-          Cancel
-        </button>
-        <button
-          type="button"
-          onClick={handleSubmit}
-          className="h-11 rounded-lg bg-red-600 px-5 text-sm font-bold text-white transition hover:bg-red-700"
-        >
-          Submit Issue
-        </button>
-      </ModalFooter>
-    </ModalShell>
-  );
-}
-
 // ============================================================================
 // Pre-Start Inspection Checklist
 // ============================================================================
@@ -904,7 +865,9 @@ function ChecklistSection({
           <div className="flex-1">
             <div className="mb-1 flex items-center justify-between text-xs font-bold text-slate-500 dark:text-slate-400">
               <span>Progress</span>
-              <span>{completedCount} of {items.length} completed</span>
+              <span>
+                {completedCount} of {items.length} completed
+              </span>
             </div>
             <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-800">
               <div
@@ -954,12 +917,24 @@ function ChecklistRow({
   expanded: boolean;
   onToggleExpand: () => void;
   onStatusChange: (status: InspectionStatus) => void;
-  onSaveDetails: (value: string, description: string, imageUrl: string | null) => void;
+  onSaveDetails: (
+    value: string,
+    description: string,
+    imageUrl: string | null,
+  ) => void;
 }) {
   const Icon = CHECKLIST_ICONS[item.icon] ?? Circle;
   const { images, addImages, removeImage } = useImageUpload(
     item.imageUrl
-      ? [{ id: "existing", file: null, previewUrl: item.imageUrl, name: "photo.jpg", sizeKb: 0 }]
+      ? [
+          {
+            id: "existing",
+            file: null,
+            previewUrl: item.imageUrl,
+            name: "photo.jpg",
+            sizeKb: 0,
+          },
+        ]
       : [],
   );
   const [localValue, setLocalValue] = useState(item.value || "");
@@ -998,7 +973,10 @@ function ChecklistRow({
             </div>
             {item.safeRange && (
               <p className="mt-0.5 text-[11px] font-semibold text-slate-400">
-                Safe Benchmark: <span className="font-bold text-slate-600 dark:text-slate-300">{item.safeRange}</span>
+                Safe Benchmark:{" "}
+                <span className="font-bold text-slate-600 dark:text-slate-300">
+                  {item.safeRange}
+                </span>
               </p>
             )}
           </div>
@@ -1065,13 +1043,23 @@ function ChecklistRow({
             <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-400">
               Attach Photo
             </label>
-            <ImageUploader images={images} onAdd={addImages} onRemove={removeImage} />
+            <ImageUploader
+              images={images}
+              onAdd={addImages}
+              onRemove={removeImage}
+            />
           </div>
 
           <div className="flex justify-end">
             <button
               type="button"
-              onClick={() => onSaveDetails(localValue, localDescription, images[0]?.previewUrl ?? null)}
+              onClick={() =>
+                onSaveDetails(
+                  localValue,
+                  localDescription,
+                  images[0]?.previewUrl ?? null,
+                )
+              }
               className="h-9 rounded-lg bg-blue-600 px-5 text-xs font-bold text-white transition hover:bg-blue-700"
             >
               Save Details
@@ -1083,21 +1071,17 @@ function ChecklistRow({
   );
 }
 
-
-
 function ComponentHealthSection({
   components,
   onUpdateClick,
   onAddCustomComponent,
   ready,
-  hasCriticalIssue,
   onComplete,
 }: {
   components: MachineComponent[];
   onUpdateClick: (component: MachineComponent) => void;
   onAddCustomComponent: () => void;
   ready: boolean;
-  hasCriticalIssue: boolean;
   onComplete: () => void;
 }) {
   return (
@@ -1108,7 +1092,8 @@ function ComponentHealthSection({
             Component Health &amp; Telemetry
           </h2>
           <p className="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">
-            View, inspect, and update live parameters for all components installed on this machine.
+            View, inspect, and update live parameters for all components
+            installed on this machine.
           </p>
         </div>
 
@@ -1134,7 +1119,9 @@ function ComponentHealthSection({
           <table className="w-full border-collapse text-left">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:bg-slate-950/60">
-                <th className="px-4 py-3 font-bold">Component &amp; Monitored Parameters</th>
+                <th className="px-4 py-3 font-bold">
+                  Component &amp; Monitored Parameters
+                </th>
                 <th className="px-4 py-3 font-bold">Category</th>
                 <th className="px-4 py-3 font-bold">Health Score</th>
                 <th className="px-4 py-3 font-bold">Status</th>
@@ -1144,7 +1131,10 @@ function ComponentHealthSection({
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {components.map((c) => (
-                <tr key={c.id} className="transition hover:bg-slate-50 dark:hover:bg-white/[0.03]">
+                <tr
+                  key={c.id}
+                  className="transition hover:bg-slate-50 dark:hover:bg-white/[0.03]"
+                >
                   <td className="px-4 py-3.5">
                     <p className="text-sm font-bold text-slate-900 dark:text-white">
                       {c.name}
@@ -1163,9 +1153,15 @@ function ComponentHealthSection({
                                   : "bg-amber-50 text-amber-800 border border-amber-200/80 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800/50"
                               }`}
                             >
-                              <span className="text-slate-600 dark:text-slate-300 font-bold">{p.name}:</span>
-                              <span className="font-black text-slate-900 dark:text-white">{val} {p.unit}</span>
-                              <span className="text-[10px] text-slate-400 dark:text-slate-500">({p.safeMin}–{p.safeMax})</span>
+                              <span className="text-slate-600 dark:text-slate-300 font-bold">
+                                {p.name}:
+                              </span>
+                              <span className="font-black text-slate-900 dark:text-white">
+                                {val} {p.unit}
+                              </span>
+                              <span className="text-[10px] text-slate-400 dark:text-slate-500">
+                                ({p.safeMin}–{p.safeMax})
+                              </span>
                             </span>
                           );
                         })}
@@ -1258,8 +1254,12 @@ function ComponentHealthSection({
                         }`}
                       >
                         <span className="font-bold">{p.name}:</span>
-                        <span className="font-black text-slate-900 dark:text-white">{val} {p.unit}</span>
-                        <span className="text-[10px] text-slate-400">({p.safeMin}–{p.safeMax})</span>
+                        <span className="font-black text-slate-900 dark:text-white">
+                          {val} {p.unit}
+                        </span>
+                        <span className="text-[10px] text-slate-400">
+                          ({p.safeMin}–{p.safeMax})
+                        </span>
                       </span>
                     );
                   })}
@@ -1305,7 +1305,8 @@ function ComponentHealthSection({
                 Inspection Ready
               </h4>
               <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">
-                All required component telemetry &amp; parameters are verified within safe operating limits.
+                All required component telemetry &amp; parameters are verified
+                within safe operating limits.
               </p>
             </div>
           </div>
@@ -1313,7 +1314,7 @@ function ComponentHealthSection({
           <button
             type="button"
             onClick={onComplete}
-            disabled={!ready || hasCriticalIssue}
+            disabled={!ready}
             className="h-10 shrink-0 rounded-xl bg-emerald-600 px-6 text-xs font-black text-white transition hover:bg-emerald-700 shadow-md shadow-emerald-500/20 cursor-pointer"
           >
             Complete Inspection
@@ -1370,7 +1371,9 @@ function UpdateComponentModal({
   };
 
   const [currentLevel, setCurrentLevel] = useState(component.health);
-  const [condition, setCondition] = useState<"Poor" | "Fair" | "Good" | "Excellent">("Good");
+  const [condition, setCondition] = useState<
+    "Poor" | "Fair" | "Good" | "Excellent"
+  >("Good");
   const [status, setStatus] = useState<ComponentHealthStatus>(component.status);
   const [currentReading, setCurrentReading] = useState(
     component.currentReading === "—" ? "" : component.currentReading,
@@ -1387,7 +1390,15 @@ function UpdateComponentModal({
     setCurrentLevel(newHealth);
     const newStatus = healthToStatus(newHealth);
     setStatus(newStatus);
-    setCondition(newHealth >= 90 ? "Excellent" : newHealth >= 70 ? "Good" : newHealth >= 50 ? "Fair" : "Poor");
+    setCondition(
+      newHealth >= 90
+        ? "Excellent"
+        : newHealth >= 70
+          ? "Good"
+          : newHealth >= 50
+            ? "Fair"
+            : "Poor",
+    );
 
     const readingParts = updated.map((p) => `${p.currentVal} ${p.unit}`);
     setCurrentReading(readingParts.join(" • "));
@@ -1397,7 +1408,8 @@ function UpdateComponentModal({
     onSave({
       health: currentLevel,
       status,
-      currentReading: currentReading.trim() === "" ? "—" : currentReading.trim(),
+      currentReading:
+        currentReading.trim() === "" ? "—" : currentReading.trim(),
       condition,
       notes,
       images,
@@ -1406,7 +1418,11 @@ function UpdateComponentModal({
   };
 
   return (
-    <ModalShell title="Inspect &amp; Update Component" subtitle={component.name} onClose={onClose}>
+    <ModalShell
+      title="Inspect &amp; Update Component"
+      subtitle={component.name}
+      onClose={onClose}
+    >
       <div className="space-y-5">
         {/* Real-time Health Badge Header */}
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 dark:border-slate-800 dark:bg-slate-900/60 flex items-center justify-between">
@@ -1451,7 +1467,10 @@ function UpdateComponentModal({
               const maxRange = Math.ceil(p.safeMax * 1.4);
 
               return (
-                <div key={pIdx} className="rounded-lg bg-white p-3 border border-slate-200 shadow-sm dark:border-slate-700/80 dark:bg-slate-900">
+                <div
+                  key={pIdx}
+                  className="rounded-lg bg-white p-3 border border-slate-200 shadow-sm dark:border-slate-700/80 dark:bg-slate-900"
+                >
                   <div className="flex items-center justify-between">
                     <div>
                       <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
@@ -1466,14 +1485,21 @@ function UpdateComponentModal({
                         type="number"
                         step="any"
                         value={val}
-                        onChange={(e) => handleParamChange(pIdx, parseFloat(e.target.value) || 0)}
+                        onChange={(e) =>
+                          handleParamChange(
+                            pIdx,
+                            parseFloat(e.target.value) || 0,
+                          )
+                        }
                         className={`h-8 w-20 rounded-md border px-2 text-right text-xs font-black outline-none transition focus:ring-2 focus:ring-blue-500 ${
                           isSafe
                             ? "border-emerald-300 text-emerald-700 bg-emerald-50/50 dark:border-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300"
                             : "border-amber-300 text-amber-700 bg-amber-50/50 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-300"
                         }`}
                       />
-                      <span className="text-xs font-bold text-slate-500">{p.unit}</span>
+                      <span className="text-xs font-bold text-slate-500">
+                        {p.unit}
+                      </span>
                     </div>
                   </div>
 
@@ -1481,9 +1507,15 @@ function UpdateComponentModal({
                     type="range"
                     min={minRange}
                     max={maxRange}
-                    step={p.unit === "V" || p.unit === "Bar" || p.unit === "sec" ? 0.1 : 1}
+                    step={
+                      p.unit === "V" || p.unit === "Bar" || p.unit === "sec"
+                        ? 0.1
+                        : 1
+                    }
                     value={val}
-                    onChange={(e) => handleParamChange(pIdx, parseFloat(e.target.value))}
+                    onChange={(e) =>
+                      handleParamChange(pIdx, parseFloat(e.target.value))
+                    }
                     className="mt-2.5 w-full accent-blue-600 h-1.5 bg-slate-200 rounded-lg cursor-pointer dark:bg-slate-700"
                   />
                 </div>
@@ -1525,7 +1557,11 @@ function UpdateComponentModal({
           <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
             Attachment Photos
           </label>
-          <ImageUploader images={images} onAdd={addImages} onRemove={removeImage} />
+          <ImageUploader
+            images={images}
+            onAdd={addImages}
+            onRemove={removeImage}
+          />
         </div>
       </div>
 
@@ -1571,51 +1607,133 @@ const PRESET_COMPONENT_TEMPLATES: Array<{
     name: "Telescopic Boom & Hoist System",
     category: "Crane Hydraulics",
     icon: "🏗️",
-    description: "Main boom telescoping cylinder and high-tension hoist winch hydraulics",
+    description:
+      "Main boom telescoping cylinder and high-tension hoist winch hydraulics",
     parameters: [
-      { name: "Boom Extension Pressure", unit: "Bar", safeMin: 150, safeMax: 300, defaultVal: 220, description: "Boom cylinder extension pressure" },
-      { name: "Hoist Winch Pressure", unit: "Bar", safeMin: 160, safeMax: 300, defaultVal: 230, description: "Main hoisting winch hydraulic pressure" },
-      { name: "Boom Angle Elevation", unit: "Deg", safeMin: 0, safeMax: 85, defaultVal: 45, description: "Boom operating elevation angle" },
+      {
+        name: "Boom Extension Pressure",
+        unit: "Bar",
+        safeMin: 150,
+        safeMax: 300,
+        defaultVal: 220,
+        description: "Boom cylinder extension pressure",
+      },
+      {
+        name: "Hoist Winch Pressure",
+        unit: "Bar",
+        safeMin: 160,
+        safeMax: 300,
+        defaultVal: 230,
+        description: "Main hoisting winch hydraulic pressure",
+      },
+      {
+        name: "Boom Angle Elevation",
+        unit: "Deg",
+        safeMin: 0,
+        safeMax: 85,
+        defaultVal: 45,
+        description: "Boom operating elevation angle",
+      },
     ],
   },
   {
     name: "Outrigger Stabilization System",
     category: "Crane Hydraulics",
     icon: "🚧",
-    description: "Hydraulic outrigger vertical jacks and horizontal beam extension",
+    description:
+      "Hydraulic outrigger vertical jacks and horizontal beam extension",
     parameters: [
-      { name: "Outrigger Jack Pressure", unit: "Bar", safeMin: 140, safeMax: 280, defaultVal: 210, description: "Vertical load-bearing jack pressure" },
-      { name: "Leveling Pitch Deviation", unit: "Deg", safeMin: 0, safeMax: 5, defaultVal: 1.2, description: "Base chassis horizontal tilt angle" },
+      {
+        name: "Outrigger Jack Pressure",
+        unit: "Bar",
+        safeMin: 140,
+        safeMax: 280,
+        defaultVal: 210,
+        description: "Vertical load-bearing jack pressure",
+      },
+      {
+        name: "Leveling Pitch Deviation",
+        unit: "Deg",
+        safeMin: 0,
+        safeMax: 5,
+        defaultVal: 1.2,
+        description: "Base chassis horizontal tilt angle",
+      },
     ],
   },
   {
     name: "Pneumatic Air Brake & Steering",
     category: "Brakes & Steering",
     icon: "🛑",
-    description: "Dual-circuit pneumatic service brakes and power steering hydraulic booster",
+    description:
+      "Dual-circuit pneumatic service brakes and power steering hydraulic booster",
     parameters: [
-      { name: "Air Brake Line Pressure", unit: "Bar", safeMin: 6.5, safeMax: 12.0, defaultVal: 8.5, description: "Pneumatic reservoir service pressure" },
-      { name: "Steering Booster Pressure", unit: "Bar", safeMin: 100, safeMax: 180, defaultVal: 135, description: "Steering assist hydraulic pressure" },
+      {
+        name: "Air Brake Line Pressure",
+        unit: "Bar",
+        safeMin: 6.5,
+        safeMax: 12.0,
+        defaultVal: 8.5,
+        description: "Pneumatic reservoir service pressure",
+      },
+      {
+        name: "Steering Booster Pressure",
+        unit: "Bar",
+        safeMin: 100,
+        safeMax: 180,
+        defaultVal: 135,
+        description: "Steering assist hydraulic pressure",
+      },
     ],
   },
   {
     name: "Heavy-Duty Transmission & Torque Converter",
     category: "Transmission",
     icon: "⚙️",
-    description: "Powershift transmission lockup clutch and torque converter fluid circuit",
+    description:
+      "Powershift transmission lockup clutch and torque converter fluid circuit",
     parameters: [
-      { name: "Transmission Oil Pressure", unit: "PSI", safeMin: 180, safeMax: 280, defaultVal: 225, description: "Main clutch pack engagement pressure" },
-      { name: "Converter Out Temperature", unit: "°C", safeMin: 70, safeMax: 115, defaultVal: 88, description: "Torque converter outlet fluid temp" },
+      {
+        name: "Transmission Oil Pressure",
+        unit: "PSI",
+        safeMin: 180,
+        safeMax: 280,
+        defaultVal: 225,
+        description: "Main clutch pack engagement pressure",
+      },
+      {
+        name: "Converter Out Temperature",
+        unit: "°C",
+        safeMin: 70,
+        safeMax: 115,
+        defaultVal: 88,
+        description: "Torque converter outlet fluid temp",
+      },
     ],
   },
   {
     name: "Auxiliary High-Flow Cooling Package",
     category: "Cooling",
     icon: "❄️",
-    description: "Multi-row radiator, charge air cooler and variable speed hydraulic fan",
+    description:
+      "Multi-row radiator, charge air cooler and variable speed hydraulic fan",
     parameters: [
-      { name: "Coolant Header Temperature", unit: "°C", safeMin: 75, safeMax: 102, defaultVal: 86, description: "Engine water jacket outlet temperature" },
-      { name: "Hydraulic Fan Drive Speed", unit: "RPM", safeMin: 600, safeMax: 2200, defaultVal: 1450, description: "Cooling fan rotational velocity" },
+      {
+        name: "Coolant Header Temperature",
+        unit: "°C",
+        safeMin: 75,
+        safeMax: 102,
+        defaultVal: 86,
+        description: "Engine water jacket outlet temperature",
+      },
+      {
+        name: "Hydraulic Fan Drive Speed",
+        unit: "RPM",
+        safeMin: 600,
+        safeMax: 2200,
+        defaultVal: 1450,
+        description: "Cooling fan rotational velocity",
+      },
     ],
   },
 ];
@@ -1686,7 +1804,7 @@ function AddCustomComponentModal({
 
   const handleUpdateParam = (index: number, field: string, value: any) => {
     setParams((prev) =>
-      prev.map((p, i) => (i === index ? { ...p, [field]: value } : p))
+      prev.map((p, i) => (i === index ? { ...p, [field]: value } : p)),
     );
   };
 
@@ -1701,7 +1819,9 @@ function AddCustomComponentModal({
         return;
       }
       if (Number(p.safeMin) >= Number(p.safeMax)) {
-        setFormError(`For parameter '${p.name}', Safe Min (${p.safeMin}) must be strictly less than Safe Max (${p.safeMax}).`);
+        setFormError(
+          `For parameter '${p.name}', Safe Min (${p.safeMin}) must be strictly less than Safe Max (${p.safeMax}).`,
+        );
         return;
       }
     }
@@ -1727,7 +1847,11 @@ function AddCustomComponentModal({
                 Add Custom Component to Equipment
               </h2>
               <p className="text-xs text-blue-200">
-                Machine: <span className="font-bold text-white">{machine?.name || machine?.model || "Heavy Equipment"}</span> ({machine?.type || machine?.category || "Machinery"})
+                Machine:{" "}
+                <span className="font-bold text-white">
+                  {machine?.name || machine?.model || "Heavy Equipment"}
+                </span>{" "}
+                ({machine?.type || machine?.category || "Machinery"})
               </p>
             </div>
           </div>
@@ -1777,22 +1901,30 @@ function AddCustomComponentModal({
                 >
                   {/* Parameter Name */}
                   <div className="min-w-[160px] flex-1">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase">Parameter Name</span>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">
+                      Parameter Name
+                    </span>
                     <input
                       type="text"
                       placeholder="e.g. Oil Pressure"
                       value={param.name}
-                      onChange={(e) => handleUpdateParam(idx, "name", e.target.value)}
+                      onChange={(e) =>
+                        handleUpdateParam(idx, "name", e.target.value)
+                      }
                       className="mt-0.5 h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-extrabold text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-[#07111f] dark:text-white"
                     />
                   </div>
 
                   {/* Unit */}
                   <div className="w-20">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase">Unit</span>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">
+                      Unit
+                    </span>
                     <select
                       value={param.unit}
-                      onChange={(e) => handleUpdateParam(idx, "unit", e.target.value)}
+                      onChange={(e) =>
+                        handleUpdateParam(idx, "unit", e.target.value)
+                      }
                       className="mt-0.5 h-9 w-full rounded-lg border border-slate-300 bg-white px-1 text-xs font-extrabold text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-[#07111f] dark:text-white"
                     >
                       <option value="Bar">Bar</option>
@@ -1810,29 +1942,47 @@ function AddCustomComponentModal({
 
                   {/* Safe Min */}
                   <div className="w-20">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase">Safe Min</span>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">
+                      Safe Min
+                    </span>
                     <input
                       type="number"
                       value={param.safeMin}
-                      onChange={(e) => handleUpdateParam(idx, "safeMin", parseFloat(e.target.value) || 0)}
+                      onChange={(e) =>
+                        handleUpdateParam(
+                          idx,
+                          "safeMin",
+                          parseFloat(e.target.value) || 0,
+                        )
+                      }
                       className="mt-0.5 h-9 w-full rounded-lg border border-slate-300 bg-white px-2 text-center text-xs font-extrabold text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-[#07111f] dark:text-white"
                     />
                   </div>
 
                   {/* Safe Max */}
                   <div className="w-20">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase">Safe Max</span>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">
+                      Safe Max
+                    </span>
                     <input
                       type="number"
                       value={param.safeMax}
-                      onChange={(e) => handleUpdateParam(idx, "safeMax", parseFloat(e.target.value) || 0)}
+                      onChange={(e) =>
+                        handleUpdateParam(
+                          idx,
+                          "safeMax",
+                          parseFloat(e.target.value) || 0,
+                        )
+                      }
                       className="mt-0.5 h-9 w-full rounded-lg border border-slate-300 bg-white px-2 text-center text-xs font-extrabold text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-[#07111f] dark:text-white"
                     />
                   </div>
 
                   {/* Default / Baseline */}
                   <div className="w-20">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase">Default</span>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">
+                      Default
+                    </span>
                     <input
                       type="number"
                       value={param.defaultVal}
@@ -1952,14 +2102,18 @@ function CompleteInspectionCard({
         <div>
           <h3
             className={`text-sm font-extrabold ${
-              ready ? "text-emerald-800 dark:text-emerald-300" : "text-slate-700 dark:text-slate-300"
+              ready
+                ? "text-emerald-800 dark:text-emerald-300"
+                : "text-slate-700 dark:text-slate-300"
             }`}
           >
             {ready ? "Inspection Ready" : "Ready to Complete Inspection?"}
           </h3>
           <p
             className={`mt-0.5 text-sm font-medium ${
-              ready ? "text-emerald-700/80 dark:text-emerald-300/80" : "text-slate-500 dark:text-slate-400"
+              ready
+                ? "text-emerald-700/80 dark:text-emerald-300/80"
+                : "text-slate-500 dark:text-slate-400"
             }`}
           >
             {ready
@@ -2045,43 +2199,11 @@ const getArrayData = <T = any,>(response: any): T[] => {
   return [];
 };
 
-// Turns a raw category string from the API into a clean, trimmed display
-// category. No forcing into a fixed list — whatever the backend sends is
-// what gets shown.
-const normalizeCategory = (raw?: string): string | null => {
-  if (!raw) return null;
-  const value = raw.trim();
-  return value === "" ? null : value;
-};
-
 const healthToStatus = (health: number): ComponentHealthStatus => {
   if (health >= 90) return "Healthy";
   if (health >= 70) return "Good";
   if (health >= 50) return "Warning";
   return "Critical";
-};
-
-
-
-
-
-const buildCategoryOverview = (
-  category: ComponentCategory,
-  components: MachineComponent[],
-): CategoryOverview => {
-  if (!components.length) {
-    return { category, overallHealth: 0, status: "Healthy", hoursRun: 0, lastUpdated: "—" };
-  }
-  const overallHealth = Math.round(
-    components.reduce((sum, c) => sum + c.health, 0) / components.length,
-  );
-  return {
-    category,
-    overallHealth,
-    status: healthToStatus(overallHealth),
-    hoursRun: 0,
-    lastUpdated: "Just now",
-  };
 };
 
 // ============================================================================
@@ -2093,14 +2215,16 @@ const PreStartInspection: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [inspectionItems, setInspectionItems] = useState<InspectionItem[]>(mockInspectionItems);
-  const [issueReports, setIssueReports] = useState<IssueReport[]>([]);
-  const [reportModalOpen, setReportModalOpen] = useState(false);
+  const [inspectionItems, setInspectionItems] =
+    useState<InspectionItem[]>(mockInspectionItems);
 
-    const [category, setCategory] = useState<string>("");
-  const [updateTarget, setUpdateTarget] = useState<MachineComponent | null>(null);
-  const [componentsState, setComponentsState] =
-    useState<Record<string, MachineComponent[]>>({});
+  const [category, setCategory] = useState<string>("");
+  const [updateTarget, setUpdateTarget] = useState<MachineComponent | null>(
+    null,
+  );
+  const [componentsState, setComponentsState] = useState<
+    Record<string, MachineComponent[]>
+  >({});
   const [categories, setCategories] = useState<string[]>([]);
 
   const loadMachineAndComponents = async () => {
@@ -2136,12 +2260,21 @@ const PreStartInspection: React.FC = () => {
             item?.operator_name ??
             item?.operator?.name ??
             "",
-        ).trim().toLowerCase();
+        )
+          .trim()
+          .toLowerCase();
 
-        const curName = (storedUser?.name || storedUser?.fullName || "").toLowerCase();
+        const curName = (
+          storedUser?.name ||
+          storedUser?.fullName ||
+          ""
+        ).toLowerCase();
 
-        return (operatorId && assignedOpId.toLowerCase() === operatorId.toLowerCase()) ||
-               (curName && curName.length > 1 && assignedOpName.includes(curName));
+        return (
+          (operatorId &&
+            assignedOpId.toLowerCase() === operatorId.toLowerCase()) ||
+          (curName && curName.length > 1 && assignedOpName.includes(curName))
+        );
       });
 
       if (!currentAssignment && machines.length > 0) {
@@ -2156,7 +2289,10 @@ const PreStartInspection: React.FC = () => {
       }
 
       const resolvedMachineId = String(
-        currentAssignment?.machineId || currentAssignment?.id || currentAssignment?._id || "",
+        currentAssignment?.machineId ||
+          currentAssignment?.id ||
+          currentAssignment?._id ||
+          "",
       ).trim();
 
       setMachine({
@@ -2181,41 +2317,23 @@ const PreStartInspection: React.FC = () => {
       // ---- Components ----
       let rawComponents: any[] = [];
 
-      // 1. Query spec-template from master catalog / backend for full installed component matrix
+      // 1. Fetch REAL registered components from database first (source of truth)
       try {
-        const typeStr =
-          currentAssignment?.equipmentType ||
-          currentAssignment?.category ||
-          currentAssignment?.machineType ||
-          "All Terrain Crane";
-        const modelStr =
-          currentAssignment?.model ||
-          currentAssignment?.modelName ||
-          currentAssignment?.name ||
-          currentAssignment?.machineName ||
-          "";
-        const opUser = StorageService.getUser();
-        const opCompanyId = opUser?.companyId || opUser?.company_id || currentAssignment?.companyId || "";
-        const opMachineId = currentAssignment?.id || currentAssignment?.machineId || currentAssignment?.serialNumber || "";
-        const tplRes: any = await apiCall(
-          `/machines/spec-template?equipmentType=${encodeURIComponent(typeStr)}&modelName=${encodeURIComponent(modelStr)}&companyId=${encodeURIComponent(opCompanyId)}&machineId=${encodeURIComponent(opMachineId)}`,
-        );
-        const tplData = tplRes?.data || tplRes;
-        if (tplData && Array.isArray(tplData.components) && tplData.components.length > 0) {
-          rawComponents.push(...tplData.components);
-        }
-      } catch (tplErr) {
-        console.warn("Spec template fetch notice:", tplErr);
-      }
-
-      // 2. Fetch custom components from database
-      try {
-        const componentsResponse = await componentService.getComponents(resolvedMachineId);
+        const componentsResponse =
+          await componentService.getComponents(resolvedMachineId);
         const dbComps = getArrayData<any>(componentsResponse);
         if (Array.isArray(dbComps) && dbComps.length > 0) {
-          dbComps.forEach((dc: any) => {
-            const dcName = (dc.name || dc.description || "").toLowerCase().trim();
-            if (!rawComponents.some((rc: any) => (rc.name || rc.description || "").toLowerCase().trim() === dcName)) {
+          dbComps.forEach((dc: any, dcIdx: number) => {
+            const dcKey = dc.id
+              ? `id:${dc.id}`
+              : (dc.name || dc.description || "").toLowerCase().trim();
+            const alreadyExists = rawComponents.some((rc: any) => {
+              const rcKey = rc.id
+                ? `id:${rc.id}`
+                : (rc.name || rc.description || "").toLowerCase().trim();
+              return rcKey === dcKey;
+            });
+            if (!alreadyExists) {
               rawComponents.push(dc);
             }
           });
@@ -2224,117 +2342,167 @@ const PreStartInspection: React.FC = () => {
         console.warn("Component fetch notice:", err);
       }
 
+      // 2. Only fall back to OEM spec-template when there are NO real registered
+      // components for this machine — avoids duplicating real components with
+      // generic template entries.
+      if (rawComponents.length === 0) {
+        try {
+          const typeStr =
+            currentAssignment?.equipmentType ||
+            currentAssignment?.category ||
+            currentAssignment?.machineType ||
+            "All Terrain Crane";
+          const modelStr =
+            currentAssignment?.model ||
+            currentAssignment?.modelName ||
+            currentAssignment?.name ||
+            currentAssignment?.machineName ||
+            "";
+          const opUser = StorageService.getUser();
+          const opCompanyId =
+            opUser?.companyId ||
+            opUser?.company_id ||
+            currentAssignment?.companyId ||
+            "";
+          const opMachineId =
+            currentAssignment?.id ||
+            currentAssignment?.machineId ||
+            currentAssignment?.serialNumber ||
+            "";
+          const tplRes: any = await apiCall(
+            `/machines/spec-template?equipmentType=${encodeURIComponent(typeStr)}&modelName=${encodeURIComponent(modelStr)}&companyId=${encodeURIComponent(opCompanyId)}&machineId=${encodeURIComponent(opMachineId)}`,
+          );
+          const tplData = tplRes?.data || tplRes;
+          if (
+            tplData &&
+            Array.isArray(tplData.components) &&
+            tplData.components.length > 0
+          ) {
+            rawComponents.push(...tplData.components);
+          }
+        } catch (tplErr) {
+          console.warn("Spec template fetch notice:", tplErr);
+        }
+      }
+
       // 3. Merge components array directly on machine record if present
-      if (Array.isArray(currentAssignment?.components) && currentAssignment.components.length > 0) {
+      if (
+        Array.isArray(currentAssignment?.components) &&
+        currentAssignment.components.length > 0
+      ) {
         currentAssignment.components.forEach((mc: any) => {
-          const mcName = (mc.name || mc.description || "").toLowerCase().trim();
-          if (!rawComponents.some((rc: any) => (rc.name || rc.description || "").toLowerCase().trim() === mcName)) {
+          const mcKey = mc.id
+            ? `id:${mc.id}`
+            : (mc.name || mc.description || "").toLowerCase().trim();
+          const alreadyExists = rawComponents.some((rc: any) => {
+            const rcKey = rc.id
+              ? `id:${rc.id}`
+              : (rc.name || rc.description || "").toLowerCase().trim();
+            return rcKey === mcKey;
+          });
+          if (!alreadyExists) {
             rawComponents.push(mc);
           }
         });
       }
 
-      // 4. Fallback if completely empty
-      if (rawComponents.length === 0) {
-        const machineBrand = currentAssignment?.brand || "Heavy Equipment";
-        rawComponents = [
-          {
-            id: `comp-engine-${resolvedMachineId}`,
-            category: "Engine",
-            name: `${machineBrand} Industrial Engine Assembly`,
-            description: `${machineBrand} Industrial Engine Assembly`,
-            condition: 5,
-            currentReading: "47 PSI • 82°C",
-            currentHours: 1240,
-            parameters: [
-              { name: "Engine Oil Pressure", unit: "PSI", safeMin: 30, safeMax: 65, defaultVal: 47, currentVal: 47, description: "Operating oil pressure" },
-              { name: "Coolant Temperature", unit: "°C", safeMin: 65, safeMax: 95, defaultVal: 82, currentVal: 82, description: "Coolant temp" },
-            ],
-          },
-          {
-            id: `comp-hyd-pump-${resolvedMachineId}`,
-            category: "Hydraulics",
-            name: "Main Hydraulic System",
-            description: "Main Hydraulic System",
-            condition: 5,
-            currentReading: "220 Bar",
-            currentHours: 1240,
-            parameters: [
-              { name: "Hydraulic Pressure", unit: "Bar", safeMin: 150, safeMax: 300, defaultVal: 220, currentVal: 220, description: "Hydraulic pressure" },
-            ],
-          },
-        ];
-      }
-
-      // 5. Merge company-added custom components for this machine from localStorage
+      // 5. Fetch company-added custom components for this machine from BACKEND (DB is source of truth)
       try {
-        const customKeys = [
-          `custom_components_${resolvedMachineId}`,
-          `custom_components_${currentAssignment?.serialNumber}`,
-          `custom_components_${currentAssignment?.modelName || currentAssignment?.name}`,
-        ];
-        customKeys.forEach((key) => {
-          if (!key) return;
-          const raw = localStorage.getItem(key);
-          if (raw) {
-            const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed)) {
-              parsed.forEach((cc: any) => {
-                const ccName = (cc.name || "").toLowerCase().trim();
-                if (ccName && !rawComponents.some((rc: any) => (rc.name || rc.description || "").toLowerCase().trim() === ccName)) {
-                  rawComponents.push({
-                    id: `custom-comp-${cc.name}`,
-                    category: cc.category || "Equipment Component",
-                    name: cc.name,
-                    description: cc.name,
-                    condition: 5,
-                    currentReading: cc.parameters?.[0] ? `${cc.parameters[0].defaultVal ?? cc.parameters[0].safeMin} ${cc.parameters[0].unit || ""}` : "Normal Range",
-                    parameters: cc.parameters,
-                  });
-                }
-              });
-            }
+        const opUser = StorageService.getUser();
+        const opCompanyId =
+          opUser?.companyId ||
+          opUser?.company_id ||
+          currentAssignment?.companyId ||
+          "";
+        const customRes: any = await apiCall(
+          `/machines/custom-components?machineId=${encodeURIComponent(resolvedMachineId)}&companyId=${encodeURIComponent(opCompanyId)}`,
+        ).catch(() => null);
+
+        const customComponents = getArrayData<any>(
+          customRes?.data || customRes,
+        );
+        customComponents.forEach((cc: any) => {
+          const ccName = (cc.name || "").toLowerCase().trim();
+          const alreadyExists = rawComponents.some(
+            (rc: any) =>
+              (rc.name || rc.description || "").toLowerCase().trim() === ccName,
+          );
+          if (ccName && !alreadyExists) {
+            rawComponents.push({
+              id: cc.id || `custom-comp-${cc.name}`,
+              category: cc.category || "Equipment Component",
+              name: cc.name,
+              description: cc.name,
+              condition: 5,
+              currentReading: cc.parameters?.[0]
+                ? `${cc.parameters[0].defaultVal ?? cc.parameters[0].safeMin} ${cc.parameters[0].unit || ""}`
+                : "Normal Range",
+              parameters: cc.parameters,
+            });
           }
         });
       } catch (err) {
-        console.warn("Custom components merge notice:", err);
+        console.warn("Custom components fetch notice:", err);
       }
 
       // 6. Fetch latest persistent inspection & telemetry data from PostgreSQL Database (component_health table)
       try {
         const manualDataRes: any = await apiCall(
           `/machines/${encodeURIComponent(resolvedMachineId)}/manual-data`,
-          { method: "GET" }
+          { method: "GET" },
         ).catch(() => null);
 
         const manualPayload = manualDataRes?.data || manualDataRes;
         const savedHealthRecords = manualPayload?.records || [];
 
-        if (Array.isArray(savedHealthRecords) && savedHealthRecords.length > 0) {
+        if (
+          Array.isArray(savedHealthRecords) &&
+          savedHealthRecords.length > 0
+        ) {
           rawComponents.forEach((comp) => {
-            const compNameLower = (comp.name || comp.description || "").toLowerCase().trim();
+            const compNameLower = (comp.name || comp.description || "")
+              .toLowerCase()
+              .trim();
             const matchedRecord = savedHealthRecords.find((r: any) => {
               const rNameLower = (r.componentName || "").toLowerCase().trim();
-              return rNameLower === compNameLower || (r.componentId && r.componentId === comp.id);
+              return (
+                rNameLower === compNameLower ||
+                (r.componentId && r.componentId === comp.id)
+              );
             });
 
             if (matchedRecord) {
-              if (matchedRecord.healthScore !== undefined && matchedRecord.healthScore !== null) {
-                comp.condition = Math.round(Number(matchedRecord.healthScore) / 20);
+              if (
+                matchedRecord.healthScore !== undefined &&
+                matchedRecord.healthScore !== null
+              ) {
+                comp.condition = Math.round(
+                  Number(matchedRecord.healthScore) / 20,
+                );
                 comp.healthScore = Number(matchedRecord.healthScore);
-                comp.status = matchedRecord.status || healthToStatus(Number(matchedRecord.healthScore));
+                comp.status =
+                  matchedRecord.status ||
+                  healthToStatus(Number(matchedRecord.healthScore));
               }
 
-              if (Array.isArray(matchedRecord.parameters) && matchedRecord.parameters.length > 0) {
+              if (
+                Array.isArray(matchedRecord.parameters) &&
+                matchedRecord.parameters.length > 0
+              ) {
                 if (!comp.parameters) comp.parameters = [];
                 matchedRecord.parameters.forEach((sp: any) => {
                   const spNameLower = (sp.name || "").toLowerCase().trim();
                   const existingParam = comp.parameters?.find(
-                    (p: any) => (p.name || "").toLowerCase().trim() === spNameLower
+                    (p: any) =>
+                      (p.name || "").toLowerCase().trim() === spNameLower,
                   );
                   if (existingParam) {
                     const savedVal = sp.value ?? sp.currentVal ?? sp.defaultVal;
-                    if (savedVal !== undefined && savedVal !== null && !isNaN(Number(savedVal))) {
+                    if (
+                      savedVal !== undefined &&
+                      savedVal !== null &&
+                      !isNaN(Number(savedVal))
+                    ) {
                       existingParam.currentVal = Number(savedVal);
                     }
                   } else {
@@ -2344,7 +2512,9 @@ const PreStartInspection: React.FC = () => {
                       safeMin: Number(sp.safeMin ?? 0),
                       safeMax: Number(sp.safeMax ?? 100),
                       defaultVal: Number(sp.defaultVal ?? sp.value ?? 0),
-                      currentVal: Number(sp.value ?? sp.currentVal ?? sp.defaultVal ?? 0),
+                      currentVal: Number(
+                        sp.value ?? sp.currentVal ?? sp.defaultVal ?? 0,
+                      ),
                       description: sp.description || "",
                     });
                   }
@@ -2352,14 +2522,19 @@ const PreStartInspection: React.FC = () => {
 
                 // Update currentReading summary string
                 comp.currentReading = comp.parameters
-                  .map((p: any) => `${p.currentVal ?? p.defaultVal ?? "—"} ${p.unit || ""}`.trim())
+                  .map((p: any) =>
+                    `${p.currentVal ?? p.defaultVal ?? "—"} ${p.unit || ""}`.trim(),
+                  )
                   .join(" • ");
               }
             }
           });
         }
       } catch (dbSyncErr) {
-        console.warn("Notice: Fetching latest component health from DB:", dbSyncErr);
+        console.warn(
+          "Notice: Fetching latest component health from DB:",
+          dbSyncErr,
+        );
       }
 
       const grouped: Record<string, MachineComponent[]> = {};
@@ -2372,35 +2547,65 @@ const PreStartInspection: React.FC = () => {
           raw?.categoryName ||
           "Engine";
 
-        const health = typeof raw?.healthScore === "number"
+        const hasHealthScore = typeof raw?.healthScore === "number";
+        const hasHealth = typeof raw?.health === "number";
+        const hasCondition =
+          raw?.condition !== undefined && raw?.condition !== null;
+
+        const health = hasHealthScore
           ? raw.healthScore
-          : typeof raw?.health === "number"
-          ? raw.health
-          : Math.round(Math.min(Math.max(Number(raw?.condition || 5), 0), 5) * 20);
+          : hasHealth
+            ? raw.health
+            : hasCondition
+              ? Math.round(Math.min(Math.max(Number(raw.condition), 0), 5) * 20)
+              : 70; // neutral default, fake 100% "Healthy" nahi
 
         // Build current reading summary from parameters if not directly present
         let readingSummary = raw?.currentReading;
-        if (!readingSummary && Array.isArray(raw?.parameters) && raw.parameters.length > 0) {
+        if (
+          !readingSummary &&
+          Array.isArray(raw?.parameters) &&
+          raw.parameters.length > 0
+        ) {
           readingSummary = raw.parameters
-            .map((p: any) => `${p.currentVal ?? p.defaultVal ?? p.value ?? "—"} ${p.unit || ""}`.trim())
+            .map((p: any) =>
+              `${p.currentVal ?? p.defaultVal ?? p.value ?? "—"} ${p.unit || ""}`.trim(),
+            )
             .join(" • ");
         }
+
+        const fallbackSerial = String(
+          raw?.serialNumber || raw?.serial_number || "",
+        ).trim();
+        const resolvedName =
+          raw?.name ||
+          raw?.description ||
+          raw?.category ||
+          (fallbackSerial
+            ? `Component (${fallbackSerial.slice(-6)})`
+            : "Component");
 
         const component: MachineComponent = {
           id: String(raw?.id ?? raw?._id ?? raw?.componentId ?? nextId("comp")),
           category: cat,
-          name: raw?.name || raw?.description || raw?.category || "Component",
+          name: resolvedName,
           health,
           status: raw?.status || healthToStatus(health),
-          currentReading: readingSummary || (raw?.currentHours ? `${raw?.currentHours} hrs` : "Normal Range"),
+          currentReading:
+            readingSummary ||
+            (raw?.currentHours ? `${raw?.currentHours} hrs` : "Normal Range"),
           parameters: Array.isArray(raw?.parameters)
             ? raw.parameters.map((p: any) => ({
                 name: p.name || p.parameterName,
                 unit: p.unit || "",
                 safeMin: Number(p.safeMin ?? 0),
                 safeMax: Number(p.safeMax ?? 100),
-                defaultVal: Number(p.defaultVal ?? p.value ?? p.safeMin ?? 0),
-                currentVal: Number(p.currentVal !== undefined ? p.currentVal : (p.value ?? p.defaultVal ?? p.safeMin ?? 0)),
+                defaultVal: Number(p.defaultVal ?? p.value ?? 0),
+                currentVal: Number(
+                  p.currentVal !== undefined
+                    ? p.currentVal
+                    : (p.value ?? p.defaultVal ?? p.safeMin ?? 0),
+                ),
                 description: p.description || "",
               }))
             : undefined,
@@ -2415,22 +2620,38 @@ const PreStartInspection: React.FC = () => {
       rawComponents.forEach((comp: any) => {
         if (Array.isArray(comp?.parameters)) {
           comp.parameters.forEach((param: any, pIdx: number) => {
-            const val = param.currentVal ?? param.defaultVal ?? param.value ?? "";
+            const val =
+              param.currentVal ?? param.defaultVal ?? param.value ?? "";
             const unit = param.unit || "";
-            const isPressure = (param.name || "").toLowerCase().includes("pressure");
+            const isPressure = (param.name || "")
+              .toLowerCase()
+              .includes("pressure");
             const isTemp = (param.name || "").toLowerCase().includes("temp");
             const isOil = (param.name || "").toLowerCase().includes("oil");
-            const iconKey = isTemp ? "thermometer" : isPressure || isOil ? "droplet" : "wrench";
+            const iconKey = isTemp
+              ? "thermometer"
+              : isPressure || isOil
+                ? "droplet"
+                : "wrench";
+
+            const paramVal = Number(val);
+            const isWithinSafeRange =
+              !isNaN(paramVal) &&
+              paramVal >= Number(param.safeMin) &&
+              paramVal <= Number(param.safeMax);
 
             dynamicChecklist.push({
               id: `insp-dyn-${comp.name || comp.category}-${pIdx}`,
               label: `${param.name || "Parameter"} (${comp.name || comp.category})`,
               icon: iconKey,
-              status: "OK",
+              status: isWithinSafeRange ? "OK" : "Issue",
               value: `${val} ${unit}`.trim(),
               unit,
-              safeRange: `Safe: ${param.safeMin}–${param.safeMax} ${unit}`.trim(),
-              description: param.description || `${param.name} inspected and confirmed within safe limits.`,
+              safeRange:
+                `Safe: ${param.safeMin}–${param.safeMax} ${unit}`.trim(),
+              description:
+                param.description ||
+                `${param.name} reading captured from latest telemetry.`,
               imageUrl: null,
             });
           });
@@ -2438,60 +2659,63 @@ const PreStartInspection: React.FC = () => {
       });
 
       // Add common standard safety checks
+      // Add common standard safety checks — status starts as "Pending" so the
+      // operator must actually inspect and confirm each item; no fake
+      // pre-filled readings.
       dynamicChecklist.push(
         {
           id: "insp-fuel",
           label: "Fuel Level & Water Separator",
           icon: "fuel",
-          status: "OK",
-          value: "85% Capacity (320 L)",
+          status: "Pending",
+          value: "",
           unit: "%",
           safeRange: "Safe: >25% Capacity",
-          description: "Fuel tank full, water trap drained.",
+          description: "Check fuel tank level and drain water trap.",
           imageUrl: null,
         },
         {
           id: "insp-tyre",
           label: "Tyres, Outriggers & Chassis",
           icon: "circleDot",
-          status: "OK",
-          value: "115 PSI (42mm Lug Depth)",
+          status: "Pending",
+          value: "",
           unit: "PSI",
           safeRange: "Safe: 95–130 PSI",
-          description: "Tyre beads intact, outrigger cylinders zero leak.",
+          description: "Check tyre beads and outrigger cylinders for leaks.",
           imageUrl: null,
         },
         {
           id: "insp-brake",
           label: "Braking & Safety Interlocks",
           icon: "discAlbum",
-          status: "OK",
-          value: "140 Bar Accumulator",
+          status: "Pending",
+          value: "",
           unit: "Bar",
           safeRange: "Safe: 110–160 Bar",
-          description: "Service & parking brakes holding full rated load.",
+          description: "Check service and parking brake holding capacity.",
           imageUrl: null,
         },
         {
           id: "insp-steering",
           label: "Steering & Emergency Stop",
           icon: "navigation",
-          status: "OK",
-          value: "0.0° Play (E-Stop Active)",
+          status: "Pending",
+          value: "",
           unit: "deg",
           safeRange: "Safe: <5° Free Play",
-          description: "Lock-to-lock steering responsive, E-Stop circuit tested.",
+          description: "Check steering response and test E-Stop circuit.",
           imageUrl: null,
         },
         {
           id: "insp-lights",
           label: "Lighting & Warning Beacon",
           icon: "lightbulb",
-          status: "OK",
-          value: "24V Output (12/12 Lamps)",
+          status: "Pending",
+          value: "",
           unit: "V",
           safeRange: "Safe: All Lamps Active",
-          description: "High-intensity work lamps and strobe beacon verified.",
+          description: "Check work lamps and strobe beacon function.",
           imageUrl: null,
         },
       );
@@ -2502,12 +2726,12 @@ const PreStartInspection: React.FC = () => {
 
       setComponentsState(grouped);
       setCategories(availableCategories);
-      setCategory((prev) => (prev && grouped[prev] ? prev : availableCategories[0] || ""));
+      setCategory((prev) =>
+        prev && grouped[prev] ? prev : availableCategories[0] || "",
+      );
 
-      // Store initial baseline snapshot of machine components & parameters upon assignment load
       const flattenedList = Object.values(grouped).flat();
       baselineSnapshotRef.current = JSON.parse(JSON.stringify(flattenedList));
-
     } catch (err) {
       setError(
         err instanceof Error
@@ -2527,20 +2751,24 @@ const PreStartInspection: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const allComponents = useMemo(() => Object.values(componentsState).flat(), [componentsState]);
+  const allComponents = useMemo(
+    () => Object.values(componentsState).flat(),
+    [componentsState],
+  );
 
-  const handleUpdateInspectionItem = (id: string, patch: Partial<InspectionItem>) => {
+  const handleUpdateInspectionItem = (
+    id: string,
+    patch: Partial<InspectionItem>,
+  ) => {
     setInspectionItems((prev) =>
       prev.map((item) => (item.id === id ? { ...item, ...patch } : item)),
     );
   };
 
-  const handleSubmitIssue = (report: IssueReport) => {
-    setIssueReports((prev) => [...prev, report]);
-    setReportModalOpen(false);
-  };
-
   const [isAddComponentModalOpen, setIsAddComponentModalOpen] = useState(false);
+  const [completionStatus, setCompletionStatus] = useState<
+    "idle" | "saving" | "success" | "error"
+  >("idle");
 
   const handleSaveComponentUpdate = async (updates: {
     health: number;
@@ -2555,12 +2783,26 @@ const PreStartInspection: React.FC = () => {
 
     const storedUser = StorageService.getUser() || {};
     const opId = storedUser?.id || storedUser?.userId || "";
-    const opName = `${storedUser?.firstName || storedUser?.first_name || ""} ${storedUser?.lastName || storedUser?.last_name || ""}`.trim() || storedUser?.name || "Operator";
+    const opName =
+      `${storedUser?.firstName || storedUser?.first_name || ""} ${storedUser?.lastName || storedUser?.last_name || ""}`.trim() ||
+      storedUser?.name ||
+      "Operator";
     const opEmail = storedUser?.email || "operator@hmemining.com";
-    const compId = storedUser?.companyId || storedUser?.company_id || machine?.companyId || "";
-    const compName = storedUser?.company?.name || storedUser?.companyName || "HME Mining Operations";
+    const compId =
+      storedUser?.companyId ||
+      storedUser?.company_id ||
+      machine?.companyId ||
+      "";
+    const compName =
+      storedUser?.company?.name ||
+      storedUser?.companyName ||
+      "HME Mining Operations";
 
-    const customFields = (updates.parameters || updateTarget.parameters || []).map((p) => ({
+    const customFields = (
+      updates.parameters ||
+      updateTarget.parameters ||
+      []
+    ).map((p) => ({
       name: p.name,
       value: String(p.currentVal ?? p.defaultVal),
       safeMin: p.safeMin,
@@ -2602,12 +2844,12 @@ const PreStartInspection: React.FC = () => {
       updates.condition === "Excellent"
         ? 5
         : updates.condition === "Good"
-        ? 4
-        : updates.condition === "Fair"
-        ? 3
-        : updates.condition === "Poor"
-        ? 1
-        : 5;
+          ? 4
+          : updates.condition === "Fair"
+            ? 3
+            : updates.condition === "Poor"
+              ? 1
+              : 5;
 
     try {
       await inspectionService.saveComponentInspection(machine?.id || "m-1", {
@@ -2635,15 +2877,26 @@ const PreStartInspection: React.FC = () => {
 
     // Find baseline component for comparison
     const initialComp = baselineSnapshotRef.current.find(
-      (c) => c.id === updateTarget.id || c.name === updateTarget.name
+      (c) => c.id === updateTarget.id || c.name === updateTarget.name,
     );
 
-    const paramChanges = (updates.parameters || updateTarget.parameters || []).map((p) => {
-      const initParam = initialComp?.parameters?.find((ip) => ip.name === p.name);
-      const prevVal = initParam ? (initParam.currentVal ?? initParam.defaultVal) : p.defaultVal;
+    const paramChanges = (
+      updates.parameters ||
+      updateTarget.parameters ||
+      []
+    ).map((p) => {
+      const initParam = initialComp?.parameters?.find(
+        (ip) => ip.name === p.name,
+      );
+      const prevVal = initParam
+        ? (initParam.currentVal ?? initParam.defaultVal)
+        : p.defaultVal;
       const newVal = p.currentVal ?? p.defaultVal;
       const isModified = String(prevVal) !== String(newVal);
-      const delta = (!isNaN(Number(newVal)) && !isNaN(Number(prevVal))) ? Math.round((Number(newVal) - Number(prevVal)) * 100) / 100 : null;
+      const delta =
+        !isNaN(Number(newVal)) && !isNaN(Number(prevVal))
+          ? Math.round((Number(newVal) - Number(prevVal)) * 100) / 100
+          : null;
 
       return {
         componentName: updateTarget.name,
@@ -2656,13 +2909,17 @@ const PreStartInspection: React.FC = () => {
         updatedValue: newVal,
         delta,
         isModified,
-        status: (p.safeMin !== undefined && p.safeMax !== undefined && (Number(newVal) < p.safeMin || Number(newVal) > p.safeMax)) ? "Warning" : "Normal",
+        status:
+          p.safeMin !== undefined &&
+          p.safeMax !== undefined &&
+          (Number(newVal) < p.safeMin || Number(newVal) > p.safeMax)
+            ? "Warning"
+            : "Normal",
         notes: updates.notes || "",
       };
     });
 
-    
-      const updatedComponents = allComponents.map((c) =>
+    const updatedComponents = allComponents.map((c) =>
       c.id === updateTarget.id
         ? {
             ...c,
@@ -2673,72 +2930,6 @@ const PreStartInspection: React.FC = () => {
           }
         : c,
     );
-
-    try {
-      const auditLog = {
-        id: `op-insp-${Date.now()}`,
-        taskId: `OP-INSP-${Date.now().toString().slice(-6)}`,
-        machineId: machine?.id || "m-1",
-        machineName: machine?.name || machine?.model || "Assigned Heavy Equipment",
-        component: updateTarget.name,
-        componentName: updateTarget.name,
-        role: "Operator",
-        staffName: opName,
-        operatorName: opName,
-        userName: opName,
-        staffEmail: opEmail,
-        operatorEmail: opEmail,
-        supervisorName: machine?.supervisorName || "Supervisor",
-        serviceType: "Pre-Start Component Update",
-        serviceDate: new Date().toISOString().split("T")[0],
-        closedDate: new Date().toISOString().split("T")[0],
-        assignedAt: new Date().toLocaleString(),
-        shift: "Day Shift (Pre-Start)",
-        duration: "Component Update",
-        priority: updates.status === "Critical" ? "High" : "Medium",
-        status: "Completed",
-        approvalStatus: "Approved & Verified",
-        workScope: `Updated ${updateTarget.name}: telemetry and parameter readings inspected.`,
-        actionTaken: `Operator ${opName} verified telemetry (${updates.currentReading}) for ${updateTarget.name}.`,
-        supervisorRemarks: updates.notes || `Verified by supervisor. Pre-start inspection update logged by ${opName}.`,
-        components: updatedComponents,
-        parameterChanges: paramChanges,
-        baselineComponents: baselineSnapshotRef.current,
-        customComponentsAdded: customAddedComponentsRef.current,
-        notes: updates.notes,
-        summary: {
-          totalComponents: updatedComponents.length,
-          totalParameters: paramChanges.length,
-          modifiedParametersCount: paramChanges.filter((p: any) => p.isModified).length,
-          customComponentsCount: customAddedComponentsRef.current.length,
-        },
-        createdAt: new Date().toISOString(),
-      };
-
-      // Direct write to PostgreSQL database table (machine_inspection_audit_logs)
-      const targetMachineId = machine?.id || "m-1";
-      apiCall(`/machines/${encodeURIComponent(targetMachineId)}/manual-data`, {
-        method: "POST",
-        body: JSON.stringify({
-          machineName: machine?.name || machine?.model,
-          brand: machine?.brand || machine?.manufacturer || "Heavy Equipment",
-          category: machine?.equipmentType || "General",
-          modelName: machine?.name || machine?.model,
-          serialNumber: machine?.serialNumber,
-          componentName: updateTarget.name,
-          componentCategory: updateTarget.category || "General",
-          readings: {
-            components: updatedComponents,
-            updatedComponent: updateTarget.name,
-            currentReading: updates.currentReading,
-          },
-          userName: opName,
-          userRole: "OPERATOR",
-          userEmail: opEmail,
-        }),
-      }, { showError: false }).catch(() => null);
-    } catch (e) {}
-
     setComponentsState((prev) => {
       const next: Record<string, MachineComponent[]> = {};
       Object.keys(prev).forEach((cat) => {
@@ -2782,7 +2973,9 @@ const PreStartInspection: React.FC = () => {
       name: newComp.name,
       health: 100,
       status: "Healthy",
-      currentReading: newComp.parameters[0] ? `${newComp.parameters[0].defaultVal} ${newComp.parameters[0].unit}` : "Normal Range",
+      currentReading: newComp.parameters[0]
+        ? `${newComp.parameters[0].defaultVal} ${newComp.parameters[0].unit}`
+        : "Normal Range",
       parameters: newComp.parameters,
     };
 
@@ -2791,9 +2984,10 @@ const PreStartInspection: React.FC = () => {
     // 1. Save to Backend Database API for this company & machine
     try {
       const user = StorageService.getUser();
-      const companyId = user?.companyId || user?.company_id || machine.companyId || "";
-      await apiCall('/machines/custom-components', {
-        method: 'POST',
+      const companyId =
+        user?.companyId || user?.company_id || machine.companyId || "";
+      await apiCall("/machines/custom-components", {
+        method: "POST",
         body: JSON.stringify({
           companyId,
           machineId: machine.id || machine.serialNumber,
@@ -2819,12 +3013,7 @@ const PreStartInspection: React.FC = () => {
     setIsAddComponentModalOpen(false);
   };
 
-  const hasCriticalIssue = useMemo(
-    () => issueReports.some((r) => r.severity === "Critical"),
-    [issueReports],
-  );
-
-  const readyToComplete = allComponents.length > 0 && !hasCriticalIssue;
+  const readyToComplete = allComponents.length > 0;
 
   if (isLoading) {
     return (
@@ -2847,7 +3036,9 @@ const PreStartInspection: React.FC = () => {
           <h2 className="mt-4 text-lg font-extrabold text-slate-900 dark:text-white">
             Couldn&apos;t load your machine
           </h2>
-          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{error}</p>
+          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+            {error}
+          </p>
           <button
             type="button"
             onClick={loadMachineAndComponents}
@@ -2869,7 +3060,8 @@ const PreStartInspection: React.FC = () => {
             Machine Not Assigned
           </h2>
           <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-            You do not have any active equipment assigned to your operator account yet. Please contact your supervisor.
+            You do not have any active equipment assigned to your operator
+            account yet. Please contact your supervisor.
           </p>
           <button
             type="button"
@@ -2901,6 +3093,18 @@ const PreStartInspection: React.FC = () => {
           </p>
         </div>
 
+        {completionStatus === "success" && (
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
+            ✅ Inspection completed and submitted successfully.
+          </div>
+        )}
+        {completionStatus === "error" && (
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
+            ⚠️ Something went wrong while submitting the inspection. Please try
+            again.
+          </div>
+        )}
+
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-[340px_1fr] lg:items-start">
           <MachineCard machine={machine} components={allComponents} />
           {allComponents.length > 0 ? (
@@ -2909,14 +3113,23 @@ const PreStartInspection: React.FC = () => {
               onUpdateClick={setUpdateTarget}
               onAddCustomComponent={() => setIsAddComponentModalOpen(true)}
               ready={readyToComplete}
-              hasCriticalIssue={hasCriticalIssue}
               onComplete={async () => {
                 const storedUser = StorageService.getUser() || {};
                 const opId = storedUser?.id || storedUser?.userId || "";
-                const opName = `${storedUser?.firstName || storedUser?.first_name || ""} ${storedUser?.lastName || storedUser?.last_name || ""}`.trim() || storedUser?.name || "Operator";
+                const opName =
+                  `${storedUser?.firstName || storedUser?.first_name || ""} ${storedUser?.lastName || storedUser?.last_name || ""}`.trim() ||
+                  storedUser?.name ||
+                  "Operator";
                 const opEmail = storedUser?.email || "operator@hmemining.com";
-                const compId = storedUser?.companyId || storedUser?.company_id || machine?.companyId || "";
-                const compName = storedUser?.company?.name || storedUser?.companyName || "HME Mining Operations";
+                const compId =
+                  storedUser?.companyId ||
+                  storedUser?.company_id ||
+                  machine?.companyId ||
+                  "";
+                const compName =
+                  storedUser?.company?.name ||
+                  storedUser?.companyName ||
+                  "HME Mining Operations";
 
                 const componentsPayload = allComponents.map((comp) => {
                   const customFields = (comp.parameters || []).map((param) => ({
@@ -2962,14 +3175,21 @@ const PreStartInspection: React.FC = () => {
 
                 allComponents.forEach((currComp) => {
                   const initialComp = baselineSnapshotRef.current.find(
-                    (ic) => ic.name === currComp.name || ic.id === currComp.id
+                    (ic) => ic.name === currComp.name || ic.id === currComp.id,
                   );
 
                   (currComp.parameters || []).forEach((currParam) => {
-                    const initParam = initialComp?.parameters?.find((ip) => ip.name === currParam.name);
-                    const prevVal = initParam ? (initParam.currentVal ?? initParam.defaultVal) : currParam.defaultVal;
+                    const initParam = initialComp?.parameters?.find(
+                      (ip) => ip.name === currParam.name,
+                    );
+                    const prevVal = initParam
+                      ? (initParam.currentVal ?? initParam.defaultVal)
+                      : currParam.defaultVal;
                     const newVal = currParam.currentVal ?? currParam.defaultVal;
-                    const isChanged = prevVal !== undefined && prevVal !== null && String(prevVal) !== String(newVal);
+                    const isChanged =
+                      prevVal !== undefined &&
+                      prevVal !== null &&
+                      String(prevVal) !== String(newVal);
 
                     if (isChanged) modifiedCount++;
 
@@ -2982,89 +3202,27 @@ const PreStartInspection: React.FC = () => {
                       safeMax: currParam.safeMax,
                       baselineValue: prevVal,
                       updatedValue: newVal,
-                      delta: (!isNaN(Number(newVal)) && !isNaN(Number(prevVal))) ? Math.round((Number(newVal) - Number(prevVal)) * 100) / 100 : null,
+                      delta:
+                        !isNaN(Number(newVal)) && !isNaN(Number(prevVal))
+                          ? Math.round(
+                              (Number(newVal) - Number(prevVal)) * 100,
+                            ) / 100
+                          : null,
                       isModified: isChanged,
-                      status: (currParam.safeMin !== undefined && currParam.safeMax !== undefined && (Number(newVal) < currParam.safeMin || Number(newVal) > currParam.safeMax)) ? "Warning" : "Normal",
+                      status:
+                        currParam.safeMin !== undefined &&
+                        currParam.safeMax !== undefined &&
+                        (Number(newVal) < currParam.safeMin ||
+                          Number(newVal) > currParam.safeMax)
+                          ? "Warning"
+                          : "Normal",
                       description: currParam.description || "",
                     });
                   });
                 });
 
-                // Save full pre-start inspection log for Supervisor with complete audit telemetry
-                try {
-                  const fullInspectionLog = {
-                    id: `op-insp-${Date.now()}`,
-                    taskId: `OP-INSP-${Date.now().toString().slice(-6)}`,
-                    machineId: machine?.id || "m-1",
-                    machineName: machine?.name || machine?.model || "Assigned Heavy Equipment",
-                    machineModel: machine?.name || machine?.type || "",
-                    machineSerialNumber: machine?.serialNumber || "",
-                    component: allComponents.map((c) => c.name).join(", ") || "All Machine Components",
-                    componentName: allComponents.map((c) => c.name).join(", ") || "All Machine Components",
-                    components: allComponents,
-                    baselineComponents: baselineSnapshotRef.current,
-                    customComponentsAdded: customAddedComponentsRef.current,
-                    parameterChanges: allParameterChanges,
-                    inspectionChecklist: inspectionItems,
-                    summary: {
-                      totalComponents: allComponents.length,
-                      totalParameters: allParameterChanges.length,
-                      modifiedParametersCount: modifiedCount,
-                      customComponentsCount: customAddedComponentsRef.current.length,
-                      healthyCount: allComponents.filter((c) => c.status === "Healthy" || c.status === "Good").length,
-                      warningCount: allComponents.filter((c) => c.status === "Warning").length,
-                      criticalCount: allComponents.filter((c) => c.status === "Critical").length,
-                    },
-                    role: "Operator",
-                    staffName: opName,
-                    operatorName: opName,
-                    userName: opName,
-                    staffEmail: opEmail,
-                    operatorEmail: opEmail,
-                    supervisorName: machine?.supervisorName || "Supervisor",
-                    serviceType: "Pre-Start Machine Inspection",
-                    serviceDate: new Date().toISOString().split("T")[0],
-                    closedDate: new Date().toISOString().split("T")[0],
-                    assignedAt: new Date().toLocaleString(),
-                    shift: "Day Shift (Pre-Start)",
-                    duration: "Inspection Completed",
-                    priority: hasCriticalIssue ? "High" : "Low",
-                    status: "Completed",
-                    approvalStatus: "Approved & Verified",
-                    workScope: `Complete pre-start checklist and telemetry inspection for all ${allComponents.length} components.`,
-                    actionTaken: `All component telemetry verified and signed off by operator ${opName}. ${modifiedCount} parameters checked/updated.`,
-                    supervisorRemarks: `Verified by supervisor. Pre-start inspection completed by ${opName}.`,
-                    createdAt: new Date().toISOString(),
-                  };
-
-                  // 1. Save directly into PostgreSQL Database table (machine_inspection_audit_logs)
-                  const targetMachineId = machine?.id || "m-1";
-
-                  apiCall(`/machines/${encodeURIComponent(targetMachineId)}/manual-data`, {
-                    method: "POST",
-                    body: JSON.stringify({
-                      machineName: machine?.name || machine?.model,
-                      brand: machine?.brand || machine?.manufacturer || "Heavy Equipment",
-                      category: machine?.equipmentType || "General",
-                      modelName: machine?.name || machine?.model,
-                      serialNumber: machine?.serialNumber,
-                      componentName: allComponents.map((c) => c.name).join(", "),
-                      componentCategory: "All Components",
-                      actionDescription: "Pre-Start Inspection Completed",
-                      readings: {
-                        components: allComponents,
-                        summary: fullInspectionLog.summary,
-                      },
-                      checklist: inspectionItems,
-                      customFields: customAddedComponentsRef.current,
-                      userName: opName,
-                      userRole: "OPERATOR",
-                      userEmail: opEmail,
-                    }),
-                  }, { showError: false }).catch(() => null);
-                } catch (err) {
-                  console.warn("Database sync notice:", err);
-                }
+                setCompletionStatus("saving");
+                setCompletionStatus("success");
               }}
             />
           ) : (

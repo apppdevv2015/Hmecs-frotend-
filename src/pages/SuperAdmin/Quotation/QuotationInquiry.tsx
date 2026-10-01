@@ -3158,16 +3158,6 @@ export default function QuotationManagementPage() {
  const handleConfirmSend = useCallback(async () => {
     if (!selectedInquiry || !pendingSendDraft) return;
 
-    if (
-  selectedInquiry.company.contactPerson === "—" ||
-  selectedInquiry.company.email === "—" ||
-  selectedInquiry.company.phone === "—"
-) {
-  showErrorToast(
-    "Company contact details (person, email or phone) are missing. Please update the inquiry before sending a quotation."
-  );
-  return;
-}
     setSavingState("send");
     try {
       const isTrial =

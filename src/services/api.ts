@@ -17,7 +17,6 @@ export const getApiBaseUrl = () => {
   return envUrl;
 };
 
-// Strict localStorage Cleanup: Keep ONLY authentication session keys & theme
 if (typeof window !== "undefined" && window.localStorage) {
   try {
     const keysToRemove: string[] = [];

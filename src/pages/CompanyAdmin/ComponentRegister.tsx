@@ -21,12 +21,10 @@ import { componentService } from "../../services/companyadmin/componentService";
 import AppSelect from "../../components/ui/dropdown/AppSelect";
 import Pagination from "../../components/common/Pagination";
 
-
 import StorageService from "../../services/storage.service";
 import { isReadOnlyRole } from "../../components/common/permissions";
 
 // import { componentSchema } from "../../validations/companyAdminValidation";
-
 
 type MachineStatus = "good" | "warning" | "critical";
 type ComponentStatus = "good" | "warning" | "critical";
@@ -125,7 +123,6 @@ const emptyForm: ComponentForm = {
   imageUrl: "",
 };
 
-
 const LOCKED_ON_EDIT_FIELDS: (keyof ComponentForm)[] = [
   "machineId",
   "category",
@@ -136,7 +133,6 @@ const LOCKED_ON_EDIT_FIELDS: (keyof ComponentForm)[] = [
   "plannedLife",
   "replacementCost",
 ];
-
 
 const componentSchema = z
   .object({
@@ -190,7 +186,12 @@ const componentSchema = z
       .min(1, "Planned life is required")
       .regex(/^\d+$/, "Planned life must contain only numbers"),
 
-    replacementCost: z.string().optional(),
+    replacementCost: z
+      .string()
+      .trim()
+      .regex(/^\d*(\.\d{1,2})?$/, "Replacement cost must be a valid amount")
+      .optional(),
+
 
     condition: z.string().trim().min(1, "Condition is required"),
   })
@@ -233,7 +234,6 @@ const componentSchema = z
       });
     }
   });
-
 
 const defaultCategories: Category[] = [
   { id: "1", name: "Engine" },
@@ -278,7 +278,9 @@ const normalizeMachine = (item: any): Machine => {
       item?.model ||
       "Unnamed Machine",
   );
-  const rawModel = String(item?.model || item?.equipmentType || item?.equipment_type || "");
+  const rawModel = String(
+    item?.model || item?.equipmentType || item?.equipment_type || "",
+  );
 
   return {
     id: String(item?.id || item?.machine_id || item?.machineId || ""),
@@ -497,7 +499,17 @@ const ComponentManagement: React.FC = () => {
 
   const [loading, setLoading] = useState(true);
   const [componentLoading, setComponentLoading] = useState(false);
-  const [inspectionMap, setInspectionMap] = useState<Record<string, { healthScore: number; status: string; updatedAt?: string; hasData: boolean }>>({});
+  const [inspectionMap, setInspectionMap] = useState<
+    Record<
+      string,
+      {
+        healthScore: number;
+        status: string;
+        updatedAt?: string;
+        hasData: boolean;
+      }
+    >
+  >({});
 
   const fetchMachineComponentsAndSpecs = async (machList: Machine[]) => {
     try {
@@ -505,36 +517,62 @@ const ComponentManagement: React.FC = () => {
         machList.map(async (m) => {
           try {
             const targetId = m.id || m.machineId;
-            const res: any = await machineService.getManualInspectionData(targetId);
+            const res: any =
+              await machineService.getManualInspectionData(targetId);
             const data = res?.data || res || {};
-            
+
             let records: any[] = [];
             if (Array.isArray(data.records)) records = data.records;
             else if (Array.isArray(data)) records = data;
 
             let specs: any[] = [];
             if (Array.isArray(data.specComponents)) specs = data.specComponents;
-            else if (Array.isArray(data.spec?.components)) specs = data.spec.components;
+            else if (Array.isArray(data.spec?.components))
+              specs = data.spec.components;
 
             return { machine: m, records, specs };
           } catch (e) {
             return { machine: m, records: [], specs: [] };
           }
-        })
+        }),
       );
 
       const generatedComponents: MachineComponent[] = [];
-      const map: Record<string, { healthScore: number; status: string; updatedAt?: string; hasData: boolean }> = {};
+      const map: Record<
+        string,
+        {
+          healthScore: number;
+          status: string;
+          updatedAt?: string;
+          hasData: boolean;
+        }
+      > = {};
 
       results.forEach(({ machine, records, specs }) => {
         // Build inspection map
         records.forEach((r: any) => {
-          const keyByName = String(r.componentName || "").toLowerCase().trim();
-          const keyById = String(r.componentId || r.id || "").toLowerCase().trim();
-          const keyBySn = String(r.serialNumber || "").replace(/^DEMO-/i, "").toLowerCase().trim();
-          const score = Number(r.healthScore ?? r.health_score ?? r.score ?? 100);
-          const status = r.status || (score < 50 ? "Critical" : score < 85 ? "Warning" : "Healthy");
-          const item = { healthScore: score, status, updatedAt: r.updatedAt || r.createdAt, hasData: true };
+          const keyByName = String(r.componentName || "")
+            .toLowerCase()
+            .trim();
+          const keyById = String(r.componentId || r.id || "")
+            .toLowerCase()
+            .trim();
+          const keyBySn = String(r.serialNumber || "")
+            .replace(/^DEMO-/i, "")
+            .toLowerCase()
+            .trim();
+          const score = Number(
+            r.healthScore ?? r.health_score ?? r.score ?? 100,
+          );
+          const status =
+            r.status ||
+            (score < 50 ? "Critical" : score < 85 ? "Warning" : "Healthy");
+          const item = {
+            healthScore: score,
+            status,
+            updatedAt: r.updatedAt || r.createdAt,
+            hasData: true,
+          };
 
           if (keyById) map[keyById] = item;
           if (keyBySn) map[keyBySn] = item;
@@ -547,24 +585,43 @@ const ComponentManagement: React.FC = () => {
             const compName = sp.name || `Component ${idx + 1}`;
             const compCat = sp.category || compName.split(" ")[0] || "General";
             const key = compName.toLowerCase().trim();
-            const inspectData = map[key] || { healthScore: 100, status: "Healthy", hasData: false };
+            const inspectData = map[key] || {
+              healthScore: 100,
+              status: "Healthy",
+              hasData: false,
+            };
 
-            const cond = inspectData.healthScore >= 90 ? 1 : inspectData.healthScore >= 75 ? 2 : inspectData.healthScore >= 50 ? 3 : inspectData.healthScore >= 30 ? 4 : 5;
-            const paramCount = Array.isArray(sp.parameters) ? sp.parameters.length : 4;
-            const paramSummary = Array.isArray(sp.parameters) ? sp.parameters.map((p: any) => p.name).join(", ") : "";
+            const cond =
+              inspectData.healthScore >= 90
+                ? 1
+                : inspectData.healthScore >= 75
+                  ? 2
+                  : inspectData.healthScore >= 50
+                    ? 3
+                    : inspectData.healthScore >= 30
+                      ? 4
+                      : 5;
+            const paramCount = Array.isArray(sp.parameters)
+              ? sp.parameters.length
+              : 4;
+            const paramSummary = Array.isArray(sp.parameters)
+              ? sp.parameters.map((p: any) => p.name).join(", ")
+              : "";
 
             generatedComponents.push({
               id: `spec-${machine.id || machine.machineId}-${idx}`,
               machineId: machine.machineId || machine.id,
               name: compName,
               category: compCat,
-              description: sp.description || `${compName} (${paramCount} parameters: ${paramSummary})`,
-              serialNumber: `SN-${machine.serialNumber ? machine.serialNumber.replace('SN-', '') : 'AUTO'}-${compCat.substring(0, 3).toUpperCase()}`,
+              description:
+                sp.description ||
+                `${compName} (${paramCount} parameters: ${paramSummary})`,
+              serialNumber: `SN-${machine.serialNumber ? machine.serialNumber.replace("SN-", "") : "AUTO"}-${compCat.substring(0, 3).toUpperCase()}`,
               supplier: machine.name?.split(" ")[0] || "OEM Standard",
               installHours: 0,
               currentHours: Math.round((100 - inspectData.healthScore) * 150),
               plannedLife: 15000,
-              replacementCost: 45000,
+              replacementCost: 0,
               condition: cond,
               createdAt: machine.status || new Date().toISOString(),
               updatedAt: inspectData.updatedAt || new Date().toISOString(),
@@ -578,9 +635,17 @@ const ComponentManagement: React.FC = () => {
               intelligence: {
                 hoursRun: Math.round((100 - inspectData.healthScore) * 150),
                 lifeUsedPercent: 100 - inspectData.healthScore,
-                remainingHours: Math.max(0, 15000 - Math.round((100 - inspectData.healthScore) * 150)),
+                remainingHours: Math.max(
+                  0,
+                  15000 - Math.round((100 - inspectData.healthScore) * 150),
+                ),
                 riskStatus: inspectData.status,
-                riskColor: inspectData.status === "Critical" ? "red" : inspectData.status === "Warning" ? "amber" : "emerald",
+                riskColor:
+                  inspectData.status === "Critical"
+                    ? "red"
+                    : inspectData.status === "Warning"
+                      ? "amber"
+                      : "emerald",
                 riskDriver: "Inspection Diagnostics",
                 estimatedSavings: "$12,400",
               },
@@ -626,7 +691,7 @@ const ComponentManagement: React.FC = () => {
     ];
   }, [machines]);
 
-    const selectedMachineComponents = useMemo(() => {
+  const selectedMachineComponents = useMemo(() => {
     if (!selectedMachine) return components;
 
     const machIds = new Set(
@@ -637,10 +702,12 @@ const ComponentManagement: React.FC = () => {
         machIds.has(component.machineId) ||
         (component.machineId &&
           selectedMachine.name &&
-          component.machineId.toLowerCase() === selectedMachine.name.toLowerCase()) ||
+          component.machineId.toLowerCase() ===
+            selectedMachine.name.toLowerCase()) ||
         (component.machineId &&
           selectedMachine.serialNumber &&
-          component.machineId.toLowerCase() === selectedMachine.serialNumber.toLowerCase()),
+          component.machineId.toLowerCase() ===
+            selectedMachine.serialNumber.toLowerCase()),
     );
   }, [components, selectedMachine]);
 
@@ -828,7 +895,8 @@ const ComponentManagement: React.FC = () => {
       );
 
       // Fetch rich spec components and inspection health from backend
-      const specComponents = await fetchMachineComponentsAndSpecs(mappedMachines);
+      const specComponents =
+        await fetchMachineComponentsAndSpecs(mappedMachines);
 
       // Combine DB registered components and spec components (deduplicating by name+machineId)
       const combinedComponents = [...mappedComponents];
@@ -836,7 +904,7 @@ const ComponentManagement: React.FC = () => {
         const exists = combinedComponents.some(
           (c) =>
             c.machineId === sc.machineId &&
-            c.name.toLowerCase() === sc.name.toLowerCase()
+            c.name.toLowerCase() === sc.name.toLowerCase(),
         );
         if (!exists) {
           combinedComponents.push(sc);
@@ -960,8 +1028,6 @@ const ComponentManagement: React.FC = () => {
   const validateForm = () => {
     if (!form.machineId.trim()) return "Please select a machine";
 
-  
-
     if (!form.name.trim()) return "Component name is required";
     if (!form.serialNumber.trim()) return "Serial number is required";
     if (!form.supplier.trim()) return "Supplier is required";
@@ -1003,7 +1069,7 @@ const ComponentManagement: React.FC = () => {
         ? form.customCategory.trim()
         : form.category.trim() || "General";
 
-        const payload = {
+    const payload = {
       name: form.name.trim(),
       category: finalCategory,
       description: form.description.trim() || form.name.trim(),
@@ -1128,8 +1194,6 @@ const ComponentManagement: React.FC = () => {
     );
   }
 
-
-
   const categoryFilterOptions = [
     { label: "All Categories", value: "all" },
     ...categories.map((cat) => ({
@@ -1210,14 +1274,18 @@ const ComponentManagement: React.FC = () => {
                 {/* 1. Machine Dropdown (Always shows first machine by default) */}
                 <div className="relative min-w-[240px] max-w-[340px]">
                   <select
-                    value={selectedMachine?.id || selectedMachine?.machineId || "all"}
+                    value={
+                      selectedMachine?.id || selectedMachine?.machineId || "all"
+                    }
                     onChange={(e) => {
                       const val = e.target.value;
                       setSelectedComponentFilter("all");
                       if (val === "all") {
                         setSelectedMachine(null);
                       } else {
-                        const mach = machines.find((m) => m.id === val || m.machineId === val);
+                        const mach = machines.find(
+                          (m) => m.id === val || m.machineId === val,
+                        );
                         if (mach) {
                           setSelectedMachine(mach);
                         }
@@ -1225,10 +1293,16 @@ const ComponentManagement: React.FC = () => {
                     }}
                     className="h-11 w-full truncate rounded-xl border border-slate-300 bg-white px-3.5 pr-8 text-xs font-bold text-slate-800 shadow-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-700 dark:bg-[#101f33] dark:text-white cursor-pointer"
                   >
-                    <option value="all">🌐 All Fleet Machines ({machines.length})</option>
+                    <option value="all">
+                      🌐 All Fleet Machines ({machines.length})
+                    </option>
                     {machines.map((m) => (
-                      <option key={m.id || m.machineId} value={m.id || m.machineId}>
-                        🚜 {m.name || m.model} {m.serialNumber ? `(${m.serialNumber})` : ""}
+                      <option
+                        key={m.id || m.machineId}
+                        value={m.id || m.machineId}
+                      >
+                        🚜 {m.name || m.model}{" "}
+                        {m.serialNumber ? `(${m.serialNumber})` : ""}
                       </option>
                     ))}
                   </select>
@@ -1280,7 +1354,6 @@ const ComponentManagement: React.FC = () => {
                 {showHealthView ? "Health View: ON" : "Health View: OFF"}
               </button>
 
-
               <div className="relative h-11 w-52 shrink-0">
                 <Search
                   className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
@@ -1331,7 +1404,6 @@ const ComponentManagement: React.FC = () => {
                   triggerClassName="h-11 w-full rounded-xl border border-slate-300 bg-white px-3.5 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:bg-[#101f33] dark:text-white"
                 />
               </div>
-
             </div>
           </div>
 
@@ -1387,28 +1459,48 @@ const ComponentManagement: React.FC = () => {
                         )
                       : 0;
                   const conditionInfo = getConditionLabel(component.condition);
-                  const cIdKey = String(component.id || "").toLowerCase().trim();
-                  const cSnKey = String(component.serialNumber || "").replace(/^DEMO-/i, "").toLowerCase().trim();
-                  const cNameKey = String(component.name || "").toLowerCase().trim();
-                  const inspRecord = inspectionMap[cIdKey] || inspectionMap[cSnKey] || inspectionMap[cNameKey] || null;
+                  const cIdKey = String(component.id || "")
+                    .toLowerCase()
+                    .trim();
+                  const cSnKey = String(component.serialNumber || "")
+                    .replace(/^DEMO-/i, "")
+                    .toLowerCase()
+                    .trim();
+                  const cNameKey = String(component.name || "")
+                    .toLowerCase()
+                    .trim();
+                  const inspRecord =
+                    inspectionMap[cIdKey] ||
+                    inspectionMap[cSnKey] ||
+                    inspectionMap[cNameKey] ||
+                    null;
 
-                  const liveScore = inspRecord && inspRecord.hasData
-                    ? inspRecord.healthScore
-                    : component.intelligence?.hoursRun !== undefined
-                    ? Math.round(100 - (component.intelligence?.lifeUsedPercent || 0))
-                    : getHealthPercent(component.condition);
+                  const liveScore =
+                    inspRecord && inspRecord.hasData
+                      ? inspRecord.healthScore
+                      : component.intelligence?.hoursRun !== undefined
+                        ? Math.round(
+                            100 -
+                              (component.intelligence?.lifeUsedPercent || 0),
+                          )
+                        : getHealthPercent(component.condition);
 
-                  const riskStatus = inspRecord && inspRecord.hasData
-                    ? inspRecord.status
-                    : component.intelligence?.riskStatus ||
-                      (liveScore < 50 ? "Critical" : liveScore < 85 ? "Warning" : "Healthy");
+                  const riskStatus =
+                    inspRecord && inspRecord.hasData
+                      ? inspRecord.status
+                      : component.intelligence?.riskStatus ||
+                        (liveScore < 50
+                          ? "Critical"
+                          : liveScore < 85
+                            ? "Warning"
+                            : "Healthy");
 
                   const riskColorClass =
                     riskStatus.toLowerCase() === "critical"
                       ? "border-red-200 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"
                       : riskStatus.toLowerCase() === "warning"
-                      ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
-                      : "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300";
+                        ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
+                        : "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300";
 
                   return (
                     <div key={component.id} className="p-4 sm:p-5">
@@ -1421,7 +1513,9 @@ const ComponentManagement: React.FC = () => {
                             <span className="mt-1 inline-flex w-fit rounded-md border border-blue-200 bg-blue-50 px-2 py-0.5 font-mono text-[10px] font-bold text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300">
                               {machine.serialNumber}
                             </span>
-                          ) : machineModel && machineModel.toLowerCase() !== machineName.toLowerCase() ? (
+                          ) : machineModel &&
+                            machineModel.toLowerCase() !==
+                              machineName.toLowerCase() ? (
                             <span className="mt-1 inline-flex w-fit rounded-md border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300">
                               {machineModel}
                             </span>
@@ -1436,8 +1530,8 @@ const ComponentManagement: React.FC = () => {
                               riskStatus.toLowerCase() === "critical"
                                 ? "bg-red-500"
                                 : riskStatus.toLowerCase() === "warning"
-                                ? "bg-amber-500"
-                                : "bg-emerald-500"
+                                  ? "bg-amber-500"
+                                  : "bg-emerald-500"
                             }`}
                           />
                           {riskStatus} {liveScore}%
@@ -1453,7 +1547,10 @@ const ComponentManagement: React.FC = () => {
                           {component.supplier || "-"}
                         </p>
                         <p className="mt-1 text-[11px] font-semibold text-slate-400 dark:text-slate-500">
-                          📅 {formatDateTime(component.updatedAt || component.createdAt)}
+                          📅{" "}
+                          {formatDateTime(
+                            component.updatedAt || component.createdAt,
+                          )}
                         </p>
                       </div>
 
@@ -1520,37 +1617,60 @@ const ComponentManagement: React.FC = () => {
 
               {/* Desktop / large-screen table */}
               <div className="hidden w-full overflow-x-auto hme-hide-scrollbar lg:block">
-
-                                <table className="w-full min-w-[1000px] border-collapse text-left">
+                <table className="w-full min-w-[1000px] border-collapse text-left">
                   <thead>
                     <tr className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-[0.14em] text-slate-500 dark:border-slate-800 dark:bg-slate-950/60">
-                      <th className="px-4 py-4 text-center font-bold w-14">S.No.</th>
+                      <th className="px-4 py-4 text-center font-bold w-14">
+                        S.No.
+                      </th>
                       <th
                         className="px-6 py-4 font-bold cursor-pointer select-none transition hover:text-blue-600 dark:hover:text-blue-400"
                         onClick={() => handleSort("machine")}
                       >
-                        Machine / Type {sortField === "machine" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
+                        Machine / Type{" "}
+                        {sortField === "machine"
+                          ? sortOrder === "asc"
+                            ? "▲"
+                            : "▼"
+                          : "↕"}
                       </th>
                       <th
                         className="px-6 py-4 font-bold cursor-pointer select-none transition hover:text-blue-600 dark:hover:text-blue-400"
                         onClick={() => handleSort("name")}
                       >
-                        Component Name / Serial {sortField === "name" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
+                        Component Name / Serial{" "}
+                        {sortField === "name"
+                          ? sortOrder === "asc"
+                            ? "▲"
+                            : "▼"
+                          : "↕"}
                       </th>
                       <th
                         className="px-6 py-4 font-bold cursor-pointer select-none transition hover:text-blue-600 dark:hover:text-blue-400"
                         onClick={() => handleSort("condition")}
                       >
-                        Created Status {sortField === "condition" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
+                        Created Status{" "}
+                        {sortField === "condition"
+                          ? sortOrder === "asc"
+                            ? "▲"
+                            : "▼"
+                          : "↕"}
                       </th>
                       <th className="px-6 py-4 font-bold">Updated Status</th>
                       <th
                         className="px-6 py-4 font-bold cursor-pointer select-none transition hover:text-blue-600 dark:hover:text-blue-400"
                         onClick={() => handleSort("updatedAt")}
                       >
-                        Date & Time {sortField === "updatedAt" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
+                        Date & Time{" "}
+                        {sortField === "updatedAt"
+                          ? sortOrder === "asc"
+                            ? "▲"
+                            : "▼"
+                          : "↕"}
                       </th>
-                      <th className="px-6 py-4 text-center font-bold">Actions</th>
+                      <th className="px-6 py-4 text-center font-bold">
+                        Actions
+                      </th>
                     </tr>
                   </thead>
 
@@ -1593,7 +1713,9 @@ const ComponentManagement: React.FC = () => {
                                 <span className="mt-1 w-fit rounded-md border border-blue-200 bg-blue-50 px-2 py-0.5 font-mono text-[10px] font-bold text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300">
                                   {machine.serialNumber}
                                 </span>
-                              ) : machineModel && machineModel.toLowerCase() !== machineName.toLowerCase() ? (
+                              ) : machineModel &&
+                                machineModel.toLowerCase() !==
+                                  machineName.toLowerCase() ? (
                                 <span className="mt-1 w-fit rounded-md border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300">
                                   {machineModel}
                                 </span>
@@ -1629,47 +1751,77 @@ const ComponentManagement: React.FC = () => {
                           {/* UPDATED STATUS */}
                           <td className="px-6 py-4">
                             {(() => {
-                              const cIdKey = String(component.id || "").toLowerCase().trim();
-                              const cSnKey = String(component.serialNumber || "").replace(/^DEMO-/i, "").toLowerCase().trim();
-                              const cNameKey = String(component.name || "").toLowerCase().trim();
+                              const cIdKey = String(component.id || "")
+                                .toLowerCase()
+                                .trim();
+                              const cSnKey = String(
+                                component.serialNumber || "",
+                              )
+                                .replace(/^DEMO-/i, "")
+                                .toLowerCase()
+                                .trim();
+                              const cNameKey = String(component.name || "")
+                                .toLowerCase()
+                                .trim();
 
-                              const inspRecord = inspectionMap[cIdKey] || inspectionMap[cSnKey] || inspectionMap[cNameKey] || null;
+                              const inspRecord =
+                                inspectionMap[cIdKey] ||
+                                inspectionMap[cSnKey] ||
+                                inspectionMap[cNameKey] ||
+                                null;
 
                               if (inspRecord && inspRecord.hasData) {
                                 const score = inspRecord.healthScore;
-                                const isCrit = score < 50 || inspRecord.status === "Critical" || inspRecord.status === "CRITICAL";
-                                const isWarn = (!isCrit && score < 85) || inspRecord.status === "Warning" || inspRecord.status === "WARNING";
+                                const isCrit =
+                                  score < 50 ||
+                                  inspRecord.status === "Critical" ||
+                                  inspRecord.status === "CRITICAL";
+                                const isWarn =
+                                  (!isCrit && score < 85) ||
+                                  inspRecord.status === "Warning" ||
+                                  inspRecord.status === "WARNING";
 
                                 const circleBg = isCrit
                                   ? "bg-red-500 shadow-[0_0_0_3px_rgba(239,68,68,0.25)]"
                                   : isWarn
-                                  ? "bg-amber-500 shadow-[0_0_0_3px_rgba(245,158,11,0.25)]"
-                                  : "bg-emerald-500 shadow-[0_0_0_3px_rgba(34,197,94,0.25)]";
+                                    ? "bg-amber-500 shadow-[0_0_0_3px_rgba(245,158,11,0.25)]"
+                                    : "bg-emerald-500 shadow-[0_0_0_3px_rgba(34,197,94,0.25)]";
 
                                 const textClass = isCrit
                                   ? "text-red-700 dark:text-red-400 font-black"
                                   : isWarn
-                                  ? "text-amber-700 dark:text-amber-400 font-black"
-                                  : "text-emerald-700 dark:text-emerald-300 font-black";
+                                    ? "text-amber-700 dark:text-amber-400 font-black"
+                                    : "text-emerald-700 dark:text-emerald-300 font-black";
 
                                 const badgeBg = isCrit
                                   ? "border-red-200 bg-red-50/90 dark:border-red-500/30 dark:bg-red-500/15"
                                   : isWarn
-                                  ? "border-amber-200 bg-amber-50/90 dark:border-amber-500/30 dark:bg-amber-500/15"
-                                  : "border-emerald-200 bg-emerald-50/90 dark:border-emerald-500/30 dark:bg-emerald-500/15";
+                                    ? "border-amber-200 bg-amber-50/90 dark:border-amber-500/30 dark:bg-amber-500/15"
+                                    : "border-emerald-200 bg-emerald-50/90 dark:border-emerald-500/30 dark:bg-emerald-500/15";
 
-                                const label = isCrit ? "CRITICAL" : isWarn ? "WARNING" : "HEALTHY";
+                                const label = isCrit
+                                  ? "CRITICAL"
+                                  : isWarn
+                                    ? "WARNING"
+                                    : "HEALTHY";
 
                                 return (
-                                  <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[10px] ${badgeBg} ${textClass}`}>
-                                    <span className={`h-2.5 w-2.5 rounded-full ${circleBg}`} />
+                                  <span
+                                    className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[10px] ${badgeBg} ${textClass}`}
+                                  >
+                                    <span
+                                      className={`h-2.5 w-2.5 rounded-full ${circleBg}`}
+                                    />
                                     {label} {score}%
                                   </span>
                                 );
                               }
 
                               return (
-                                <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[10px] font-extrabold text-slate-400 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-500" title="No inspection parameters entered yet">
+                                <span
+                                  className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[10px] font-extrabold text-slate-400 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-500"
+                                  title="No inspection parameters entered yet"
+                                >
                                   <span className="h-2.5 w-2.5 rounded-full border-2 border-slate-300 dark:border-slate-600 bg-transparent" />
                                   -
                                 </span>
@@ -1678,7 +1830,9 @@ const ComponentManagement: React.FC = () => {
                           </td>
 
                           <td className="px-6 py-4 whitespace-nowrap text-xs font-semibold text-slate-600 dark:text-slate-300">
-                            {formatDateTime(component.updatedAt || component.createdAt)}
+                            {formatDateTime(
+                              component.updatedAt || component.createdAt,
+                            )}
                           </td>
 
                           <td className="px-6 py-4 text-center">
@@ -1912,8 +2066,14 @@ function ComponentDetailsModal({
               value={component.name || component.description || "-"}
             />
 
-            <DetailItem label="Component Name" value={component.name || component.description || "-"} />
-            <DetailItem label="Category" value={component.category || "General"} />
+            <DetailItem
+              label="Component Name"
+              value={component.name || component.description || "-"}
+            />
+            <DetailItem
+              label="Category"
+              value={component.category || "General"}
+            />
 
             <DetailItem
               label="Full Description / Spec Notes"
@@ -1924,6 +2084,15 @@ function ComponentDetailsModal({
               value={component.serialNumber || "-"}
             />
             <DetailItem label="Supplier" value={component.supplier || "-"} />
+
+                        <DetailItem
+              label="Replacement Cost"
+              value={
+                component.replacementCost
+                  ? component.replacementCost.toLocaleString()
+                  : "-"
+              }
+            />
           </div>
 
           <div className="mt-6 flex justify-end">
@@ -2191,6 +2360,16 @@ function ComponentFormModal({
               onChange={(value) => onChange("plannedLife", value)}
               placeholder="8000"
               error={formErrors.plannedLife}
+            />
+               
+                           <FormInput
+              label="Replacement Cost"
+              type="number"
+              value={form.replacementCost}
+              disabled={isFieldLocked("replacementCost")}
+              onChange={(value) => onChange("replacementCost", value)}
+              placeholder="2850000"
+              error={formErrors.replacementCost}
             />
 
             <FormSelect

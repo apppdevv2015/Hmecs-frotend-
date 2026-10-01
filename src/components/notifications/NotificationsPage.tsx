@@ -125,7 +125,10 @@ const CATEGORY_META: Record<Category, { icon: typeof Cpu; badge: string }> = {
       "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400",
   },
 };
-
+const DEFAULT_CATEGORY_META: { icon: typeof Cpu; badge: string } = {
+  icon: FileText,
+  badge: "bg-gray-100 text-gray-700 dark:bg-gray-500/10 dark:text-gray-300",
+};
 
 function getRelativeTime(timestamp: string) {
   const diff = Date.now() - new Date(timestamp).getTime();
@@ -447,7 +450,7 @@ export default function NotificationsPage() {
           <ul className="flex flex-col gap-2.5">
             {paged.map((notification) => {
               const severity = SEVERITY_META[notification.severity];
-              const category = CATEGORY_META[notification.category];
+              const category = CATEGORY_META[notification.category] ?? DEFAULT_CATEGORY_META;
               const SeverityIcon = severity.icon;
               const CategoryIcon = category.icon;
 

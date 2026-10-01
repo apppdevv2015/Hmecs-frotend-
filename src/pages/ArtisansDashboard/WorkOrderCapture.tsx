@@ -1,858 +1,2067 @@
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
-  ArrowLeft,
-  Camera,
-  Check,
+  AlertCircle,
+  CalendarClock,
   CheckCircle2,
-  Clock,
-  Info,
+  ClipboardList,
+  Cpu,
+  ExternalLink,
+  Eye,
+  History as HistoryIcon,
+  ImageMinus,
+  ImagePlus,
+  ImageUp,
+  Link2,
+  ListChecks,
   Loader2,
   MapPin,
-  Settings2,
+  PackageSearch,
+  Plus,
+  RefreshCw,
+  Search,
+  Send,
   Timer,
-  Upload,
-  User,
   Wrench,
   X,
   XCircle,
-  AlertTriangle,
-  FileText,
-  History as HistoryIcon,
-  ShieldCheck,
-  Calendar,
-  Activity,
-  Eye,
-  RefreshCw,
-  Search,
-  CheckSquare,
 } from "lucide-react";
-import toast from "react-hot-toast";
 
-import AppSelect from "../../components/ui/dropdown/AppSelect";
-import machineService from "../../services/Operator/machineService";
-import { fleetService } from "../../services/Fleet/fleetService";
-import { componentService } from "../../services/companyadmin/componentService";
-import StorageService, { STORAGE_KEYS } from "../../services/storage.service";
-import { apiCall } from "../../services/apiHandler";
-import { showSuccessToast, showErrorToast } from "../../utils/toastUtils";
+import ImagePreviewModal from "../../components/common/ImagePreviewModal";
+import { showErrorToast } from "../../utils/toastUtils";
+
+import {
+  jobCardService,
+  resolveJobCardFileUrl,
+  type InspectionFindingStatus,
+  type JobCard,
+  type JobCardAttachmentType,
+  type JobCardPriority,
+  type JobCardStatus,
+} from "../../services/Job card/jobCardService";
 
 /* ============================================================================
- * 1. TYPES
+ * CONFIG
  * ==========================================================================*/
 
-type HealthStatus = "GOOD" | "NEEDS_ATTENTION" | "CRITICAL";
-type ComponentHealthStatus = "Healthy" | "Good" | "Warning" | "Critical";
+const FETCH_LIMIT = 200;
+const HISTORY_PAGE_SIZE = 10;
 
-interface MachineComponent {
-  id: string;
-  category: string;
-  name: string;
-  health: number;
-  status: ComponentHealthStatus;
-  currentReading: string;
-}
+const WORKABLE_STATUSES: JobCardStatus[] = [
+  "ASSIGNED",
+  "IN_PROGRESS",
+  "WAITING_FOR_PARTS",
+];
 
-interface MachineDetails {
-  id: string;
-  name: string;
-  machineId: string;
-  machineType: string;
-  imageUrl: string;
-  assignedOperator: string;
-  assignedSupervisor?: string;
-  shift: string;
-  date: string;
-  location: string;
-  status: "In Progress" | "Idle" | "Under Maintenance";
-  currentHours?: number;
-}
+const STATUS_META: Record<JobCardStatus, { label: string; badge: string }> = {
+  DRAFT: {
+    label: "Draft",
+    badge: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
+  },
+  OPEN: {
+    label: "Open",
+    badge: "bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300",
+  },
+  ASSIGNED: {
+    label: "Assigned",
+    badge: "bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300",
+  },
+  IN_PROGRESS: {
+    label: "In progress",
+    badge:
+      "bg-violet-100 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300",
+  },
+  WAITING_FOR_PARTS: {
+    label: "Waiting for parts",
+    badge:
+      "bg-purple-100 text-purple-700 dark:bg-purple-950/50 dark:text-purple-300",
+  },
+  WAITING_FOR_APPROVAL: {
+    label: "Awaiting approval",
+    badge:
+      "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300",
+  },
+  COMPLETED: {
+    label: "Completed",
+    badge:
+      "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300",
+  },
+  CLOSED: {
+    label: "Closed",
+    badge: "bg-teal-100 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300",
+  },
+  CANCELLED: {
+    label: "Cancelled",
+    badge: "bg-red-100 text-red-600 dark:bg-red-950/40 dark:text-red-300",
+  },
+};
 
-interface IssueAttachment {
-  id: string;
-  file: File;
-  previewUrl: string;
-}
+const PRIORITY_META: Record<
+  JobCardPriority,
+  { label: string; badge: string; dot: string }
+> = {
+  LOW: {
+    label: "Low",
+    badge: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
+    dot: "bg-slate-400",
+  },
+  MEDIUM: {
+    label: "Medium",
+    badge:
+      "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300",
+    dot: "bg-amber-500",
+  },
+  HIGH: {
+    label: "High",
+    badge:
+      "bg-orange-100 text-orange-700 dark:bg-orange-950/50 dark:text-orange-300",
+    dot: "bg-orange-500",
+  },
+  CRITICAL: {
+    label: "Critical",
+    badge: "bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300",
+    dot: "bg-red-500",
+  },
+};
 
-interface WorkReportFormState {
-  workDescription: string;
-  overallCondition: HealthStatus | null;
-  issuesObserved: boolean | null;
-  issueDescription: string;
-  downtime: string;
-  attachments: IssueAttachment[];
-}
+const PRIORITY_RANK: Record<JobCardPriority, number> = {
+  CRITICAL: 0,
+  HIGH: 1,
+  MEDIUM: 2,
+  LOW: 3,
+};
 
-interface FormErrors {
-  workDescription?: string;
-  overallCondition?: string;
-  issueDescription?: string;
-}
+const ATTACHMENT_OPTIONS: { value: JobCardAttachmentType; label: string }[] = [
+  { value: "PHOTO_BEFORE", label: "Photo before repair" },
+  { value: "PHOTO_AFTER", label: "Photo after repair" },
+];
 
-type PageLoadState = "loading" | "ready" | "no-machine" | "error";
-type SubmitState = "idle" | "saving-draft" | "submitting" | "submitted";
+const ATTACHMENT_LABEL: Record<JobCardAttachmentType, string> = {
+  PHOTO_BEFORE: "Photo before",
+  PHOTO_AFTER: "Photo after",
+  MANUAL: "Manual",
+  DRAWING: "Drawing",
+};
+
+const INPUT_CLS =
+  "h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-900 outline-none transition placeholder:font-medium placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-[#101f33] dark:text-white";
+const TEXTAREA_CLS =
+  "w-full resize-none rounded-xl border border-slate-200 bg-white p-3 text-xs font-semibold text-slate-900 outline-none transition placeholder:font-medium placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-[#101f33] dark:text-white";
 
 /* ============================================================================
- * 2. HELPERS
+ * HELPERS
  * ==========================================================================*/
 
-const cleanMachineName = (rawName?: string): string => {
-  let name = String(rawName || "").trim();
-  const words = name.split(/\s+/);
-  if (words.length >= 2 && words[0].toLowerCase() === words[1].toLowerCase()) {
-    words.shift();
-    name = words.join(" ");
-  }
-  return name || "Mining Equipment";
+const toNumber = (value: unknown): number => {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
 };
 
-const formatDate = (isoString?: string) => {
-  if (!isoString) return "—";
-  try {
-    const d = new Date(isoString);
-    if (isNaN(d.getTime())) return isoString;
-    return d.toLocaleString("en-US", {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
-    });
-  } catch {
-    return isoString;
-  }
+const getRunningLog = (jc: JobCard) =>
+  jc.laborLogs.find((log) => !log.endTime) ?? null;
+
+const getLoggedMinutes = (jc: JobCard, nowMs: number): number =>
+  jc.laborLogs.reduce((sum, log) => {
+    if (log.endTime) return sum + (log.durationMinutes ?? 0);
+    const started = new Date(log.startTime).getTime();
+    return sum + Math.max(0, (nowMs - started) / 60000);
+  }, 0);
+
+const formatMinutes = (minutes: number): string => {
+  const total = Math.floor(minutes);
+  return `${Math.floor(total / 60)}h ${String(total % 60).padStart(2, "0")}m`;
 };
 
-const formatDuration = (startIso: string, endIso: string): string => {
-  const diffMs = new Date(endIso).getTime() - new Date(startIso).getTime();
-  if (diffMs <= 0) return "0h 0m";
-  const hours = Math.floor(diffMs / 3600000);
-  const minutes = Math.floor((diffMs % 3600000) / 60000);
-  return `${hours}h ${minutes}m`;
+const formatClock = (ms: number): string => {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  return [h, m, s].map((v) => String(v).padStart(2, "0")).join(":");
 };
+
+const formatDate = (value?: string | null): string => {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+};
+
+const formatDateTime = (value?: string | null): string => {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return "—";
+  return d.toLocaleString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
+const money = (value: unknown): string => toNumber(value).toFixed(2);
+
+const partsCostOf = (jc: JobCard): number =>
+  jc.parts.reduce((sum, p) => sum + toNumber(p.totalCost), 0);
+
+const componentLabel = (jc: JobCard): string =>
+  jc.component?.description || jc.component?.category || "No component linked";
+
+function useTick(enabled: boolean): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!enabled) return;
+    setNow(Date.now());
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [enabled]);
+  return now;
+}
 
 /* ============================================================================
- * 3. MAIN COMPONENT
+ * SMALL UI PIECES
+ * ==========================================================================*/
+
+function StatusBadge({ status }: { status: JobCardStatus }) {
+  const meta = STATUS_META[status];
+  return (
+    <span
+      className={`inline-flex items-center whitespace-nowrap rounded-lg px-2.5 py-1 text-[11px] font-bold ${meta.badge}`}
+    >
+      {meta.label}
+    </span>
+  );
+}
+
+function PriorityBadge({ priority }: { priority: JobCardPriority }) {
+  const meta = PRIORITY_META[priority];
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-1 text-[11px] font-bold ${meta.badge}`}
+    >
+      <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />
+      {meta.label}
+    </span>
+  );
+}
+
+function Panel({
+  title,
+  subtitle,
+  icon,
+  right,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  icon: React.ReactNode;
+  right?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-[#0b1728]">
+      <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4 dark:border-slate-800">
+        <div className="flex items-start gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
+            {icon}
+          </div>
+          <div>
+            <h3 className="text-sm font-extrabold text-slate-900 dark:text-white">
+              {title}
+            </h3>
+            {subtitle && (
+              <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                {subtitle}
+              </p>
+            )}
+          </div>
+        </div>
+        {right}
+      </div>
+      <div className="p-5">{children}</div>
+    </section>
+  );
+}
+
+function Label({
+  children,
+  required,
+}: {
+  children: React.ReactNode;
+  required?: boolean;
+}) {
+  return (
+    <label className="mb-1 block text-[11px] font-bold text-slate-600 dark:text-slate-300">
+      {children}
+      {required && <span className="text-red-500"> *</span>}
+    </label>
+  );
+}
+
+function FormError({ message }: { message: string | null }) {
+  if (!message) return null;
+  return (
+    <p className="flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-[11px] font-semibold text-red-700 dark:bg-red-500/10 dark:text-red-300">
+      <AlertCircle size={13} className="shrink-0" />
+      {message}
+    </p>
+  );
+}
+
+function EmptyLine({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="rounded-xl border border-dashed border-slate-200 px-4 py-5 text-center text-xs text-slate-400 dark:border-slate-700">
+      {children}
+    </p>
+  );
+}
+
+function PrimaryButton({
+  busy,
+  disabled,
+  children,
+  ...rest
+}: {
+  busy?: boolean;
+  children: React.ReactNode;
+} & React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <button
+      type="button"
+      disabled={busy || disabled}
+      className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-xs font-bold text-white shadow-md shadow-blue-600/25 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+      {...rest}
+    >
+      {busy ? <Loader2 size={14} className="animate-spin" /> : null}
+      {children}
+    </button>
+  );
+}
+
+/* ============================================================================
+ * PAGE
  * ==========================================================================*/
 
 export default function ArtisanWorkOrderCapture() {
-  const storedUser =
-    StorageService.get<any>(STORAGE_KEYS.USER) ||
-    StorageService.get<any>("user") ||
-    {};
-  const artisanName = storedUser?.name || storedUser?.fullName || "Artisan Technician";
-  const artisanEmail = storedUser?.email || "artisan@mine.com";
-  const artisanId = String(storedUser?.id || storedUser?.userId || "art-1");
+  const [searchParams] = useSearchParams();
+  const preferredId = searchParams.get("jobCard");
 
-  // Machines State
-  const [machines, setMachines] = useState<MachineDetails[]>([]);
-  const [selectedMachine, setSelectedMachine] = useState<MachineDetails | null>(null);
-  const [pageState, setPageState] = useState<PageLoadState>("loading");
-  const [components, setComponents] = useState<MachineComponent[]>([]);
+  const [cards, setCards] = useState<JobCard[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(preferredId);
+  const [waitingBusy, setWaitingBusy] = useState(false);
+  const [historyId, setHistoryId] = useState<string | null>(null);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
-  // Shift Times from Database Pre-Inspection
-  const [workStartTime, setWorkStartTime] = useState<string>(new Date().toISOString());
-  const [workEndTime, setWorkEndTime] = useState<string>(new Date().toISOString());
-
-  // Form State
-  const [form, setForm] = useState<WorkReportFormState>({
-    workDescription: "",
-    overallCondition: null,
-    issuesObserved: false,
-    issueDescription: "",
-    downtime: "",
-    attachments: [],
-  });
-
-  const [errors, setErrors] = useState<FormErrors>({});
-  const [submitState, setSubmitState] = useState<SubmitState>("idle");
-
-  // Database Inspection History State
-  const [historyLogs, setHistoryLogs] = useState<any[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
-  const [selectedHistoryLog, setSelectedHistoryLog] = useState<any | null>(null);
-
-  // ---------------------------------------------------------------------------
-  // Load Assigned Machines for THIS Artisan
-  // ---------------------------------------------------------------------------
-  const loadAssignedMachines = useCallback(async () => {
+  const loadCards = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
+    setLoadError(null);
     try {
-      setPageState("loading");
-      const userCompanyId = StorageService.getCompanyId() || "";
-      const currentArtisanId = String(artisanId).toLowerCase().trim();
-      const currentArtisanEmail = String(artisanEmail).toLowerCase().trim();
-      const currentArtisanName = String(artisanName).toLowerCase().trim();
-
-               interface RawMachine {
-        id?: string;
-        machineId?: string;
-        machineName?: string;
-        name?: string;
-        serialNumber?: string;
-        fleetId?: string;
-        equipmentType?: string;
-        category?: string;
-        imageUrl?: string;
-        location?: string;
-        site?: string;
-        companyId?: string;
-        currentHours?: number;
-        totalHours?: number;
-        hoursRun?: number;
-        operatingHours?: number;
-        installHours?: number;
-        assignedOperatorName?: string;
-        assignedSupervisorName?: string;
-        assignedArtisanId?: string;
-        assigned_artisan_id?: string;
-        artisanId?: string;
-        artisan_id?: string;
-        technicianId?: string;
-        assignedArtisanName?: string;
-        artisanName?: string;
-        technician?: string;
-        assignedArtisanEmail?: string;
-        artisanEmail?: string;
-      }
-
-      interface ListApiResponse {
-        data?: RawMachine[];
-        assignedMachines?: RawMachine[];
-        machines?: RawMachine[];
-      }
-
-      let rawList: RawMachine[] = [];
-      try {
-        const res = (await machineService.getAssignedMachines()) as
-          | RawMachine[]
-          | ListApiResponse;
-        if (Array.isArray(res)) rawList = res;
-        else if (Array.isArray(res.data)) rawList = res.data;
-        else if (Array.isArray(res.assignedMachines)) rawList = res.assignedMachines;
-      } catch {
-        const res2 = (await fleetService.getFleetMachines()) as
-          | RawMachine[]
-          | ListApiResponse;
-        if (Array.isArray(res2)) rawList = res2;
-        else if (Array.isArray(res2.data)) rawList = res2.data;
-        else if (Array.isArray(res2.machines)) rawList = res2.machines;
-      }
-
-      // Filter strictly for machines assigned to THIS Artisan
-                const assignedToArtisanList = rawList.filter((m: RawMachine) => {
-        if (!m) return false;
-        if (userCompanyId && m.companyId && String(m.companyId) !== userCompanyId) return false;
-
-        const mArtisanId = String(
-          m?.assignedArtisanId ??
-          m?.assigned_artisan_id ??
-          m?.artisanId ??
-          m?.artisan_id ??
-          m?.technicianId ??
-          ""
-        ).toLowerCase().trim();
-
-        const mArtisanName = String(
-          m?.assignedArtisanName ??
-          m?.artisanName ??
-          m?.technician ??
-          ""
-        ).toLowerCase().trim();
-
-        const mArtisanEmail = String(
-          m?.assignedArtisanEmail ??
-          m?.artisanEmail ??
-          ""
-        ).toLowerCase().trim();
-
-        if (mArtisanId && currentArtisanId && mArtisanId === currentArtisanId) return true;
-        if (mArtisanEmail && currentArtisanEmail && mArtisanEmail === currentArtisanEmail) return true;
-        if (mArtisanName && currentArtisanName && (
-          mArtisanName.includes(currentArtisanName) ||
-          currentArtisanName.includes(mArtisanName)
-        )) return true;
-
-        return false;
-      });
-
-           const finalMachines = assignedToArtisanList.length > 0 ? assignedToArtisanList : rawList.filter((m: RawMachine) => {
-        const hasArtisanField = m?.assignedArtisanId || m?.assignedArtisanName;
-        return !userCompanyId || !m.companyId || String(m.companyId) === userCompanyId ? Boolean(hasArtisanField) : false;
-      });
-
-            const mapped: MachineDetails[] = (finalMachines.length > 0 ? finalMachines : (rawList.length > 0 ? [rawList[0]] : [])).map((m: RawMachine) => {
-        const rawHours =
-          m.currentHours ??
-          m.totalHours ??
-          m.hoursRun ??
-          m.operatingHours ??
-          m.installHours ??
-          0;
-
-                return {
-          id: String(m.machineId || m.id || ""),
-          name: cleanMachineName(m.machineName || m.name),
-          machineId: String(m.serialNumber || m.fleetId || "SN-HME-1001").replace(/^DEMO-/i, ""),
-          machineType: m.equipmentType || m.category || "Heavy Machinery",
-          imageUrl:
-            m.imageUrl ||
-            "https://images.unsplash.com/photo-1581094794329-c8112a89af12?q=80&w=800&auto=format&fit=crop",
-          assignedOperator: m.assignedOperatorName || "Operator User",
-          assignedSupervisor: m.assignedSupervisorName || "Supervisor User",
-          shift: "Day Shift (Artisan Maintenance)",
-          date: new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }),
-          location: m.location || m.site || "Mining Pit Sector A",
-          status: "In Progress",
-          currentHours: Number(rawHours || 0),
-        };
-      });
-
-      setMachines(mapped);
-      if (mapped.length > 0) {
-        setSelectedMachine(mapped[0]);
-      }
-      setPageState(mapped.length > 0 ? "ready" : "no-machine");
+      const res = await jobCardService.getJobCards({ limit: FETCH_LIMIT });
+      setCards([...res.data.items]);
     } catch (err) {
-      console.warn("Could not load machines:", err);
-      setPageState("error");
-    }
-  }, [artisanId, artisanEmail, artisanName]);
-
-  useEffect(() => {
-    loadAssignedMachines();
-  }, [loadAssignedMachines]);
-
-  // ---------------------------------------------------------------------------
-  // Load History and Start Time for Selected Machine
-  // ---------------------------------------------------------------------------
-  const loadMachineDetailsAndHistory = useCallback(async (machineId: string) => {
-    if (!machineId) return;
-    try {
-      setHistoryLoading(true);
-      const userCompanyId = StorageService.getCompanyId() || "";
-      const queryParam = userCompanyId ? `?companyId=${encodeURIComponent(userCompanyId)}` : "";
-
-      // 1. Fetch History from PostgreSQL
-      const historyRes: any = await apiCall(
-        `/machines/${encodeURIComponent(machineId)}/inspection-history${queryParam}`,
-        { method: "GET" },
-        { showError: false }
-      ).catch(() => apiCall(`/machines/inspection-history${queryParam}`, { method: "GET" }, { showError: false }));
-
-      let logs: any[] = [];
-      if (Array.isArray(historyRes?.data?.historyLogs)) logs = historyRes.data.historyLogs;
-      else if (Array.isArray(historyRes?.data)) logs = historyRes.data;
-      else if (Array.isArray(historyRes)) logs = historyRes;
-
-      const matchedLogs = logs.filter(
-        (l: any) => l.machineId === machineId || (l.machineName && selectedMachine && l.machineName.toLowerCase().includes(selectedMachine.name.toLowerCase()))
+      setLoadError(
+        err instanceof Error ? err.message : "Could not load your job cards.",
       );
-      setHistoryLogs(matchedLogs.length > 0 ? matchedLogs : logs.slice(0, 15));
-
-      // 2. Set Start Time from latest pre-start inspection timestamp in PostgreSQL
-      if (logs.length > 0 && logs[0].createdAt) {
-        setWorkStartTime(new Date(logs[0].createdAt).toISOString());
-      } else {
-        const fall = new Date();
-        fall.setHours(fall.getHours() - 2);
-        setWorkStartTime(fall.toISOString());
-      }
-      setWorkEndTime(new Date().toISOString());
-
-            // 3. Load Components
-      interface RawComponent {
-        id?: string;
-        componentId?: string;
-        category?: string;
-        name?: string;
-        description?: string;
-        healthScore?: number;
-        currentReading?: string;
-      }
-
-      interface ComponentsApiResponse {
-        data?: RawComponent[];
-        components?: RawComponent[];
-      }
-
-      const compRes = (await componentService.getComponentsByMachineId(
-        machineId,
-      )) as RawComponent[] | ComponentsApiResponse;
-      let rawComps: RawComponent[] = [];
-      if (Array.isArray(compRes)) rawComps = compRes;
-      else if (Array.isArray(compRes.data)) rawComps = compRes.data;
-      else if (Array.isArray(compRes.components)) rawComps = compRes.components;
-
-      setComponents(rawComps.map((c: any) => ({
-        id: c.id || c.componentId,
-        category: c.category || "General Subsystem",
-        name: c.name || c.description || "Component Unit",
-        health: c.healthScore ?? 90,
-        status: "Healthy",
-        currentReading: c.currentReading || "Normal",
-      })));
-    } catch (err) {
-      console.warn("History loading notice:", err);
+      if (!silent) setCards([]);
     } finally {
-      setHistoryLoading(false);
+      setLoading(false);
     }
-  }, [selectedMachine]);
+  }, []);
 
   useEffect(() => {
-    if (selectedMachine?.id) {
-      loadMachineDetailsAndHistory(selectedMachine.id);
-    }
-  }, [selectedMachine?.id, loadMachineDetailsAndHistory]);
+    loadCards();
+  }, [loadCards]);
 
-  // ---------------------------------------------------------------------------
-  // Validation & Submit to PostgreSQL
-  // ---------------------------------------------------------------------------
-  const validate = (): boolean => {
-    const errs: FormErrors = {};
-    if (!form.workDescription.trim()) errs.workDescription = "Please enter work description";
-    if (!form.overallCondition) errs.overallCondition = "Please select overall condition";
-    if (form.issuesObserved && !form.issueDescription.trim()) errs.issueDescription = "Please describe the observed issue";
-    setErrors(errs);
-    return Object.keys(errs).length === 0;
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") loadCards(true);
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [loadCards]);
+
+  const refreshCard = useCallback(async (id: string) => {
+    try {
+      const res = await jobCardService.getJobCardById(id);
+      setCards((prev) => prev.map((c) => (c.id === id ? res.data : c)));
+    } catch (err) {
+      showErrorToast(
+        err instanceof Error ? err.message : "Could not refresh the job card",
+      );
+    }
+  }, []);
+
+  const workable = useMemo(
+    () =>
+      cards
+        .filter((c) => WORKABLE_STATUSES.includes(c.status))
+        .sort((a, b) => {
+          const runA = getRunningLog(a) ? 0 : 1;
+          const runB = getRunningLog(b) ? 0 : 1;
+          if (runA !== runB) return runA - runB;
+          const inA = a.status === "IN_PROGRESS" ? 0 : 1;
+          const inB = b.status === "IN_PROGRESS" ? 0 : 1;
+          if (inA !== inB) return inA - inB;
+          return PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority];
+        }),
+    [cards],
+  );
+
+  const selected = useMemo(
+    () => workable.find((c) => c.id === selectedId) ?? workable[0] ?? null,
+    [workable, selectedId],
+  );
+
+  const historyCards = useMemo(
+    () =>
+      cards
+        .filter((c) => !WORKABLE_STATUSES.includes(c.status))
+        .sort((a, b) =>
+          (b.actualFinishDate ?? b.updatedAt).localeCompare(
+            a.actualFinishDate ?? a.updatedAt,
+          ),
+        ),
+    [cards],
+  );
+
+  const historyView = useMemo(
+    () => cards.find((c) => c.id === historyId) ?? null,
+    [cards, historyId],
+  );
+
+  /** IN_PROGRESS is the only status the backend lets move to WAITING_FOR_APPROVAL/PARTS. */
+  const markWaitingForParts = async (jc: JobCard) => {
+    setWaitingBusy(true);
+    try {
+      const fresh = (await jobCardService.getJobCardById(jc.id)).data;
+      if (getRunningLog(fresh)) {
+        await jobCardService.logLaborTimer(jc.id, { actionType: "PAUSE" });
+      }
+      await jobCardService.updateJobCardStatus(jc.id, {
+        status: "WAITING_FOR_PARTS",
+      });
+    } catch (err) {
+      showErrorToast(
+        err instanceof Error ? err.message : "Could not update the status",
+      );
+    } finally {
+      await refreshCard(jc.id);
+      setWaitingBusy(false);
+    }
   };
 
-  const handleSubmit = async (isDraft: boolean) => {
-    if (!isDraft && !validate()) return;
-    if (!selectedMachine) return;
-
+  const submitReport = async (
+    jc: JobCard,
+    report: {
+      rootCause: string;
+      correctiveAction: string;
+      postRepairCondition?: number;
+      downtimeHours?: number;
+    },
+  ) => {
     try {
-      setSubmitState(isDraft ? "saving-draft" : "submitting");
-      const finalEndTime = new Date().toISOString();
-      const totalHours = formatDuration(workStartTime, finalEndTime);
-
-      await apiCall(`/machines/${encodeURIComponent(selectedMachine.id)}/manual-data`, {
-        method: "POST",
-        body: JSON.stringify({
-          machineName: selectedMachine.name,
-          brand: "Heavy Equipment",
-          category: selectedMachine.machineType,
-          modelName: selectedMachine.name,
-          serialNumber: selectedMachine.machineId,
-          componentName: components.map((c) => c.name).join(", ") || "All Machine Components",
-          componentCategory: "Artisan Work Order & Maintenance Report",
-          actionDescription: isDraft ? "Artisan Draft Work Order Saved" : "Final Artisan Work Order Submitted",
-          readings: {
-            workDescription: form.workDescription,
-            overallCondition: form.overallCondition,
-            workStartTime,
-            workEndTime: finalEndTime,
-            totalWorkingHours: totalHours,
-            issuesObserved: form.issuesObserved,
-            issueDescription: form.issueDescription,
-            downtime: form.downtime,
-          },
-          userName: artisanName,
-          userRole: "ARTISAN",
-          userEmail: artisanEmail,
-        }),
-      }, { showError: false });
-
-      showSuccessToast(isDraft ? "Draft work order saved successfully." : "✓ Work order report submitted to database!");
-      loadMachineDetailsAndHistory(selectedMachine.id);
-      setSubmitState("submitted");
-    } catch (err: any) {
-      showErrorToast(err.message || "Failed to submit work order");
-      setSubmitState("idle");
+      const fresh = (await jobCardService.getJobCardById(jc.id)).data;
+      if (getRunningLog(fresh)) {
+        await jobCardService.logLaborTimer(jc.id, { actionType: "FINISH" });
+      }
+      await jobCardService.updateJobCardStatus(jc.id, {
+        status: "WAITING_FOR_APPROVAL",
+        ...report,
+      });
+      await loadCards(true);
+      return true;
+    } catch (err) {
+      showErrorToast(
+        err instanceof Error ? err.message : "Could not submit the report",
+      );
+      await refreshCard(jc.id);
+      return false;
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] p-4 font-sans text-slate-900 antialiased dark:bg-[#07111f] dark:text-slate-50 sm:p-6 lg:p-8 space-y-6">
-      {/* ── HEADER ── */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <div className="inline-flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-bold uppercase tracking-wider text-indigo-700 dark:border-indigo-900/50 dark:bg-indigo-950/40 dark:text-indigo-300">
-            <FileText size={14} />
-            Artisan Work Order & Maintenance Job Card
+    <div className="min-h-screen bg-slate-100 p-4 font-sans text-slate-900 dark:bg-[#07111f] dark:text-slate-50 sm:p-6 lg:p-8">
+      <div className="mx-auto max-w-[1400px] space-y-6">
+        {/* Header */}
+        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#3B37E6] via-[#3730D9] to-[#2E2AD9] shadow-lg">
+          <div className="pointer-events-none absolute -right-16 -top-24 h-64 w-64 rounded-full bg-white/10 blur-2xl" />
+          <div className="relative flex flex-col gap-5 px-6 py-7 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="mb-3 inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur-sm">
+                <ListChecks size={14} />
+                Artisan workspace
+              </div>
+              <h1 className="text-2xl font-black tracking-tight text-white sm:text-3xl">
+                Work capture
+              </h1>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-blue-100">
+                Record what you found, the parts you used and the repair report
+                for the job you are working on. Your past jobs are listed below.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => loadCards()}
+              disabled={loading}
+              className="inline-flex h-10 items-center gap-2 self-start rounded-xl border border-white/20 bg-white/10 px-4 text-xs font-bold text-white backdrop-blur-sm transition hover:bg-white/20 disabled:opacity-50 sm:self-auto"
+            >
+              <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
+              Refresh
+            </button>
           </div>
-          <h1 className="mt-2 text-2xl font-black tracking-tight text-slate-900 dark:text-white sm:text-3xl">
-            Work Order & End Shift Report
-          </h1>
-          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-            Record maintenance execution logs, downtime metrics, and view real-time PostgreSQL database inspection audit records.
-          </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => {
-              loadAssignedMachines();
-              if (selectedMachine) loadMachineDetailsAndHistory(selectedMachine.id);
-              showSuccessToast("Refreshed work order data!");
-            }}
-            className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-800 dark:bg-[#101f33] dark:text-slate-200 cursor-pointer"
+        {loadError && (
+          <div className="flex items-center justify-between gap-3 rounded-2xl border border-red-300 bg-red-50 px-4 py-3 text-xs font-semibold text-red-700 dark:border-red-500/40 dark:bg-red-950/40 dark:text-red-300">
+            <span className="flex items-center gap-2">
+              <AlertCircle size={16} />
+              {loadError}
+            </span>
+            <button
+              type="button"
+              onClick={() => loadCards()}
+              className="rounded-lg border border-red-300 px-3 py-1 font-bold hover:bg-red-100 dark:border-red-500/40 dark:hover:bg-red-950/60"
+            >
+              Try again
+            </button>
+          </div>
+        )}
+
+        {loading ? (
+          <div className="flex min-h-[320px] flex-col items-center justify-center gap-3 rounded-3xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-[#0b1728]">
+            <Loader2 className="h-8 w-8 animate-spin text-blue-600 dark:text-blue-400" />
+            <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">
+              Loading your job cards...
+            </p>
+          </div>
+        ) : !selected ? (
+          <div className="flex min-h-[260px] flex-col items-center justify-center rounded-3xl border border-dashed border-slate-300 bg-white p-8 text-center dark:border-slate-700 dark:bg-[#0b1728]">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-slate-300">
+              <ClipboardList size={26} />
+            </div>
+            <h3 className="mt-4 text-base font-extrabold text-slate-900 dark:text-white">
+              No active job to capture
+            </h3>
+            <p className="mt-1 max-w-md text-sm text-slate-500 dark:text-slate-400">
+              When a supervisor assigns you a job card, it will appear here.
+              Start its timer from My tasks and come back to record your work.
+            </p>
+          </div>
+        ) : (
+          <>
+            <JobBanner
+              jc={selected}
+              options={workable}
+              onSelect={setSelectedId}
+            />
+
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+              <div className="space-y-6 lg:col-span-2">
+                <FindingsPanel
+                  key={`f-${selected.id}`}
+                  jc={selected}
+                  onChanged={() => refreshCard(selected.id)}
+                />
+                <PartsPanel
+                  key={`p-${selected.id}`}
+                  jc={selected}
+                  waitingBusy={waitingBusy}
+                  onWaitingForParts={() => markWaitingForParts(selected)}
+                  onChanged={() => refreshCard(selected.id)}
+                />
+                <AttachmentsPanel
+                  key={`a-${selected.id}`}
+                  jc={selected}
+                  onChanged={() => refreshCard(selected.id)}
+                  onPreviewImage={setPreviewImage}
+                />
+              </div>
+
+              <div className="space-y-6 lg:sticky lg:top-6 lg:self-start">
+                <CostPanel jc={selected} />
+                <ReportPanel
+                  key={`r-${selected.id}`}
+                  jc={selected}
+                  onSubmit={(report) => submitReport(selected, report)}
+                />
+              </div>
+            </div>
+          </>
+        )}
+
+        {!loading && (
+          <HistoryPanel cards={historyCards} onView={setHistoryId} />
+        )}
+      </div>
+
+      {historyView && (
+        <HistoryModal
+          jc={historyView}
+          onClose={() => setHistoryId(null)}
+          onPreviewImage={setPreviewImage}
+        />
+      )}
+
+      {previewImage && (
+        <ImagePreviewModal
+          imageUrl={previewImage}
+          onClose={() => setPreviewImage(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ============================================================================
+ * JOB BANNER
+ * ==========================================================================*/
+
+function JobBanner({
+  jc,
+  options,
+  onSelect,
+}: {
+  jc: JobCard;
+  options: JobCard[];
+  onSelect: (id: string) => void;
+}) {
+  const running = getRunningLog(jc);
+  const now = useTick(!!running);
+  const logged = getLoggedMinutes(jc, now);
+  const allocated = toNumber(jc.allocatedLaborHours);
+
+  const hint =
+    jc.status === "ASSIGNED"
+      ? "Start the timer from My tasks to begin the job. You can already record findings and parts."
+      : jc.status === "WAITING_FOR_PARTS"
+        ? "This job is waiting for parts. Resume the timer from My tasks when the parts arrive."
+        : running
+          ? "Timer is running. It stops automatically when you submit the report."
+          : "Timer is stopped. Resume it from My tasks if you are still working.";
+
+  return (
+    <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-[#0b1728]">
+      <div className="flex flex-col gap-5 p-5 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0 space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-md bg-slate-100 px-2 py-0.5 font-mono text-[11px] font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+              {jc.jobCardNumber}
+            </span>
+            <StatusBadge status={jc.status} />
+            <PriorityBadge priority={jc.priority} />
+          </div>
+          <h2 className="text-xl font-black leading-snug text-slate-900 dark:text-white">
+            {jc.title}
+          </h2>
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400">
+            <span className="inline-flex items-center gap-1.5">
+              <Cpu size={13} />
+              {jc.machine?.name ?? "Machine"}
+              <span className="font-mono font-normal text-slate-400">
+                {jc.machine?.serialNumber}
+              </span>
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <MapPin size={13} />
+              {jc.machine?.site || "Site not set"}
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <Wrench size={13} />
+              {componentLabel(jc)}
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <CalendarClock size={13} />
+              Due {formatDate(jc.plannedFinishDate)}
+            </span>
+          </div>
+          <p className="text-xs text-slate-500 dark:text-slate-400">{hint}</p>
+        </div>
+
+        <div className="flex shrink-0 flex-col gap-3 sm:flex-row lg:flex-col xl:flex-row">
+          <div
+            className={`min-w-[190px] rounded-2xl p-4 ${
+              running
+                ? "bg-gradient-to-br from-[#3B37E6] to-[#2E2AD9] text-white shadow-lg shadow-blue-600/25"
+                : "border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-white/[0.04]"
+            }`}
           >
-            <RefreshCw size={15} className={historyLoading ? "animate-spin text-blue-600" : ""} />
-            Refresh History
-          </button>
+            <p
+              className={`flex items-center gap-1.5 text-[11px] font-bold ${
+                running ? "text-blue-100" : "text-slate-500 dark:text-slate-400"
+              }`}
+            >
+              <Timer size={13} />
+              {running ? "Timer running" : "Timer stopped"}
+            </p>
+            <p
+              className={`mt-1 font-mono text-2xl font-black tabular-nums ${
+                running ? "text-white" : "text-slate-900 dark:text-white"
+              }`}
+            >
+              {running
+                ? formatClock(now - new Date(running.startTime).getTime())
+                : formatMinutes(logged)}
+            </p>
+            <p
+              className={`mt-0.5 text-[11px] font-semibold ${
+                running ? "text-blue-100" : "text-slate-500 dark:text-slate-400"
+              }`}
+            >
+              Total {formatMinutes(logged)}
+              {allocated > 0 ? ` of ${allocated}h` : ""}
+            </p>
+          </div>
+
+          {options.length > 1 && (
+            <div className="min-w-[220px]">
+              <Label>Switch job card</Label>
+              <select
+                value={jc.id}
+                onChange={(e) => onSelect(e.target.value)}
+                className={INPUT_CLS}
+              >
+                {options.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.jobCardNumber} · {o.title}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================================
+ * FINDINGS
+ * ==========================================================================*/
+
+function FindingsPanel({
+  jc,
+  onChanged,
+}: {
+  jc: JobCard;
+  onChanged: () => Promise<void>;
+}) {
+  const [form, setForm] = useState({
+    parameterName: "",
+    measuredValue: "",
+    unit: "",
+    standardSpec: "",
+    status: "PASS" as InspectionFindingStatus,
+    remarks: "",
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const findings = useMemo(
+    () =>
+      [...jc.findings].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    [jc.findings],
+  );
+
+  const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) =>
+    setForm((prev) => ({ ...prev, [key]: value }));
+
+  const add = async () => {
+    if (!form.parameterName.trim()) {
+      setError("Enter what you checked, for example Hydraulic pressure.");
+      return;
+    }
+    setError(null);
+    setSaving(true);
+    try {
+      await jobCardService.addInspectionFinding(jc.id, {
+        parameterName: form.parameterName.trim(),
+        status: form.status,
+        ...(form.measuredValue.trim()
+          ? { measuredValue: form.measuredValue.trim() }
+          : {}),
+        ...(form.unit.trim() ? { unit: form.unit.trim() } : {}),
+        ...(form.standardSpec.trim()
+          ? { standardSpec: form.standardSpec.trim() }
+          : {}),
+        ...(form.remarks.trim() ? { remarks: form.remarks.trim() } : {}),
+      });
+      await onChanged();
+      setForm({
+        parameterName: "",
+        measuredValue: "",
+        unit: "",
+        standardSpec: "",
+        status: "PASS",
+        remarks: "",
+      });
+    } catch (err) {
+      showErrorToast(
+        err instanceof Error ? err.message : "Could not save the finding",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Panel
+      title="What you found"
+      subtitle="Record each check you made: what you measured and whether it passed."
+      icon={<ListChecks size={18} />}
+      right={
+        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-extrabold tabular-nums text-slate-600 dark:bg-white/10 dark:text-slate-300">
+          {findings.length}
+        </span>
+      }
+    >
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-6">
+        <div className="sm:col-span-3">
+          <Label required>Checked item</Label>
+          <input
+            value={form.parameterName}
+            onChange={(e) => set("parameterName", e.target.value)}
+            placeholder="e.g. Hydraulic pressure"
+            className={INPUT_CLS}
+          />
+        </div>
+        <div className="sm:col-span-2">
+          <Label>Measured value</Label>
+          <input
+            value={form.measuredValue}
+            onChange={(e) => set("measuredValue", e.target.value)}
+            placeholder="e.g. 180"
+            className={INPUT_CLS}
+          />
+        </div>
+        <div>
+          <Label>Unit</Label>
+          <input
+            value={form.unit}
+            onChange={(e) => set("unit", e.target.value)}
+            placeholder="bar"
+            className={INPUT_CLS}
+          />
+        </div>
+        <div className="sm:col-span-3">
+          <Label>Standard / spec</Label>
+          <input
+            value={form.standardSpec}
+            onChange={(e) => set("standardSpec", e.target.value)}
+            placeholder="e.g. 200–220 bar"
+            className={INPUT_CLS}
+          />
+        </div>
+        <div className="sm:col-span-3">
+          <Label>Result</Label>
+          <div className="grid h-10 grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-900">
+            {(["PASS", "FAIL"] as InspectionFindingStatus[]).map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => set("status", s)}
+                className={`rounded-lg text-xs font-bold transition ${
+                  form.status === s
+                    ? s === "PASS"
+                      ? "bg-emerald-500 text-white shadow-sm"
+                      : "bg-red-500 text-white shadow-sm"
+                    : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+                }`}
+              >
+                {s === "PASS" ? "Pass" : "Fail"}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="sm:col-span-6">
+          <Label>Remarks</Label>
+          <input
+            value={form.remarks}
+            onChange={(e) => set("remarks", e.target.value)}
+            placeholder="Anything worth noting"
+            className={INPUT_CLS}
+          />
         </div>
       </div>
 
-      {/* ── MACHINE SELECTION & BANNER ── */}
-      {selectedMachine && (
-        <div className="rounded-2xl border border-blue-500/20 bg-gradient-to-r from-[#2044cd] via-[#1d4ed8] to-[#1e3a8a] p-6 text-white shadow-xl shadow-blue-500/10">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="space-y-1.5">
-              <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-0.5 text-xs font-black uppercase tracking-wider text-blue-100 backdrop-blur-md">
-                <Wrench size={13} />
-                Selected Maintenance Target
-              </div>
-              <h2 className="text-xl font-black text-white sm:text-2xl">
-                {selectedMachine.name}
-              </h2>
-              <p className="text-xs font-semibold text-blue-100">
-                Serial: <span className="font-mono text-cyan-300">{selectedMachine.machineId}</span> • Category: {selectedMachine.machineType} • 📍 {selectedMachine.location}
-              </p>
-            </div>
+      <div className="mt-3 space-y-3">
+        <FormError message={error} />
+        <div className="flex justify-end">
+          <PrimaryButton busy={saving} onClick={add}>
+            {!saving && <Plus size={14} />}
+            Add finding
+          </PrimaryButton>
+        </div>
+      </div>
 
-            {machines.length > 1 && (
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-blue-200">Switch Equipment:</span>
-                <select
-                  value={selectedMachine.id}
-                  onChange={(e) => {
-                    const m = machines.find((x) => x.id === e.target.value);
-                    if (m) setSelectedMachine(m);
-                  }}
-                  className="rounded-xl border border-white/30 bg-white/10 px-3 py-2 text-xs font-bold text-white outline-none backdrop-blur-md dark:bg-[#0b1728]"
+      <div className="mt-5">
+        {findings.length === 0 ? (
+          <EmptyLine>No findings recorded yet.</EmptyLine>
+        ) : (
+          <ul className="divide-y divide-slate-100 rounded-2xl border border-slate-200 dark:divide-slate-800 dark:border-slate-800">
+            {findings.map((f) => (
+              <li
+                key={f.id}
+                className="flex items-start justify-between gap-3 px-4 py-3"
+              >
+                <div className="min-w-0">
+                  <p className="text-xs font-extrabold text-slate-800 dark:text-slate-100">
+                    {f.parameterName}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+                    {f.measuredValue
+                      ? `Measured ${f.measuredValue}${f.unit ? ` ${f.unit}` : ""}`
+                      : "No value recorded"}
+                    {f.standardSpec ? ` · Spec ${f.standardSpec}` : ""}
+                  </p>
+                  {f.remarks && (
+                    <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                      {f.remarks}
+                    </p>
+                  )}
+                </div>
+                <span
+                  className={`inline-flex shrink-0 items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-bold ${
+                    f.status === "PASS"
+                      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"
+                      : "bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300"
+                  }`}
                 >
-                  {machines.map((m) => (
-                    <option key={m.id} value={m.id} className="text-slate-900">{m.name} ({m.machineId})</option>
-                  ))}
-                </select>
-              </div>
+                  {f.status === "PASS" ? (
+                    <CheckCircle2 size={12} />
+                  ) : (
+                    <XCircle size={12} />
+                  )}
+                  {f.status === "PASS" ? "Pass" : "Fail"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </Panel>
+  );
+}
+
+/* ============================================================================
+ * PARTS
+ * ==========================================================================*/
+
+function PartsPanel({
+  jc,
+  waitingBusy,
+  onWaitingForParts,
+  onChanged,
+}: {
+  jc: JobCard;
+  waitingBusy: boolean;
+  onWaitingForParts: () => void;
+  onChanged: () => Promise<void>;
+}) {
+  const [form, setForm] = useState({
+    partName: "",
+    partNumber: "",
+    quantity: "1",
+    unitCost: "",
+    isConsumed: true,
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const parts = useMemo(
+    () => [...jc.parts].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    [jc.parts],
+  );
+  const total = partsCostOf(jc);
+
+  const qty = parseInt(form.quantity, 10);
+  const unit = form.unitCost.trim() === "" ? 0 : Number(form.unitCost);
+  const linePreview = qty > 0 && unit >= 0 ? qty * unit : 0;
+
+  const add = async () => {
+    if (!form.partName.trim()) {
+      setError("Enter the part name.");
+      return;
+    }
+    if (!(qty > 0)) {
+      setError("Quantity must be at least 1.");
+      return;
+    }
+    if (form.unitCost.trim() !== "" && !(unit >= 0)) {
+      setError("Unit cost cannot be negative.");
+      return;
+    }
+    setError(null);
+    setSaving(true);
+    try {
+      await jobCardService.addPart(jc.id, {
+        partName: form.partName.trim(),
+        quantity: qty,
+        isConsumed: form.isConsumed,
+        ...(form.partNumber.trim()
+          ? { partNumber: form.partNumber.trim() }
+          : {}),
+        ...(form.unitCost.trim() !== "" ? { unitCost: unit } : {}),
+      });
+      await onChanged();
+      setForm({
+        partName: "",
+        partNumber: "",
+        quantity: "1",
+        unitCost: "",
+        isConsumed: true,
+      });
+    } catch (err) {
+      showErrorToast(
+        err instanceof Error ? err.message : "Could not save the part",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Panel
+      title="Parts used"
+      subtitle="Add every part you replaced or consumed, with its cost."
+      icon={<PackageSearch size={18} />}
+      right={
+        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-extrabold tabular-nums text-slate-600 dark:bg-white/10 dark:text-slate-300">
+          {parts.length}
+        </span>
+      }
+    >
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-6">
+        <div className="sm:col-span-3">
+          <Label required>Part name</Label>
+          <input
+            value={form.partName}
+            onChange={(e) =>
+              setForm((p) => ({ ...p, partName: e.target.value }))
+            }
+            placeholder="e.g. Hydraulic hose"
+            className={INPUT_CLS}
+          />
+        </div>
+        <div className="sm:col-span-3">
+          <Label>Part number</Label>
+          <input
+            value={form.partNumber}
+            onChange={(e) =>
+              setForm((p) => ({ ...p, partNumber: e.target.value }))
+            }
+            placeholder="Optional"
+            className={INPUT_CLS}
+          />
+        </div>
+        <div className="sm:col-span-2">
+          <Label required>Quantity</Label>
+          <input
+            type="number"
+            min={1}
+            step={1}
+            value={form.quantity}
+            onChange={(e) =>
+              setForm((p) => ({ ...p, quantity: e.target.value }))
+            }
+            className={INPUT_CLS}
+          />
+        </div>
+        <div className="sm:col-span-2">
+          <Label>Unit cost</Label>
+          <input
+            type="number"
+            min={0}
+            step={0.01}
+            value={form.unitCost}
+            onChange={(e) =>
+              setForm((p) => ({ ...p, unitCost: e.target.value }))
+            }
+            placeholder="0.00"
+            className={INPUT_CLS}
+          />
+        </div>
+        <div className="sm:col-span-2">
+          <Label>Line total</Label>
+          <div className="flex h-10 items-center rounded-xl bg-slate-50 px-3 font-mono text-xs font-black tabular-nums text-slate-800 dark:bg-white/[0.04] dark:text-slate-100">
+            {linePreview.toFixed(2)}
+          </div>
+        </div>
+        <label className="flex items-center gap-2 text-xs font-semibold text-slate-600 dark:text-slate-300 sm:col-span-6">
+          <input
+            type="checkbox"
+            checked={form.isConsumed}
+            onChange={(e) =>
+              setForm((p) => ({ ...p, isConsumed: e.target.checked }))
+            }
+            className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+          />
+          This part was used up (consumed)
+        </label>
+      </div>
+
+      <div className="mt-3 space-y-3">
+        <FormError message={error} />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          {jc.status === "IN_PROGRESS" ? (
+            <button
+              type="button"
+              onClick={onWaitingForParts}
+              disabled={waitingBusy}
+              className="inline-flex h-10 items-center gap-2 rounded-xl border border-purple-200 bg-purple-50 px-4 text-xs font-bold text-purple-700 transition hover:bg-purple-100 disabled:opacity-60 dark:border-purple-500/30 dark:bg-purple-500/10 dark:text-purple-300 dark:hover:bg-purple-500/20"
+            >
+              {waitingBusy ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <PackageSearch size={14} />
+              )}
+              Waiting for parts
+            </button>
+          ) : (
+            <span />
+          )}
+          <PrimaryButton busy={saving} onClick={add}>
+            {!saving && <Plus size={14} />}
+            Add part
+          </PrimaryButton>
+        </div>
+      </div>
+
+      <div className="mt-5">
+        {parts.length === 0 ? (
+          <EmptyLine>No parts recorded yet.</EmptyLine>
+        ) : (
+          <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800">
+            <table className="w-full min-w-[480px] text-left text-xs">
+              <thead className="bg-slate-50 text-[11px] font-bold text-slate-500 dark:bg-white/[0.04] dark:text-slate-400">
+                <tr>
+                  <th className="px-4 py-2.5">Part</th>
+                  <th className="px-4 py-2.5 text-right">Qty</th>
+                  <th className="px-4 py-2.5 text-right">Unit cost</th>
+                  <th className="px-4 py-2.5 text-right">Total</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {parts.map((p) => (
+                  <tr key={p.id}>
+                    <td className="px-4 py-2.5">
+                      <p className="font-bold text-slate-800 dark:text-slate-100">
+                        {p.partName}
+                      </p>
+                      {p.partNumber && (
+                        <p className="font-mono text-[10px] text-slate-400">
+                          {p.partNumber}
+                        </p>
+                      )}
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-semibold tabular-nums">
+                      {p.quantity}
+                    </td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-slate-500 dark:text-slate-400">
+                      {money(p.unitCost)}
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-bold tabular-nums text-slate-800 dark:text-slate-100">
+                      {money(p.totalCost)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-white/[0.04]">
+                  <td
+                    colSpan={3}
+                    className="px-4 py-2.5 text-right text-[11px] font-bold text-slate-500 dark:text-slate-400"
+                  >
+                    Parts total
+                  </td>
+                  <td className="px-4 py-2.5 text-right font-black tabular-nums text-slate-900 dark:text-white">
+                    {total.toFixed(2)}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </div>
+    </Panel>
+  );
+}
+
+/* ============================================================================
+ * ATTACHMENTS
+ * ==========================================================================*/
+
+function AttachmentsPanel({
+  jc,
+  onChanged,
+  onPreviewImage,
+}: {
+  jc: JobCard;
+  onChanged: () => Promise<void>;
+  onPreviewImage: (imageUrl: string) => void;
+}) {
+  const [fileType, setFileType] =
+    useState<JobCardAttachmentType>("PHOTO_BEFORE");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const attachments = useMemo(
+    () =>
+      [...jc.attachments].sort((a, b) =>
+        b.createdAt.localeCompare(a.createdAt),
+      ),
+    [jc.attachments],
+  );
+
+  const add = async () => {
+    if (!selectedFile) {
+      setError("Choose a photo or file to upload.");
+      return;
+    }
+    setError(null);
+    setSaving(true);
+    try {
+      await jobCardService.addAttachment(jc.id, {
+        file: selectedFile,
+        fileType,
+      });
+      await onChanged();
+      setSelectedFile(null);
+      if (inputRef.current) inputRef.current.value = "";
+    } catch (err) {
+      showErrorToast(
+        err instanceof Error ? err.message : "Could not upload the file",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const remove = async (attachmentId: string) => {
+    setDeletingId(attachmentId);
+    try {
+      await jobCardService.deleteAttachment(jc.id, attachmentId);
+      await onChanged();
+    } catch (err) {
+      showErrorToast(
+        err instanceof Error ? err.message : "Could not delete the file",
+      );
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  return (
+    <Panel
+      title="Photos and files"
+      subtitle="Attach before and after photos (JPG, PNG or WEBP, max 10 MB)."
+      icon={<Link2 size={18} />}
+      right={
+        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-extrabold tabular-nums text-slate-600 dark:bg-white/10 dark:text-slate-300">
+          {attachments.length}
+        </span>
+      }
+    >
+      <div className="space-y-3">
+        <div>
+          <Label>Type</Label>
+          <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1 dark:border-slate-700 dark:bg-slate-900">
+            {ATTACHMENT_OPTIONS.map((o) => (
+              <button
+                key={o.value}
+                type="button"
+                onClick={() => setFileType(o.value)}
+                className={`inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-bold transition ${
+                  fileType === o.value
+                    ? "bg-blue-600 text-white shadow-sm"
+                    : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+                }`}
+              >
+                {o.value === "PHOTO_BEFORE" ? (
+                  <ImageMinus size={14} />
+                ) : (
+                  <ImagePlus size={14} />
+                )}
+                {o.value === "PHOTO_BEFORE" ? "Before" : "After"}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <Label required>File</Label>
+          <label
+            htmlFor="attachment-file-input"
+            className="flex h-24 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 px-4 text-center transition hover:border-blue-400 hover:bg-blue-50/50 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-blue-500/50 dark:hover:bg-blue-500/5"
+          >
+            {selectedFile ? (
+              <>
+                <ImageUp
+                  size={20}
+                  className="text-blue-600 dark:text-blue-400"
+                />
+                <span className="max-w-full truncate px-4 text-xs font-bold text-slate-700 dark:text-slate-200">
+                  {selectedFile.name}
+                </span>
+                <span className="text-[10px] text-slate-400">
+                  {(selectedFile.size / 1024).toFixed(0)} KB · Click to change
+                </span>
+              </>
+            ) : (
+              <>
+                <ImageUp size={20} className="text-slate-400" />
+                <span className="text-xs font-bold text-slate-600 dark:text-slate-300">
+                  Click to choose a photo
+                </span>
+                <span className="text-[10px] text-slate-400">
+                  JPG, PNG or WEBP · max 10 MB
+                </span>
+              </>
             )}
+          </label>
+          <input
+            ref={inputRef}
+            id="attachment-file-input"
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
+            className="sr-only"
+          />
+        </div>
+      </div>
+
+      <div className="mt-3 space-y-3">
+        <FormError message={error} />
+        <div className="flex justify-end">
+          <PrimaryButton busy={saving} onClick={add}>
+            {!saving && <Plus size={14} />}
+            Upload file
+          </PrimaryButton>
+        </div>
+      </div>
+
+      <div className="mt-5">
+        {attachments.length === 0 ? (
+          <EmptyLine>No files attached yet.</EmptyLine>
+        ) : (
+          <ul className="divide-y divide-slate-100 rounded-2xl border border-slate-200 dark:divide-slate-800 dark:border-slate-800">
+            {attachments.map((a) => (
+              <li
+                key={a.id}
+                className="flex items-center justify-between gap-3 px-4 py-3 text-xs"
+              >
+                <div className="min-w-0">
+                  <p className="truncate font-bold text-slate-800 dark:text-slate-100">
+                    {a.fileName}
+                  </p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    {ATTACHMENT_LABEL[a.fileType] ?? a.fileType} ·{" "}
+                    {formatDateTime(a.createdAt)}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onPreviewImage(resolveJobCardFileUrl(a.fileUrl))
+                    }
+                    className="inline-flex items-center gap-1 font-bold text-blue-600 hover:underline dark:text-blue-400"
+                  >
+                    Open
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => remove(a.id)}
+                    disabled={deletingId === a.id}
+                    className="text-red-500 transition hover:text-red-700 disabled:opacity-50 dark:text-red-400 dark:hover:text-red-300"
+                  >
+                    {deletingId === a.id ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      <XCircle size={14} />
+                    )}
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </Panel>
+  );
+}
+
+/* ============================================================================
+ * COST SUMMARY
+ * ==========================================================================*/
+
+function CostPanel({ jc }: { jc: JobCard }) {
+  const running = getRunningLog(jc);
+  const partsCost = partsCostOf(jc);
+  const labour = toNumber(jc.laborCost);
+  const rate = toNumber(jc.laborRate);
+
+  return (
+    <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-[#0b1728]">
+      <div className="bg-gradient-to-br from-[#3B37E6] to-[#2E2AD9] p-5 text-white">
+        <p className="text-[11px] font-bold text-blue-100">Cost so far</p>
+        <p className="mt-1 font-mono text-3xl font-black tabular-nums">
+          {money(jc.totalCost)}
+        </p>
+      </div>
+      <div className="space-y-2 p-5 text-xs">
+        <div className="flex items-center justify-between">
+          <span className="text-slate-500 dark:text-slate-400">Parts</span>
+          <span className="font-bold tabular-nums text-slate-800 dark:text-slate-100">
+            {partsCost.toFixed(2)}
+          </span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-slate-500 dark:text-slate-400">
+            Labour ({toNumber(jc.actualLaborHours)}h saved)
+          </span>
+          <span className="font-bold tabular-nums text-slate-800 dark:text-slate-100">
+            {labour.toFixed(2)}
+          </span>
+        </div>
+        {rate === 0 && (
+          <p className="rounded-lg bg-amber-50 px-3 py-2 text-[11px] font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
+            No labour rate is set on this job card, so labour cost stays at 0.
+          </p>
+        )}
+        {running && (
+          <p className="text-[11px] text-slate-400">
+            Labour updates when the timer stops.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================================
+ * REPORT + SUBMIT
+ * ==========================================================================*/
+
+function ReportPanel({
+  jc,
+  onSubmit,
+}: {
+  jc: JobCard;
+  onSubmit: (report: {
+    rootCause: string;
+    correctiveAction: string;
+    postRepairCondition?: number;
+    downtimeHours?: number;
+  }) => Promise<boolean>;
+}) {
+  const [rootCause, setRootCause] = useState(jc.rootCause ?? "");
+  const [correctiveAction, setCorrectiveAction] = useState(
+    jc.correctiveAction ?? "",
+  );
+  const [condition, setCondition] = useState(jc.postRepairCondition ?? "");
+  const [downtime, setDowntime] = useState(
+    toNumber(jc.downtimeHours) > 0 ? String(toNumber(jc.downtimeHours)) : "",
+  );
+  const [error, setError] = useState<string | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  const canSubmit = jc.status === "IN_PROGRESS";
+  const blockedReason =
+    jc.status === "ASSIGNED"
+      ? "Start the timer from My tasks before you submit the report."
+      : jc.status === "WAITING_FOR_PARTS"
+        ? "Resume the timer from My tasks before you submit the report."
+        : null;
+
+  const validate = () => {
+    if (!rootCause.trim()) return "Describe the root cause.";
+    if (!correctiveAction.trim()) return "Describe the corrective action.";
+    if (condition !== "") {
+      const c = parseInt(condition, 10);
+      if (!(c >= 1 && c <= 5)) return "Condition must be between 1 and 5.";
+    }
+    if (downtime.trim() !== "" && !(Number(downtime) >= 0))
+      return "Downtime must be 0 or more.";
+    return null;
+  };
+
+  const openConfirm = () => {
+    const problem = validate();
+    setError(problem);
+    if (!problem) setConfirmOpen(true);
+  };
+
+  const confirm = async () => {
+    setSubmitting(true);
+    const ok = await onSubmit({
+      rootCause: rootCause.trim(),
+      correctiveAction: correctiveAction.trim(),
+      ...(condition !== ""
+        ? { postRepairCondition: parseInt(condition, 10) }
+        : {}),
+      ...(downtime.trim() !== "" ? { downtimeHours: Number(downtime) } : {}),
+    });
+    setSubmitting(false);
+    if (ok) setConfirmOpen(false);
+    else setConfirmOpen(false);
+  };
+
+  return (
+    <>
+      <Panel
+        title="Repair report"
+        subtitle="Fill this in when the work is finished."
+        icon={<Send size={18} />}
+      >
+        <div className="space-y-3">
+          <div>
+            <Label required>Root cause</Label>
+            <textarea
+              rows={3}
+              value={rootCause}
+              onChange={(e) => setRootCause(e.target.value)}
+              placeholder="Why did the fault happen?"
+              className={TEXTAREA_CLS}
+            />
+          </div>
+          <div>
+            <Label required>Corrective action</Label>
+            <textarea
+              rows={3}
+              value={correctiveAction}
+              onChange={(e) => setCorrectiveAction(e.target.value)}
+              placeholder="What did you do to fix it?"
+              className={TEXTAREA_CLS}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Condition after repair</Label>
+              <select
+                value={condition}
+                onChange={(e) => setCondition(e.target.value)}
+                className={INPUT_CLS}
+              >
+                <option value="">Not rated</option>
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <option key={n} value={String(n)}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <Label>Downtime (hours)</Label>
+              <input
+                type="number"
+                min={0}
+                step={0.5}
+                value={downtime}
+                onChange={(e) => setDowntime(e.target.value)}
+                placeholder="0"
+                className={INPUT_CLS}
+              />
+            </div>
           </div>
 
-          <div className="mt-4 grid grid-cols-2 gap-3 border-t border-white/10 pt-4 sm:grid-cols-4 text-xs">
-            <div>
-              <span className="text-blue-200 text-[10px] uppercase font-bold">Assigned Artisan</span>
-              <p className="font-bold text-white">👤 {artisanName}</p>
+          <FormError message={error} />
+          {blockedReason && (
+            <p className="rounded-lg bg-slate-100 px-3 py-2 text-[11px] font-medium text-slate-600 dark:bg-white/[0.06] dark:text-slate-300">
+              {blockedReason}
+            </p>
+          )}
+
+          <button
+            type="button"
+            onClick={openConfirm}
+            disabled={!canSubmit}
+            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#3B37E6] text-xs font-bold text-white shadow-md shadow-blue-600/25 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Send size={14} />
+            Submit report
+          </button>
+        </div>
+      </Panel>
+
+      {confirmOpen && (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm">
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-label="Submit report"
+            className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-[#0b1728]"
+          >
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
+              <Send size={20} />
             </div>
-            <div>
-              <span className="text-blue-200 text-[10px] uppercase font-bold">Shift Start Time</span>
-              <p className="font-bold text-white">🕒 {formatDate(workStartTime)}</p>
-            </div>
-            <div>
-              <span className="text-blue-200 text-[10px] uppercase font-bold">Operating Meter</span>
-              <p className="font-bold text-white">{selectedMachine.currentHours ? `${selectedMachine.currentHours.toLocaleString()} hrs` : "0 hrs"}</p>
-            </div>
-            <div>
-              <span className="text-blue-200 text-[10px] uppercase font-bold">Total Shift Duration</span>
-              <p className="font-bold text-emerald-300">⏱️ {formatDuration(workStartTime, workEndTime)}</p>
+            <h3 className="mt-4 text-lg font-extrabold text-slate-900 dark:text-white">
+              Submit this report?
+            </h3>
+            <p className="mt-1 text-sm leading-relaxed text-slate-500 dark:text-slate-400">
+              The timer for{" "}
+              <span className="font-bold text-slate-700 dark:text-slate-200">
+                {jc.jobCardNumber}
+              </span>{" "}
+              stops if it is running, and the job card goes to your supervisor
+              for approval. You will not be able to add more parts, findings or
+              files after this.
+            </p>
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmOpen(false)}
+                disabled={submitting}
+                className="h-10 rounded-lg border border-slate-200 px-4 text-xs font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-white/[0.06]"
+              >
+                Go back
+              </button>
+              <PrimaryButton busy={submitting} onClick={confirm}>
+                Submit report
+              </PrimaryButton>
             </div>
           </div>
         </div>
       )}
+    </>
+  );
+}
 
-      {/* ── WORK ORDER FORM SECTION ── */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-[#0b1728] space-y-6">
-        <div>
-          <h3 className="text-base font-black text-slate-900 dark:text-white">
-            1. Maintenance Execution & Work Details
-          </h3>
-          <p className="text-xs text-slate-400">
-            Detail maintenance interventions performed, components replaced or calibrated.
-          </p>
+/* ============================================================================
+ * HISTORY
+ * ==========================================================================*/
+
+function HistoryPanel({
+  cards,
+  onView,
+}: {
+  cards: JobCard[];
+  onView: (id: string) => void;
+}) {
+  const [search, setSearch] = useState("");
+  const [visible, setVisible] = useState(HISTORY_PAGE_SIZE);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return cards;
+    return cards.filter((c) =>
+      [c.jobCardNumber, c.title, c.machine?.name, c.machine?.serialNumber].some(
+        (v) =>
+          String(v ?? "")
+            .toLowerCase()
+            .includes(q),
+      ),
+    );
+  }, [cards, search]);
+
+  return (
+    <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-[#0b1728]">
+      <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-start gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
+            <HistoryIcon size={18} />
+          </div>
+          <div>
+            <h3 className="text-sm font-extrabold text-slate-900 dark:text-white">
+              My work history
+            </h3>
+            <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+              Jobs you have submitted, with time, parts and cost.
+            </p>
+          </div>
         </div>
-
-        <div>
-          <label className="mb-1 block text-xs font-bold text-slate-700 dark:text-slate-300">
-            Work & Maintenance Summary *
-          </label>
-          <textarea
-            rows={3}
-            value={form.workDescription}
-            onChange={(e) => setForm((prev) => ({ ...prev, workDescription: e.target.value }))}
-            placeholder="e.g. Conducted hydraulic line pressure test, changed primary fuel filter, calibrated steering cylinder..."
-            className="w-full rounded-xl border border-slate-300 bg-white p-3 text-xs font-semibold text-slate-700 outline-none transition focus:border-blue-500 dark:border-slate-700 dark:bg-[#101f33] dark:text-white"
+        <div className="relative w-full sm:max-w-xs">
+          <Search
+            size={15}
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
           />
-          {errors.workDescription && <p className="mt-1 text-[11px] font-bold text-rose-500">{errors.workDescription}</p>}
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label className="mb-1 block text-xs font-bold text-slate-700 dark:text-slate-300">
-              Overall Equipment Condition Verdict *
-            </label>
-            <select
-              value={form.overallCondition || ""}
-              onChange={(e) => setForm((prev) => ({ ...prev, overallCondition: (e.target.value as HealthStatus) || null }))}
-              className="h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-xs font-bold text-slate-700 outline-none transition focus:border-blue-500 dark:border-slate-700 dark:bg-[#101f33] dark:text-white"
-            >
-              <option value="">Select condition verdict...</option>
-              <option value="GOOD">✓ Good / Fully Operational</option>
-              <option value="NEEDS_ATTENTION">⚠️ Needs Attention / Scheduled Service</option>
-              <option value="CRITICAL">🔴 Critical / Out of Service</option>
-            </select>
-            {errors.overallCondition && <p className="mt-1 text-[11px] font-bold text-rose-500">{errors.overallCondition}</p>}
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs font-bold text-slate-700 dark:text-slate-300">
-              Maintenance Downtime (Hours)
-            </label>
-            <input
-              type="number"
-              min={0}
-              step={0.5}
-              placeholder="e.g. 1.5 (leave empty if 0)"
-              value={form.downtime}
-              onChange={(e) => setForm((prev) => ({ ...prev, downtime: e.target.value }))}
-              className="h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-xs font-bold text-slate-700 outline-none transition focus:border-blue-500 dark:border-slate-700 dark:bg-[#101f33] dark:text-white"
-            />
-          </div>
-        </div>
-
-        {/* Submit Actions */}
-        <div className="flex items-center justify-end gap-3 border-t border-slate-100 pt-4 dark:border-slate-800">
-          <button
-            type="button"
-            onClick={() => handleSubmit(true)}
-            className="rounded-xl border border-slate-200 px-5 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 cursor-pointer"
-          >
-            Save Draft
-          </button>
-          <button
-            type="button"
-            onClick={() => handleSubmit(false)}
-            className="rounded-xl bg-blue-600 px-6 py-2.5 text-xs font-black text-white shadow-lg shadow-blue-500/25 transition hover:bg-blue-700 cursor-pointer"
-          >
-            Submit Final Work Order
-          </button>
+          <input
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setVisible(HISTORY_PAGE_SIZE);
+            }}
+            placeholder="Search job card or machine"
+            className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 text-xs font-medium text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/20 dark:border-slate-800 dark:bg-slate-950 dark:text-white"
+          />
         </div>
       </div>
 
-      {/* ── 2. RECENT DATABASE INSPECTION & AUDIT LOGS (MOVED HERE AS REQUESTED) ── */}
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-[#0b1728]">
-        <div className="border-b border-slate-200 p-5 dark:border-slate-800">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-base font-black text-slate-900 dark:text-white">
-                Recent Database Inspection & Audit Logs ({historyLogs.length})
-              </h3>
-              <p className="text-xs text-slate-400">
-                Chronological audit records for {selectedMachine?.name || "Equipment"} from PostgreSQL.
-              </p>
-            </div>
-          </div>
+      {filtered.length === 0 ? (
+        <div className="px-5 py-12 text-center text-xs text-slate-400">
+          {cards.length === 0
+            ? "You have not submitted any job yet."
+            : "No jobs match your search."}
         </div>
-
-        <div className="w-full overflow-x-auto">
-          <table className="w-full min-w-[750px] border-collapse text-left">
-            <thead>
-              <tr className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wider text-slate-500 dark:border-slate-800 dark:bg-slate-950/60">
-                <th className="px-6 py-4 font-bold">#</th>
-                <th className="px-6 py-4 font-bold">Submission Date & Time</th>
-                <th className="px-6 py-4 font-bold">Inspection Scope</th>
-                <th className="px-6 py-4 font-bold">Health Rating</th>
-                <th className="px-6 py-4 font-bold">Inspected By</th>
-                <th className="px-6 py-4 text-center font-bold">Action</th>
-              </tr>
-            </thead>
-
-            <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-              {historyLoading ? (
+      ) : (
+        <>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[860px] text-left">
+              <thead className="bg-slate-50 text-[11px] font-bold text-slate-500 dark:bg-white/[0.04] dark:text-slate-400">
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-xs font-bold text-slate-400">
-                    <Loader2 className="mx-auto mb-2 animate-spin text-blue-600" size={20} />
-                    Loading history from PostgreSQL Database...
-                  </td>
+                  <th className="px-5 py-3">Job card</th>
+                  <th className="px-5 py-3">Machine</th>
+                  <th className="px-5 py-3">Finished</th>
+                  <th className="px-5 py-3">Status</th>
+                  <th className="px-5 py-3 text-right">Time</th>
+                  <th className="px-5 py-3 text-right">Parts</th>
+                  <th className="px-5 py-3 text-right">Total cost</th>
+                  <th className="px-5 py-3 text-center">Details</th>
                 </tr>
-              ) : historyLogs.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="py-12 text-center text-xs font-bold text-slate-400">
-                    No prior inspection records found for this machine in the database.
-                  </td>
-                </tr>
-              ) : (
-                historyLogs.map((log, idx) => (
-                  <tr key={log.id || idx} className="transition hover:bg-slate-50 dark:hover:bg-white/[0.02]">
-                    <td className="px-6 py-4 font-bold text-slate-400">{idx + 1}</td>
-                    <td className="px-6 py-4 text-xs font-bold text-slate-900 dark:text-white">
-                      {formatDate(log.createdAt)}
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {filtered.slice(0, visible).map((c) => (
+                  <tr
+                    key={c.id}
+                    className="transition hover:bg-slate-50/70 dark:hover:bg-white/[0.02]"
+                  >
+                    <td className="max-w-[260px] px-5 py-3">
+                      <p className="font-mono text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                        {c.jobCardNumber}
+                      </p>
+                      <p className="truncate text-xs font-bold text-slate-800 dark:text-slate-100">
+                        {c.title}
+                      </p>
                     </td>
-                    <td className="px-6 py-4 text-xs font-semibold text-slate-700 dark:text-slate-300">
-                      {log.componentName || "All Components Inspection"}
+                    <td className="px-5 py-3 text-xs font-semibold text-slate-700 dark:text-slate-200">
+                      {c.machine?.name ?? "—"}
                     </td>
-                    <td className="px-6 py-4">
-                      <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-black text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
-                        {log.overallMachineHealth ?? 100}% Optimal
-                      </span>
+                    <td className="whitespace-nowrap px-5 py-3 text-xs font-semibold text-slate-600 dark:text-slate-300">
+                      {formatDate(c.actualFinishDate ?? c.updatedAt)}
                     </td>
-                    <td className="px-6 py-4 text-xs font-bold text-slate-900 dark:text-white">
-                      👤 {log.userName || "Artisan"} ({log.userRole || "ARTISAN"})
+                    <td className="px-5 py-3">
+                      <StatusBadge status={c.status} />
                     </td>
-                    <td className="px-6 py-4 text-center">
+                    <td className="px-5 py-3 text-right font-mono text-xs font-bold tabular-nums text-slate-700 dark:text-slate-200">
+                      {toNumber(c.actualLaborHours).toFixed(1)}h
+                    </td>
+                    <td className="px-5 py-3 text-right font-mono text-xs font-bold tabular-nums text-slate-700 dark:text-slate-200">
+                      {partsCostOf(c).toFixed(2)}
+                    </td>
+                    <td className="px-5 py-3 text-right font-mono text-xs font-black tabular-nums text-slate-900 dark:text-white">
+                      {money(c.totalCost)}
+                    </td>
+                    <td className="px-5 py-3 text-center">
                       <button
                         type="button"
-                        onClick={() => setSelectedHistoryLog(log)}
-                        className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs font-bold text-blue-700 transition hover:bg-blue-100 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300 cursor-pointer"
+                        onClick={() => onView(c.id)}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-700 dark:bg-[#101f33] dark:text-slate-300 dark:hover:border-blue-500/40 dark:hover:bg-blue-500/10 dark:hover:text-blue-300"
                       >
                         <Eye size={13} />
-                        View Snapshot
+                        View
                       </button>
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* ── MODAL: PREMIUM INSPECTION AUDIT SNAPSHOT ── */}
-      {selectedHistoryLog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4 animate-in fade-in duration-200">
-          <div className="relative max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl border border-slate-200 bg-white p-6 sm:p-8 shadow-2xl dark:border-slate-800 dark:bg-[#0b1728] space-y-6">
-            {/* Modal Header */}
-            <div className="flex items-start justify-between border-b border-slate-100 pb-4 dark:border-slate-800">
-              <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
-                  <ShieldCheck size={26} />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="rounded bg-blue-100 px-2 py-0.5 text-[10px] font-black uppercase text-blue-800 dark:bg-blue-900/60 dark:text-blue-300">
-                      Verified Audit Record
-                    </span>
-                    <span className="rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-black text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300">
-                      ● {selectedHistoryLog.overallMachineHealth ?? 100}% Health Rating
-                    </span>
-                  </div>
-                  <h3 className="mt-1 text-lg font-black text-slate-900 dark:text-white sm:text-xl">
-                    {selectedHistoryLog.machineName || selectedMachine?.name || "Mining Machinery"}
-                  </h3>
-                  <p className="text-xs text-slate-400">
-                    Audit ID: <span className="font-mono text-slate-600 dark:text-slate-300">{selectedHistoryLog.id || "AUD-DB-1001"}</span>
-                  </p>
-                </div>
-              </div>
-
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3 text-xs dark:border-slate-800">
+            <span className="font-semibold text-slate-500 dark:text-slate-400">
+              Showing {Math.min(visible, filtered.length)} of {filtered.length}
+            </span>
+            {visible < filtered.length && (
               <button
                 type="button"
-                onClick={() => setSelectedHistoryLog(null)}
-                className="rounded-xl p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 cursor-pointer"
+                onClick={() => setVisible((v) => v + HISTORY_PAGE_SIZE)}
+                className="rounded-lg border border-slate-200 px-3 py-1.5 font-bold text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-white/[0.04]"
               >
-                <X size={20} />
+                Show more
               </button>
-            </div>
-
-            {/* 4-Card Overview Grid */}
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <div className="rounded-2xl border border-slate-100 bg-slate-50/80 p-3.5 dark:border-slate-800 dark:bg-[#101f33]/60">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Date & Time</span>
-                <p className="mt-1 text-xs font-black text-slate-900 dark:text-white">{formatDate(selectedHistoryLog.createdAt)}</p>
-              </div>
-
-              <div className="rounded-2xl border border-slate-100 bg-slate-50/80 p-3.5 dark:border-slate-800 dark:bg-[#101f33]/60">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Submitted By</span>
-                <p className="mt-1 text-xs font-black text-slate-900 dark:text-white">👤 {selectedHistoryLog.userName || "Artisan"}</p>
-                <span className="text-[10px] font-semibold text-blue-600 dark:text-blue-400">Role: {selectedHistoryLog.userRole || "ARTISAN"}</span>
-              </div>
-
-              <div className="rounded-2xl border border-slate-100 bg-slate-50/80 p-3.5 dark:border-slate-800 dark:bg-[#101f33]/60">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Shift Type</span>
-                <p className="mt-1 text-xs font-black text-slate-900 dark:text-white">Day Shift</p>
-                <span className="text-[10px] font-semibold text-slate-400">Pre-Start Inspection</span>
-              </div>
-
-              <div className="rounded-2xl border border-slate-100 bg-slate-50/80 p-3.5 dark:border-slate-800 dark:bg-[#101f33]/60">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Database Status</span>
-                <p className="mt-1 text-xs font-black text-emerald-600 dark:text-emerald-400">✓ Signed Off</p>
-                <span className="text-[10px] font-semibold text-slate-400">PostgreSQL Synced</span>
-              </div>
-            </div>
-
-            {/* Inspected Scope & Action Card */}
-            <div className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4 dark:border-slate-800 dark:bg-[#101f33]/40 space-y-3">
-              <div>
-                <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Inspection & Maintenance Scope:</span>
-                <div className="mt-1.5 flex flex-wrap gap-1.5">
-                  {(selectedHistoryLog.componentName || "All Components Inspection").split(",").map((name: string, i: number) => (
-                    <span key={i} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-bold text-slate-800 dark:border-slate-700 dark:bg-[#0b1728] dark:text-slate-200">
-                      🔧 {name.trim()}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              <div className="border-t border-slate-200/60 pt-3 dark:border-slate-800">
-                <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Action Remarks & Diagnostic Notes:</span>
-                <p className="mt-1 text-xs font-medium leading-relaxed text-slate-800 dark:text-slate-200">
-                  {selectedHistoryLog.actionDescription || selectedHistoryLog.readings?.workDescription || "Standard pre-start mechanical inspection & parameter calibration verified."}
-                </p>
-              </div>
-            </div>
-
-            {/* Telemetry Breakdown (if recorded) */}
-            {selectedHistoryLog.readings?.components && Array.isArray(selectedHistoryLog.readings.components) && selectedHistoryLog.readings.components.length > 0 && (
-              <div className="space-y-3">
-                <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Component Telemetry Readings ({selectedHistoryLog.readings.components.length})
-                </h4>
-                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 max-h-48 overflow-y-auto pr-1">
-                  {selectedHistoryLog.readings.components.map((comp: any, idx: number) => (
-                    <div key={idx} className="rounded-xl border border-slate-200 bg-white p-3 shadow-2xs dark:border-slate-800 dark:bg-[#101f33]">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-black text-slate-900 dark:text-white truncate">{comp.name}</span>
-                        <span className="rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-                          {comp.health ?? 100}%
-                        </span>
-                      </div>
-                      <p className="mt-1 text-[11px] font-semibold text-blue-600 dark:text-blue-400">{comp.currentReading || "Calibrated & Normal"}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
             )}
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+function HistoryModal({
+  jc,
+  onClose,
+  onPreviewImage,
+}: {
+  jc: JobCard;
+  onClose: () => void;
+  onPreviewImage: (imageUrl: string) => void;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
-            {/* Checklist items (if recorded) */}
-            {selectedHistoryLog.checklist && Array.isArray(selectedHistoryLog.checklist) && selectedHistoryLog.checklist.length > 0 && (
-              <div className="space-y-3">
-                <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Safety Checklist Verification ({selectedHistoryLog.checklist.length} items)
-                </h4>
-                <div className="grid grid-cols-2 gap-2 max-h-36 overflow-y-auto pr-1">
-                  {selectedHistoryLog.checklist.map((item: any, idx: number) => (
-                    <div key={idx} className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 p-2.5 text-xs dark:border-slate-800 dark:bg-[#101f33]/60">
-                      <span className="font-semibold text-slate-800 dark:text-slate-200 truncate">{item.label}</span>
-                      <span className={`rounded px-1.5 py-0.5 text-[10px] font-black uppercase ${item.status === "OK" ? "bg-emerald-500 text-white" : "bg-rose-500 text-white"}`}>
-                        {item.status || "OK"}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+  const logs = [...jc.laborLogs].sort((a, b) =>
+    b.startTime.localeCompare(a.startTime),
+  );
+  const findings = [...jc.findings].sort((a, b) =>
+    b.createdAt.localeCompare(a.createdAt),
+  );
 
-            {/* Modal Footer */}
-            <div className="flex items-center justify-between border-t border-slate-100 pt-4 dark:border-slate-800">
-              <div className="text-[11px] font-semibold text-slate-400">
-                🔒 Cryptographic Audit Hash: <span className="font-mono text-slate-500">SHA256-{String(selectedHistoryLog.id || Date.now()).slice(-8)}</span>
+  const Kpi = ({ label, value }: { label: string; value: string }) => (
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-white/[0.04]">
+      <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+        {label}
+      </p>
+      <p className="mt-1 font-mono text-lg font-black tabular-nums text-slate-900 dark:text-white">
+        {value}
+      </p>
+    </div>
+  );
+
+  const Block = ({
+    title,
+    children,
+  }: {
+    title: string;
+    children: React.ReactNode;
+  }) => (
+    <section className="rounded-2xl border border-slate-200 p-4 dark:border-slate-800">
+      <h4 className="mb-3 text-xs font-extrabold text-slate-500 dark:text-slate-400">
+        {title}
+      </h4>
+      {children}
+    </section>
+  );
+
+  const Line = ({
+    label,
+    value,
+  }: {
+    label: string;
+    value: React.ReactNode;
+  }) => (
+    <div className="flex items-start justify-between gap-4 py-1.5 text-xs">
+      <span className="shrink-0 text-slate-500 dark:text-slate-400">
+        {label}
+      </span>
+      <span className="text-right font-bold text-slate-800 dark:text-slate-100">
+        {value}
+      </span>
+    </div>
+  );
+
+  return (
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-950/70 p-3 backdrop-blur-sm sm:p-6">
+      <button
+        type="button"
+        aria-label="Close details"
+        onClick={onClose}
+        className="absolute inset-0 cursor-default"
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Job card ${jc.jobCardNumber}`}
+        className="relative flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-[#0b1728]"
+      >
+        <div className="relative shrink-0 overflow-hidden bg-gradient-to-r from-[#3B37E6] via-[#3730D9] to-[#2E2AD9] px-6 py-5">
+          <div className="pointer-events-none absolute -right-10 -top-16 h-44 w-44 rounded-full bg-white/10 blur-2xl" />
+          <div className="relative flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <p className="font-mono text-xs font-bold text-blue-200">
+                {jc.jobCardNumber}
+              </p>
+              <h2 className="mt-1 text-xl font-black leading-snug text-white">
+                {jc.title}
+              </h2>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <StatusBadge status={jc.status} />
+                <PriorityBadge priority={jc.priority} />
+                <span className="rounded-lg bg-white/15 px-2.5 py-1 text-[11px] font-bold text-white">
+                  {jc.machine?.name ?? "Machine"}
+                </span>
               </div>
-              <button
-                type="button"
-                onClick={() => setSelectedHistoryLog(null)}
-                className="rounded-xl bg-blue-600 px-6 py-2.5 text-xs font-bold text-white shadow-md transition hover:bg-blue-700 cursor-pointer"
-              >
-                Close Snapshot
-              </button>
             </div>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              className="rounded-xl bg-white/10 p-2 text-white transition hover:bg-white/20"
+            >
+              <X size={18} />
+            </button>
           </div>
         </div>
-      )}
+
+        <div className="flex-1 space-y-4 overflow-y-auto p-5 [scrollbar-width:thin]">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Kpi
+              label="Labour time"
+              value={`${toNumber(jc.actualLaborHours).toFixed(1)}h`}
+            />
+            <Kpi label="Downtime" value={`${toNumber(jc.downtimeHours)}h`} />
+            <Kpi label="Parts cost" value={partsCostOf(jc).toFixed(2)} />
+            <Kpi label="Total cost" value={money(jc.totalCost)} />
+          </div>
+
+          <Block title="Repair report">
+            <Line label="Root cause" value={jc.rootCause || "—"} />
+            <Line
+              label="Corrective action"
+              value={jc.correctiveAction || "—"}
+            />
+            <Line
+              label="Condition after repair"
+              value={
+                jc.postRepairCondition ? `${jc.postRepairCondition} / 5` : "—"
+              }
+            />
+            <Line label="Component" value={componentLabel(jc)} />
+            <Line label="Started" value={formatDateTime(jc.actualStartDate)} />
+            <Line
+              label="Finished"
+              value={formatDateTime(jc.actualFinishDate)}
+            />
+            {jc.supervisorNotes && (
+              <Line label="Supervisor notes" value={jc.supervisorNotes} />
+            )}
+          </Block>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <Block title={`Parts (${jc.parts.length})`}>
+              {jc.parts.length === 0 ? (
+                <p className="text-xs text-slate-400">No parts recorded.</p>
+              ) : (
+                <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {jc.parts.map((p) => (
+                    <li
+                      key={p.id}
+                      className="flex items-center justify-between gap-3 py-2 text-xs"
+                    >
+                      <span className="min-w-0 truncate font-semibold text-slate-700 dark:text-slate-200">
+                        {p.partName}
+                        <span className="font-normal text-slate-400">
+                          {" "}
+                          × {p.quantity}
+                        </span>
+                      </span>
+                      <span className="shrink-0 font-bold tabular-nums text-slate-700 dark:text-slate-200">
+                        {money(p.totalCost)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Block>
+
+            <Block title={`Findings (${findings.length})`}>
+              {findings.length === 0 ? (
+                <p className="text-xs text-slate-400">No findings recorded.</p>
+              ) : (
+                <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {findings.map((f) => (
+                    <li
+                      key={f.id}
+                      className="flex items-center justify-between gap-3 py-2 text-xs"
+                    >
+                      <span className="min-w-0 truncate font-semibold text-slate-700 dark:text-slate-200">
+                        {f.parameterName}
+                        {f.measuredValue && (
+                          <span className="font-normal text-slate-400">
+                            {" "}
+                            · {f.measuredValue}
+                            {f.unit ? ` ${f.unit}` : ""}
+                          </span>
+                        )}
+                      </span>
+                      <span
+                        className={`shrink-0 font-bold ${
+                          f.status === "PASS"
+                            ? "text-emerald-600 dark:text-emerald-400"
+                            : "text-red-600 dark:text-red-400"
+                        }`}
+                      >
+                        {f.status === "PASS" ? "Pass" : "Fail"}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Block>
+          </div>
+
+          <Block title={`Time log (${logs.length})`}>
+            {logs.length === 0 ? (
+              <p className="text-xs text-slate-400">No time logged.</p>
+            ) : (
+              <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+                {logs.map((log) => (
+                  <li
+                    key={log.id}
+                    className="flex items-center justify-between py-2 text-xs"
+                  >
+                    <span className="font-semibold text-slate-700 dark:text-slate-200">
+                      {formatDateTime(log.startTime)}
+                      {log.endTime && (
+                        <span className="font-normal text-slate-400">
+                          {" "}
+                          → {formatDateTime(log.endTime)}
+                        </span>
+                      )}
+                    </span>
+                    <span className="font-mono font-bold tabular-nums text-slate-600 dark:text-slate-300">
+                      {log.endTime
+                        ? formatMinutes(log.durationMinutes ?? 0)
+                        : "Running"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Block>
+
+          {jc.attachments.length > 0 && (
+            <Block title={`Files (${jc.attachments.length})`}>
+              <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+                {jc.attachments.map((a) => (
+                  <li
+                    key={a.id}
+                    className="flex items-center justify-between gap-3 py-2 text-xs"
+                  >
+                    <span className="min-w-0 truncate font-semibold text-slate-700 dark:text-slate-200">
+                      {a.fileName}
+                      <span className="font-normal text-slate-400">
+                        {" "}
+                        · {ATTACHMENT_LABEL[a.fileType] ?? a.fileType}
+                      </span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onPreviewImage(resolveJobCardFileUrl(a.fileUrl))
+                      }
+                      className="inline-flex shrink-0 items-center gap-1 font-bold text-blue-600 hover:underline dark:text-blue-400"
+                    >
+                      Open
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </Block>
+          )}
+        </div>
+
+        <div className="flex shrink-0 justify-end border-t border-slate-100 bg-slate-50/70 px-5 py-4 dark:border-slate-800 dark:bg-slate-900/60">
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex h-11 items-center justify-center rounded-lg border border-slate-200 bg-white px-5 text-xs font-bold text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-[#101f33] dark:text-slate-200 dark:hover:bg-white/[0.06]"
+          >
+            Close
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

@@ -24,7 +24,7 @@ export const NOTIFICATION_CATEGORIES = [
   "Payment",
 ] as const;
 
-export type Category = (typeof NOTIFICATION_CATEGORIES)[number];
+export type Category = string;
 
 export const NOTIFICATION_SEVERITIES = [
   "info",
@@ -71,8 +71,7 @@ const isObject = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value);
 
 const isCategory = (value: unknown): value is Category =>
-  typeof value === "string" &&
-  (NOTIFICATION_CATEGORIES as readonly string[]).includes(value);
+  typeof value === "string" && value.trim().length > 0;
 
 const isSeverity = (value: unknown): value is Severity =>
   typeof value === "string" &&
