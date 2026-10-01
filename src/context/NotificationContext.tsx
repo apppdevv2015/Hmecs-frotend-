@@ -160,6 +160,11 @@ const getAuthToken = (): string | null =>
   StorageService.get<string>(STORAGE_KEYS.TOKEN);
 
 const getApiBase = (): string => {
+  const configuredApiBase = import.meta.env.VITE_API_BASE_URL;
+  if (configuredApiBase) {
+    return `${configuredApiBase.replace(/\/+$/, "").replace(/\/api\/v1$/, "")}/api/v1`;
+  }
+
   const rawSocketUrl =
     import.meta.env.VITE_SOCKET_URL || "ws://localhost:4000/ws/alerts";
 
@@ -172,7 +177,7 @@ const getApiBase = (): string => {
   resolved = resolved
     .replace(/^ws:\/\//, "http://")
     .replace(/^wss:\/\//, "https://");
-  const base = resolved.replace(/\/ws\/alerts.*$/, "");
+  const base = resolved.replace(/\/ws\/alerts.*$/, "").replace(/\/+$/, "");
 
   return `${base}/api/v1`;
 };

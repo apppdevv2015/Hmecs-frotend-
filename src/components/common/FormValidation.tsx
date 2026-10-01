@@ -31,6 +31,8 @@ export const companyDetailsSchema = z.object({
     .min(1, "Company email is required")
     .email("Please enter a valid email address"),
 
+  phone: z.string().trim().min(1, "Phone number is required"),
+
   siteLocation: z
     .string()
     .trim()

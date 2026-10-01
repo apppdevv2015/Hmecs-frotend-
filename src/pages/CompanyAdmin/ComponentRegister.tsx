@@ -192,7 +192,6 @@ const componentSchema = z
       .regex(/^\d*(\.\d{1,2})?$/, "Replacement cost must be a valid amount")
       .optional(),
 
-
     condition: z.string().trim().min(1, "Condition is required"),
   })
   .superRefine((data, ctx) => {
@@ -293,6 +292,16 @@ const normalizeMachine = (item: any): Machine => {
     status: item?.status || "active",
   };
 };
+
+const normalizeInspectionIdentity = (value: string) =>
+  value.toLowerCase().trim();
+
+const inspectionMapKey = (
+  machineId: string,
+  identityType: "id" | "serial" | "name",
+  identity: string,
+) =>
+  `${normalizeInspectionIdentity(machineId)}::${identityType}::${normalizeInspectionIdentity(identity)}`;
 
 const deriveComponentName = (item: any): string => {
   const directName = item?.name || item?.componentName || item?.component_name;
@@ -511,6 +520,24 @@ const ComponentManagement: React.FC = () => {
     >
   >({});
 
+  const getInspectionRecord = (component: MachineComponent) => {
+    const machineId = component.machineId;
+    if (!machineId) return null;
+
+    const componentId = String(component.id || "").trim();
+    const serialNumber = String(component.serialNumber || "")
+      .replace(/^DEMO-/i, "")
+      .trim();
+    const componentName = String(component.name || "").trim();
+
+    return (
+      inspectionMap[inspectionMapKey(machineId, "id", componentId)] ||
+      inspectionMap[inspectionMapKey(machineId, "serial", serialNumber)] ||
+      inspectionMap[inspectionMapKey(machineId, "name", componentName)] ||
+      null
+    );
+  };
+
   const fetchMachineComponentsAndSpecs = async (machList: Machine[]) => {
     try {
       const results = await Promise.all(
@@ -549,17 +576,21 @@ const ComponentManagement: React.FC = () => {
       > = {};
 
       results.forEach(({ machine, records, specs }) => {
+        const machineIds = [machine.id, machine.machineId]
+          .map((value) => normalizeInspectionIdentity(String(value || "")))
+          .filter(Boolean);
+
         // Build inspection map
         records.forEach((r: any) => {
-          const keyByName = String(r.componentName || "")
-            .toLowerCase()
-            .trim();
-          const keyById = String(r.componentId || r.id || "")
-            .toLowerCase()
-            .trim();
+          const recordMachineId = normalizeInspectionIdentity(
+            String(r.machineId || machine.id || machine.machineId || ""),
+          );
+          if (!recordMachineId || !machineIds.includes(recordMachineId)) return;
+
+          const keyByName = String(r.componentName || "").trim();
+          const keyById = String(r.componentId || r.id || "").trim();
           const keyBySn = String(r.serialNumber || "")
             .replace(/^DEMO-/i, "")
-            .toLowerCase()
             .trim();
           const score = Number(
             r.healthScore ?? r.health_score ?? r.score ?? 100,
@@ -574,9 +605,13 @@ const ComponentManagement: React.FC = () => {
             hasData: true,
           };
 
-          if (keyById) map[keyById] = item;
-          if (keyBySn) map[keyBySn] = item;
-          if (keyByName) map[keyByName] = item;
+          machineIds.forEach((machineId) => {
+            if (keyById) map[inspectionMapKey(machineId, "id", keyById)] = item;
+            if (keyBySn)
+              map[inspectionMapKey(machineId, "serial", keyBySn)] = item;
+            if (keyByName)
+              map[inspectionMapKey(machineId, "name", keyByName)] = item;
+          });
         });
 
         // If specs exist for this machine, generate structured components
@@ -584,8 +619,12 @@ const ComponentManagement: React.FC = () => {
           specs.forEach((sp: any, idx: number) => {
             const compName = sp.name || `Component ${idx + 1}`;
             const compCat = sp.category || compName.split(" ")[0] || "General";
-            const key = compName.toLowerCase().trim();
-            const inspectData = map[key] || {
+            const inspectData = machineIds
+              .map(
+                (machineId) =>
+                  map[inspectionMapKey(machineId, "name", compName)],
+              )
+              .find(Boolean) || {
               healthScore: 100,
               status: "Healthy",
               hasData: false,
@@ -954,7 +993,7 @@ const ComponentManagement: React.FC = () => {
     setIsFullReplace(true);
     setForm({
       ...emptyForm,
-      category: categories[0]?.name || "",
+      category: "",
       machineId: selectedMachine?.machineId || machines[0]?.machineId || "",
     });
     setIsFormOpen(true);
@@ -1027,6 +1066,10 @@ const ComponentManagement: React.FC = () => {
 
   const validateForm = () => {
     if (!form.machineId.trim()) return "Please select a machine";
+    if (!form.category.trim()) return "Please select a category";
+    if (form.category === "Custom" && !form.customCategory.trim()) {
+      return "Custom category name is required";
+    }
 
     if (!form.name.trim()) return "Component name is required";
     if (!form.serialNumber.trim()) return "Serial number is required";
@@ -1459,21 +1502,7 @@ const ComponentManagement: React.FC = () => {
                         )
                       : 0;
                   const conditionInfo = getConditionLabel(component.condition);
-                  const cIdKey = String(component.id || "")
-                    .toLowerCase()
-                    .trim();
-                  const cSnKey = String(component.serialNumber || "")
-                    .replace(/^DEMO-/i, "")
-                    .toLowerCase()
-                    .trim();
-                  const cNameKey = String(component.name || "")
-                    .toLowerCase()
-                    .trim();
-                  const inspRecord =
-                    inspectionMap[cIdKey] ||
-                    inspectionMap[cSnKey] ||
-                    inspectionMap[cNameKey] ||
-                    null;
+                  const inspRecord = getInspectionRecord(component);
 
                   const liveScore =
                     inspRecord && inspRecord.hasData
@@ -1751,24 +1780,7 @@ const ComponentManagement: React.FC = () => {
                           {/* UPDATED STATUS */}
                           <td className="px-6 py-4">
                             {(() => {
-                              const cIdKey = String(component.id || "")
-                                .toLowerCase()
-                                .trim();
-                              const cSnKey = String(
-                                component.serialNumber || "",
-                              )
-                                .replace(/^DEMO-/i, "")
-                                .toLowerCase()
-                                .trim();
-                              const cNameKey = String(component.name || "")
-                                .toLowerCase()
-                                .trim();
-
-                              const inspRecord =
-                                inspectionMap[cIdKey] ||
-                                inspectionMap[cSnKey] ||
-                                inspectionMap[cNameKey] ||
-                                null;
+                              const inspRecord = getInspectionRecord(component);
 
                               if (inspRecord && inspRecord.hasData) {
                                 const score = inspRecord.healthScore;
@@ -2065,11 +2077,6 @@ function ComponentDetailsModal({
               label="Component Name"
               value={component.name || component.description || "-"}
             />
-
-            <DetailItem
-              label="Component Name"
-              value={component.name || component.description || "-"}
-            />
             <DetailItem
               label="Category"
               value={component.category || "General"}
@@ -2085,7 +2092,7 @@ function ComponentDetailsModal({
             />
             <DetailItem label="Supplier" value={component.supplier || "-"} />
 
-                        <DetailItem
+            <DetailItem
               label="Replacement Cost"
               value={
                 component.replacementCost
@@ -2296,6 +2303,26 @@ function ComponentFormModal({
               placeholder="TY-990-001"
             />
 
+                        <FormSelect
+              label="Category *"
+              value={form.category}
+              disabled={isFieldLocked("category")}
+              onChange={(value) => onChange("category", value)}
+              options={[...categories.map((c) => c.name), "Custom"]}
+              error={formErrors.category}
+            />
+
+            {form.category === "Custom" && (
+              <FormInput
+                label="Custom Category *"
+                value={form.customCategory}
+                disabled={isFieldLocked("customCategory")}
+                onChange={(value) => onChange("customCategory", value)}
+                placeholder="e.g. Lighting"
+                error={formErrors.customCategory}
+              />
+            )}
+
             <div className="sm:col-span-2">
               <label className="block">
                 <span className="mb-1.5 block text-xs font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
@@ -2361,8 +2388,8 @@ function ComponentFormModal({
               placeholder="8000"
               error={formErrors.plannedLife}
             />
-               
-                           <FormInput
+
+            <FormInput
               label="Replacement Cost"
               type="number"
               value={form.replacementCost}

@@ -549,7 +549,7 @@ export default function SignUpForm() {
   const contractDurationValue = watch("contractDuration");
 
   const handleNext = async () => {
-    const isStepValid = await trigger(STEP_ONE_FIELDS);
+    const isStepValid = await trigger([...STEP_ONE_FIELDS]);
     if (isStepValid) {
       setStep(2);
     }
