@@ -547,24 +547,23 @@ export default function AppSidebar({ role = "super_admin" }: AppSidebarProps) {
           </div>
         </div>
 
-        {/* Navigation */}
-        <nav className="mt-7 flex-1 space-y-5 overflow-y-auto overflow-x-hidden px-4 pb-5 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-          {/* Dashboard - always visible */}
-          {/* Dashboard - only visible after Company Admin is activated */}
+
+        <nav className="mt-7 flex-1 space-y-1 overflow-y-auto overflow-x-hidden px-4 pb-5 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+  
           {(!isCompanyAdmin || isCompanyAdminActive) && (
             <div className="space-y-1.5">
               {dashboardItem && renderLink(dashboardItem)}
             </div>
           )}
 
-          {/* Navigation Groups */}
+         
           {mainGroups.map((group, index) => {
             const isOpen = openGroup === group.title;
 
             const hasTitle = group.title.trim() !== "";
 
             return (
-              <div key={group.title || `group-${index}`} className="space-y-2">
+              <div key={group.title || `group-${index}`}>
                 {hasTitle ? (
                   <>
                     {showText ? (
@@ -612,7 +611,6 @@ export default function AppSidebar({ role = "super_admin" }: AppSidebarProps) {
           })}
         </nav>
 
-        {/* Bottom Section */}
         <div className="shrink-0 border-t border-white/10 bg-transparent p-4">
           {/* Settings */}
           {settingsGroup && (
@@ -621,7 +619,7 @@ export default function AppSidebar({ role = "super_admin" }: AppSidebarProps) {
             </div>
           )}
 
-          {/* Profile + Logout */}
+        
           {showText ? (
             <div className="flex items-center gap-3 rounded-2xl bg-white/8 p-3">
               <button
@@ -681,7 +679,6 @@ export default function AppSidebar({ role = "super_admin" }: AppSidebarProps) {
                 Are you sure you want to logout from your account?
               </p>
             </div>
-
             <div className="mt-6 flex gap-3">
               <button
                 onClick={() => setShowLogoutModal(false)}

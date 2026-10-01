@@ -31,14 +31,7 @@ export const companyDetailsSchema = z.object({
     .min(1, "Company email is required")
     .email("Please enter a valid email address"),
 
-  phone: z
-    .string()
-    .trim()
-    .min(1, "Phone number is required")
-    .regex(
-      /^[6-9]\d{9}$/,
-      "Please enter a valid 10 digit phone number",
-    ),
+  phone: z.string().trim().min(1, "Phone number is required"),
 
   siteLocation: z
     .string()

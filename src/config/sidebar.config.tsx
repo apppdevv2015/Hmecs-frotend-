@@ -126,6 +126,11 @@ const companyAdminNavGroups: NavGroup[] = [
         icon: <PackageSearch className={sidebarIconClass} />,
       },
       {
+        name: "Job Cards",
+        path: "/company-admin/job-cards",
+        icon: <ClipboardList className={sidebarIconClass} />,
+      },
+      {
         name: "Heat Map",
         path: "/company-admin/heatmap",
         icon: <Map className={sidebarIconClass} />,
@@ -135,11 +140,11 @@ const companyAdminNavGroups: NavGroup[] = [
         path: "/company-admin/categories",
         icon: <ListChecks className={sidebarIconClass} />,
       },
-      {
-        name: "Machine Health",
-        path: "/company-admin/inspection-entry",
-        icon: <ClipboardCheck className={sidebarIconClass} />,
-      },
+      // {
+      //   name: "Machine Health",
+      //   path: "/company-admin/inspection-entry",
+      //   icon: <ClipboardCheck className={sidebarIconClass} />,
+      // },
     ],
   },
   {
@@ -181,7 +186,10 @@ const companyAdminNavGroups: NavGroup[] = [
 ];
 
 const engineerNavGroups: NavGroup[] = companyAdminNavGroups
-  .filter((group) => group.title !== "Inquiry Management")
+  .filter(
+    (group) =>
+      group.title !== "Inquiry Management" && group.title !== "Account",
+  )
   .map((group) => ({
     ...group,
     items: group.items.map((item) => ({
@@ -383,10 +391,16 @@ export const sidebarConfig: Record<
             icon: <PackageSearch className={sidebarIconClass} />,
           },
           {
+            name: "Job Cards",
+            path: "/company-admin/job-cards",
+            icon: <ClipboardList className={sidebarIconClass} />,
+          },
+          {
             name: "Heat Map",
             path: "/company-admin/heatmap",
             icon: <Map className={sidebarIconClass} />,
           },
+
           {
             name: "Category Master",
             path: "/company-admin/categories",
@@ -421,11 +435,10 @@ export const sidebarConfig: Record<
           },
         ],
       },
-
       {
         title: "Account",
         items: [
-                    {
+          {
             name: "Notifications",
             path: "/company-admin/notifications",
             icon: <Bell className={sidebarIconClass} />,
@@ -444,7 +457,6 @@ export const sidebarConfig: Record<
         ],
       },
     ],
-
     limitedNavGroups: [
       {
         title: "Inquiry Management",
@@ -464,14 +476,8 @@ export const sidebarConfig: Record<
             path: "/company-admin/invoices",
             icon: <Receipt className={sidebarIconClass} />,
           },
-          {
-            name: "Notifications",
-            path: "/support/notifications",
-            icon: <FileText className={sidebarIconClass} />,
-          },
         ],
       },
-
       {
         title: "Account",
         items: [
@@ -506,11 +512,6 @@ export const sidebarConfig: Record<
           {
             name: "My Tasks",
             path: "/artisans/tasks",
-            icon: <ClipboardCheck className={artisansIconClass} />,
-          },
-          {
-            name: "Pre-Start Inspection",
-            path: "/artisans/pre-start-inspection",
             icon: <ClipboardCheck className={artisansIconClass} />,
           },
           {
@@ -696,6 +697,11 @@ export const sidebarConfig: Record<
             icon: <ClipboardCheck className={supervisorIconClass} />,
           },
           {
+            name: "Job Cards",
+            path: "/supervisor/job-cards",
+            icon: <ClipboardList className={supervisorIconClass} />,
+          },
+          {
             name: "Fleet Health",
             path: "/supervisor/fleet",
             icon: <Activity className={supervisorIconClass} />,
@@ -846,7 +852,7 @@ export const sidebarConfig: Record<
       },
     ],
 
-       profile: {
+    profile: {
       shortName: "EN",
       title: "Engineer",
       subtitle: "engineer@hme.com",
@@ -895,7 +901,7 @@ export const sidebarConfig: Record<
           //   path: "/sub-admin/inspection-entry",
           //   icon: <ClipboardCheck className={sidebarIconClass} />,
           // },
-                    {
+          {
             name: "Notifications",
             path: "/sub-admin/notifications",
             icon: <Bell className={sidebarIconClass} />,

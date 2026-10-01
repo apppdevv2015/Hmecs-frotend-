@@ -5,14 +5,15 @@ import { useNavigate } from "react-router-dom";
 import { ArrowRight, X } from "lucide-react";
 
 import StorageService, { STORAGE_KEYS } from "../../services/storage.service";
-import { Notification, useNotifications, Severity, Category } from "../../context/NotificationContext";
+import {
+  Notification,
+  useNotifications,
+  Severity,
+  Category,
+} from "../../context/NotificationContext";
 // ─────────────────────────────────────────────────────────────────────────
 
-
-
 type ActorRole = "Supervisor" | "Engineer" | "Artisan" | "Operator" | "Admin";
-
-
 
 const SEVERITY_PRIORITY: Record<Severity, number> = {
   critical: 0,
@@ -60,13 +61,15 @@ const CATEGORY_STYLES: Record<Category, string> = {
   Component: "bg-teal-50 text-teal-700 dark:bg-teal-500/10 dark:text-teal-400",
   Subscription:
     "bg-gray-100 text-gray-700 dark:bg-gray-500/10 dark:text-gray-300",
-  Quotation:
-    "bg-cyan-50 text-cyan-700 dark:bg-cyan-500/10 dark:text-cyan-400",
+  Quotation: "bg-cyan-50 text-cyan-700 dark:bg-cyan-500/10 dark:text-cyan-400",
   Contract:
     "bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-400",
   Payment:
     "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400",
 };
+
+const DEFAULT_CATEGORY_STYLE =
+  "bg-gray-100 text-gray-700 dark:bg-gray-500/10 dark:text-gray-300";
 
 function getRelativeTime(timestamp: string): string {
   const diff = Date.now() - new Date(timestamp).getTime();
@@ -114,8 +117,6 @@ export default function NotificationDropdown() {
 
   const currentRole = StorageService.get<string>(STORAGE_KEYS.ROLE);
 
-  
-
   const sortedNotifications = useMemo(
     () => sortNotifications(notifications),
     [notifications],
@@ -147,7 +148,7 @@ export default function NotificationDropdown() {
       .replace(/-/g, "_")
       .replace(/_+$/g, "");
 
-       const notificationRouteMap: Record<string, string> = {
+    const notificationRouteMap: Record<string, string> = {
       super_admin: "/super-admin/notifications",
       superadmin: "/super-admin/notifications",
       system_admin: "/super-admin/notifications",
@@ -220,7 +221,9 @@ export default function NotificationDropdown() {
               Notifications
             </h5>
             <span className="text-xs text-gray-400 dark:text-gray-500">
-              {unreadCount > 0 ? `${unreadCount} unread` : "You're all caught up"}
+              {unreadCount > 0
+                ? `${unreadCount} unread`
+                : "You're all caught up"}
             </span>
           </div>
 
@@ -345,10 +348,14 @@ export default function NotificationDropdown() {
                         {severity.label}
                       </span>
                       <span
-                        className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${CATEGORY_STYLES[notification.category]}`}
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                          CATEGORY_STYLES[notification.category] ??
+                          DEFAULT_CATEGORY_STYLE
+                        }`}
                       >
                         {notification.category}
                       </span>
+
                       <span className="ml-auto text-xs text-gray-400 dark:text-gray-500">
                         {getRelativeTime(notification.timestamp)}
                       </span>
