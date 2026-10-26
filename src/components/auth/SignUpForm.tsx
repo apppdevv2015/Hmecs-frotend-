@@ -31,7 +31,6 @@ import {
 } from "../../components/common/FormValidation";
 import PdfAttachment from "../../components/common/PdfAttachment";
 
-
 import Navbar from "../../components/landing/Navbar";
 import Footer from "../../components/landing/Footer";
 
@@ -424,16 +423,16 @@ export default function SignUpForm() {
 
   const [active, setActive] = useState("");
 
-
   const [showPassword, setShowPassword] = useState(false);
 
   const [step, setStep] = useState<1 | 2>(1);
 
-
-  const [equipmentTypeOptions, setEquipmentTypeOptions] =
-    useState<SelectOption[]>(EQUIPMENT_TYPE_OPTIONS);
-  const [optionalServiceOptions, setOptionalServiceOptions] =
-    useState<SelectOption[]>(OPTIONAL_SERVICE_OPTIONS);
+  const [equipmentTypeOptions, setEquipmentTypeOptions] = useState<
+    SelectOption[]
+  >(EQUIPMENT_TYPE_OPTIONS);
+  const [optionalServiceOptions, setOptionalServiceOptions] = useState<
+    SelectOption[]
+  >(OPTIONAL_SERVICE_OPTIONS);
   const [isLoadingDynamicOptions, setIsLoadingDynamicOptions] = useState(false);
 
   useEffect(() => {
@@ -509,7 +508,6 @@ export default function SignUpForm() {
     watch,
     formState: { errors, isSubmitting },
   } = useForm<SignUpFormData>({
-
     resolver: zodResolver(signUpSchema),
     defaultValues: {
       companyName: "",
@@ -517,7 +515,7 @@ export default function SignUpForm() {
       email: "",
       phone: "",
       siteLocation: "",
-      
+
       password: "",
       quotationType: preselectedQuotationType ?? "",
       numberOfSites: "",
@@ -545,14 +543,13 @@ export default function SignUpForm() {
     name: "siteNames",
   });
 
-  const siteNameArrayError = (
-    errors.siteNames as { message?: string }
-  )?.message;
+  const siteNameArrayError = (errors.siteNames as { message?: string })
+    ?.message;
 
   const contractDurationValue = watch("contractDuration");
 
   const handleNext = async () => {
-    const isStepValid = await trigger(STEP_ONE_FIELDS);
+    const isStepValid = await trigger([...STEP_ONE_FIELDS]);
     if (isStepValid) {
       setStep(2);
     }
@@ -582,26 +579,26 @@ export default function SignUpForm() {
       // 1. Register the company/user
       // --------------------------------------------------
 
-      const contactParts = data.contactPerson.trim().split(/\\s+/);
+      const contactParts = (data.contactPerson || "").trim().split(/\s+/);
       const firstName = contactParts[0] || "";
       const lastName = contactParts.slice(1).join(" ") || firstName;
 
       const registerResponse = await authService.register({
-        company_name: data.companyName.trim(),
+        company_name: (data.companyName || "").trim(),
         fname: firstName,
         lname: lastName,
-        email: data.email.trim().toLowerCase(),
+        email: (data.email || "").trim().toLowerCase(),
         password: data.password,
-        mobile_number: data.phone.trim(),
+        mobile_number: (data.phone || "").trim(),
       });
 
-      const registerData =
-        (registerResponse as any)?.data ??
-        registerResponse;
+      const registerData = (registerResponse as any)?.data ?? registerResponse;
 
       const registrationMessage =
-        (typeof registerData?.message === "string" && registerData.message.trim()) ||
-        (typeof (registerResponse as any)?.message === "string" && (registerResponse as any).message.trim()) ||
+        (typeof registerData?.message === "string" &&
+          registerData.message.trim()) ||
+        (typeof (registerResponse as any)?.message === "string" &&
+          (registerResponse as any).message.trim()) ||
         "";
 
       if (registrationMessage) {
@@ -623,13 +620,11 @@ export default function SignUpForm() {
       StorageService.remove(STORAGE_KEYS.NAME);
       StorageService.remove(STORAGE_KEYS.COMPANY_ID);
 
-            const createdCompanyId =
-        registerData?.company?.id ||
-        (registerResponse as any)?.company?.id;
+      const createdCompanyId =
+        registerData?.company?.id || (registerResponse as any)?.company?.id;
 
       const createdUserId =
-        registerData?.user?.id ||
-        (registerResponse as any)?.user?.id;
+        registerData?.user?.id || (registerResponse as any)?.user?.id;
 
       const normalizedRole = "company_admin";
       const finalUser = {
@@ -645,7 +640,9 @@ export default function SignUpForm() {
       };
 
       if (token) {
-        console.warn("Registration returned a token, but signup flow intentionally clears it so the user must login manually.");
+        console.warn(
+          "Registration returned a token, but signup flow intentionally clears it so the user must login manually.",
+        );
       }
 
       StorageService.set(STORAGE_KEYS.ROLE, normalizedRole);
@@ -659,21 +656,19 @@ export default function SignUpForm() {
       const toastId = showLoadingToast("Submitting quotation request...");
       try {
         await submitQuotationRequest({
-          companyName: data.companyName.trim(),
-          contactPerson: data.contactPerson.trim(),
-          email: data.email.trim().toLowerCase(),
-          phone: data.phone.trim(),
+          companyName: (data.companyName || "").trim(),
+          contactPerson: (data.contactPerson || "").trim(),
+          email: (data.email || "").trim().toLowerCase(),
+          phone: (data.phone || "").trim(),
           siteLocation: data.siteLocation?.trim(),
           quotationType: data.quotationType,
           numberOfSites: Number(data.numberOfSites) || 1,
-          siteNames:
-            data.siteNames?.map((s) => s.name).filter(Boolean) || [],
+          siteNames: data.siteNames?.map((s) => s.name).filter(Boolean) || [],
           activeMachines: Number(data.activeMachines) || 1,
           equipmentTypes: data.equipmentTypes || [],
           contractDuration: data.contractDuration,
           optionalServices: data.optionalServices || [],
-          implementationRequirements:
-            data.implementationRequirements?.trim(),
+          implementationRequirements: data.implementationRequirements?.trim(),
           additionalRequirements: data.additionalRequirements?.trim(),
           companyId: createdCompanyId,
           userId: createdUserId,
@@ -691,7 +686,7 @@ export default function SignUpForm() {
       setTimeout(() => {
         window.location.href = "/company-admin/dashboard";
       }, 1000);
-
+      return;
 
       // --------------------------------------------------
       // 3. Build quotation request payload
@@ -700,7 +695,9 @@ export default function SignUpForm() {
       const quotationPayload = {
         companyId: registerData?.company?.id || registerData?.companyId || null,
         userId: registerData?.user?.id || registerData?.userId || null,
-        companyName: (registerData?.company?.name || data.companyName.trim()).trim(),
+        companyName: (
+          registerData?.company?.name || data.companyName.trim()
+        ).trim(),
         contactPerson: data.contactPerson.trim(),
         email: data.email.trim().toLowerCase(),
         phone: data.phone.trim(),
@@ -728,7 +725,6 @@ export default function SignUpForm() {
       await createQuotationRequest(quotationPayload);
 
       navigate("/signin", { replace: true });
-
     } catch (error) {
       const errorMessage = extractApiError(error);
       if (errorMessage) {
@@ -1062,9 +1058,7 @@ export default function SignUpForm() {
                 {step === 2 && (
                   <div>
                     <div className="grid min-w-0 grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
-
-
-                                          {/* Quotation Type */}
+                      {/* Quotation Type */}
                       <div className="flex min-w-0 flex-col sm:col-span-2">
                         <Label>1. Quotation Type *</Label>
 
@@ -1081,7 +1075,10 @@ export default function SignUpForm() {
                             <button
                               type="button"
                               onClick={() =>
-                                navigate("/signup", { replace: true, state: null })
+                                navigate("/signup", {
+                                  replace: true,
+                                  state: null,
+                                })
                               }
                               className="text-xs font-bold text-blue-600 hover:text-blue-700 dark:text-blue-400"
                             >
@@ -1247,7 +1244,7 @@ export default function SignUpForm() {
                       <div className="flex min-w-0 flex-col">
                         <Label>5. Fleet / Equipment Types *</Label>
                         <div className="mt-1">
-                                                    <Controller
+                          <Controller
                             name="equipmentTypes"
                             control={control}
                             render={({ field }) => (
@@ -1269,7 +1266,6 @@ export default function SignUpForm() {
                               />
                             )}
                           />
-
                         </div>
                         <div className="min-h-[18px] pt-1">
                           {errors.equipmentTypes?.message && (
@@ -1280,7 +1276,7 @@ export default function SignUpForm() {
                         </div>
                       </div>
 
-                                           {/* Preferred Contract Duration */}
+                      {/* Preferred Contract Duration */}
                       <div className="flex min-w-0 flex-col">
                         <Label>6. Preferred Contract Duration *</Label>
                         <div className="mt-1">
@@ -1358,7 +1354,7 @@ export default function SignUpForm() {
                         <Label>Optional Services</Label>
 
                         <div className="mt-1">
-                                                    <Controller
+                          <Controller
                             name="optionalServices"
                             control={control}
                             render={({ field }) => (
@@ -1374,7 +1370,6 @@ export default function SignUpForm() {
                               />
                             )}
                           />
-
                         </div>
                       </div>
 

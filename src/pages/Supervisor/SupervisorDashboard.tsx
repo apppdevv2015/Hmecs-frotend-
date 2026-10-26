@@ -1249,7 +1249,9 @@ export default function SupervisorDashboard() {
                       <div className="flex items-center justify-between gap-2">
                         <h4 className="truncate text-xs font-bold text-slate-900 dark:text-white">
                           {activity.title}
+                
                         </h4>
+
                         <span className="shrink-0 text-[10px] font-semibold text-slate-400 dark:text-slate-500">
                           {activity.time}
                         </span>

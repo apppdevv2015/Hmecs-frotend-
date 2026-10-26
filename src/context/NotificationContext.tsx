@@ -24,7 +24,7 @@ export const NOTIFICATION_CATEGORIES = [
   "Payment",
 ] as const;
 
-export type Category = (typeof NOTIFICATION_CATEGORIES)[number];
+export type Category = string;
 
 export const NOTIFICATION_SEVERITIES = [
   "info",
@@ -71,8 +71,7 @@ const isObject = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value);
 
 const isCategory = (value: unknown): value is Category =>
-  typeof value === "string" &&
-  (NOTIFICATION_CATEGORIES as readonly string[]).includes(value);
+  typeof value === "string" && value.trim().length > 0;
 
 const isSeverity = (value: unknown): value is Severity =>
   typeof value === "string" &&
@@ -161,6 +160,11 @@ const getAuthToken = (): string | null =>
   StorageService.get<string>(STORAGE_KEYS.TOKEN);
 
 const getApiBase = (): string => {
+  const configuredApiBase = import.meta.env.VITE_API_BASE_URL;
+  if (configuredApiBase) {
+    return `${configuredApiBase.replace(/\/+$/, "").replace(/\/api\/v1$/, "")}/api/v1`;
+  }
+
   const rawSocketUrl =
     import.meta.env.VITE_SOCKET_URL || "ws://localhost:4000/ws/alerts";
 
@@ -173,7 +177,7 @@ const getApiBase = (): string => {
   resolved = resolved
     .replace(/^ws:\/\//, "http://")
     .replace(/^wss:\/\//, "https://");
-  const base = resolved.replace(/\/ws\/alerts.*$/, "");
+  const base = resolved.replace(/\/ws\/alerts.*$/, "").replace(/\/+$/, "");
 
   return `${base}/api/v1`;
 };

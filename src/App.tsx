@@ -378,6 +378,8 @@ const SupervisorOperators = lazy(
   () => import("./pages/Supervisor/SupervisorOperators"),
 );
 
+const JobCards = lazy(() => import("./pages/Supervisor/JobCards"));
+
 const SupervisorTasks = lazy(
   () => import("./pages/Supervisor/SupervisorTasks"),
 );
@@ -1049,7 +1051,7 @@ export default function App() {
                   path="/company-admin/job-cards"
                   element={
                     <Suspense fallback={<PageSkeleton />}>
-                      <JobCardManagement />
+                      <JobCards />
                     </Suspense>
                   }
                 />
@@ -1627,6 +1629,15 @@ export default function App() {
                 />
 
                 <Route
+                  path="/supervisor/job-cards"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <JobCards />
+                    </Suspense>
+                  }
+                />
+
+                <Route
                   path="/supervisor/components"
                   element={<SupervisorComponent />}
                 />
@@ -1727,6 +1738,15 @@ export default function App() {
                     </Suspense>
                   }
                 />
+                <Route
+                  path="/engineers/job-cards"
+                  element={
+                    <Suspense fallback={<PageSkeleton />}>
+                      <JobCards />
+                    </Suspense>
+                  }
+                />
+                
                 <Route
                   path="/engineers/notifications"
                   element={

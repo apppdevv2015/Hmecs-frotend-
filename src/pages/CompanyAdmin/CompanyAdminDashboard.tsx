@@ -2178,77 +2178,11 @@ export default function CompanyAdminDashboard() {
             </div>
           </div>
 
-          <div className="relative overflow-hidden rounded-[2rem] border border-indigo-200/20 bg-gradient-to-r from-[#3B37E6] via-[#3730D9] to-[#2E2AD9] p-8 shadow-2xl">
+          
             {/* Background Effects */}
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.10),transparent_40%)]" />
             <div className="absolute -top-16 -right-16 h-56 w-56 rounded-full bg-white/10 blur-3xl" />
             <div className="absolute bottom-0 left-0 h-40 w-40 rounded-full bg-cyan-400/10 blur-3xl" />
-
-            {/* Icon */}
-            <div className="absolute right-6 top-6 opacity-10">
-              <Shield size={110} className="text-white" />
-            </div>
-
-            <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-              {/* Left */}
-              <div className="max-w-2xl">
-                <div className="inline-flex items-center rounded-full border border-white/20 bg-white/10 px-4 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-100 backdrop-blur-sm">
-                  {subscription?.plan?.planName
-                    ? `${subscription.plan.planName.toUpperCase()} PLAN`
-                    : "ACTIVE SUBSCRIPTION"}
-                </div>
-
-                <h3 className="mt-4 text-3xl font-extrabold tracking-tight text-white capitalize">
-                  {subscription?.plan?.planName || "Enterprise"} Access
-                </h3>
-
-                <p className="mt-3 text-[15px] leading-7 text-blue-100">
-                  Your organization is currently on the{" "}
-                  <span className="font-bold text-amber-300 uppercase">
-                    {subscription?.plan?.planName ||
-                      subscription?.name ||
-                      "Active"}
-                  </span>{" "}
-                  plan with complete access to predictive analytics, GPS telemetry,
-                  AI-powered insights, and executive reporting across your
-                  fleet.
-                </p>
-              </div>
-
-              {/* Right */}
-              <button
-                onClick={() => navigate("/company-admin/subscriptions")}
-                className="group inline-flex items-center justify-center rounded-2xl bg-white px-8 py-4 text-sm font-bold text-[#3730D9] shadow-xl transition-all duration-300 hover:-translate-y-1 hover:bg-blue-50 hover:shadow-2xl"
-              >
-                Manage Subscription
-                <ArrowRight
-                  size={18}
-                  className="ml-3 transition-transform duration-300 group-hover:translate-x-1"
-                />
-              </button>
-            </div>
-          </div>
-
-          <div className="pt-20 border-t border-slate-200">
-            <div className="mb-10 flex items-center gap-4">
-              <div className="h-10 w-10 rounded-2xl bg-blue-600 flex items-center justify-center text-white">
-                <History size={20} />
-              </div>
-
-              <h2 className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-                Billing & Enterprise Control
-              </h2>
-            </div>
-
-            <CompanyPlanCard
-              subscription={subscription}
-              machineCount={machines.length}
-            />
-
-            <div className="mt-10">
-              <SubscriptionHistoryTable history={history} activeSubscription={subscription} />
-            </div>
-          </div>
         </div>
       </div>
 
