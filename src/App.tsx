@@ -1,6 +1,7 @@
 import { useNotifications } from "./context/NotificationContext";
 import { PageSkeleton } from "./components/common/Skeleton";
 import { authService } from "./services/Auth/authService";
+import { Blog } from "./components/landing/Footer";
 
 import {
   BrowserRouter as Router,
@@ -1746,7 +1747,7 @@ export default function App() {
                     </Suspense>
                   }
                 />
-                
+
                 <Route
                   path="/engineers/notifications"
                   element={
@@ -1856,11 +1857,12 @@ export default function App() {
             </Route>
 
             {/* Coming Soon Routes */}
+            <Route path="/company-admin/coming-soon/blog" element={<Blog />} />
+
             <Route
               path="/company-admin/coming-soon/:module"
               element={<ComingSoon />}
             />
-
             <Route path="/coming-soon" element={<ComingSoon />} />
 
             {/* 404 Route */}
