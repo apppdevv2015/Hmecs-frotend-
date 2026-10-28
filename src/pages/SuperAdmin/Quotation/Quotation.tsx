@@ -4,14 +4,15 @@ import { ClipboardList, MessageSquareCheck, PlusCircle } from "lucide-react";
 
 import QuotationInquiry from "./QuotationInquiry";
 
-import QuotationResponses from "./QuotationResponses";<<<<<<< quotation-flow-complete-integration
-
 import QuotationResponses from "./QuotationResponses";
-
-
 import AddonQuotationBuilder from "./AddonQuotationBuilder";
 
-import FormCard from "../../../components/common/SignupCard";
+
+
+
+
+
+
 
 /* ============================================================
    TYPES
@@ -191,11 +192,6 @@ const Quotation: FC = () => {
               Manage inquiries, add-ons and responses in one place
             </p>
           </div>
-
-          <FormCard
-            onInquirySubmitted={() => {
-            }}
-          />
 
         </div>
 
