@@ -28,7 +28,7 @@ const contactInfo = [
   {
     icon: Phone,
     label: "Call Us",
-    value: "+1 202-620-1020",
+    value: "+27 202-620-1020",
     sub: "Mon - Sat, 9:00 AM - 7:00 PM",
   },
   {
@@ -40,7 +40,7 @@ const contactInfo = [
   {
     icon: MapPin,
     label: "Visit Us",
-    value: "Panchkula, Haryana, India",
+    value: "Cape town, South Africa",
     sub: "By appointment only",
   },
   {
