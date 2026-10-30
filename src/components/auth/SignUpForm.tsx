@@ -262,14 +262,14 @@ function AppSelect({
         aria-haspopup="listbox"
         aria-expanded={isOpen}
         className={`flex h-11 w-full items-center justify-between rounded-lg border bg-white px-3.5 text-sm transition focus:outline-none focus:ring-4 dark:bg-slate-900 ${error
-            ? "border-red-500 focus:ring-red-500/20"
-            : "border-gray-300 focus:border-blue-500 focus:ring-blue-500/10 dark:border-slate-700"
+          ? "border-red-500 focus:ring-red-500/20"
+          : "border-gray-300 focus:border-blue-500 focus:ring-blue-500/10 dark:border-slate-700"
           }`}
       >
         <span
           className={`truncate ${selectedLabel
-              ? "text-slate-900 dark:text-white"
-              : "text-slate-400 dark:text-slate-500"
+            ? "text-slate-900 dark:text-white"
+            : "text-slate-400 dark:text-slate-500"
             }`}
         >
           {selectedLabel || placeholder}
@@ -298,8 +298,8 @@ function AppSelect({
                     setIsOpen(false);
                   }}
                   className={`flex w-full items-center justify-between rounded-md px-2.5 py-2 text-left text-sm transition ${isSelected
-                      ? "bg-blue-50 font-semibold text-blue-700 dark:bg-blue-500/10 dark:text-blue-300"
-                      : "text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
+                    ? "bg-blue-50 font-semibold text-blue-700 dark:bg-blue-500/10 dark:text-blue-300"
+                    : "text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
                     }`}
                 >
                   {option.label}
@@ -374,14 +374,14 @@ function AppMultiSelect({
           aria-haspopup="listbox"
           aria-expanded={isOpen}
           className={`flex h-11 w-full items-center justify-between rounded-lg border bg-white px-3.5 text-sm transition focus:outline-none focus:ring-4 dark:bg-slate-900 ${error
-              ? "border-red-500 focus:ring-red-500/20"
-              : "border-gray-300 focus:border-blue-500 focus:ring-blue-500/10 dark:border-slate-700"
+            ? "border-red-500 focus:ring-red-500/20"
+            : "border-gray-300 focus:border-blue-500 focus:ring-blue-500/10 dark:border-slate-700"
             }`}
         >
           <span
             className={`truncate ${selectedLabels.length
-                ? "text-slate-900 dark:text-white"
-                : "text-slate-400 dark:text-slate-500"
+              ? "text-slate-900 dark:text-white"
+              : "text-slate-400 dark:text-slate-500"
               }`}
           >
             {summaryText}
@@ -407,14 +407,14 @@ function AppMultiSelect({
                     aria-selected={isSelected}
                     onClick={() => toggleValue(option.value)}
                     className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm transition ${isSelected
-                        ? "bg-blue-50 font-semibold text-blue-700 dark:bg-blue-500/10 dark:text-blue-300"
-                        : "text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
+                      ? "bg-blue-50 font-semibold text-blue-700 dark:bg-blue-500/10 dark:text-blue-300"
+                      : "text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
                       }`}
                   >
                     <span
                       className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${isSelected
-                          ? "border-blue-600 bg-blue-600 text-white"
-                          : "border-slate-300 dark:border-slate-600"
+                        ? "border-blue-600 bg-blue-600 text-white"
+                        : "border-slate-300 dark:border-slate-600"
                         }`}
                     >
                       {isSelected && <Check className="h-3 w-3" />}
@@ -493,7 +493,7 @@ function TermsCheckbox({
       {open &&
         createPortal(
           <div
-            className="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-900/60 p-4"
+            className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-900/60 p-4"
             onClick={() => setOpen(false)}
           >
             <div
@@ -552,16 +552,16 @@ function StepIndicator({ step }: { step: 1 | 2 }) {
       <div className="flex items-center gap-2">
         <span
           className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold transition-colors ${step === 1
-              ? "bg-blue-600 text-white"
-              : "bg-blue-100 text-blue-600 dark:bg-blue-500/15 dark:text-blue-300"
+            ? "bg-blue-600 text-white"
+            : "bg-blue-100 text-blue-600 dark:bg-blue-500/15 dark:text-blue-300"
             }`}
         >
           {step > 1 ? <Check className="h-3.5 w-3.5" /> : 1}
         </span>
         <span
           className={`text-xs font-bold sm:text-sm ${step === 1
-              ? "text-blue-600 dark:text-blue-400"
-              : "text-slate-500 dark:text-slate-400"
+            ? "text-blue-600 dark:text-blue-400"
+            : "text-slate-500 dark:text-slate-400"
             }`}
         >
           Company Details
@@ -576,16 +576,16 @@ function StepIndicator({ step }: { step: 1 | 2 }) {
       <div className="flex items-center gap-2">
         <span
           className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold transition-colors ${step === 2
-              ? "bg-blue-600 text-white"
-              : "bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-400"
+            ? "bg-blue-600 text-white"
+            : "bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-400"
             }`}
         >
           2
         </span>
         <span
           className={`text-xs font-bold sm:text-sm ${step === 2
-              ? "text-blue-600 dark:text-blue-400"
-              : "text-slate-500 dark:text-slate-400"
+            ? "text-blue-600 dark:text-blue-400"
+            : "text-slate-500 dark:text-slate-400"
             }`}
         >
           Request a Quotation
@@ -1020,8 +1020,8 @@ export default function SignUpForm() {
                             placeholder="ABC Mining Pvt Ltd"
                             autoComplete="organization"
                             className={`w-full pl-10 ${errors.companyName
-                                ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
-                                : ""
+                              ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
+                              : ""
                               }`}
                             {...register("companyName", {
                               setValueAs: (value) => value.trim(),
@@ -1053,8 +1053,8 @@ export default function SignUpForm() {
                             placeholder="John Doe"
                             autoComplete="name"
                             className={`w-full pl-10 ${errors.contactPerson
-                                ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
-                                : ""
+                              ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
+                              : ""
                               }`}
                             {...register("contactPerson", {
                               setValueAs: (value) => value.trim(),
@@ -1087,8 +1087,8 @@ export default function SignUpForm() {
                             placeholder="company@email.com"
                             autoComplete="email"
                             className={`w-full pl-10 ${errors.email
-                                ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
-                                : ""
+                              ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
+                              : ""
                               }`}
                             {...register("email", {
                               setValueAs: (value) => value.trim().toLowerCase(),
@@ -1155,8 +1155,8 @@ export default function SignUpForm() {
                             placeholder="Iron Valley Mine"
                             autoComplete="street-address"
                             className={`w-full pl-10 ${errors.siteLocation
-                                ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
-                                : ""
+                              ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
+                              : ""
                               }`}
                             {...register("siteLocation", {
                               setValueAs: (value) => value.trim(),
@@ -1189,8 +1189,8 @@ export default function SignUpForm() {
                             placeholder="Enter strong password"
                             autoComplete="new-password"
                             className={`w-full pl-10 pr-12 ${errors.password
-                                ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
-                                : ""
+                              ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
+                              : ""
                               }`}
                             {...register("password", {
                               onChange: () => {
@@ -1316,8 +1316,8 @@ export default function SignUpForm() {
                           inputMode="numeric"
                           placeholder="Enter number of sites"
                           className={`mt-1 w-full ${errors.numberOfSites
-                              ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
-                              : ""
+                            ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
+                            : ""
                             }`}
                           {...register("numberOfSites", {
                             setValueAs: (value) => value.trim(),
@@ -1406,8 +1406,8 @@ export default function SignUpForm() {
                           inputMode="numeric"
                           placeholder="Enter number of active machines"
                           className={`mt-1 w-full ${errors.activeMachines
-                              ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
-                              : ""
+                            ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
+                            : ""
                             }`}
                           {...register("activeMachines", {
                             setValueAs: (value) => value.trim(),
@@ -1494,8 +1494,8 @@ export default function SignUpForm() {
                               inputMode="numeric"
                               placeholder="Enter number of months"
                               className={`w-full ${errors.customContractDuration
-                                  ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
-                                  : ""
+                                ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
+                                : ""
                                 }`}
                               {...register("customContractDuration", {
                                 setValueAs: (value) => value.trim(),
@@ -1564,8 +1564,8 @@ export default function SignUpForm() {
                         <Label>8. Additional Requirements</Label>
                         <div
                           className={`mt-1 w-full rounded-lg border bg-white transition focus-within:ring-4 dark:bg-slate-900 ${errors.attachment
-                              ? "border-red-500 focus-within:ring-red-500/20"
-                              : "border-gray-300 focus-within:border-blue-500 focus-within:ring-blue-500/10 dark:border-slate-700"
+                            ? "border-red-500 focus-within:ring-red-500/20"
+                            : "border-gray-300 focus-within:border-blue-500 focus-within:ring-blue-500/10 dark:border-slate-700"
                             }`}
                         >
                           <textarea
