@@ -1,4 +1,11 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from "react";
+import { createPortal } from "react-dom";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Controller, useFieldArray, useForm } from "react-hook-form";
 import PhoneField from "../common/PhoneField";
@@ -124,6 +131,88 @@ const CONTRACT_DURATION_OPTIONS: SelectOption[] = [
 
 const MAX_SITE_NAME_FIELDS = 8;
 
+// ---------------------------------------------------------------------------
+// Terms & Conditions content.
+// One entry per section: `title` is the section heading, `body` is one string
+// per paragraph.
+// ---------------------------------------------------------------------------
+
+interface TermsSection {
+  title: string;
+  body: string[];
+}
+
+const TERMS_SECTIONS: TermsSection[] = [
+  {
+    title: "1. Use of the Platform",
+    body: [
+      "By registering for or using the HME Component Intelligence System (“Platform”), you agree to these Terms and Conditions. Companies must provide accurate information and keep account credentials secure. Registration does not automatically provide full access.",
+    ],
+  },
+  {
+    title: "2. Services and Quotations",
+    body: [
+      "The Platform offers a Fixed Monthly Site Licence and a Once-Off Implementation Fee. Pricing and scope are provided by quotation. A quotation request is not a contract; services commence according to the accepted quotation and signed or otherwise valid agreement.",
+    ],
+  },
+  {
+    title: "3. Trial Access",
+    body: [
+      "A trial is optional and subject to Administrator approval. Trial duration and available features may be limited. Trial access does not guarantee a contract or continued access after the trial ends.",
+    ],
+  },
+  {
+    title: "4. Fees and Payments",
+    body: [
+      "Fees, billing schedules, payment due dates, and any additional charges will be stated in the accepted quotation or contract. The Company is responsible for paying invoices in accordance with the agreed terms.",
+    ],
+  },
+  {
+    title: "5. Data and Recommendations",
+    body: [
+      "The Platform may process equipment, component, tyre, telematics, maintenance, and financial data. The Company is responsible for the accuracy and lawful provision of its data. Reports, alerts, risk scores, and predictions support decision-making but do not guarantee that failures will be prevented or specific savings achieved. Users must continue to follow safety procedures and professional engineering judgement.",
+    ],
+  },
+  {
+    title: "6. Acceptable Use and Intellectual Property",
+    body: [
+      "Users must not misuse the Platform, attempt unauthorised access, disrupt its operation, or copy or resell it without permission. The Platform’s software and design remain the property of the service provider or its licensors. The Company retains rights to its own data.",
+    ],
+  },
+  {
+    title: "7. Availability and Third-Party Services",
+    body: [
+      "The Platform may depend on internet connectivity and third-party systems. Continuous availability is not guaranteed unless specifically agreed in a contract. Additional integration and support terms may apply.",
+    ],
+  },
+  {
+    title: "8. Suspension and Termination",
+    body: [
+      "Access may be suspended or terminated in accordance with the contract, including for material breach, overdue payment, security risks, or contract expiry. Data handling after termination will follow the contract and applicable law.",
+    ],
+  },
+  {
+    title: "9. Liability and Privacy",
+    body: [
+      "Liability is limited to the extent permitted by applicable law and as stated in the relevant contract. Personal information will be handled in accordance with applicable privacy and data protection laws.",
+    ],
+  },
+  {
+    title: "10. Changes and Governing Law",
+    body: [
+      "These Terms may be updated from time to time. The governing law will be South Africa, subject to mandatory legal requirements. If these Terms conflict with a signed contract, the contract will prevail for the services it covers.",
+    ],
+  },
+  {
+    title: "11. Contact",
+    body: [
+      "Company: HMEC",
+      "Email: support@hmec.com",
+      "Address: Cape town, South Africa",
+    ],
+  },
+];
+
 // BACKEND TODO: confirm max upload size allowed by the quotation API once it
 // exists — kept generous for now since there is no endpoint to validate against.
 // ---------------------------------------------------------------------------
@@ -172,25 +261,22 @@ function AppSelect({
         onClick={() => setIsOpen((prev) => !prev)}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
-        className={`flex h-11 w-full items-center justify-between rounded-lg border bg-white px-3.5 text-sm transition focus:outline-none focus:ring-4 dark:bg-slate-900 ${
-          error
+        className={`flex h-11 w-full items-center justify-between rounded-lg border bg-white px-3.5 text-sm transition focus:outline-none focus:ring-4 dark:bg-slate-900 ${error
             ? "border-red-500 focus:ring-red-500/20"
             : "border-gray-300 focus:border-blue-500 focus:ring-blue-500/10 dark:border-slate-700"
-        }`}
+          }`}
       >
         <span
-          className={`truncate ${
-            selectedLabel
+          className={`truncate ${selectedLabel
               ? "text-slate-900 dark:text-white"
               : "text-slate-400 dark:text-slate-500"
-          }`}
+            }`}
         >
           {selectedLabel || placeholder}
         </span>
         <ChevronDown
-          className={`ml-2 h-4 w-4 shrink-0 text-slate-400 transition-transform ${
-            isOpen ? "rotate-180" : ""
-          }`}
+          className={`ml-2 h-4 w-4 shrink-0 text-slate-400 transition-transform ${isOpen ? "rotate-180" : ""
+            }`}
         />
       </button>
 
@@ -211,11 +297,10 @@ function AppSelect({
                     onChange(option.value);
                     setIsOpen(false);
                   }}
-                  className={`flex w-full items-center justify-between rounded-md px-2.5 py-2 text-left text-sm transition ${
-                    isSelected
+                  className={`flex w-full items-center justify-between rounded-md px-2.5 py-2 text-left text-sm transition ${isSelected
                       ? "bg-blue-50 font-semibold text-blue-700 dark:bg-blue-500/10 dark:text-blue-300"
                       : "text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
-                  }`}
+                    }`}
                 >
                   {option.label}
                   {isSelected && <Check className="h-4 w-4 shrink-0" />}
@@ -288,25 +373,22 @@ function AppMultiSelect({
           onClick={() => setIsOpen((prev) => !prev)}
           aria-haspopup="listbox"
           aria-expanded={isOpen}
-          className={`flex h-11 w-full items-center justify-between rounded-lg border bg-white px-3.5 text-sm transition focus:outline-none focus:ring-4 dark:bg-slate-900 ${
-            error
+          className={`flex h-11 w-full items-center justify-between rounded-lg border bg-white px-3.5 text-sm transition focus:outline-none focus:ring-4 dark:bg-slate-900 ${error
               ? "border-red-500 focus:ring-red-500/20"
               : "border-gray-300 focus:border-blue-500 focus:ring-blue-500/10 dark:border-slate-700"
-          }`}
+            }`}
         >
           <span
-            className={`truncate ${
-              selectedLabels.length
+            className={`truncate ${selectedLabels.length
                 ? "text-slate-900 dark:text-white"
                 : "text-slate-400 dark:text-slate-500"
-            }`}
+              }`}
           >
             {summaryText}
           </span>
           <ChevronDown
-            className={`ml-2 h-4 w-4 shrink-0 text-slate-400 transition-transform ${
-              isOpen ? "rotate-180" : ""
-            }`}
+            className={`ml-2 h-4 w-4 shrink-0 text-slate-400 transition-transform ${isOpen ? "rotate-180" : ""
+              }`}
           />
         </button>
 
@@ -324,18 +406,16 @@ function AppMultiSelect({
                     role="option"
                     aria-selected={isSelected}
                     onClick={() => toggleValue(option.value)}
-                    className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm transition ${
-                      isSelected
+                    className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm transition ${isSelected
                         ? "bg-blue-50 font-semibold text-blue-700 dark:bg-blue-500/10 dark:text-blue-300"
                         : "text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
-                    }`}
+                      }`}
                   >
                     <span
-                      className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
-                        isSelected
+                      className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${isSelected
                           ? "border-blue-600 bg-blue-600 text-white"
                           : "border-slate-300 dark:border-slate-600"
-                      }`}
+                        }`}
                     >
                       {isSelected && <Check className="h-3 w-3" />}
                     </span>
@@ -352,6 +432,117 @@ function AppMultiSelect({
 }
 
 // ---------------------------------------------------------------------------
+// Terms & Conditions checkbox + modal
+// ---------------------------------------------------------------------------
+
+function TermsCheckbox({
+  checked,
+  onChange,
+  sections = TERMS_SECTIONS,
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  sections?: TermsSection[];
+}) {
+  const [open, setOpen] = useState(false);
+  const id = useId();
+
+  // Close on Escape and lock background scroll while the modal is open
+  useEffect(() => {
+    if (!open) return;
+
+    const handleKey = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+
+    document.addEventListener("keydown", handleKey);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.removeEventListener("keydown", handleKey);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [open]);
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+        <input
+          id={id}
+          type="checkbox"
+          checked={checked}
+          onChange={(event) => onChange(event.target.checked)}
+          className="h-4 w-4 cursor-pointer rounded border-slate-300 accent-blue-600"
+        />
+        <label htmlFor={id} className="cursor-pointer">
+          I agree to the
+        </label>
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="font-bold text-blue-600 underline transition hover:text-blue-700 focus:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/20 dark:text-blue-400 dark:hover:text-blue-300"
+        >
+          Terms &amp; Conditions
+        </button>
+      </div>
+      <p className="ml-6 mt-1 text-xs text-slate-500 dark:text-slate-400">
+        Click Terms &amp; Conditions to read the full agreement.
+      </p>
+
+      {open &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-900/60 p-4"
+            onClick={() => setOpen(false)}
+          >
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby={`${id}-title`}
+              onClick={(event) => event.stopPropagation()}
+              className="flex max-h-[85vh] w-full max-w-2xl flex-col rounded-2xl bg-white shadow-2xl dark:bg-slate-900"
+            >
+              <h2
+                id={`${id}-title`}
+                className="border-b border-slate-200 px-6 py-4 text-lg font-black text-slate-950 dark:border-slate-800 dark:text-white"
+              >
+                Terms &amp; Conditions
+              </h2>
+
+              <div className="overflow-y-auto px-6 py-4 text-sm leading-6 text-slate-600 dark:text-slate-300">
+                {sections.map((section) => (
+                  <section key={section.title} className="mb-4 last:mb-0">
+                    <h3 className="mb-1.5 text-sm font-bold text-slate-900 dark:text-white">
+                      {section.title}
+                    </h3>
+                    {section.body.map((paragraph, index) => (
+                      <p key={index} className="mb-2 last:mb-0">
+                        {paragraph}
+                      </p>
+                    ))}
+                  </section>
+                ))}
+              </div>
+
+              <div className="flex justify-end border-t border-slate-200 px-6 py-3 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  className="h-10 rounded-xl bg-blue-600 px-6 text-sm font-bold text-white transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-500/20"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Step indicator (Company Details -> Request a Quotation)
 // ---------------------------------------------------------------------------
 
@@ -360,47 +551,42 @@ function StepIndicator({ step }: { step: 1 | 2 }) {
     <div className="flex items-center justify-center gap-2.5 sm:justify-start sm:gap-3">
       <div className="flex items-center gap-2">
         <span
-          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold transition-colors ${
-            step === 1
+          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold transition-colors ${step === 1
               ? "bg-blue-600 text-white"
               : "bg-blue-100 text-blue-600 dark:bg-blue-500/15 dark:text-blue-300"
-          }`}
+            }`}
         >
           {step > 1 ? <Check className="h-3.5 w-3.5" /> : 1}
         </span>
         <span
-          className={`text-xs font-bold sm:text-sm ${
-            step === 1
+          className={`text-xs font-bold sm:text-sm ${step === 1
               ? "text-blue-600 dark:text-blue-400"
               : "text-slate-500 dark:text-slate-400"
-          }`}
+            }`}
         >
           Company Details
         </span>
       </div>
 
       <div
-        className={`h-[2px] w-8 shrink-0 rounded-full transition-colors sm:w-16 ${
-          step === 2 ? "bg-blue-600" : "bg-slate-200 dark:bg-slate-700"
-        }`}
+        className={`h-[2px] w-8 shrink-0 rounded-full transition-colors sm:w-16 ${step === 2 ? "bg-blue-600" : "bg-slate-200 dark:bg-slate-700"
+          }`}
       />
 
       <div className="flex items-center gap-2">
         <span
-          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold transition-colors ${
-            step === 2
+          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold transition-colors ${step === 2
               ? "bg-blue-600 text-white"
               : "bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-400"
-          }`}
+            }`}
         >
           2
         </span>
         <span
-          className={`text-xs font-bold sm:text-sm ${
-            step === 2
+          className={`text-xs font-bold sm:text-sm ${step === 2
               ? "text-blue-600 dark:text-blue-400"
               : "text-slate-500 dark:text-slate-400"
-          }`}
+            }`}
         >
           Request a Quotation
         </span>
@@ -426,6 +612,8 @@ export default function SignUpForm() {
   const [showPassword, setShowPassword] = useState(false);
 
   const [step, setStep] = useState<1 | 2>(1);
+
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   const [equipmentTypeOptions, setEquipmentTypeOptions] = useState<
     SelectOption[]
@@ -571,6 +759,14 @@ export default function SignUpForm() {
     // The final submit action is available only on Step 2.
     if (step !== 2) {
       await handleNext();
+      return;
+    }
+
+    // Terms & Conditions must be accepted before anything is submitted.
+    if (!agreedToTerms) {
+      showErrorToast("Please agree to the Terms & Conditions to continue.", {
+        duration: 4000,
+      });
       return;
     }
 
@@ -823,11 +1019,10 @@ export default function SignUpForm() {
                           <Input
                             placeholder="ABC Mining Pvt Ltd"
                             autoComplete="organization"
-                            className={`w-full pl-10 ${
-                              errors.companyName
+                            className={`w-full pl-10 ${errors.companyName
                                 ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
                                 : ""
-                            }`}
+                              }`}
                             {...register("companyName", {
                               setValueAs: (value) => value.trim(),
                               onChange: () => {
@@ -857,11 +1052,10 @@ export default function SignUpForm() {
                           <Input
                             placeholder="John Doe"
                             autoComplete="name"
-                            className={`w-full pl-10 ${
-                              errors.contactPerson
+                            className={`w-full pl-10 ${errors.contactPerson
                                 ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
                                 : ""
-                            }`}
+                              }`}
                             {...register("contactPerson", {
                               setValueAs: (value) => value.trim(),
                               onChange: () => {
@@ -892,11 +1086,10 @@ export default function SignUpForm() {
                             type="email"
                             placeholder="company@email.com"
                             autoComplete="email"
-                            className={`w-full pl-10 ${
-                              errors.email
+                            className={`w-full pl-10 ${errors.email
                                 ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
                                 : ""
-                            }`}
+                              }`}
                             {...register("email", {
                               setValueAs: (value) => value.trim().toLowerCase(),
                               onChange: () => {
@@ -961,11 +1154,10 @@ export default function SignUpForm() {
                           <Input
                             placeholder="Iron Valley Mine"
                             autoComplete="street-address"
-                            className={`w-full pl-10 ${
-                              errors.siteLocation
+                            className={`w-full pl-10 ${errors.siteLocation
                                 ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
                                 : ""
-                            }`}
+                              }`}
                             {...register("siteLocation", {
                               setValueAs: (value) => value.trim(),
                               onChange: () => {
@@ -996,11 +1188,10 @@ export default function SignUpForm() {
                             type={showPassword ? "text" : "password"}
                             placeholder="Enter strong password"
                             autoComplete="new-password"
-                            className={`w-full pl-10 pr-12 ${
-                              errors.password
+                            className={`w-full pl-10 pr-12 ${errors.password
                                 ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
                                 : ""
-                            }`}
+                              }`}
                             {...register("password", {
                               onChange: () => {
                                 if (errors.password) {
@@ -1124,11 +1315,10 @@ export default function SignUpForm() {
                           type="text"
                           inputMode="numeric"
                           placeholder="Enter number of sites"
-                          className={`mt-1 w-full ${
-                            errors.numberOfSites
+                          className={`mt-1 w-full ${errors.numberOfSites
                               ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
                               : ""
-                          }`}
+                            }`}
                           {...register("numberOfSites", {
                             setValueAs: (value) => value.trim(),
                             onChange: () => {
@@ -1156,14 +1346,12 @@ export default function SignUpForm() {
                             <div key={field.id} className="relative">
                               <Input
                                 placeholder={`Site ${index + 1} Name`}
-                                className={`w-full ${
-                                  siteNameFields.length > 1 ? "pr-9" : ""
-                                } ${
-                                  (errors.siteNames as any)?.[index]?.name
+                                className={`w-full ${siteNameFields.length > 1 ? "pr-9" : ""
+                                  } ${(errors.siteNames as any)?.[index]?.name
                                     ?.message
                                     ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
                                     : ""
-                                }`}
+                                  }`}
                                 {...register(
                                   `siteNames.${index}.name` as const,
                                   {
@@ -1217,11 +1405,10 @@ export default function SignUpForm() {
                           type="text"
                           inputMode="numeric"
                           placeholder="Enter number of active machines"
-                          className={`mt-1 w-full ${
-                            errors.activeMachines
+                          className={`mt-1 w-full ${errors.activeMachines
                               ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
                               : ""
-                          }`}
+                            }`}
                           {...register("activeMachines", {
                             setValueAs: (value) => value.trim(),
                             onChange: () => {
@@ -1306,11 +1493,10 @@ export default function SignUpForm() {
                               type="text"
                               inputMode="numeric"
                               placeholder="Enter number of months"
-                              className={`w-full ${
-                                errors.customContractDuration
+                              className={`w-full ${errors.customContractDuration
                                   ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
                                   : ""
-                              }`}
+                                }`}
                               {...register("customContractDuration", {
                                 setValueAs: (value) => value.trim(),
                                 onChange: () => {
@@ -1377,11 +1563,10 @@ export default function SignUpForm() {
                       <div className="flex min-w-0 flex-col">
                         <Label>8. Additional Requirements</Label>
                         <div
-                          className={`mt-1 w-full rounded-lg border bg-white transition focus-within:ring-4 dark:bg-slate-900 ${
-                            errors.attachment
+                          className={`mt-1 w-full rounded-lg border bg-white transition focus-within:ring-4 dark:bg-slate-900 ${errors.attachment
                               ? "border-red-500 focus-within:ring-red-500/20"
                               : "border-gray-300 focus-within:border-blue-500 focus-within:ring-blue-500/10 dark:border-slate-700"
-                          }`}
+                            }`}
                         >
                           <textarea
                             rows={3}
@@ -1415,6 +1600,14 @@ export default function SignUpForm() {
                       </div>
                     </div>
 
+                    {/* Terms & Conditions */}
+                    <div className="mt-3">
+                      <TermsCheckbox
+                        checked={agreedToTerms}
+                        onChange={setAgreedToTerms}
+                      />
+                    </div>
+
                     <div className="mt-2 flex flex-col gap-3 border-t border-slate-100 pt-4 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
                       <button
                         type="button"
@@ -1427,7 +1620,7 @@ export default function SignUpForm() {
 
                       <button
                         type="submit"
-                        disabled={isSubmitting}
+                        disabled={isSubmitting || !agreedToTerms}
                         className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 text-sm font-bold text-white shadow-lg shadow-blue-600/25 transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto"
                       >
                         {isSubmitting
