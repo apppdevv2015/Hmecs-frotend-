@@ -1,14 +1,13 @@
-import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { Link, useLocation } from "react-router";
+import { useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router";
 import Navbar from "./Navbar";
 import logo1 from "../../assets/images/landingpageimages/logo1.webp";
 import heroTruck from "../../assets/images/landingpageimages/blog/blog-banner-bg.jpg";
 import tyre from "../../assets/images/landingpageimages/blog/blog-tyre.jpg";
 import dashboard from "../../assets/images/landingpageimages/blog/blog-dashboard.jpg";
-import jobcard from "../../assets/images/landingpageimages/blog/blog-jobcard.jpg";
+import jobcard from "../../assets/images/landingpageimages/blog/jobcard.jpg";
 import fleet from "../../assets/images/landingpageimages/blog/blog-fleet.jpg";
-import sunset from "../../assets/images/landingpageimages/blog/blog-sunset.jpg";
+import sunset from "../../assets/images/landingpageimages/blog/blog-Sunset(3).jpg";
 
 // ---------------------------------------------------------------------------
 // Privacy Policy content.
@@ -24,8 +23,9 @@ interface PrivacySection {
 const PRIVACY_TITLE = "Privacy Policy";
 const PRIVACY_SUBTITLE = "HME Component Intelligence System";
 
+
 const PRIVACY_SECTIONS: PrivacySection[] = [
-  {
+   {
     title: "1. Introduction",
     body: ["The Privacy Policy explains how we collect, use, and protect your personal information when you use our services. By using our services, you agree to the terms of this Privacy Policy."],
   },
@@ -72,40 +72,21 @@ const PRIVACY_SECTIONS: PrivacySection[] = [
   },
 ];
 
+// Privacy Policy page (route: /privacy-policy).
 // Layout: Navbar on top, the policy content on the full page, then the Footer.
-function PrivacyPolicyPage({ onClose }: { onClose: () => void }) {
+export function PrivacyPolicy() {
   const [active, setActive] = useState("");
-  const location = useLocation();
-  const startPath = useRef(location.pathname);
-
-  // Close if the user navigates elsewhere (for example via the Navbar)
-  useEffect(() => {
-    if (location.pathname !== startPath.current) onClose();
-  }, [location.pathname, onClose]);
+  const navigate = useNavigate();
 
   useEffect(() => {
-    const handleKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
+    window.scrollTo(0, 0);
+  }, []);
 
-    document.addEventListener("keydown", handleKey);
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    return () => {
-      document.removeEventListener("keydown", handleKey);
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [onClose]);
-
-  return createPortal(
-    <div
-      id="privacy-page"
-      className="fixed inset-0 z-[1000] overflow-y-auto bg-white pt-[90px] text-slate-900 dark:bg-slate-950 dark:text-white"
-    >
+  return (
+    <div className="min-h-screen bg-white pt-[90px] text-slate-900 dark:bg-slate-950 dark:text-white">
       <Navbar active={active} setActive={setActive} />
 
-      {/* Policy content on the full page  */}
+      {/* Policy content on the full page (no image, no card / box) */}
       <div className="mx-auto max-w-3xl px-6 py-12 text-center">
         <h1 className="text-3xl font-black tracking-tight text-slate-950 dark:text-white sm:text-4xl">
           {PRIVACY_TITLE}
@@ -113,7 +94,7 @@ function PrivacyPolicyPage({ onClose }: { onClose: () => void }) {
         <p className="mt-2 text-sm font-semibold text-slate-600 dark:text-slate-300">
           {PRIVACY_SUBTITLE}
         </p>
-
+       
 
         {/* To left-align the policy text, change text-center to text-left on this div */}
         <div className="mt-8 space-y-8 border-t border-slate-200 pt-8 text-left dark:border-slate-800">
@@ -137,7 +118,7 @@ function PrivacyPolicyPage({ onClose }: { onClose: () => void }) {
         <div className="mt-10 flex flex-wrap items-center justify-center gap-3 border-t border-slate-200 pt-8 dark:border-slate-800">
           <button
             type="button"
-            onClick={onClose}
+            onClick={() => navigate(-1)}
             className="flex h-11 items-center justify-center gap-2 rounded-xl border-2 border-slate-200 px-6 text-sm font-bold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
           >
             <span aria-hidden="true">&larr;</span>
@@ -145,7 +126,7 @@ function PrivacyPolicyPage({ onClose }: { onClose: () => void }) {
           </button>
           <button
             type="button"
-            onClick={onClose}
+            onClick={() => navigate("/")}
             className="flex h-11 items-center justify-center rounded-xl bg-blue-600 px-8 text-sm font-bold text-white shadow-lg shadow-blue-600/25 transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-500/20"
           >
             Close
@@ -153,15 +134,18 @@ function PrivacyPolicyPage({ onClose }: { onClose: () => void }) {
         </div>
       </div>
 
-      <Footer insidePrivacyPage />
-    </div>,
-    document.body,
+      <Footer />
+    </div>
   );
 }
 
 export function Blog() {
+  const [active, setActive] = useState("");
+
   return (
-    <div className="bg-white">
+    <div className="bg-white pt-[90px]">
+      <Navbar active={active} setActive={setActive} />
+
       {/* Top banner: truck is in the background, text is on top */}
       <div className="relative overflow-hidden bg-[#0b1f3a] text-white">
         <img
@@ -202,7 +186,7 @@ export function Blog() {
             <p className="mt-4 text-slate-700">
               Heavy mining equipment produces and accumulates many types of information. Depending on the machine and available data sources, this may include engine hours, fault codes, temperatures, tyre pressure, payload, inspection results, maintenance jobs, component replacements, downtime and parts consumption.
 
-
+            
             </p>
             <p className="mt-3 text-slate-700">
               A single reading rarely explains the full condition of a machine or component. Teams need context: what has changed, what inspections have found, what work has already been performed, and whether operating conditions may be contributing to wear or risk. Missing or delayed information can make planning reactive rather than proactive.
@@ -316,28 +300,13 @@ export function Blog() {
           />
         </div>
       </div>
+
+      <Footer />
     </div>
   );
 }
 
-export default function Footer({
-  insidePrivacyPage = false,
-}: {
-  insidePrivacyPage?: boolean;
-}) {
-  const [showPrivacy, setShowPrivacy] = useState(false);
-
-  // On the Privacy page itself, the Privacy links just scroll back to the top.
-  const openPrivacy = () => {
-    if (insidePrivacyPage) {
-      document
-        .getElementById("privacy-page")
-        ?.scrollTo({ top: 0, behavior: "smooth" });
-    } else {
-      setShowPrivacy(true);
-    }
-  };
-
+export default function Footer() {
   return (
     <footer
       id="contact"
@@ -435,7 +404,7 @@ export default function Footer({
 
               <li>
                 <Link
-                  to="/company-admin/coming-soon/blog"
+                  to="/blog"
                   className="text-[16px] text-slate-600 transition-all duration-300 hover:translate-x-1 hover:text-blue-600"
                 >
                   Blog
@@ -465,18 +434,17 @@ export default function Footer({
                   to="/company-admin/coming-soon/help-center"
                   className="text-[16px] text-slate-600 transition-all duration-300 hover:translate-x-1 hover:text-blue-600"
                 >
-                  Terms of Service
+                
                 </Link>
               </li>
 
               <li>
-                <button
-                  type="button"
-                  onClick={openPrivacy}
+                <Link
+                  to="/privacy-policy"
                   className="text-[16px] text-slate-600 transition-all duration-300 hover:translate-x-1 hover:text-blue-600"
                 >
                   Privacy Policy
-                </button>
+                </Link>
               </li>
             </ul>
           </div>
@@ -493,20 +461,14 @@ export default function Footer({
           </p>
 
           <div className="flex items-center gap-6">
-            <button
-              type="button"
-              onClick={openPrivacy}
+            <Link
+              to="/privacy-policy"
               className="transition hover:text-blue-600"
             >
               Privacy
-            </button>
-
-            <Link
-              to="/company-admin/coming-soon/terms"
-              className="transition hover:text-blue-600"
-            >
-              Terms
             </Link>
+
+            
 
             <Link to="/contact" className="transition hover:text-blue-600">
               Contact
@@ -514,10 +476,6 @@ export default function Footer({
           </div>
         </div>
       </div>
-
-      {!insidePrivacyPage && showPrivacy && (
-        <PrivacyPolicyPage onClose={() => setShowPrivacy(false)} />
-      )}
     </footer>
   );
 }
