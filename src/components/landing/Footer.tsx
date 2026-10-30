@@ -1,4 +1,7 @@
-import { Link } from "react-router";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { Link, useLocation } from "react-router";
+import Navbar from "./Navbar";
 import logo1 from "../../assets/images/landingpageimages/logo1.webp";
 import heroTruck from "../../assets/images/landingpageimages/blog/blog-banner-bg.jpg";
 import tyre from "../../assets/images/landingpageimages/blog/blog-tyre.jpg";
@@ -6,6 +9,155 @@ import dashboard from "../../assets/images/landingpageimages/blog/blog-dashboard
 import jobcard from "../../assets/images/landingpageimages/blog/blog-jobcard.jpg";
 import fleet from "../../assets/images/landingpageimages/blog/blog-fleet.jpg";
 import sunset from "../../assets/images/landingpageimages/blog/blog-sunset.jpg";
+
+// ---------------------------------------------------------------------------
+// Privacy Policy content.
+// Paste your policy here, word for word. One entry per section:
+// `title` is the section heading, `body` is one string per paragraph.
+// ---------------------------------------------------------------------------
+
+interface PrivacySection {
+  title: string;
+  body: string[];
+}
+
+const PRIVACY_TITLE = "Privacy Policy";
+const PRIVACY_SUBTITLE = "HME Component Intelligence System";
+
+const PRIVACY_SECTIONS: PrivacySection[] = [
+  {
+    title: "1. Introduction",
+    body: ["The Privacy Policy explains how we collect, use, and protect your personal information when you use our services. By using our services, you agree to the terms of this Privacy Policy."],
+  },
+  {
+    title: "2. Information We Collect",
+    body: ["We may collect personal information such as your name, email address, phone number, and payment information when you use our services. We also collect non-personal information such as your IP address, browser type, and usage data."],
+  },
+  {
+    title: "3. How We Use Your Information",
+    body: ["We use the information we collect to provide and improve our services, communicate with you, and comply with legal obligations."],
+  },
+  {
+    title: "4. Sharing Your Information",
+    body: ["We do not sell your personal information. We may share your information with trusted third-party service providers who assist us in providing our services."],
+  },
+  {
+    title: "5. Storage and Security",
+    body: ["We implement appropriate security measures to protect your personal information from unauthorized access, disclosure, alteration, or destruction."],
+  },
+  {
+    title: "6. Access and Responsibilities",
+    body: ["Company Admins are responsible for managing user access within their organisation. Users should keep their credentials confidential and notify the relevant administrator if they suspect unauthorised account activity. Companies must ensure they are authorised to provide the data they upload or connect to the Platform."],
+  },
+  {
+    title: "7. Third-Party Integrations ",
+    body: ["The Platform may connect to telematics, ERP, payment, communication, or other third-party services. Information shared with those services may be subject to their own privacy policies and terms."],
+  },
+  {
+    title: "8. Your Rights  ",
+    body: ["Depending on applicable law, individuals may have rights to access, correct, delete, or restrict the processing of their personal information, or to raise a complaint. Requests can be submitted using the contact details below. We may need to verify the request and may retain certain information where legally required."],
+  },
+  {
+    title: "9.  Changes to This Policy ",
+    body: ["We may update this Privacy Policy from time to time. The latest version will be published on the Platform with its updated effective date. We encourage you to review this Privacy Policy periodically to stay informed about how we are protecting your information."],
+  },
+  {
+    title: "11. Contact",
+    body: [
+      "Company: HMEC",
+      "Email: support@hmec.com",
+      "Address: Cape town, South Africa",
+      "Applicable jurisdiction: South Africa "
+    ],
+  },
+];
+
+// Layout: Navbar on top, the policy content on the full page, then the Footer.
+function PrivacyPolicyPage({ onClose }: { onClose: () => void }) {
+  const [active, setActive] = useState("");
+  const location = useLocation();
+  const startPath = useRef(location.pathname);
+
+  // Close if the user navigates elsewhere (for example via the Navbar)
+  useEffect(() => {
+    if (location.pathname !== startPath.current) onClose();
+  }, [location.pathname, onClose]);
+
+  useEffect(() => {
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+
+    document.addEventListener("keydown", handleKey);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.removeEventListener("keydown", handleKey);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [onClose]);
+
+  return createPortal(
+    <div
+      id="privacy-page"
+      className="fixed inset-0 z-[1000] overflow-y-auto bg-white pt-[90px] text-slate-900 dark:bg-slate-950 dark:text-white"
+    >
+      <Navbar active={active} setActive={setActive} />
+
+      {/* Policy content on the full page  */}
+      <div className="mx-auto max-w-3xl px-6 py-12 text-center">
+        <h1 className="text-3xl font-black tracking-tight text-slate-950 dark:text-white sm:text-4xl">
+          {PRIVACY_TITLE}
+        </h1>
+        <p className="mt-2 text-sm font-semibold text-slate-600 dark:text-slate-300">
+          {PRIVACY_SUBTITLE}
+        </p>
+
+
+        {/* To left-align the policy text, change text-center to text-left on this div */}
+        <div className="mt-8 space-y-8 border-t border-slate-200 pt-8 text-left dark:border-slate-800">
+          {PRIVACY_SECTIONS.map((section) => (
+            <section key={section.title}>
+              <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+                {section.title}
+              </h2>
+              {section.body.map((paragraph, index) => (
+                <p
+                  key={index}
+                  className="mt-2 text-sm leading-7 text-slate-600 dark:text-slate-300"
+                >
+                  {paragraph}
+                </p>
+              ))}
+            </section>
+          ))}
+        </div>
+
+        <div className="mt-10 flex flex-wrap items-center justify-center gap-3 border-t border-slate-200 pt-8 dark:border-slate-800">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-11 items-center justify-center gap-2 rounded-xl border-2 border-slate-200 px-6 text-sm font-bold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+          >
+            <span aria-hidden="true">&larr;</span>
+            Back
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-11 items-center justify-center rounded-xl bg-blue-600 px-8 text-sm font-bold text-white shadow-lg shadow-blue-600/25 transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-500/20"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+
+      <Footer insidePrivacyPage />
+    </div>,
+    document.body,
+  );
+}
 
 export function Blog() {
   return (
@@ -50,7 +202,7 @@ export function Blog() {
             <p className="mt-4 text-slate-700">
               Heavy mining equipment produces and accumulates many types of information. Depending on the machine and available data sources, this may include engine hours, fault codes, temperatures, tyre pressure, payload, inspection results, maintenance jobs, component replacements, downtime and parts consumption.
 
-            
+
             </p>
             <p className="mt-3 text-slate-700">
               A single reading rarely explains the full condition of a machine or component. Teams need context: what has changed, what inspections have found, what work has already been performed, and whether operating conditions may be contributing to wear or risk. Missing or delayed information can make planning reactive rather than proactive.
@@ -168,7 +320,24 @@ export function Blog() {
   );
 }
 
-export default function Footer() {
+export default function Footer({
+  insidePrivacyPage = false,
+}: {
+  insidePrivacyPage?: boolean;
+}) {
+  const [showPrivacy, setShowPrivacy] = useState(false);
+
+  // On the Privacy page itself, the Privacy links just scroll back to the top.
+  const openPrivacy = () => {
+    if (insidePrivacyPage) {
+      document
+        .getElementById("privacy-page")
+        ?.scrollTo({ top: 0, behavior: "smooth" });
+    } else {
+      setShowPrivacy(true);
+    }
+  };
+
   return (
     <footer
       id="contact"
@@ -301,12 +470,13 @@ export default function Footer() {
               </li>
 
               <li>
-                <Link
-                  to="/company-admin/coming-soon/privacy-policy"
+                <button
+                  type="button"
+                  onClick={openPrivacy}
                   className="text-[16px] text-slate-600 transition-all duration-300 hover:translate-x-1 hover:text-blue-600"
                 >
                   Privacy Policy
-                </Link>
+                </button>
               </li>
             </ul>
           </div>
@@ -323,12 +493,13 @@ export default function Footer() {
           </p>
 
           <div className="flex items-center gap-6">
-            <Link
-              to="/company-admin/coming-soon/privacy-policy"
+            <button
+              type="button"
+              onClick={openPrivacy}
               className="transition hover:text-blue-600"
             >
               Privacy
-            </Link>
+            </button>
 
             <Link
               to="/company-admin/coming-soon/terms"
@@ -343,6 +514,10 @@ export default function Footer() {
           </div>
         </div>
       </div>
+
+      {!insidePrivacyPage && showPrivacy && (
+        <PrivacyPolicyPage onClose={() => setShowPrivacy(false)} />
+      )}
     </footer>
   );
 }
