@@ -1,22 +1,17 @@
-import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { Link, useLocation } from "react-router";
+import { useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router";
 import Navbar from "./Navbar";
 import logo1 from "../../assets/images/landingpageimages/logo1.webp";
-import heroTruck from "../../assets/images/landingpageimages/blog/blog-banner-bg.jpg";
-import tyre from "../../assets/images/landingpageimages/blog/blog-tyre.jpg";
-import dashboard from "../../assets/images/landingpageimages/blog/blog-dashboard.jpg";
-import jobcard from "../../assets/images/landingpageimages/blog/blog-jobcard.jpg";
-import fleet from "../../assets/images/landingpageimages/blog/blog-fleet.jpg";
-import sunset from "../../assets/images/landingpageimages/blog/blog-sunset.jpg";
-
-// ---------------------------------------------------------------------------
-// Privacy Policy content.
-// Paste your policy here, word for word. One entry per section:
-// `title` is the section heading, `body` is one string per paragraph.
-// ---------------------------------------------------------------------------
+const blogImages = import.meta.glob<string>(
+  "../../assets/images/landingpageimages/blog/*.{jpg,jpeg,png,webp}",
+  {
+    eager: true,
+    import: "default",
+  }
+);
 
 interface PrivacySection {
+  id: number;
   title: string;
   body: string[];
 }
@@ -24,45 +19,56 @@ interface PrivacySection {
 const PRIVACY_TITLE = "Privacy Policy";
 const PRIVACY_SUBTITLE = "HME Component Intelligence System";
 
+
 const PRIVACY_SECTIONS: PrivacySection[] = [
   {
-    title: "1. Introduction",
+    id: 1,
+    title: "Introduction",
     body: ["The Privacy Policy explains how we collect, use, and protect your personal information when you use our services. By using our services, you agree to the terms of this Privacy Policy."],
   },
   {
-    title: "2. Information We Collect",
+    id: 2,
+    title: "Information We Collect",
     body: ["We may collect personal information such as your name, email address, phone number, and payment information when you use our services. We also collect non-personal information such as your IP address, browser type, and usage data."],
   },
   {
-    title: "3. How We Use Your Information",
+    id: 3,
+    title: "How We Use Your Information",
     body: ["We use the information we collect to provide and improve our services, communicate with you, and comply with legal obligations."],
   },
   {
-    title: "4. Sharing Your Information",
+    id: 4,
+    title: "Sharing Your Information",
     body: ["We do not sell your personal information. We may share your information with trusted third-party service providers who assist us in providing our services."],
   },
   {
-    title: "5. Storage and Security",
+    id: 5,
+    title: "Storage and Security",
     body: ["We implement appropriate security measures to protect your personal information from unauthorized access, disclosure, alteration, or destruction."],
   },
   {
-    title: "6. Access and Responsibilities",
+    id: 6,
+    title: "Access and Responsibilities",
     body: ["Company Admins are responsible for managing user access within their organisation. Users should keep their credentials confidential and notify the relevant administrator if they suspect unauthorised account activity. Companies must ensure they are authorised to provide the data they upload or connect to the Platform."],
   },
   {
-    title: "7. Third-Party Integrations ",
+    id: 7,
+    title: "Third-Party Integrations ",
     body: ["The Platform may connect to telematics, ERP, payment, communication, or other third-party services. Information shared with those services may be subject to their own privacy policies and terms."],
   },
   {
-    title: "8. Your Rights  ",
+    id: 8,
+    title: "Your Rights  ",
     body: ["Depending on applicable law, individuals may have rights to access, correct, delete, or restrict the processing of their personal information, or to raise a complaint. Requests can be submitted using the contact details below. We may need to verify the request and may retain certain information where legally required."],
   },
   {
-    title: "9.  Changes to This Policy ",
+    id: 9,
+    title: "Changes to This Policy ",
     body: ["We may update this Privacy Policy from time to time. The latest version will be published on the Platform with its updated effective date. We encourage you to review this Privacy Policy periodically to stay informed about how we are protecting your information."],
   },
   {
-    title: "11. Contact",
+    id: 10,
+    title: "Contact",
     body: [
       "Company: HMEC",
       "Email: support@hmec.com",
@@ -72,40 +78,19 @@ const PRIVACY_SECTIONS: PrivacySection[] = [
   },
 ];
 
-// Layout: Navbar on top, the policy content on the full page, then the Footer.
-function PrivacyPolicyPage({ onClose }: { onClose: () => void }) {
+export function PrivacyPolicy() {
   const [active, setActive] = useState("");
-  const location = useLocation();
-  const startPath = useRef(location.pathname);
-
-  // Close if the user navigates elsewhere (for example via the Navbar)
-  useEffect(() => {
-    if (location.pathname !== startPath.current) onClose();
-  }, [location.pathname, onClose]);
+  const navigate = useNavigate();
 
   useEffect(() => {
-    const handleKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
+    window.scrollTo(0, 0);
+  }, []);
 
-    document.addEventListener("keydown", handleKey);
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    return () => {
-      document.removeEventListener("keydown", handleKey);
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [onClose]);
-
-  return createPortal(
-    <div
-      id="privacy-page"
-      className="fixed inset-0 z-[1000] overflow-y-auto bg-white pt-[90px] text-slate-900 dark:bg-slate-950 dark:text-white"
-    >
+  return (
+    <div className="min-h-screen bg-white pt-[90px] text-slate-900 dark:bg-slate-950 dark:text-white">
       <Navbar active={active} setActive={setActive} />
 
-      {/* Policy content on the full page  */}
+      {/* Policy content on the full page */}
       <div className="mx-auto max-w-3xl px-6 py-12 text-center">
         <h1 className="text-3xl font-black tracking-tight text-slate-950 dark:text-white sm:text-4xl">
           {PRIVACY_TITLE}
@@ -118,9 +103,9 @@ function PrivacyPolicyPage({ onClose }: { onClose: () => void }) {
         {/* To left-align the policy text, change text-center to text-left on this div */}
         <div className="mt-8 space-y-8 border-t border-slate-200 pt-8 text-left dark:border-slate-800">
           {PRIVACY_SECTIONS.map((section) => (
-            <section key={section.title}>
+            <section key={section.id}>
               <h2 className="text-lg font-bold text-slate-900 dark:text-white">
-                {section.title}
+                {section.id}. {section.title}
               </h2>
               {section.body.map((paragraph, index) => (
                 <p
@@ -137,7 +122,7 @@ function PrivacyPolicyPage({ onClose }: { onClose: () => void }) {
         <div className="mt-10 flex flex-wrap items-center justify-center gap-3 border-t border-slate-200 pt-8 dark:border-slate-800">
           <button
             type="button"
-            onClick={onClose}
+            onClick={() => navigate(-1)}
             className="flex h-11 items-center justify-center gap-2 rounded-xl border-2 border-slate-200 px-6 text-sm font-bold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
           >
             <span aria-hidden="true">&larr;</span>
@@ -145,7 +130,7 @@ function PrivacyPolicyPage({ onClose }: { onClose: () => void }) {
           </button>
           <button
             type="button"
-            onClick={onClose}
+            onClick={() => navigate("/")}
             className="flex h-11 items-center justify-center rounded-xl bg-blue-600 px-8 text-sm font-bold text-white shadow-lg shadow-blue-600/25 transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-500/20"
           >
             Close
@@ -153,19 +138,92 @@ function PrivacyPolicyPage({ onClose }: { onClose: () => void }) {
         </div>
       </div>
 
-      <Footer insidePrivacyPage />
-    </div>,
-    document.body,
+      <Footer />
+    </div>
   );
 }
 
+const img = (file: string) =>
+  blogImages[`../../assets/images/landingpageimages/blog/${file}`];
+
+interface BlogSection {
+  id: number;
+  title: string;
+  body: string[];
+  bullets?: { label: string; text: string }[];
+  alt: string;
+  image: string;
+}
+
+const BLOG_SECTIONS: BlogSection[] = [
+  {
+    id: 1,
+    title: "The challenge: information that does not tell the whole story",
+    body: [
+      "Heavy mining equipment produces and accumulates many types of information. Depending on the machine and available data sources, this may include engine hours, fault codes, temperatures, tyre pressure, payload, inspection results, maintenance jobs, component replacements, downtime and parts consumption.",
+      "A single reading rarely explains the full condition of a machine or component. Teams need context: what has changed, what inspections have found, what work has already been performed, and whether operating conditions may be contributing to wear or risk. Missing or delayed information can make planning reactive rather than proactive.",
+    ],
+    alt: "Technician inspecting a large mining tyre",
+    image: img("blog-tyre.jpg"),
+  },
+  {
+    id: 2,
+    title: "One connected view of equipment and components",
+    body: [
+      "A component intelligence platform helps bring available information into a more consistent operational view. Depending on the configured equipment and integrations, the system can support:",
+    ],
+    bullets: [
+      { label: "Equipment health visibility", text: "Organise available machine readings, fault information, and active alerts." },
+      { label: "Tyre and component monitoring", text: "Maintain condition, inspection, lifecycle, and replacement information." },
+      { label: "Digital inspections and maintenance history", text: "Keep findings, work performed, and component records connected." },
+      { label: "Maintenance workflows", text: "Create and track digital job cards, assignments, parts, labour, approvals, and completion." },
+      { label: "Financial planning", text: "Connect component condition and lifecycle information with replacement costs, lead times, and budget planning." },
+    ],
+    alt: "Fleet health dashboard",
+    image: img("blog-dashboard.jpg"),
+  },
+  {
+    id: 3,
+    title: "From alerts to better maintenance planning",
+    body: [
+      "Alerts are useful, but they are only one part of the decision process. Maintenance teams also need a way to review an alert, understand the available evidence, assign the work, record findings and close the maintenance loop.",
+      "With configured rules and reliable source data, the system can help surface conditions that deserve attention, support prioritisation, and connect an identified issue to a maintenance workflow. More advanced predictive capabilities depend on the quality and history of the data, the availability of relevant integrations, and validated equipment- or site-specific logic.",
+    ],
+    alt: "Digital job card",
+    image: img("jobcard.jpg"),
+  },
+  {
+    id: 4,
+    title: "Digital job cards: connecting insight with action",
+    body: [
+      "When an inspection, breakdown or alert requires work, a digital job card can help carry the task from creation to completion. The workflow may include the machine and component, maintenance type, priority, assigned technician, planned work, labour hours, parts used, photographs, findings, corrective actions, downtime and approvals.",
+      "Keeping these details together creates a clearer maintenance history and can support reporting on overdue jobs, parts consumption, labour, mean time to repair (MTTR), mean time between failures (MTBF) and planned maintenance compliance—where the required data is captured.",
+    ],
+    alt: "Fleet of haul trucks",
+    image: img("blog-fleet.jpg"),
+  },
+  {
+    id: 5,
+    title: "Why financial intelligence matters",
+    body: [
+      "Component decisions are also financial decisions. Replacement planning may involve expected remaining life, replacement cost, supplier, lead time and the budget period. Bringing these details into the same view as maintenance and condition information can help teams prepare earlier and make trade-offs with better context.",
+      "The goal is not to replace engineering judgement. It is to make relevant information easier to find, compare and use when deciding whether to inspect, repair, monitor or plan a replacement.",
+    ],
+    alt: "Mining operations at sunset",
+    image: img("blog-Sunset(3).jpg"),
+  },
+];
+
 export function Blog() {
+  const [active, setActive] = useState("");
+
   return (
-    <div className="bg-white">
-      {/* Top banner: truck is in the background, text is on top */}
+    <div className="bg-white pt-[90px]">
+      <Navbar active={active} setActive={setActive} />
+      {/* Top banner: truck in the background, text on top */}
       <div className="relative overflow-hidden bg-[#0b1f3a] text-white">
         <img
-          src={heroTruck}
+          src={img("blog-banner-bg.jpg")}
           alt="Haul truck in an open-pit mine"
           className="absolute inset-0 h-full w-full object-cover object-center"
         />
@@ -173,171 +231,72 @@ export function Blog() {
 
         <div className="relative mx-auto max-w-6xl px-6 py-14 md:py-20">
           <div className="md:w-1/2">
-
             <h1 className="mt-5 font-sans text-4xl font-extrabold leading-tight tracking-tight md:text-5xl">
               From Equipment Data to Better Mining Decisions
             </h1>
             <div className="mt-4 h-1 w-16 bg-orange-500"></div>
             <p className="mt-4 text-lg text-slate-100">
-              Mining operations rely on heavy equipment to maintain production. When a machine becomes unavailable, it can disrupt production plans, increase maintenance pressure, and affect operational costs.
-              Equipment health, tyre condition, inspections, maintenance history, component life, and operating costs are often managed across different systems and manual processes, making it difficult to assess asset condition and determine the next steps.
-              The HME Component Intelligence System brings essential equipment and maintenance information together in one platform, helping teams improve visibility, coordinate maintenance activities, and make informed operational decisions.
+              Mining operations rely on heavy equipment to maintain production. When a machine becomes unavailable, it can disrupt production plans, increase maintenance pressure, and affect operational costs. Equipment health, tyre condition, inspections, maintenance history, component life, and operating costs are often managed across different systems and manual processes, making it difficult to assess asset condition and determine the next steps. The HME Component Intelligence System brings essential equipment and maintenance information together in one platform, helping teams improve visibility, coordinate maintenance activities, and make informed operational decisions.
             </p>
           </div>
         </div>
       </div>
 
-      <div className="mx-auto max-w-6xl space-y-12 px-6 py-12">
-        {/* 1 */}
-        <div className="flex flex-col items-center gap-8 md:flex-row">
-          <div className="md:w-1/2">
-            <div className="flex items-center gap-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-900 font-bold text-white">
-                1
-              </span>
-              <h2 className="text-2xl font-bold text-blue-900">
-                The challenge: information that does not tell the whole story
-              </h2>
+      {/* Blog sections */}
+      <div className="mx-auto max-w-6xl space-y-16 px-6 py-14">
+        {BLOG_SECTIONS.map((section, index) => (
+          <section
+            key={section.id}
+            className={`flex flex-col items-center gap-8 md:gap-12 ${index % 2 === 0 ? "md:flex-row" : "md:flex-row-reverse"
+              }`}
+          >
+            <div className="md:w-1/2">
+              <div className="flex items-center gap-4">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-900 text-lg font-bold text-white">
+                  {section.id}
+                </span>
+
+                <h2 className="text-2xl font-bold text-gray-900">
+                  {section.title}
+                </h2>
+              </div>
+              {section.body.map((paragraph, i) => (
+                <p key={i} className="mt-4 text-base leading-relaxed text-slate-700">
+                  {paragraph}
+                </p>
+              ))}
+
+              {section.bullets && (
+                <ul className="mt-4 space-y-2 text-slate-700">
+                  {section.bullets.map((b) => (
+                    <li key={b.label} className="flex gap-2">
+                      <span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-black"></span>
+                      <span>
+                        <strong className="text-[#0b1f3a]">{b.label}:</strong> {b.text}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
-            <p className="mt-4 text-slate-700">
-              Heavy mining equipment produces and accumulates many types of information. Depending on the machine and available data sources, this may include engine hours, fault codes, temperatures, tyre pressure, payload, inspection results, maintenance jobs, component replacements, downtime and parts consumption.
 
-
-            </p>
-            <p className="mt-3 text-slate-700">
-              A single reading rarely explains the full condition of a machine or component. Teams need context: what has changed, what inspections have found, what work has already been performed, and whether operating conditions may be contributing to wear or risk. Missing or delayed information can make planning reactive rather than proactive.
-            </p>
-          </div>
-          <img
-            src={tyre}
-            alt="Technician inspecting a large mining tyre"
-            className="h-auto w-full self-stretch object-cover md:w-1/2"
-          />
-        </div>
-
-        {/* 2 */}
-        <div className="flex flex-col items-center gap-8 md:flex-row-reverse">
-          <div className="md:w-1/2">
-            <div className="flex items-center gap-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-900 font-bold text-white">
-                2
-              </span>
-              <h2 className="text-2xl font-bold text-blue-900">
-                One connected view of equipment and components
-              </h2>
+            <div className="md:w-1/2">
+              <img
+                src={section.image}
+                alt={section.alt}
+                className="h-auto w-full  object-contain shadow-md"
+              />
             </div>
-            <p className="mt-4 text-slate-700">
-              A component intelligence platform helps bring available information into a more consistent operational view. Depending on the configured equipment and integrations, the system can support:
-
-            </p>
-            <p className="mt-3 text-slate-700">
-              Equipment health visibility: Organise available machine readings, fault information, and active alerts. Tyre and component monitoring: Maintain condition, inspection, lifecycle, and replacement information. Digital inspections and maintenance history: Keep findings, work performed, and component records connected. Maintenance workflows: Create and track digital job cards, assignments, parts, labour, approvals, and completion. Operational and management reporting: Review downtime, maintenance costs, work status, and component trends. Financial planning: Connect component condition and lifecycle information with replacement costs, lead times, and budget planning.
-            </p>
-          </div>
-          <img
-            src={dashboard}
-            alt="Fleet health dashboard (illustrative)"
-            className="h-auto w-full self-stretch object-cover md:w-1/2"
-          />
-        </div>
-
-        {/* 3 */}
-        <div className="flex flex-col items-center gap-8 md:flex-row">
-          <div className="md:w-1/2">
-            <div className="flex items-center gap-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-900 font-bold text-white">
-                3
-              </span>
-              <h2 className="text-2xl font-bold text-blue-900">
-                From alerts to better maintenance planning
-              </h2>
-            </div>
-            <p className="mt-4 text-slate-700">
-              Alerts are useful, but they are only one part of the decision process. Maintenance teams also need a way to review an alert, understand the available evidence, assign the work, record findings and close the maintenance loop.
-            </p>
-            <p className="mt-3 text-slate-700">
-              With configured rules and reliable source data, the system can help surface conditions that deserve attention, support prioritisation, and connect an identified issue to a maintenance workflow. More advanced predictive capabilities depend on the quality and history of the data, the availability of relevant integrations, and validated equipment- or site-specific logic.
-            </p>
-          </div>
-          <img
-            src={jobcard}
-            alt="Technician using a digital job card on a tablet"
-            className="h-auto w-full self-stretch object-cover md:w-1/2"
-          />
-        </div>
-
-        {/* 4 */}
-        <div className="flex flex-col items-center gap-8 md:flex-row-reverse">
-          <div className="md:w-1/2">
-            <div className="flex items-center gap-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-900 font-bold text-white">
-                4
-              </span>
-              <h2 className="text-2xl font-bold text-blue-900">
-                Digital job cards: connecting insight with action
-              </h2>
-            </div>
-            <p className="mt-4 text-slate-700">
-              When an inspection, breakdown or alert requires work, a digital job card can help carry the task from creation to completion. The workflow may include the machine and component, maintenance type, priority, assigned technician, planned work, labour hours, parts used, photographs, findings, corrective actions, downtime and approvals.
-            </p>
-            <p className="mt-3 text-slate-700">
-              Keeping these details together creates a clearer maintenance history and can support reporting on overdue jobs, parts consumption, labour, mean time to repair (MTTR), mean time between failures (MTBF) and planned maintenance compliance—where the required data is captured.
-            </p>
-          </div>
-          <img
-            src={fleet}
-            alt="Fleet of haul trucks with monitoring icons"
-            className="h-auto w-full self-stretch object-cover md:w-1/2"
-          />
-        </div>
-
-        {/* 5 */}
-        <div className="flex flex-col items-center gap-8 md:flex-row">
-          <div className="md:w-1/2">
-            <div className="flex items-center gap-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-900 font-bold text-white">
-                5
-              </span>
-              <h2 className="text-2xl font-bold text-blue-900">
-                Why financial intelligence matters
-              </h2>
-            </div>
-            <p className="mt-4 text-slate-700">
-              Component decisions are also financial decisions. Replacement planning may involve expected remaining life, replacement cost, supplier, lead time and the budget period. Bringing these details into the same view as maintenance and condition information can help teams prepare earlier and make trade-offs with better context.
-            </p>
-            <p className="mt-3 text-slate-700">
-              The goal is not to replace engineering judgement. It is to make relevant information easier to find, compare and use when deciding whether to inspect, repair, monitor or plan a replacement.
-            </p>
-          </div>
-          <img
-            src={sunset}
-            alt="Reduce downtime, extend component life, improve efficiency, control costs"
-            className="h-auto w-full self-stretch object-cover md:w-1/2"
-          />
-        </div>
+          </section>
+        ))}
       </div>
+
+      <Footer />
     </div>
   );
 }
 
-export default function Footer({
-  insidePrivacyPage = false,
-}: {
-  insidePrivacyPage?: boolean;
-}) {
-  const [showPrivacy, setShowPrivacy] = useState(false);
-
-  // On the Privacy page itself, the Privacy links just scroll back to the top.
-  const openPrivacy = () => {
-    if (insidePrivacyPage) {
-      document
-        .getElementById("privacy-page")
-        ?.scrollTo({ top: 0, behavior: "smooth" });
-    } else {
-      setShowPrivacy(true);
-    }
-  };
-
+export default function Footer() {
   return (
     <footer
       id="contact"
@@ -435,7 +394,7 @@ export default function Footer({
 
               <li>
                 <Link
-                  to="/company-admin/coming-soon/blog"
+                  to="/blog"
                   className="text-[16px] text-slate-600 transition-all duration-300 hover:translate-x-1 hover:text-blue-600"
                 >
                   Blog
@@ -465,18 +424,17 @@ export default function Footer({
                   to="/company-admin/coming-soon/help-center"
                   className="text-[16px] text-slate-600 transition-all duration-300 hover:translate-x-1 hover:text-blue-600"
                 >
-                  Terms of Service
+
                 </Link>
               </li>
 
               <li>
-                <button
-                  type="button"
-                  onClick={openPrivacy}
+                <Link
+                  to="/privacy-policy"
                   className="text-[16px] text-slate-600 transition-all duration-300 hover:translate-x-1 hover:text-blue-600"
                 >
                   Privacy Policy
-                </button>
+                </Link>
               </li>
             </ul>
           </div>
@@ -493,31 +451,18 @@ export default function Footer({
           </p>
 
           <div className="flex items-center gap-6">
-            <button
-              type="button"
-              onClick={openPrivacy}
+            <Link
+              to="/privacy-policy"
               className="transition hover:text-blue-600"
             >
               Privacy
-            </button>
-
-            <Link
-              to="/company-admin/coming-soon/terms"
-              className="transition hover:text-blue-600"
-            >
-              Terms
             </Link>
-
             <Link to="/contact" className="transition hover:text-blue-600">
               Contact
             </Link>
           </div>
         </div>
       </div>
-
-      {!insidePrivacyPage && showPrivacy && (
-        <PrivacyPolicyPage onClose={() => setShowPrivacy(false)} />
-      )}
     </footer>
   );
 }
