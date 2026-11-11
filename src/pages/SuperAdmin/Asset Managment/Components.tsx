@@ -136,48 +136,48 @@ const getCompanyLocation = (company: Company) => {
 const getCompanyMachineCount = (company: Company) => {
   return Number(
     (company as any).machineCount ??
-      (company as any).machinesCount ??
-      (company as any).totalMachines ??
-      (company as any).total_machines ??
-      (company as any).machine_count ??
-      (company as any).machines_count ??
-      (company as any).machines?.length ??
-      0,
+    (company as any).machinesCount ??
+    (company as any).totalMachines ??
+    (company as any).total_machines ??
+    (company as any).machine_count ??
+    (company as any).machines_count ??
+    (company as any).machines?.length ??
+    0,
   );
 };
 
 const getCompanyComponentCount = (company: Company) => {
   return Number(
     (company as any).componentCount ??
-      (company as any).componentsCount ??
-      (company as any).totalComponents ??
-      (company as any).total_components ??
-      (company as any).component_count ??
-      (company as any).components_count ??
-      (company as any).components?.length ??
-      0,
+    (company as any).componentsCount ??
+    (company as any).totalComponents ??
+    (company as any).total_components ??
+    (company as any).component_count ??
+    (company as any).components_count ??
+    (company as any).components?.length ??
+    0,
   );
 };
 
 const getCompanyCriticalCount = (company: Company) => {
   return Number(
     (company as any).criticalCount ??
-      (company as any).critical_count ??
-      (company as any).criticalComponents ??
-      (company as any).critical_components ??
-      (company as any).totalCritical ??
-      (company as any).total_critical ??
-      0,
+    (company as any).critical_count ??
+    (company as any).criticalComponents ??
+    (company as any).critical_components ??
+    (company as any).totalCritical ??
+    (company as any).total_critical ??
+    0,
   );
 };
 
 const getMachineApiId = (machine: Machine) => {
   return String(
     machine.id ||
-      (machine as any).machine?.id ||
-      (machine as any).machineId ||
-      (machine as any).machine_id ||
-      "",
+    (machine as any).machine?.id ||
+    (machine as any).machineId ||
+    (machine as any).machine_id ||
+    "",
   );
 };
 
@@ -213,20 +213,20 @@ const getMachineAverageHealth = (machine: Machine) => {
   return clampPercent(
     Number(
       (machine as any).averageHealth ||
-        (machine as any).average_health ||
-        (machine as any).avgHealth ||
-        (machine as any).avg_health ||
-        (machine as any).health ||
-        (machine as any).health_percentage ||
-        (machine as any).overallHealth ||
-        (machine as any).overall_health ||
-        (machine as any).machineHealth ||
-        (machine as any).machine_health ||
-        (machine as any).calculatedHealth ||
-        (machine as any).calculated_health ||
-        (machine as any).healthScore ||
-        (machine as any).health_score ||
-        0,
+      (machine as any).average_health ||
+      (machine as any).avgHealth ||
+      (machine as any).avg_health ||
+      (machine as any).health ||
+      (machine as any).health_percentage ||
+      (machine as any).overallHealth ||
+      (machine as any).overall_health ||
+      (machine as any).machineHealth ||
+      (machine as any).machine_health ||
+      (machine as any).calculatedHealth ||
+      (machine as any).calculated_health ||
+      (machine as any).healthScore ||
+      (machine as any).health_score ||
+      0,
     ),
   );
 };
@@ -234,36 +234,36 @@ const getMachineAverageHealth = (machine: Machine) => {
 const getMachineComponentCount = (machine: Machine) => {
   return Number(
     (machine as any).componentCount ||
-      (machine as any).component_count ||
-      (machine as any).componentsCount ||
-      (machine as any).components_count ||
-      (machine as any).totalComponents ||
-      (machine as any).total_components ||
-      (machine as any).components?.length ||
-      0,
+    (machine as any).component_count ||
+    (machine as any).componentsCount ||
+    (machine as any).components_count ||
+    (machine as any).totalComponents ||
+    (machine as any).total_components ||
+    (machine as any).components?.length ||
+    0,
   );
 };
 
 const getMachineCriticalCount = (machine: Machine) => {
   return Number(
     (machine as any).criticalCount ||
-      (machine as any).critical_count ||
-      (machine as any).criticalComponents ||
-      (machine as any).critical_components ||
-      (machine as any).totalCritical ||
-      (machine as any).total_critical ||
-      0,
+    (machine as any).critical_count ||
+    (machine as any).criticalComponents ||
+    (machine as any).critical_components ||
+    (machine as any).totalCritical ||
+    (machine as any).total_critical ||
+    0,
   );
 };
 
 const getComponentMachineId = (component: MachineComponent) => {
   return String(
     component.machineId ||
-      component.machine_id ||
-      (component as any).machine?.machineId ||
-      (component as any).machine?.machine_id ||
-      (component as any).machine?.id ||
-      "",
+    component.machine_id ||
+    (component as any).machine?.machineId ||
+    (component as any).machine?.machine_id ||
+    (component as any).machine?.id ||
+    "",
   );
 };
 
@@ -315,9 +315,9 @@ const getComponentCategory = (component: MachineComponent) => {
 const getComponentCondition = (component: MachineComponent) => {
   return Number(
     (component as any).condition ||
-      (component as any).condition_score ||
-      (component as any).intelligence?.condition ||
-      3,
+    (component as any).condition_score ||
+    (component as any).intelligence?.condition ||
+    3,
   );
 };
 
@@ -330,25 +330,25 @@ const getHealthFromCondition = (condition: number) => {
 const getComponentHealth = (component: MachineComponent) => {
   const directHealth = Number(
     component.health ||
-      component.health_percentage ||
-      component.condition_score ||
-      (component as any).healthScore ||
-      (component as any).health_score ||
-      (component as any).intelligence?.healthScore ||
-      (component as any).intelligence?.health ||
-      (component as any).calculatedMetrics?.health ||
-      (component as any).calculated_metrics?.health ||
-      (component as any).metrics?.health ||
-      0,
+    component.health_percentage ||
+    component.condition_score ||
+    (component as any).healthScore ||
+    (component as any).health_score ||
+    (component as any).intelligence?.healthScore ||
+    (component as any).intelligence?.health ||
+    (component as any).calculatedMetrics?.health ||
+    (component as any).calculated_metrics?.health ||
+    (component as any).metrics?.health ||
+    0,
   );
 
   if (directHealth > 0) return clampPercent(directHealth);
 
   const riskStatus = String(
     (component as any).intelligence?.riskStatus ||
-      (component as any).riskStatus ||
-      (component as any).risk_status ||
-      "",
+    (component as any).riskStatus ||
+    (component as any).risk_status ||
+    "",
   ).toLowerCase();
 
   if (riskStatus === "healthy" || riskStatus === "good" || riskStatus === "low")
@@ -369,10 +369,10 @@ const getComponentHealth = (component: MachineComponent) => {
 const getComponentStatus = (component: MachineComponent): ComponentStatus => {
   const riskStatus = String(
     (component as any).intelligence?.riskStatus ||
-      (component as any).riskStatus ||
-      (component as any).risk_status ||
-      component.status ||
-      "",
+    (component as any).riskStatus ||
+    (component as any).risk_status ||
+    component.status ||
+    "",
   ).toLowerCase();
 
   if (riskStatus === "healthy" || riskStatus === "good" || riskStatus === "low")
@@ -755,11 +755,11 @@ export default function SuperAdminComponents() {
     selectedMachineTotalComponents === 0
       ? 0
       : clampPercent(
-          machineComponents.reduce(
-            (total, component) => total + getComponentHealth(component),
-            0,
-          ) / selectedMachineTotalComponents,
-        );
+        machineComponents.reduce(
+          (total, component) => total + getComponentHealth(component),
+          0,
+        ) / selectedMachineTotalComponents,
+      );
 
   const resetToCompanies = () => {
     setSelectedCompany(null);
@@ -922,7 +922,7 @@ export default function SuperAdminComponents() {
         );
       });
 
-     
+
 
       setComponents(safeMachineComponents);
     } catch (error: any) {
@@ -947,11 +947,10 @@ export default function SuperAdminComponents() {
       <div className="mb-6 flex flex-wrap items-center gap-3">
         <button
           onClick={resetToCompanies}
-          className={`rounded-full px-4 py-2 text-sm font-semibold transition-all duration-200 ${
-            !selectedCompany
+          className={`rounded-full px-4 py-2 text-sm font-semibold transition-all duration-200 ${!selectedCompany
               ? "bg-blue-600 text-white shadow-md"
               : "border border-blue-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-[#081028] dark:text-slate-300 dark:hover:bg-slate-800"
-          }`}
+            }`}
         >
           Companies
         </button>
@@ -961,11 +960,10 @@ export default function SuperAdminComponents() {
         <button
           onClick={selectedCompany ? resetToMachines : undefined}
           disabled={!selectedCompany}
-          className={`rounded-full px-4 py-2 text-sm font-semibold transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50 ${
-            selectedCompany && !selectedMachine
+          className={`rounded-full px-4 py-2 text-sm font-semibold transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50 ${selectedCompany && !selectedMachine
               ? "bg-blue-600 text-white shadow-md"
               : "border border-blue-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-[#081028] dark:text-slate-300 dark:hover:bg-slate-800"
-          }`}
+            }`}
         >
           {selectedCompany ? getCompanyName(selectedCompany) : "Machines"}
         </button>
@@ -974,11 +972,10 @@ export default function SuperAdminComponents() {
 
         <button
           disabled={!selectedMachine}
-          className={`rounded-full px-4 py-2 text-sm font-semibold transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50 ${
-            selectedMachine
+          className={`rounded-full px-4 py-2 text-sm font-semibold transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50 ${selectedMachine
               ? "bg-blue-600 text-white shadow-md"
               : "border border-blue-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-[#081028] dark:text-slate-300"
-          }`}
+            }`}
         >
           {selectedMachine ? getMachineName(selectedMachine) : "Components"}
         </button>
@@ -1184,7 +1181,7 @@ export default function SuperAdminComponents() {
                 <thead className="bg-gray-50 text-xs uppercase text-gray-500 dark:bg-gray-950 dark:text-gray-400">
                   <tr>
                     <th className="px-5 py-4 font-semibold">Component</th>
-                    <th className="px-5 py-4 font-semibold">Health</th>
+
                     <th className="px-5 py-4 font-semibold">Status</th>
                     <th className="px-5 py-4 font-semibold">Serial</th>
                     <th className="px-5 py-4 font-semibold">Remaining Life</th>
@@ -1252,24 +1249,6 @@ export default function SuperAdminComponents() {
                               </div>
                             </div>
                           </td>
-
-                          <td className="px-5 py-4">
-                            <div className="flex items-center gap-3">
-                              <div className="h-2 w-28 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
-                                <div
-                                  className={`h-full rounded-full ${healthBarStyles(
-                                    health,
-                                  )}`}
-                                  style={{ width: `${health}%` }}
-                                />
-                              </div>
-
-                              <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">
-                                {health}%
-                              </span>
-                            </div>
-                          </td>
-
                           <td className="px-5 py-4">
                             <span
                               className={`rounded-full px-3 py-1 text-xs font-semibold ring-1 ${statusStyles[status]}`}
@@ -1442,11 +1421,10 @@ function CompanyCard({
         </div>
 
         <span
-          className={`rounded-full px-3 py-1 text-xs font-semibold ${
-            criticalCount > 0
+          className={`rounded-full px-3 py-1 text-xs font-semibold ${criticalCount > 0
               ? "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300"
               : "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300"
-          }`}
+            }`}
         >
           {criticalCount} Critical
         </span>
@@ -1506,11 +1484,10 @@ function MachineCard({
         </div>
 
         <span
-          className={`rounded-full px-3 py-1 text-xs font-semibold ${
-            criticalCount > 0
+          className={`rounded-full px-3 py-1 text-xs font-semibold ${criticalCount > 0
               ? "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300"
               : "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300"
-          }`}
+            }`}
         >
           {criticalCount} Critical
         </span>
@@ -1532,25 +1509,6 @@ function MachineCard({
         <MapPin size={15} />
         {getMachineLocation(machine)}
       </p>
-
-      <div className="mt-5">
-        <div className="mb-2 flex items-center justify-between text-xs">
-          <span className="font-medium text-gray-500 dark:text-gray-400">
-            Overall Health
-          </span>
-
-          <span className="font-bold text-gray-900 dark:text-white">
-            {averageHealth}%
-          </span>
-        </div>
-
-        <div className="h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
-          <div
-            className={`h-full rounded-full ${healthBarStyles(averageHealth)}`}
-            style={{ width: `${averageHealth}%` }}
-          />
-        </div>
-      </div>
 
       <div className="mt-5 grid grid-cols-2 gap-3">
         <MiniStat label="Components" value={componentsCount} />
@@ -1652,25 +1610,6 @@ function ComponentDetailsModal({
                 {status}
               </span>
             </div>
-
-            <div className="mt-6">
-              <div className="mb-2 flex items-center justify-between">
-                <span className="text-sm font-semibold text-gray-600 dark:text-gray-300">
-                  Health Percentage
-                </span>
-
-                <span className="text-sm font-bold text-gray-900 dark:text-white">
-                  {health}%
-                </span>
-              </div>
-
-              <div className="h-3 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
-                <div
-                  className={`h-full rounded-full ${healthBarStyles(health)}`}
-                  style={{ width: `${health}%` }}
-                />
-              </div>
-            </div>
           </div>
 
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -1748,59 +1687,51 @@ const addComponentSchema = z.object({
     ],
     { message: "Select a valid category" },
   ),
- serialNumber: z
-  .string()
-  .trim()
-  .min(1, "Serial number is required")
-  .max(60, "Serial number is too long"),
+  serialNumber: z
+    .string()
+    .trim()
+    .min(1, "Serial number is required")
+    .max(60, "Serial number is too long"),
 
-description: z
-  .string()
-  .trim()
-  .min(1, "Description is required")
-  .max(150, "Description is too long"),
+  description: z
+    .string()
+    .trim()
+    .min(1, "Description is required")
+    .max(150, "Description is too long"),
 
-supplier: z
-  .string()
-  .trim()
-  .min(1, "Supplier is required")
-  .max(80, "Supplier is too long"),
+  supplier: z
+    .string()
+    .trim()
+    .min(1, "Supplier is required")
+    .max(80, "Supplier is too long"),
 
-installHours: z.coerce
-  .number({
-    message: "Install hours is required",
-  })
-  .min(0, "Install hours cannot be negative")
-  .max(1000000, "Install hours seems too high"),
+  installHours: z.coerce
+    .number({
+      message: "Install hours is required",
+    })
+    .min(0, "Install hours cannot be negative")
+    .max(1000000, "Install hours seems too high"),
 
-currentHours: z.coerce
-  .number({
-    message: "Current hours is required",
-  })
-  .min(0, "Current hours cannot be negative")
-  .max(1000000, "Current hours seems too high"),
+  currentHours: z.coerce
+    .number({
+      message: "Current hours is required",
+    })
+    .min(0, "Current hours cannot be negative")
+    .max(1000000, "Current hours seems too high"),
 
-plannedLife: z.coerce
-  .number({
-    message: "Planned life is required",
-  })
-  .min(0, "Planned life cannot be negative")
-  .max(1000000, "Planned life seems too high"),
+  plannedLife: z.coerce
+    .number({
+      message: "Planned life is required",
+    })
+    .min(0, "Planned life cannot be negative")
+    .max(1000000, "Planned life seems too high"),
 
-replacementCost: z.coerce
-  .number({
-    message: "Replacement cost is required",
-  })
-  .min(0, "Replacement cost cannot be negative")
-  .max(100000000, "Replacement cost seems too high"),
-
-condition: z.coerce
-  .number({
-    message: "Condition is required",
-  })
-  .int("Condition must be a whole number")
-  .min(1, "Condition must be between 1 and 5")
-  .max(5, "Condition must be between 1 and 5"),
+  replacementCost: z.coerce
+    .number({
+      message: "Replacement cost is required",
+    })
+    .min(0, "Replacement cost cannot be negative")
+    .max(100000000, "Replacement cost seems too high"),
 });
 
 type AddComponentFormValues = z.infer<typeof addComponentSchema>;
@@ -1838,7 +1769,6 @@ function AddComponentModal({
       currentHours: 0,
       plannedLife: 0,
       replacementCost: 0,
-      condition: 3,
     },
   });
   const [isCategoryOpen, setIsCategoryOpen] = useState(false);
@@ -1855,6 +1785,7 @@ function AddComponentModal({
   const onSubmitAddComponent = async (values: AddComponentFormValues) => {
     const payload: ComponentPayload = {
       machineId: values.machineId,
+      companyId: company.id,
       category: values.category,
       description: values.description.trim(),
       serialNumber: values.serialNumber.trim(),
@@ -1863,7 +1794,6 @@ function AddComponentModal({
       currentHours: values.currentHours,
       plannedLife: values.plannedLife,
       replacementCost: values.replacementCost,
-      condition: values.condition,
     };
 
     try {
@@ -1978,11 +1908,10 @@ function AddComponentModal({
                         });
                         setIsCategoryOpen(false);
                       }}
-                      className={`w-full px-5 py-2 text-left text-sm font-medium transition ${
-                        selectedCategory === category
+                      className={`w-full px-5 py-2 text-left text-sm font-medium transition ${selectedCategory === category
                           ? "bg-blue-600 text-white"
                           : "text-slate-700 hover:bg-blue-600 hover:text-white dark:text-slate-200"
-                      }`}
+                        }`}
                     >
                       {category}
                     </button>
@@ -2141,29 +2070,6 @@ function AddComponentModal({
               )}
             </div>
 
-            <div>
-              <label className="mb-2 block text-xs font-bold uppercase tracking-[0.25em] text-slate-500 dark:text-slate-400">
-                Condition
-              </label>
-
-              <select
-                {...registerAddComponent("condition")}
-                disabled={submitting}
-                className={`h-14 w-full rounded-lg border bg-white px-5 text-sm font-semibold text-slate-700 outline-none transition focus:ring-4 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-slate-950 dark:text-slate-200 ${inputErrorClass(!!addComponentErrors.condition)}`}
-              >
-                <option value="1">1 / 5 - Excellent</option>
-                <option value="2">2 / 5 - Good</option>
-                <option value="3">3 / 5 - Average</option>
-                <option value="4">4 / 5 - Poor</option>
-                <option value="5">5 / 5 - Critical</option>
-              </select>
-
-              {addComponentErrors.condition && (
-                <p className="mt-1.5 text-xs font-medium text-red-600 dark:text-red-400">
-                  {addComponentErrors.condition.message}
-                </p>
-              )}
-            </div>
           </div>
 
           <div className="sticky bottom-0 -mx-6 -mb-6 mt-6 flex justify-end gap-3 border-t border-slate-200 bg-white px-6 py-4 dark:border-slate-800 dark:bg-slate-900">
