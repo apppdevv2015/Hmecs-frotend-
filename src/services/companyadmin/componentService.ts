@@ -40,6 +40,7 @@ const getCompanyId = () => {
 
 export type ComponentPayload = {
   machineId?: string;
+  companyId?: string;
   category: string;
   description: string;
   serialNumber: string;
@@ -48,7 +49,7 @@ export type ComponentPayload = {
   currentHours: number;
   plannedLife: number;
   replacementCost: number;
-  condition: number;
+  condition?: number;
 };
 
 export interface EngineerDashboardComponentIntelligence {
@@ -118,7 +119,7 @@ export const componentService = {
     }).catch(() => apiCall<any[]>(`/components/register?machineId=${encodeURIComponent(machineId)}`, { method: "GET" })).catch(() => []);
   },
 
-    getEngineerDashboardComponents: () => {
+  getEngineerDashboardComponents: () => {
     return apiCall<EngineerDashboardComponent[]>(
       "/components/engineer-dashboard",
       {
@@ -134,7 +135,7 @@ export const componentService = {
     }).catch(() => []);
   },
 
-  
+
 
   createComponent: (payload: ComponentPayload) => {
     return apiCall<any>(
