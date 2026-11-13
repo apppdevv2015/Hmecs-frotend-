@@ -718,21 +718,19 @@ export default function SuperAdminComponents() {
 
       const componentName = getComponentName(component);
       const category = getComponentCategory(component);
-      const status = getComponentStatus(component);
       const serialNumber = getSerialNumber(component);
       const supplier = getSupplier(component);
 
       const searchableText =
-        `${componentName} ${category} ${status} ${serialNumber} ${supplier}`.toLowerCase();
+        `${componentName} ${category} ${serialNumber} ${supplier}`.toLowerCase();
 
       const matchesSearch = searchableText.includes(
         search.trim().toLowerCase(),
       );
-      const matchesStatus = statusFilter === "All" || status === statusFilter;
 
-      return matchesMachine && matchesSearch && matchesStatus;
+      return matchesMachine && matchesSearch;
     });
-  }, [selectedMachine, components, search, statusFilter]);
+  }, [selectedMachine, components, search]);
 
   const paginatedComponents = machineComponents.slice(
     (page - 1) * pageSize,
@@ -742,15 +740,6 @@ export default function SuperAdminComponents() {
   const totalPages = Math.ceil(machineComponents.length / pageSize);
 
   const selectedMachineTotalComponents = machineComponents.length;
-
-  const selectedMachineWarningComponents = machineComponents.filter(
-    (component) => getComponentStatus(component) === "Warning",
-  ).length;
-
-  const selectedMachineCriticalComponents = machineComponents.filter(
-    (component) => getComponentStatus(component) === "Critical",
-  ).length;
-
   const selectedMachineAverageHealth =
     selectedMachineTotalComponents === 0
       ? 0
@@ -774,7 +763,6 @@ export default function SuperAdminComponents() {
     setComponentsError("");
 
     setSearch("");
-    setStatusFilter("All");
     setPage(1);
   };
 
@@ -787,7 +775,6 @@ export default function SuperAdminComponents() {
     setComponentsError("");
 
     setSearch("");
-    setStatusFilter("All");
     setPage(1);
   };
 
@@ -803,7 +790,6 @@ export default function SuperAdminComponents() {
       setMachineStats({});
 
       setSearch("");
-      setStatusFilter("All");
       setPage(1);
 
       setMachinesLoading(true);
@@ -887,7 +873,6 @@ export default function SuperAdminComponents() {
       setComponents([]);
 
       setSearch("");
-      setStatusFilter("All");
       setPage(1);
 
       setComponentsLoading(true);
@@ -948,8 +933,8 @@ export default function SuperAdminComponents() {
         <button
           onClick={resetToCompanies}
           className={`rounded-full px-4 py-2 text-sm font-semibold transition-all duration-200 ${!selectedCompany
-              ? "bg-blue-600 text-white shadow-md"
-              : "border border-blue-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-[#081028] dark:text-slate-300 dark:hover:bg-slate-800"
+            ? "bg-blue-600 text-white shadow-md"
+            : "border border-blue-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-[#081028] dark:text-slate-300 dark:hover:bg-slate-800"
             }`}
         >
           Companies
@@ -961,8 +946,8 @@ export default function SuperAdminComponents() {
           onClick={selectedCompany ? resetToMachines : undefined}
           disabled={!selectedCompany}
           className={`rounded-full px-4 py-2 text-sm font-semibold transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50 ${selectedCompany && !selectedMachine
-              ? "bg-blue-600 text-white shadow-md"
-              : "border border-blue-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-[#081028] dark:text-slate-300 dark:hover:bg-slate-800"
+            ? "bg-blue-600 text-white shadow-md"
+            : "border border-blue-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-[#081028] dark:text-slate-300 dark:hover:bg-slate-800"
             }`}
         >
           {selectedCompany ? getCompanyName(selectedCompany) : "Machines"}
@@ -973,8 +958,8 @@ export default function SuperAdminComponents() {
         <button
           disabled={!selectedMachine}
           className={`rounded-full px-4 py-2 text-sm font-semibold transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50 ${selectedMachine
-              ? "bg-blue-600 text-white shadow-md"
-              : "border border-blue-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-[#081028] dark:text-slate-300"
+            ? "bg-blue-600 text-white shadow-md"
+            : "border border-blue-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-[#081028] dark:text-slate-300"
             }`}
         >
           {selectedMachine ? getMachineName(selectedMachine) : "Components"}
@@ -1006,7 +991,6 @@ export default function SuperAdminComponents() {
                   company={company}
                   machinesCount={getCompanyMachineCount(company)}
                   componentsCount={getCompanyComponentCount(company)}
-                  criticalCount={getCompanyCriticalCount(company)}
                   onView={() => handleCompanySelect(company)}
                 />
               ))}
@@ -1054,10 +1038,6 @@ export default function SuperAdminComponents() {
                     machineStats[getMachineApiId(machine)]?.componentsCount ??
                     getMachineComponentCount(machine)
                   }
-                  criticalCount={
-                    machineStats[getMachineApiId(machine)]?.criticalCount ??
-                    getMachineCriticalCount(machine)
-                  }
                   averageHealth={
                     machineStats[getMachineApiId(machine)]?.averageHealth ??
                     getMachineAverageHealth(machine)
@@ -1097,7 +1077,7 @@ export default function SuperAdminComponents() {
             </div>
           </div>
 
-          <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-2">
             <SummaryCard
               label="Average Health"
               value={`${selectedMachineAverageHealth}%`}
@@ -1110,20 +1090,6 @@ export default function SuperAdminComponents() {
               value={selectedMachineTotalComponents}
               icon={<Wrench size={22} />}
               iconClass="bg-blue-100 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400"
-            />
-
-            <SummaryCard
-              label="Warning"
-              value={selectedMachineWarningComponents}
-              icon={<AlertTriangle size={22} />}
-              iconClass="bg-yellow-100 text-yellow-600 dark:bg-yellow-500/15 dark:text-yellow-400"
-            />
-
-            <SummaryCard
-              label="Critical"
-              value={selectedMachineCriticalComponents}
-              icon={<AlertTriangle size={22} />}
-              iconClass="bg-red-100 text-red-600 dark:bg-red-500/15 dark:text-red-400"
             />
           </div>
 
@@ -1157,22 +1123,6 @@ export default function SuperAdminComponents() {
                     className="h-11 w-full rounded-xl border border-gray-200 bg-white pl-10 pr-4 text-sm text-gray-700 outline-none transition focus:border-blue-500 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-200 sm:w-72"
                   />
                 </div>
-
-                <select
-                  value={statusFilter}
-                  onChange={(event) => {
-                    setStatusFilter(
-                      event.target.value as "All" | ComponentStatus,
-                    );
-                    setPage(1);
-                  }}
-                  className="h-11 w-full rounded-xl border border-gray-200 bg-white px-4 text-sm text-gray-700 outline-none transition focus:border-blue-500 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-200 sm:w-44"
-                >
-                  <option value="All">All Status</option>
-                  <option value="Healthy">Healthy</option>
-                  <option value="Warning">Warning</option>
-                  <option value="Critical">Critical</option>
-                </select>
               </div>
             </div>
 
@@ -1181,8 +1131,6 @@ export default function SuperAdminComponents() {
                 <thead className="bg-gray-50 text-xs uppercase text-gray-500 dark:bg-gray-950 dark:text-gray-400">
                   <tr>
                     <th className="px-5 py-4 font-semibold">Component</th>
-
-                    <th className="px-5 py-4 font-semibold">Status</th>
                     <th className="px-5 py-4 font-semibold">Serial</th>
                     <th className="px-5 py-4 font-semibold">Remaining Life</th>
                     <th className="px-5 py-4 font-semibold">Supplier</th>
@@ -1197,7 +1145,7 @@ export default function SuperAdminComponents() {
                   {componentsLoading ? (
                     <tr>
                       <td
-                        colSpan={8}
+                        colSpan={6}
                         className="px-5 py-10 text-center text-sm text-gray-500 dark:text-gray-400"
                       >
                         <div className="flex items-center justify-center gap-2">
@@ -1209,7 +1157,7 @@ export default function SuperAdminComponents() {
                   ) : componentsError ? (
                     <tr>
                       <td
-                        colSpan={8}
+                        colSpan={6}
                         className="px-5 py-10 text-center text-sm text-red-600 dark:text-red-400"
                       >
                         {componentsError}
@@ -1218,7 +1166,6 @@ export default function SuperAdminComponents() {
                   ) : paginatedComponents.length > 0 ? (
                     paginatedComponents.map((item, idx) => {
                       const health = getComponentHealth(item);
-                      const status = getComponentStatus(item);
                       const lifeUsed = getLifeUsedPercent(item);
 
                       return (
@@ -1249,14 +1196,6 @@ export default function SuperAdminComponents() {
                               </div>
                             </div>
                           </td>
-                          <td className="px-5 py-4">
-                            <span
-                              className={`rounded-full px-3 py-1 text-xs font-semibold ring-1 ${statusStyles[status]}`}
-                            >
-                              {status}
-                            </span>
-                          </td>
-
                           <td className="px-5 py-4 text-sm font-mono text-gray-700 dark:text-gray-300">
                             {getSerialNumber(item, idx)}
                           </td>
@@ -1288,7 +1227,7 @@ export default function SuperAdminComponents() {
                   ) : (
                     <tr>
                       <td
-                        colSpan={8}
+                        colSpan={6}
                         className="px-5 py-10 text-center text-sm text-gray-500 dark:text-gray-400"
                       >
                         No components found for this machine.
@@ -1404,13 +1343,11 @@ function CompanyCard({
   company,
   machinesCount,
   componentsCount,
-  criticalCount,
   onView,
 }: {
   company: Company;
   machinesCount: number;
   componentsCount: number;
-  criticalCount: number;
   onView: () => void;
 }) {
   return (
@@ -1419,15 +1356,6 @@ function CompanyCard({
         <div className="rounded-xl bg-blue-100 p-3 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400">
           <Building2 size={24} />
         </div>
-
-        <span
-          className={`rounded-full px-3 py-1 text-xs font-semibold ${criticalCount > 0
-              ? "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300"
-              : "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300"
-            }`}
-        >
-          {criticalCount} Critical
-        </span>
       </div>
 
       <h3 className="mt-4 text-lg font-bold text-gray-900 dark:text-white">
@@ -1466,13 +1394,11 @@ function CompanyCard({
 function MachineCard({
   machine,
   componentsCount,
-  criticalCount,
   averageHealth,
   onView,
 }: {
   machine: Machine;
   componentsCount: number;
-  criticalCount: number;
   averageHealth: number;
   onView: () => void;
 }) {
@@ -1482,15 +1408,6 @@ function MachineCard({
         <div className="rounded-xl bg-orange-100 p-3 text-orange-600 dark:bg-orange-500/15 dark:text-orange-400">
           <Truck size={24} />
         </div>
-
-        <span
-          className={`rounded-full px-3 py-1 text-xs font-semibold ${criticalCount > 0
-              ? "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300"
-              : "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300"
-            }`}
-        >
-          {criticalCount} Critical
-        </span>
       </div>
 
       <h3 className="mt-4 text-lg font-bold text-gray-900 dark:text-white">
@@ -1512,7 +1429,6 @@ function MachineCard({
 
       <div className="mt-5 grid grid-cols-2 gap-3">
         <MiniStat label="Components" value={componentsCount} />
-        <MiniStat label="Critical" value={criticalCount} />
       </div>
 
       <button
@@ -1549,8 +1465,6 @@ function ComponentDetailsModal({
   machine: Machine;
   onClose: () => void;
 }) {
-  const health = getComponentHealth(component);
-  const status = getComponentStatus(component);
   const lifeUsed = getLifeUsedPercent(component);
 
   return (
@@ -1603,12 +1517,6 @@ function ComponentDetailsModal({
                   </p>
                 </div>
               </div>
-
-              <span
-                className={`w-fit rounded-full px-4 py-2 text-sm font-bold ring-1 ${statusStyles[status]}`}
-              >
-                {status}
-              </span>
             </div>
           </div>
 
@@ -1909,8 +1817,8 @@ function AddComponentModal({
                         setIsCategoryOpen(false);
                       }}
                       className={`w-full px-5 py-2 text-left text-sm font-medium transition ${selectedCategory === category
-                          ? "bg-blue-600 text-white"
-                          : "text-slate-700 hover:bg-blue-600 hover:text-white dark:text-slate-200"
+                        ? "bg-blue-600 text-white"
+                        : "text-slate-700 hover:bg-blue-600 hover:text-white dark:text-slate-200"
                         }`}
                     >
                       {category}
