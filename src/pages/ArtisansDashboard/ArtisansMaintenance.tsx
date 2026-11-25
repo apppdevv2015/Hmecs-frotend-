@@ -269,7 +269,7 @@ export default function ArtisansMaintenance() {
         }),
       }, { showError: false });
 
-      showSuccessToast(`✓ Component fix for ${fixComponentName} saved to PostgreSQL database!`);
+      showSuccessToast(`✓ Component fix for ${fixComponentName} saved to Database!`);
       setIsLogFixModalOpen(false);
       setFixComponentName("");
       setFixIssueFound("");
@@ -328,7 +328,7 @@ export default function ArtisansMaintenance() {
             type="button"
             onClick={() => {
               loadMaintenanceData();
-              showSuccessToast("Refreshed maintenance records from PostgreSQL Database!");
+              showSuccessToast("Refreshed maintenance records from Database!");
             }}
             className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-800 dark:bg-[#101f33] dark:text-slate-200 cursor-pointer"
           >
